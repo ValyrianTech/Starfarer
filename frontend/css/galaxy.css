@@ -1,0 +1,61 @@
+#screen-galaxy {
+  position: relative;
+}
+
+#galaxy-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.galaxy-hud {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  z-index: 10;
+  max-width: 320px;
+}
+
+.galaxy-hud .system-info {
+  margin-top: 0.5rem;
+  font-size: var(--font-size-sm);
+}
+
+.galaxy-hud .system-info .name {
+  color: var(--color-cyan);
+  font-size: var(--font-size-md);
+}
+
+.galaxy-legend {
+  position: absolute;
+  bottom: 1rem;
+  left: 1rem;
+  z-index: 10;
+  display: flex;
+  gap: 1rem;
+  font-size: var(--font-size-sm);
+}
+
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 0.3rem;
+}
+
+.legend-dot.visited { background: var(--color-cyan); }
+.legend-dot.unvisited { background: rgba(255, 255, 255, 0.3); }
+.legend-dot.current { background: var(--color-star); box-shadow: 0 0 6px var(--color-star); }
+
+.galaxy-controls {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}

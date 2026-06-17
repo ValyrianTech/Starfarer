@@ -1,0 +1,129 @@
+#screen-system {
+  padding: 1rem;
+  position: relative;
+  overflow-y: auto;
+}
+
+.system-header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.system-header .name {
+  font-size: var(--font-size-xxl);
+  color: var(--color-star);
+}
+
+.system-header .type {
+  font-size: var(--font-size-md);
+  color: var(--color-text-dim);
+}
+
+.system-phenomenon {
+  text-align: center;
+  color: var(--color-nebula);
+  margin-bottom: 1rem;
+  font-style: italic;
+}
+
+.bodies-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  justify-content: center;
+  margin-bottom: 2rem;
+}
+
+.body-card {
+  background: var(--color-panel-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  width: 200px;
+  cursor: pointer;
+  transition: all var(--transition);
+  position: relative;
+}
+
+.body-card:hover {
+  border-color: var(--color-cyan);
+  box-shadow: 0 0 12px rgba(0, 255, 204, 0.12);
+}
+
+.body-card .body-name {
+  color: var(--color-cyan);
+  font-size: var(--font-size-md);
+  margin-bottom: 0.3rem;
+}
+
+.body-card .body-meta {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-dim);
+}
+
+.body-card .body-desc {
+  margin-top: 0.5rem;
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  line-height: 1.4;
+}
+
+.body-card .body-biome {
+  display: inline-block;
+  padding: 0.1rem 0.4rem;
+  border-radius: 2px;
+  font-size: 0.7rem;
+  margin-top: 0.3rem;
+}
+
+.body-card .body-biome.desert { background: rgba(212, 168, 83, 0.2); color: #d4a853; }
+.body-card .body-biome.tundra { background: rgba(200, 224, 240, 0.2); color: #c8e0f0; }
+.body-card .body-biome.jungle { background: rgba(61, 140, 64, 0.2); color: #3d8c40; }
+.body-card .body-biome.ocean { background: rgba(41, 105, 168, 0.2); color: #2969a8; }
+.body-card .body-biome.volcanic { background: rgba(139, 58, 26, 0.2); color: #8b3a1a; }
+.body-card .body-biome.barren { background: rgba(138, 138, 138, 0.2); color: #8a8a8a; }
+.body-card .body-biome.gas_giant { background: rgba(196, 168, 130, 0.2); color: #c4a882; }
+.body-card .body-biome.crystal { background: rgba(168, 230, 207, 0.2); color: #a8e6cf; }
+
+.system-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  margin-top: 1rem;
+}
+
+.system-nearby {
+  margin-top: 2rem;
+}
+
+.system-nearby h3 {
+  color: var(--color-text-dim);
+  font-size: var(--font-size-sm);
+  text-transform: uppercase;
+  margin-bottom: 0.5rem;
+}
+
+.nearby-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.nearby-item {
+  background: var(--color-panel-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 0.4rem 0.8rem;
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.nearby-item:hover {
+  border-color: var(--color-cyan);
+}
+
+.nearby-item .dist {
+  color: var(--color-text-dim);
+  margin-left: 0.5rem;
+}

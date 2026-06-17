@@ -1,0 +1,366 @@
+# How to Play Starfarer (AI Agent Guide)
+
+> For AI agents playing via API or browser automation. Humans welcome too.
+
+---
+
+## 1. Overview
+
+Starfarer is a procedurally generated space exploration game. You pilot a starship through a 50-system galaxy. Every action is available via REST API. The browser UI exists as a reference client with machine-parseable DOM.
+
+**Goal:** Explore systems, discover artifacts and lore, manage resources, and survive. There is no fixed win condition — optimize for discoveries, credits, and systems visited.
+
+**Tagline:** *The universe is infinite. Your fuel is not.*
+
+---
+
+## 2. Getting Started
+
+### 2.1 Start the Game (API)
+
+```http
+POST /api/game/new
+Content-Type: application/json
+
+{
+  "seed": 42,           // optional: universe seed (same seed = same universe)
+  "ship_name": "MyShip" // optional: name your ship (default: "Serendipity")
+}
+```
+
+Response:
+```json
+{
+  "game_id": "abc123...",
+  "state": {
+    "ship": { "name": "MyShip", "fuel": 80, "hull": 100, ... },
+    "current_system": { "id": "sys_0000", "name": "Epsilon Q9232", ... }
+  }
+}
+```
+
+**Save the `game_id`** — you need it for every subsequent request.
+
+### 2.2 Continue a Saved Game
+
+```http
+POST /api/game/{game_id}/load
+```
+
+### 2.3 Start the Game (Browser)
+
+Navigate to the frontend URL. The game state is available as JSON-LD:
+
+```javascript
+JSON.parse(document.getElementById('game-state').textContent)
+```
+
+All interactive elements have `data-action` attributes. Click them or trigger them programmatically.
+
+---
+
+## 3. Core Game Loop
+
+```
+Galaxy Map → Select System → Jump → System View → Scan → Land → Explore → Handle Events → Repeat
+```
+
+### 3.1 View the Galaxy
+
+```http
+GET /api/game/{game_id}/galaxy
+```
+
+Returns all 50 systems with coordinates, star types, and visited status. The `current_system_id` field tells you where your ship is.
+
+### 3.2 Check Nearby Systems
+
+```http
+GET /api/game/{game_id}/nearby
+```
+
+Returns all systems sorted by distance. Each entry includes:
+- `distance_ly` — distance in light-years
+- `fuel_cost` — fuel required for jump
+- `reachable` — whether you have enough fuel AND jump range
+
+**Decision rule:** Jump to `reachable` systems. Upgrade your hyperdrive to reach further ones.
+
+### 3.3 Jump to a System
+
+```http
+POST /api/game/{game_id}/jump/{system_id}
+```
+
+Costs fuel based on distance (3 fuel per LY, minimum 1). Morale decays by 2 per jump (less with life support upgrades). A procedural event may trigger after jumping.
+
+### 3.4 Scan a System
+
+```http
+POST /api/game/{game_id}/scan
+```
+
+Costs 5 fuel. Reveals all orbital bodies (planets, moons, asteroid belts) and their biomes. A system only needs to be scanned once.
+
+### 3.5 View System Details
+
+```http
+GET /api/game/{game_id}/system/{system_id}
+```
+
+Returns all bodies with IDs, biomes, sizes, descriptions, and points of interest count.
+
+### 3.6 Land on a Body
+
+```http
+POST /api/game/{game_id}/land/{body_id}
+```
+
+Select a body from the system detail. Planets yield more discoveries than asteroid belts or moons.
+
+### 3.7 Explore the Surface
+
+```http
+POST /api/game/{game_id}/explore
+```
+
+Costs 2 fuel. Generates discoveries (minerals, artifacts, lifeforms, signals, ruins). Each discovery has:
+- `category` — type of find
+- `name` — what you found
+- `value` — credit value if sold
+- `description` — flavor text
+
+### 3.8 Handle Events
+
+After jumping, scanning, or exploring, you may receive a `pending_event`. Events have 2-4 choices.
+
+```http
+POST /api/game/{game_id}/event/{event_id}/resolve
+Content-Type: application/json
+
+{ "choice_index": 0 }
+```
+
+Choices have outcomes that modify stats: `fuel`, `hull`, `morale`, `credits`, `cargo`. Outcomes are formatted as semicolon-separated key:value pairs (e.g., `credits:50; fuel:-10`).
+
+**Strategy tip:** Prefer choices that give credits early game. Avoid choices that damage hull or morale unless the reward is high.
+
+---
+
+## 4. Resource Management
+
+### 4.1 Ship Stats
+
+| Stat | Start | Max | Meaning |
+|------|-------|-----|---------|
+| Fuel | 80 | 100 | Consumed for jumps, scans, exploration. 0 = stranded. |
+| Hull | 100 | 100 | Ship integrity. 0 = game over. |
+| Cargo | 0 | 50 | Inventory slots used. |
+| Morale | 80 | 100 | Below 30 triggers negative crew events. |
+| Credits | 1000 | ∞ | Universal currency. |
+| Crew | 4 | 10 | Affects morale decay and some event outcomes. |
+| Jump Range | 4 LY | ∞ | Max light-years per jump. Upgradable. |
+| Scanner | 1 | 5 | Detection range. Upgradable. |
+
+### 4.2 Critical Thresholds
+
+- **Fuel < 10:** Cannot jump to most systems. Find a station to refuel.
+- **Hull < 30:** High risk. Repair at a station.
+- **Morale < 30:** Crew events trigger more frequently and are more dangerous.
+- **Cargo > max_cargo:** Can't collect more. Sell or discard items.
+
+---
+
+## 5. Trading
+
+Trade at space stations (systems with phenomenon `"none"`, `"nebula"`, or `"ancient_gate"`).
+
+### Buy Fuel
+
+```http
+POST /api/game/{game_id}/trade
+Content-Type: application/json
+
+{ "action": "buy", "item": "fuel", "quantity": 10 }
+```
+
+### Repair Hull
+
+```http
+POST /api/game/{game_id}/trade
+Content-Type: application/json
+
+{ "action": "buy", "item": "repair", "quantity": 2 }
+```
+
+Each repair point restores 20 hull at ~40 credits per point.
+
+### Sell Discoveries
+
+```http
+POST /api/game/{game_id}/trade
+Content-Type: application/json
+
+{ "action": "sell", "item": "artifact" }
+```
+
+Sells the first matching discovery from your inventory. Prices vary per system.
+
+---
+
+## 6. Ship Upgrades
+
+### View Available Upgrades
+
+```http
+GET /api/game/{game_id}/upgrades
+```
+
+### Purchase an Upgrade
+
+```http
+POST /api/game/{game_id}/upgrade
+Content-Type: application/json
+
+{ "upgrade_id": "hyperdrive" }
+```
+
+### Upgrade Reference
+
+| ID | Effect | Base Cost | Max Level |
+|----|--------|-----------|-----------|
+| `hyperdrive` | +1 jump range | 500 | 5 |
+| `scanner` | +1 scanner level | 400 | 5 |
+| `cargo_hold` | +10 cargo capacity | 350 | 4 |
+| `hull_plating` | +20 max hull | 450 | 3 |
+| `fuel_tanks` | +20 max fuel | 300 | 3 |
+| `life_support` | -1 morale decay per jump | 400 | 3 |
+
+Cost scales: `base_cost * (current_level + 1)`.
+
+**Recommended priority:** `hyperdrive` → `fuel_tanks` → `scanner` → `hull_plating` → `cargo_hold` → `life_support`
+
+---
+
+## 7. Viewing Progress
+
+### Ship Log
+
+```http
+GET /api/game/{game_id}/log
+```
+
+All actions are logged with timestamps. Useful for understanding what happened.
+
+### Discoveries
+
+```http
+GET /api/game/{game_id}/discoveries
+```
+
+Everything you've found, organized by category with credit values.
+
+### Full Game State
+
+```http
+GET /api/game/{game_id}
+```
+
+Complete state dump: ship, current system, pending events, discoveries, log entries.
+
+### Leaderboard
+
+```http
+GET /api/leaderboard
+```
+
+Top players ranked by discoveries and systems visited.
+
+---
+
+## 8. Strategy Guide
+
+### 8.1 Early Game (Credits < 2000)
+- Explore every body in your starting system — it's free aside from scan/explore fuel
+- Sell all discoveries to build credits
+- Prioritize `hyperdrive` upgrade to reach more systems
+- Only jump to systems with `reachable: true`
+
+### 8.2 Mid Game (Credits 2000-5000)
+- Upgrade `fuel_tanks` to extend range
+- Visit trade-capable systems to refuel and sell
+- Take risks on event choices that offer credit rewards
+- Track morale — buy `life_support` if it dips below 40
+
+### 8.3 Late Game
+- Upgrade `scanner` to detect phenomena before jumping
+- Max out `hyperdrive` to access the entire galaxy
+- Explore high-body-count systems first (more discoveries per fuel)
+- Aim for the leaderboard by maximizing discoveries and systems visited
+
+### 8.4 Risk Management
+- **Always keep fuel above 15** — enough to jump to at least one known system
+- **Repair hull before it drops below 40** — events can deal sudden damage
+- **Keep morale above 40** — low morale events can cascade
+- **Don't jump blindly** — scan systems first to find valuable bodies
+
+### 8.5 Optimal Discovery Strategy
+- Target planets with high `poi_count` and `body_type: "planet"` (more discoveries per explore)
+- Systems with phenomena (`nebula`, `ancient_gate`) may trigger unique events
+- Jungle and ocean biomes tend to yield more lifeform discoveries (higher value)
+- Crystal and volcanic biomes yield rarer minerals
+
+---
+
+## 9. Saving
+
+```http
+POST /api/game/{game_id}/save
+```
+
+The game persists all state to SQLite. Save frequently — especially before risky jumps.
+
+---
+
+## 10. API Reference (Quick)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/health` | Server health check |
+| POST | `/api/game/new` | Create new game |
+| GET | `/api/game/{id}` | Full game state |
+| GET | `/api/game/{id}/galaxy` | Galaxy map data |
+| GET | `/api/game/{id}/system/{sid}` | System details |
+| POST | `/api/game/{id}/jump/{sid}` | Jump to system |
+| POST | `/api/game/{id}/scan` | Scan current system |
+| POST | `/api/game/{id}/land/{bid}` | Land on body |
+| POST | `/api/game/{id}/explore` | Explore surface |
+| POST | `/api/game/{id}/event/{eid}/resolve` | Resolve event |
+| GET | `/api/game/{id}/log` | Ship log |
+| GET | `/api/game/{id}/discoveries` | Discovery list |
+| POST | `/api/game/{id}/trade` | Buy/sell at station |
+| GET | `/api/game/{id}/upgrades` | Upgrade options |
+| POST | `/api/game/{id}/upgrade` | Purchase upgrade |
+| GET | `/api/game/{id}/nearby` | Nearby systems |
+| POST | `/api/game/{id}/save` | Save game |
+| POST | `/api/game/{id}/load` | Load game |
+| GET | `/api/leaderboard` | Top players |
+
+Full OpenAPI docs at `/docs` and `/redoc`.
+
+---
+
+## 11. Browser Automation Tips
+
+For AI agents using browser tools:
+
+1. **Read game state:** `document.getElementById('game-state').textContent` — full JSON
+2. **Find actions:** `document.querySelectorAll('[data-action]')` — all interactive elements
+3. **Click actions:** Elements have `data-action` values like `"jump-to"`, `"scan"`, `"land"`, `"explore"`, `"resolve-event"`
+4. **Click with params:** Some elements carry extra data like `data-system-id`, `data-body-id`, `data-event-id`, `data-choice-idx`
+5. **Screen navigation:** Click `data-action="show-galaxy"` for map, `data-action="show-log"` for log
+6. **Canvas interaction:** The galaxy map is a Canvas element. Click on stars to select them, then use the "Jump" button. Pan by dragging, zoom with scroll wheel.
+
+---
+
+*End of Guide. Good luck in the void, pilot.*

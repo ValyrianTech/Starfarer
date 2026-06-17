@@ -1,0 +1,49 @@
+.surface-explore {
+  padding: 1rem;
+  max-width: 600px;
+  margin: 2rem auto;
+}
+
+.surface-body-header {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.surface-body-header .name {
+  font-size: var(--font-size-xl);
+  color: var(--color-cyan);
+}
+
+.discovery-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+
+.discovery-item {
+  background: var(--color-panel-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 0.8rem;
+}
+
+.discovery-item .disc-name {
+  color: var(--color-star);
+}
+
+.discovery-item .disc-category {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-dim);
+  text-transform: uppercase;
+}
+
+.discovery-item .disc-desc {
+  font-size: var(--font-size-sm);
+  margin-top: 0.3rem;
+}
+
+.discovery-item .disc-value {
+  font-size: var(--font-size-sm);
+  color: var(--color-green);
+}
