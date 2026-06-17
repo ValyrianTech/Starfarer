@@ -37,21 +37,21 @@ class TestUniverseGeneration:
 
     def test_each_system_has_bodies(self):
         systems = generate_universe(42)
-        for sys in systems.values():
-            assert len(sys.bodies) >= 1
-            assert len(sys.bodies) <= 20
+        for system in systems.values():
+            assert len(system.bodies) >= 1
+            assert len(system.bodies) <= 20
 
     def test_each_system_has_valid_star_type(self):
         from backend.config import STAR_SPECTRAL_TYPES
         systems = generate_universe(42)
-        for sys in systems.values():
-            assert sys.star_type in STAR_SPECTRAL_TYPES
+        for system in systems.values():
+            assert system.star_type in STAR_SPECTRAL_TYPES
 
     def test_bodies_have_valid_biomes(self):
         from backend.config import BIOME_TYPES
         systems = generate_universe(42)
-        for sys in systems.values():
-            for body in sys.bodies:
+        for system in systems.values():
+            for body in system.bodies:
                 assert body.biome in BIOME_TYPES or body.body_type == "asteroid_belt"
 
     def test_distance_calculation(self):

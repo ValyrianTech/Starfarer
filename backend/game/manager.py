@@ -54,7 +54,6 @@ def get_game_state(state: GameState) -> dict:
 
 def get_galaxy(state: GameState) -> dict:
     systems_data = []
-    current = state.get_current_system()
     for sys_id, sys_data in state.systems.items():
         systems_data.append({
             "id": sys_data.id,
@@ -112,7 +111,7 @@ def _state_to_dict(state: GameState) -> dict:
         "systems": {k: v.to_dict() for k, v in state.systems.items()},
         "events": [e.to_dict() for e in state.events],
         "discoveries": [d.to_dict() for d in state.discoveries],
-        "lore_fragments": [l.to_dict() for l in state.lore_fragments],
+        "lore_fragments": [lf.to_dict() for lf in state.lore_fragments],
         "log_entries": state.log_entries,
         "systems_visited": state.systems_visited,
         "game_started": state.game_started,
@@ -130,7 +129,7 @@ def _state_from_dict(d: dict) -> GameState:
 
     events = [Event.from_dict(e) for e in d.get("events", [])]
     discoveries = [Discovery.from_dict(disc) for disc in d.get("discoveries", [])]
-    lore = [LoreFragment.from_dict(l) for l in d.get("lore_fragments", [])]
+    lore = [LoreFragment.from_dict(lf) for lf in d.get("lore_fragments", [])]
 
     return GameState(
         id=d["id"],

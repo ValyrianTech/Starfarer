@@ -117,7 +117,7 @@ class TestNavigation:
             target = state.systems[reachable[0]["id"]]
             ok, cost, msg = can_jump(state.ship, target, state.get_current_system())
             assert ok is True
-            result = perform_jump(state, target, cost)
+            _ = perform_jump(state, target, cost)
             assert state.ship.current_system_id == target.id
             assert state.ship.fuel < 80
 
