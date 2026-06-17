@@ -1,5 +1,4 @@
 import random
-import uuid
 
 from backend.config import UPGRADE_COSTS, UPGRADE_EFFECTS, UPGRADE_MAX_LEVELS
 from backend.models.game_state import GameState

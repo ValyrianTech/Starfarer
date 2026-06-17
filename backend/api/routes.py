@@ -1,17 +1,13 @@
 import time
-import uuid
-from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException
 
 from backend.api.schemas import (
-    NewGameRequest, JumpRequest, LandRequest,
-    ResolveEventRequest, TradeRequest, UpgradeRequest,
+    NewGameRequest, ResolveEventRequest, TradeRequest, UpgradeRequest,
     HealthResponse,
 )
 from backend.game.manager import (
-    GAME_STORE, new_game, load_or_create, get_game_state,
-    get_galaxy, get_system_detail, game_save, game_load as game_load_func,
+    GAME_STORE, new_game, get_galaxy, get_system_detail, game_save, game_load as game_load_func,
 )
 from backend.generation.events import trigger_event, resolve_event as resolve_event_func
 from backend.game.engine import (
@@ -19,7 +15,6 @@ from backend.game.engine import (
     land_on_body, explore_surface,
 )
 from backend.game.trading import get_upgrade_info, purchase_upgrade, perform_trade
-from backend.generation.universe import generate_universe
 from backend.database import get_leaderboard, load_game as db_load_game
 
 START_TIME = time.time()

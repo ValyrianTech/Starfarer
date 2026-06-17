@@ -2,17 +2,13 @@ import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-import pytest
 from backend.game.engine import (
     can_jump, perform_jump, perform_scan, get_nearby_systems,
     land_on_body, explore_surface,
 )
-from backend.game.trading import get_upgrade_info, purchase_upgrade, perform_trade
+from backend.game.trading import get_upgrade_info, purchase_upgrade
 from backend.game.manager import new_game, get_galaxy, get_system_detail, game_save
 from backend.generation.events import trigger_event, resolve_event
-from backend.models.game_state import GameState
-from backend.models.ship import Ship
-from backend.models.system import StarSystem, Body
 from backend.config import SCAN_FUEL_COST
 
 
@@ -161,13 +157,12 @@ class TestEvents:
 
     def test_trigger_event(self):
         state = new_game(seed=42)
-        from backend.generation.events import trigger_event
         event = trigger_event(state)
         assert event is None or event.id is not None
 
     def test_resolve_event(self):
         state = new_game(seed=42)
-        from backend.generation.events import trigger_event, resolve_event as resolve_ev
+        from backend.generation.events import resolve_event as resolve_ev
         from backend.generation.events import _create_event, EVENT_TEMPLATES
         event = _create_event(EVENT_TEMPLATES[0], "sys_0000")
         state.events.append(event)

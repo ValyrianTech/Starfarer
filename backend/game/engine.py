@@ -1,15 +1,13 @@
 import random
-import math
 import uuid
 
 from backend.config import (
     JUMP_FUEL_COST_PER_LY, SCAN_FUEL_COST, EXPLORE_FUEL_COST,
-    MORALE_DECAY_PER_JUMP, MORALE_LOW_THRESHOLD,
+    MORALE_DECAY_PER_JUMP,
 )
 from backend.models.game_state import GameState
 from backend.models.ship import Ship
 from backend.models.system import StarSystem, Body
-from backend.models.event import Event, Choice
 from backend.models.discovery import Discovery
 from backend.generation.universe import distance_between
 

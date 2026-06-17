@@ -1,7 +1,6 @@
 import uuid
-import json
 
-from backend.database import create_game, load_game, update_game, save_game as db_save, load_save, get_leaderboard
+from backend.database import create_game, load_game, save_game as db_save, load_save
 from backend.config import (
     DEFAULT_SEED, DEFAULT_SHIP_NAME, INITIAL_FUEL, INITIAL_HULL,
     INITIAL_CARGO, INITIAL_CREW, INITIAL_MORALE, INITIAL_CREDITS,
@@ -10,12 +9,9 @@ from backend.config import (
 from backend.models.game_state import GameState
 from backend.models.ship import Ship
 from backend.generation.universe import generate_universe
-from backend.generation.events import trigger_event, resolve_event as resolve_event_internal
 from backend.game.engine import (
-    can_jump, perform_jump, perform_scan, get_nearby_systems,
-    land_on_body, explore_surface,
+    get_nearby_systems,
 )
-from backend.game.trading import get_upgrade_info, purchase_upgrade, perform_trade
 
 
 def new_game(seed: int | None = None, ship_name: str | None = None) -> GameState:
@@ -124,8 +120,8 @@ def _state_to_dict(state: GameState) -> dict:
 
 
 def _state_from_dict(d: dict) -> GameState:
-    from backend.models.system import StarSystem, Body
-    from backend.models.event import Event, Choice
+    from backend.models.system import StarSystem
+    from backend.models.event import Event
     from backend.models.discovery import Discovery, LoreFragment
 
     systems = {}

@@ -1,13 +1,10 @@
 import random
 import math
-from typing import Optional
-import uuid
 
 from backend.config import (
     GALAXY_SYSTEM_COUNT, GALAXY_WIDTH, GALAXY_HEIGHT,
     STAR_SPECTRAL_TYPES, STAR_COLORS, SYSTEM_PHENOMENA, PHENOMENON_WEIGHTS,
-    PLANET_NAMES, MOON_NAMES, BIOME_TYPES, BIOME_COLORS,
-    MIN_ORBITALS, MAX_ORBITALS,
+    PLANET_NAMES, MOON_NAMES, BIOME_TYPES, MIN_ORBITALS, MAX_ORBITALS,
 )
 from backend.models.system import StarSystem, Body
 
