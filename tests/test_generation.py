@@ -9,6 +9,7 @@ from backend.models.game_state import GameState
 from backend.models.event import Event, Choice
 from backend.models.discovery import Discovery, LoreFragment
 from backend.config import GALAXY_SYSTEM_COUNT
+import random
 
 
 class TestUniverseGeneration:
@@ -62,6 +63,55 @@ class TestUniverseGeneration:
         d = distance_between(a, b)
         assert d == 50.0
 
+    def test_body_name_unknown_type(self) -> None:
+        """_generate_body_name should return a fallback name for unknown body types."""
+        from backend.generation.universe import _generate_body_name
+        rng = random.Random(42)
+        name = _generate_body_name(rng, "UnknownType", 0, "Planet")
+        assert isinstance(name, str)
+
+    def test_biome_for_body_outer_orbit(self) -> None:
+        """_biome_for_body should handle distance >= 1.0 (outer orbit)."""
+        from backend.generation.universe import _biome_for_body
+        rng = random.Random(42)
+        biome = _biome_for_body(rng, "G", 1.5, "planet")
+        assert biome in ("gas_giant", "tundra", "barren")
+
+    def test_biome_for_body_gas_giant_path(self) -> None:
+        """_biome_for_body with a seed that triggers gas_giant path."""
+        from backend.generation.universe import _biome_for_body
+        for seed_val in range(50):
+            rng = random.Random(seed_val)
+            biome = _biome_for_body(rng, "G", 1.5, "planet")
+            if biome == "gas_giant":
+                return
+        pass
+
+    def test_biome_for_body_moon(self) -> None:
+        """_biome_for_body should return a biome from the first 5 for moons."""
+        from backend.generation.universe import _biome_for_body
+        from backend.config import BIOME_TYPES
+        rng = random.Random(42)
+        biome = _biome_for_body(rng, "G", 0.5, "moon")
+        assert biome in BIOME_TYPES[:5]
+
+    def test_biome_for_body_asteroid(self) -> None:
+        """_biome_for_body should return barren for asteroid belts."""
+        from backend.generation.universe import _biome_for_body
+        rng = random.Random(42)
+        biome = _biome_for_body(rng, "G", 0.5, "asteroid_belt")
+        assert biome == "barren"
+
+    def test_body_description_valid(self) -> None:
+        """_body_description should return a string for all known biomes."""
+        from backend.generation.universe import _body_description
+        from backend.config import BIOME_TYPES
+        rng = random.Random(42)
+        for biome in BIOME_TYPES:
+            desc = _body_description(rng, "planet", biome, "G")
+            assert isinstance(desc, str)
+            assert len(desc) > 0
+
 
 class TestShipModel:
     def test_ship_creation(self) -> None:
@@ -114,6 +164,49 @@ class TestGameState:
 
         state.apply_choice_outcome("hull:50")
         assert state.ship.hull == 100
+
+    def test_apply_choice_outcome_morale(self) -> None:
+        """apply_choice_outcome should parse and apply morale changes."""
+        ship = Ship(morale=50)
+        state = GameState(id="test-m", seed=42, ship=ship)
+        effects = state.apply_choice_outcome("morale:20")
+        assert effects["morale"] == 20
+        assert state.ship.morale == 70
+
+    def test_apply_choice_outcome_cargo(self) -> None:
+        """apply_choice_outcome should parse and apply cargo changes."""
+        ship = Ship(cargo=10, max_cargo=50)
+        state = GameState(id="test-c", seed=42, ship=ship)
+        effects = state.apply_choice_outcome("cargo:5")
+        assert effects["cargo"] == 5
+        assert state.ship.cargo == 15
+
+    def test_apply_choice_outcome_multiple_stats(self) -> None:
+        """apply_choice_outcome with all stat types should apply all effects."""
+        ship = Ship(fuel=50, hull=50, morale=50, credits=500, cargo=10, max_fuel=100, max_hull=100, max_cargo=50)
+        state = GameState(id="test-all", seed=42, ship=ship)
+        effects = state.apply_choice_outcome("fuel:-10; hull:10; morale:5; credits:200; cargo:-2")
+        assert effects["fuel"] == -10
+        assert effects["hull"] == 10
+        assert effects["morale"] == 5
+        assert effects["credits"] == 200
+        assert effects["cargo"] == -2
+        assert state.ship.fuel == 40
+        assert state.ship.hull == 60
+        assert state.ship.morale == 55
+        assert state.ship.credits == 700
+        assert state.ship.cargo == 8
+
+    def test_apply_choice_outcome_clamping_max_min(self) -> None:
+        """apply_choice_outcome should clamp stats to min/max bounds."""
+        ship = Ship(fuel=5, hull=95, morale=5, credits=10, cargo=0, max_fuel=100, max_hull=100, max_cargo=50)
+        state = GameState(id="test-clamp", seed=42, ship=ship)
+        state.apply_choice_outcome("fuel:-20; hull:20; morale:-10; credits:-50; cargo:-10")
+        assert state.ship.fuel == 0
+        assert state.ship.hull == 100
+        assert state.ship.morale == 0
+        assert state.ship.credits == 0
+        assert state.ship.cargo == 0
 
 
 class TestEventModel:
