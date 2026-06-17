@@ -1,3 +1,12 @@
+"""
+Procedural universe generation system.
+
+Provides functions for generating a deterministic galaxy of star
+systems with planets, moons, and celestial phenomena using a seed-based
+random number generator. Also includes distance calculations and
+connectivity enforcement.
+"""
+
 import random
 import math
 
@@ -10,15 +19,59 @@ from backend.models.system import StarSystem, Body
 
 
 def seeded_random(seed: int, *extra: str) -> random.Random:
+    """Create a deterministic random number generator from a seed.
+
+    Combines the base seed with any number of extra string arguments
+    to produce a reproducible RNG instance.
+
+    :param seed: The base universe seed.
+    :type seed: int
+    :param extra: Additional strings to mix into the seed for
+        independent RNG streams.
+    :type extra: str
+    :returns: A seeded :class:`random.Random` instance.
+    :rtype: random.Random
+    """
     rng = random.Random(str(seed) + "".join(str(e) for e in extra))
     return rng
 
 
 def _pick_weighted(rng: random.Random, items: list[str], weights: list[int]) -> str:
+    """Pick a random item from a list using weighted probabilities.
+
+    Uses ``rng.choices`` to select one item from ``items`` according
+    to the corresponding ``weights``.
+
+    :param rng: The seeded random number generator.
+    :type rng: random.Random
+    :param items: The list of items to choose from.
+    :type items: list[str]
+    :param weights: The weight for each item, corresponding 1:1 with
+        ``items``.
+    :type weights: list[int]
+    :returns: The selected item.
+    :rtype: str
+    """
     return rng.choices(items, weights=weights, k=1)[0]
 
 
 def _system_name(rng: random.Random, idx: int, x: float, y: float) -> str:
+    """Generate a pseudo-astronomical name for a star system.
+
+    Combines a prefix or suffix with a random sector letter and
+    number to produce names like "Proxima A342" or "Vega B7891".
+
+    :param rng: The seeded random number generator.
+    :type rng: random.Random
+    :param idx: The index of this system in the generation sequence.
+    :type idx: int
+    :param x: The x-coordinate of the system in the galaxy.
+    :type x: float
+    :param y: The y-coordinate of the system in the galaxy.
+    :type y: float
+    :returns: A generated system name string.
+    :rtype: str
+    """
     prefixes = ["Proxima", "Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta", "Nova", "Kepler", "Gliese"]
     suffixes = ["Prime", "Majoris", "Minoris", "Centauri", "Draconis", "Lyrae", "Andromedae", "Cygni", "Rigel", "Vega"]
     sector = chr(65 + rng.randint(0, 25))
@@ -30,11 +83,39 @@ def _system_name(rng: random.Random, idx: int, x: float, y: float) -> str:
 
 
 def _star_type(rng: random.Random) -> str:
+    """Pick a random star spectral type using weighted probabilities.
+
+    Uses the predefined ``STAR_SPECTRAL_TYPES`` with weights
+    favouring cooler, more common stars (K, M) over rare hot stars
+    (O, B).
+
+    :param rng: The seeded random number generator.
+    :type rng: random.Random
+    :returns: A star spectral type letter (e.g. ``"G"``, ``"K"``).
+    :rtype: str
+    """
     weights = [1, 3, 5, 10, 20, 25, 36]
     return rng.choices(STAR_SPECTRAL_TYPES, weights=weights, k=1)[0]
 
 
 def _generate_body_name(rng: random.Random, body_type: str, idx: int, parent_name: str) -> str:
+    """Generate a name for a celestial body.
+
+    Uses planet name pools for planets, moon name pools for moons,
+    and a descriptive belt name for asteroid belts.
+
+    :param rng: The seeded random number generator.
+    :type rng: random.Random
+    :param body_type: The type of body (``"planet"``, ``"moon"``, or
+        ``"asteroid_belt"``).
+    :type body_type: str
+    :param idx: The index of this body in the orbital sequence.
+    :type idx: int
+    :param parent_name: The name of the parent star system.
+    :type parent_name: str
+    :returns: A generated body name string.
+    :rtype: str
+    """
     if body_type == "planet":
         name_pool = PLANET_NAMES.copy()
         rng.shuffle(name_pool)
@@ -49,6 +130,27 @@ def _generate_body_name(rng: random.Random, body_type: str, idx: int, parent_nam
 
 
 def _biome_for_body(rng: random.Random, star_type: str, distance: float, body_type: str) -> str:
+    """Determine the biome type for a celestial body.
+
+    Selects a biome based on the body type, its distance from the
+    star, and the star's spectral type. Inner orbits tend toward
+    volcanic or barren; outer orbits lean toward tundra or gas
+    giants. Sun-like stars (G, K) in the habitable zone may produce
+    jungle or ocean biomes.
+
+    :param rng: The seeded random number generator.
+    :type rng: random.Random
+    :param star_type: The spectral type of the parent star.
+    :type star_type: str
+    :param distance: The body's distance from the star as a fraction
+        of the system radius (0.0--1.0).
+    :type distance: float
+    :param body_type: The type of body (``"planet"``, ``"moon"``, or
+        ``"asteroid_belt"``).
+    :type body_type: str
+    :returns: A biome type string (e.g. ``"desert"``, ``"jungle"``).
+    :rtype: str
+    """
     if body_type == "asteroid_belt":
         return "barren"
     if body_type == "moon":
@@ -68,6 +170,24 @@ def _biome_for_body(rng: random.Random, star_type: str, distance: float, body_ty
 
 
 def _body_description(rng: random.Random, body_type: str, biome: str, star_type: str) -> str:
+    """Pick a flavour text description for a celestial body.
+
+    Selects a random descriptive sentence from a biome-specific pool
+    of flavour texts. Falls back to a generic description if the
+    biome is unrecognised.
+
+    :param rng: The seeded random number generator.
+    :type rng: random.Random
+    :param body_type: The type of body (``"planet"``, ``"moon"``,
+        etc.).
+    :type body_type: str
+    :param biome: The biome of the body.
+    :type biome: str
+    :param star_type: The spectral type of the parent star.
+    :type star_type: str
+    :returns: A flavour text description string.
+    :rtype: str
+    """
     descs = {
         "desert": [
             "A vast expanse of rust-colored dunes stretches beneath twin suns.",
@@ -114,6 +234,21 @@ def _body_description(rng: random.Random, body_type: str, biome: str, star_type:
 
 
 def generate_system(rng: random.Random, idx: int, galaxy_rng: random.Random) -> StarSystem:
+    """Generate a single star system with all its orbiting bodies.
+
+    Produces a star system with a random position in the galaxy,
+    a spectral type, an optional phenomenon, and a randomized set
+    of planets, moons, and asteroid belts.
+
+    :param rng: Seeded RNG for system details (names, biomes, etc.).
+    :type rng: random.Random
+    :param idx: The index of this system in the generation sequence.
+    :type idx: int
+    :param galaxy_rng: Seeded RNG for system positions.
+    :type galaxy_rng: random.Random
+    :returns: A fully generated :class:`StarSystem`.
+    :rtype: StarSystem
+    """
     x = galaxy_rng.uniform(50, GALAXY_WIDTH - 50)
     y = galaxy_rng.uniform(50, GALAXY_HEIGHT - 50)
 
@@ -180,6 +315,22 @@ NEIGHBOR_DISTANCE_THRESHOLD = 60
 
 
 def generate_universe(seed: int, system_count: int = GALAXY_SYSTEM_COUNT) -> dict[str, StarSystem]:
+    """Generate the complete galaxy of star systems.
+
+    Creates the specified number of star systems using deterministic,
+    seed-based RNGs for layout and details. Ensures every system has
+    at least one neighbor within a reasonable distance.
+
+    :param seed: The universe generation seed for deterministic
+        reproducibility.
+    :type seed: int
+    :param system_count: The number of star systems to generate
+        (defaults to ``GALAXY_SYSTEM_COUNT``).
+    :type system_count: int
+    :returns: A dictionary mapping system IDs to :class:`StarSystem`
+        instances.
+    :rtype: dict[str, StarSystem]
+    """
     galaxy_rng = seeded_random(seed, "galaxy_layout")
     system_rng = seeded_random(seed, "system_detail")
 
@@ -194,6 +345,18 @@ def generate_universe(seed: int, system_count: int = GALAXY_SYSTEM_COUNT) -> dic
 
 
 def _ensure_connectivity(systems: dict[str, StarSystem], rng: random.Random) -> None:
+    """Ensure every star system has at least one neighbor nearby.
+
+    Iterates over all systems and checks whether each has at least
+    one other system within ``NEIGHBOR_DISTANCE_THRESHOLD``. For any
+    isolated system, moves its closest neighbor closer so that the
+    galaxy graph remains connected.
+
+    :param systems: The dictionary of star systems keyed by system ID.
+    :type systems: dict[str, StarSystem]
+    :param rng: The seeded random number generator.
+    :type rng: random.Random
+    """
     sys_list = list(systems.values())
     for i, sys in enumerate(sys_list):
         has_neighbor = False
@@ -221,6 +384,15 @@ def _ensure_connectivity(systems: dict[str, StarSystem], rng: random.Random) -> 
 
 
 def distance_between(sys1: StarSystem, sys2: StarSystem) -> float:
+    """Calculate the Euclidean distance between two star systems.
+
+    :param sys1: The first star system.
+    :type sys1: StarSystem
+    :param sys2: The second star system.
+    :type sys2: StarSystem
+    :returns: The straight-line distance in galaxy coordinate units.
+    :rtype: float
+    """
     dx = sys1.x - sys2.x
     dy = sys1.y - sys2.y
     return math.sqrt(dx * dx + dy * dy)

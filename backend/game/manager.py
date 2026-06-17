@@ -1,3 +1,11 @@
+"""
+Game state management module.
+
+Provides functions for creating new games, loading and saving game
+state, serializing/deserializing state to/from dictionaries, and
+querying galaxy and system data.
+"""
+
 import uuid
 
 from backend.database import create_game, load_game, save_game as db_save, load_save
@@ -15,6 +23,21 @@ from backend.game.engine import (
 
 
 def new_game(seed: int | None = None, ship_name: str | None = None) -> GameState:
+    """Create a new game session with a procedurally generated universe.
+
+    Generates a UUID for the game, creates the galaxy using the given
+    (or default) seed, initializes the ship with default stats, and
+    places the player in the first generated star system.
+
+    :param seed: The universe generation seed. Uses ``DEFAULT_SEED`` (42)
+        if ``None``.
+    :type seed: int | None
+    :param ship_name: The name of the player's ship. Uses
+        ``DEFAULT_SHIP_NAME`` ("Serendipity") if ``None``.
+    :type ship_name: str | None
+    :returns: A fully initialized :class:`GameState`.
+    :rtype: GameState
+    """
     s = seed if seed is not None else DEFAULT_SEED
     name = ship_name if ship_name else DEFAULT_SHIP_NAME
     game_id = str(uuid.uuid4())
@@ -40,6 +63,21 @@ def new_game(seed: int | None = None, ship_name: str | None = None) -> GameState
 
 
 def load_or_create(game_id: str, seed: int | None = None, ship_name: str | None = None) -> GameState:
+    """Load an existing game or create a new one if not found.
+
+    Attempts to load a persisted game by its ID. If no saved data
+    exists, creates a new game with the given parameters and assigns
+    the requested game_id.
+
+    :param game_id: The unique identifier for the game.
+    :type game_id: str
+    :param seed: The universe generation seed for a new game.
+    :type seed: int | None
+    :param ship_name: The ship name for a new game.
+    :type ship_name: str | None
+    :returns: The loaded or newly created :class:`GameState`.
+    :rtype: GameState
+    """
     data = load_game(game_id)
     if data:
         return _state_from_dict(data)
@@ -49,10 +87,28 @@ def load_or_create(game_id: str, seed: int | None = None, ship_name: str | None 
 
 
 def get_game_state(state: GameState) -> dict:
+    """Serialize the game state to a dictionary.
+
+    :param state: The current game state.
+    :type state: GameState
+    :returns: A dictionary representation of the game state.
+    :rtype: dict
+    """
     return _state_to_dict(state)
 
 
 def get_galaxy(state: GameState) -> dict:
+    """Build a galaxy map overview from the current game state.
+
+    Returns summary data for every system including coordinates,
+    star type, phenomenon, visit/scan status, and body count.
+
+    :param state: The current game state.
+    :type state: GameState
+    :returns: A dictionary with ``current_system_id``, ``systems``
+        (list of system summaries), and ``systems_visited`` count.
+    :rtype: dict
+    """
     systems_data = []
     for sys_id, sys_data in state.systems.items():
         systems_data.append({
@@ -76,6 +132,20 @@ def get_galaxy(state: GameState) -> dict:
 
 
 def get_system_detail(state: GameState, sys_id: str) -> dict | None:
+    """Retrieve detailed information about a specific star system.
+
+    Includes the full system data, whether it is the current system,
+    and nearby systems if it is current.
+
+    :param state: The current game state.
+    :type state: GameState
+    :param sys_id: The unique identifier of the star system.
+    :type sys_id: str
+    :returns: A dictionary with ``system``, ``is_current``, and
+        ``nearby_systems`` keys, or ``None`` if the system is not
+        found.
+    :rtype: dict | None
+    """
     system = state.systems.get(sys_id)
     if not system:
         return None
@@ -89,12 +159,30 @@ def get_system_detail(state: GameState, sys_id: str) -> dict | None:
 
 
 def game_save(state: GameState) -> None:
+    """Persist the current game state to the database.
+
+    Writes the game state to both the ``games`` and ``saves`` tables.
+
+    :param state: The current game state.
+    :type state: GameState
+    """
     data = _state_to_dict(state)
     create_game(state.id, state.seed, state.ship.name, data)
     db_save(state.id, data)
 
 
 def game_load(game_id: str) -> GameState | None:
+    """Load a game state from the database by game ID.
+
+    Attempts to load the most recent save first, then falls back to
+    the main game record.
+
+    :param game_id: The unique identifier for the game.
+    :type game_id: str
+    :returns: The deserialized :class:`GameState`, or ``None`` if
+        no data is found.
+    :rtype: GameState | None
+    """
     data = load_save(game_id)
     if not data:
         data = load_game(game_id)
@@ -104,6 +192,17 @@ def game_load(game_id: str) -> GameState | None:
 
 
 def _state_to_dict(state: GameState) -> dict:
+    """Serialize a :class:`GameState` to a plain dictionary.
+
+    Converts all nested objects (ship, systems, events, discoveries,
+    lore fragments) to their dictionary representations for database
+    storage and JSON serialisation.
+
+    :param state: The game state to serialize.
+    :type state: GameState
+    :returns: A dictionary representation of the game state.
+    :rtype: dict
+    """
     return {
         "id": state.id,
         "seed": state.seed,
@@ -119,6 +218,17 @@ def _state_to_dict(state: GameState) -> dict:
 
 
 def _state_from_dict(d: dict) -> GameState:
+    """Deserialize a dictionary back into a :class:`GameState`.
+
+    Reconstructs a full :class:`GameState` object from a dictionary,
+    including all nested objects such as :class:`StarSystem`,
+    :class:`Event`, :class:`Discovery`, and :class:`LoreFragment`.
+
+    :param d: The dictionary representation of a game state.
+    :type d: dict
+    :returns: A fully reconstructed :class:`GameState`.
+    :rtype: GameState
+    """
     from backend.models.system import StarSystem
     from backend.models.event import Event
     from backend.models.discovery import Discovery, LoreFragment

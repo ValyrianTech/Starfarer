@@ -1,3 +1,11 @@
+"""
+Game configuration constants for Starfarer: Echoes of the Void.
+
+This module defines all configurable game parameters including initial ship
+stats, galaxy dimensions, fuel costs, upgrade systems, star types, biome
+definitions, and system phenomena.
+"""
+
 GAME_NAME = "Starfarer: Echoes of the Void"
 GAME_VERSION = "0.1.0"
 

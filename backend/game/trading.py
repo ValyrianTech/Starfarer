@@ -1,3 +1,11 @@
+"""
+Trading and ship upgrade system.
+
+Provides functions for viewing available upgrades, purchasing ship
+upgrades, and trading resources (fuel, repairs, selling discoveries)
+at trading stations.
+"""
+
 import random
 
 from backend.config import UPGRADE_COSTS, UPGRADE_EFFECTS, UPGRADE_MAX_LEVELS
@@ -6,6 +14,17 @@ from backend.models.ship import Ship
 
 
 def get_upgrade_info(ship: Ship) -> list[dict]:
+    """Get information about all available ship upgrades.
+
+    Computes the current level, max level, cost for next level, and
+    effect for each upgrade type.
+
+    :param ship: The player's ship.
+    :type ship: Ship
+    :returns: A list of upgrade info dictionaries with keys: id, name,
+        current_level, max_level, cost, effect, and can_upgrade.
+    :rtype: list[dict]
+    """
     info = []
     for upgrade_id, cost in UPGRADE_COSTS.items():
         current_level = ship.upgrades.get(upgrade_id, 0)
@@ -23,6 +42,20 @@ def get_upgrade_info(ship: Ship) -> list[dict]:
 
 
 def purchase_upgrade(state: GameState, upgrade_id: str) -> tuple[bool, str]:
+    """Purchase a ship upgrade if the ship has sufficient credits.
+
+    Validates that the upgrade exists, is not already at max level,
+    and that the ship has enough credits. Applies the upgrade effect
+    to the ship's stats and logs the purchase.
+
+    :param state: The current game state.
+    :type state: GameState
+    :param upgrade_id: The identifier of the upgrade to purchase
+        (e.g. ``"hyperdrive"``, ``"scanner"``).
+    :type upgrade_id: str
+    :returns: A tuple of ``(success, message)``.
+    :rtype: tuple[bool, str]
+    """
     if upgrade_id not in UPGRADE_COSTS:
         return False, f"Unknown upgrade: {upgrade_id}"
 
@@ -57,6 +90,25 @@ def purchase_upgrade(state: GameState, upgrade_id: str) -> tuple[bool, str]:
 
 
 def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -> tuple[bool, str]:
+    """Perform a buy or sell trade action at the current system.
+
+    Selling finds a matching discovery in the inventory and sells it
+    at a market price modified by the system seed. Buying supports
+    purchasing fuel or repairing the hull.
+
+    :param state: The current game state.
+    :type state: GameState
+    :param action: Either ``"buy"`` or ``"sell"``.
+    :type action: str
+    :param item: The item to trade (e.g. ``"fuel"``, ``"repair"``,
+        or a discovery category/name).
+    :type item: str
+    :param quantity: The quantity to buy or the multiplier for
+        repairs.
+    :type quantity: int
+    :returns: A tuple of ``(success, message)``.
+    :rtype: tuple[bool, str]
+    """
     trade_prices = {
         "fuel": (30, 50),
         "food": (10, 25),

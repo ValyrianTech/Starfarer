@@ -1,3 +1,10 @@
+"""
+Procedural event generation and resolution system.
+
+Defines the template library of in-game events and provides functions
+for triggering random events and resolving player choices against them.
+"""
+
 import random
 import uuid
 
@@ -9,7 +16,7 @@ EVENT_TEMPLATES = [
     {
         "type": "exploration",
         "title": "Ancient Signal",
-        "flavor": "Your comms array picks up a faint, repeating signal from the planet below. It follows no known protocol but has a deliberate pattern — clearly artificial.",
+        "flavor": "Your comms array picks up a faint, repeating signal from the planet below. It follows no known protocol but has a deliberate pattern \u2014 clearly artificial.",
         "choices": [
             {"text": "Investigate the signal source", "outcome": "credits:50; fuel:-5; Discovered a hidden data cache."},
             {"text": "Log the frequency and move on", "outcome": "morale:-5; The crew wonders what was missed."},
@@ -59,7 +66,7 @@ EVENT_TEMPLATES = [
     {
         "type": "discovery",
         "title": "Uncharted Ruins",
-        "flavor": "Scanner detects a massive structure on the surface — clearly artificial, clearly ancient. No record of it exists.",
+        "flavor": "Scanner detects a massive structure on the surface \u2014 clearly artificial, clearly ancient. No record of it exists.",
         "choices": [
             {"text": "Land and explore the ruins", "outcome": "fuel:-10; hull:-5; Made incredible discoveries!"},
             {"text": "Orbital survey only", "outcome": "Documented from orbit. Safer, but less rewarding."},
@@ -71,7 +78,7 @@ EVENT_TEMPLATES = [
         "title": "Life Support Failure",
         "flavor": "A critical failure in the life support system threatens the entire crew. Oxygen levels are dropping fast.",
         "choices": [
-            {"text": "Emergency repair — divert all power", "outcome": "hull:-20; fuel:-20; Life support restored."},
+            {"text": "Emergency repair \u2014 divert all power", "outcome": "hull:-20; fuel:-20; Life support restored."},
             {"text": "Evacuate to escape pods", "outcome": "crew:-1; morale:-30; Lost a crewmate, but the rest survived."},
             {"text": "Ration oxygen and hope for the best", "outcome": "morale:-20; hull:-10; Made it through, barely."},
         ],
@@ -92,7 +99,7 @@ EVENT_TEMPLATES = [
         "flavor": "An automated beacon transmits a looping message: coordinates to an uncharted system, plus a warning in an unknown language.",
         "choices": [
             {"text": "Plot a course to the coordinates", "outcome": "fuel:-20; A leap into the unknown."},
-            {"text": "Decode the warning first", "outcome": "morale:10; credits:50; Deciphered a warning about pirates — avoided a trap."},
+            {"text": "Decode the warning first", "outcome": "morale:10; credits:50; Deciphered a warning about pirates \u2014 avoided a trap."},
             {"text": "Destroy the beacon", "outcome": "Some things are better left alone."},
         ],
     },
@@ -110,6 +117,18 @@ EVENT_TEMPLATES = [
 
 
 def trigger_event(state: GameState) -> Event | None:
+    """Possibly trigger a procedural event based on the current game state.
+
+    Events have a base 35% chance of triggering after a jump, scan, or
+    exploration. If morale is low (<30), crew or crisis events are
+    forced. Systems with phenomena are more likely to trigger hazard,
+    discovery, or exploration events.
+
+    :param state: The current game state.
+    :type state: GameState
+    :returns: A new :class:`Event` if triggered, or ``None`` otherwise.
+    :rtype: Event | None
+    """
     system = state.get_current_system()
     if not system:
         return None
@@ -132,6 +151,20 @@ def trigger_event(state: GameState) -> Event | None:
 
 
 def _create_event(template: dict, system_id: str) -> Event:
+    """Instantiate an :class:`Event` from a template dictionary.
+
+    Generates a unique event ID and creates the event with its
+    title, flavour text, type, and choice list.
+
+    :param template: The event template dictionary with keys
+        ``"title"``, ``"flavor"``, ``"type"``, and ``"choices"``.
+    :type template: dict
+    :param system_id: The ID of the star system where the event
+        occurs.
+    :type system_id: str
+    :returns: A newly created :class:`Event`.
+    :rtype: Event
+    """
     event_id = str(uuid.uuid4())[:12]
     choices = [Choice(text=c["text"], outcome=c["outcome"]) for c in template["choices"]]
     return Event(
@@ -145,6 +178,26 @@ def _create_event(template: dict, system_id: str) -> Event:
 
 
 def resolve_event(state: GameState, event_id: str, choice_idx: int) -> tuple[bool, str, dict]:
+    """Resolve a pending event by applying the chosen outcome.
+
+    Validates that the event exists, is not already resolved, and that
+    the choice index is valid. Applies the outcome effects to the ship
+    and logs the resolution.
+
+    :param state: The current game state.
+    :type state: GameState
+    :param event_id: The unique identifier of the event to resolve.
+    :type event_id: str
+    :param choice_idx: The index of the chosen outcome (0-based).
+    :type choice_idx: int
+    :returns: A tuple of ``(success, message, extra_output)`` where
+        ``extra_output`` is a dictionary containing the event title,
+        chosen text, outcome text, and applied effects.
+    :rtype: tuple[bool, str, dict]
+    :raises ValueError: If the event is not found, already resolved,
+        or the choice index is invalid (caught and returned as
+        ``(False, message, {})``).
+    """
     event = None
     for e in state.events:
         if e.id == event_id:
