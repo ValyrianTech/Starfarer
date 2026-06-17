@@ -1,8 +1,9 @@
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 import os
 
 from backend.api.routes import router
@@ -13,7 +14,7 @@ DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 
 
 @asynccontextmanager
-async def lifespan(application: FastAPI):
+async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
     init_db()
     os.makedirs(DATA_DIR, exist_ok=True)
     os.makedirs(os.path.join(DATA_DIR, "save"), exist_ok=True)
@@ -47,8 +48,8 @@ if os.path.isdir(FRONTEND_DIR):
 
 
 @app.get("/")
-def index():
+def index() -> Response:
     index_path = os.path.join(FRONTEND_DIR, "index.html")
     if os.path.exists(index_path):
         return FileResponse(index_path)
-    return {"message": "Starfarer API. Visit /docs for API documentation."}
+    return JSONResponse({"message": "Starfarer API. Visit /docs for API documentation."})

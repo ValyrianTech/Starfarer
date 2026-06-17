@@ -1,5 +1,6 @@
 import random
 import uuid
+from typing import Any
 
 from backend.config import (
     JUMP_FUEL_COST_PER_LY, SCAN_FUEL_COST, EXPLORE_FUEL_COST,
@@ -71,7 +72,7 @@ def get_nearby_systems(state: GameState) -> list[dict]:
     current = state.get_current_system()
     if not current:
         return []
-    nearby = []
+    nearby: list[dict[str, Any]] = []
     for sys_id, sys_data in state.systems.items():
         if sys_id == ship.current_system_id:
             continue

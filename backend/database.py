@@ -16,7 +16,7 @@ def get_db() -> sqlite3.Connection:
     return conn
 
 
-def init_db():
+def init_db() -> None:
     conn = get_db()
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS games (

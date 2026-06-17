@@ -35,7 +35,7 @@ def new_game(seed: int | None = None, ship_name: str | None = None) -> GameState
         first_sys.visited = True
     state.systems_visited = 1
     state.add_log("system", f"New game started. Universe seed: {s}. Ship: {name}.")
-    state.add_log("navigation", f"Began journey in the {first_sys.name} system.")
+    state.add_log("navigation", f"Began journey in the {first_sys.name if first_sys else 'Unknown'} system.")
     return state
 
 

@@ -2,6 +2,7 @@ import time
 
 from fastapi import APIRouter, HTTPException
 
+from backend.models.game_state import GameState
 from backend.api.schemas import (
     NewGameRequest, ResolveEventRequest, TradeRequest, UpgradeRequest,
     HealthResponse,
@@ -22,7 +23,7 @@ START_TIME = time.time()
 router = APIRouter(prefix="/api")
 
 
-def _get_state(game_id: str):
+def _get_state(game_id: str) -> GameState | None:
     if game_id in GAME_STORE:
         return GAME_STORE[game_id]
     data = db_load_game(game_id)
@@ -34,19 +35,19 @@ def _get_state(game_id: str):
     return None
 
 
-def _save_state(game_id: str):
+def _save_state(game_id: str) -> None:
     if game_id in GAME_STORE:
         game_save(GAME_STORE[game_id])
 
 
 @router.get("/health", response_model=HealthResponse)
-def health():
+def health() -> HealthResponse:
     uptime = round(time.time() - START_TIME, 1)
     return HealthResponse(status="ok", version="0.1.0", uptime=f"{uptime}s")
 
 
 @router.post("/game/new")
-def api_new_game(req: NewGameRequest):
+def api_new_game(req: NewGameRequest) -> dict:
     state = new_game(seed=req.seed, ship_name=req.ship_name)
     if req.game_id:
         state.id = req.game_id
@@ -59,7 +60,7 @@ def api_new_game(req: NewGameRequest):
 
 
 @router.get("/game/{game_id}")
-def api_get_game(game_id: str):
+def api_get_game(game_id: str) -> dict:
     state = _get_state(game_id)
     if not state:
         raise HTTPException(status_code=404, detail="Game not found")
@@ -67,7 +68,7 @@ def api_get_game(game_id: str):
 
 
 @router.get("/game/{game_id}/galaxy")
-def api_galaxy(game_id: str):
+def api_galaxy(game_id: str) -> dict:
     state = _get_state(game_id)
     if not state:
         raise HTTPException(status_code=404, detail="Game not found")
@@ -75,7 +76,7 @@ def api_galaxy(game_id: str):
 
 
 @router.get("/game/{game_id}/system/{sys_id}")
-def api_system_detail(game_id: str, sys_id: str):
+def api_system_detail(game_id: str, sys_id: str) -> dict:
     state = _get_state(game_id)
     if not state:
         raise HTTPException(status_code=404, detail="Game not found")
@@ -86,7 +87,7 @@ def api_system_detail(game_id: str, sys_id: str):
 
 
 @router.post("/game/{game_id}/jump/{sys_id}")
-def api_jump(game_id: str, sys_id: str):
+def api_jump(game_id: str, sys_id: str) -> dict:
     state = _get_state(game_id)
     if not state:
         raise HTTPException(status_code=404, detail="Game not found")
@@ -96,28 +97,31 @@ def api_jump(game_id: str, sys_id: str):
 
     target = state.systems[sys_id]
     current = state.get_current_system()
+    if not current:
+        raise HTTPException(status_code=400, detail="No current system")
 
     ok, fuel_cost, msg = can_jump(state.ship, target, current)
     if not ok:
         raise HTTPException(status_code=400, detail=f"Cannot jump to {target.name}: {msg}")
 
-    result = perform_jump(state, target, fuel_cost)
+    result = perform_jump(state, target, int(fuel_cost))
     game_save(state)
 
     event = trigger_event(state)
     if event:
         state.events.append(event)
 
+    current_system = state.get_current_system()
     return {
         "result": result,
-        "current_system": state.get_current_system().to_dict() if state.get_current_system() else None,
+        "current_system": current_system.to_dict() if current_system else None,
         "ship": state.ship.to_dict(),
         "pending_event": event.to_dict() if event and not event.resolved else None,
     }
 
 
 @router.post("/game/{game_id}/scan")
-def api_scan(game_id: str):
+def api_scan(game_id: str) -> dict:
     state = _get_state(game_id)
     if not state:
         raise HTTPException(status_code=404, detail="Game not found")
@@ -138,7 +142,7 @@ def api_scan(game_id: str):
 
 
 @router.post("/game/{game_id}/land/{body_id}")
-def api_land(game_id: str, body_id: str):
+def api_land(game_id: str, body_id: str) -> dict:
     state = _get_state(game_id)
     if not state:
         raise HTTPException(status_code=404, detail="Game not found")
@@ -154,7 +158,7 @@ def api_land(game_id: str, body_id: str):
 
 
 @router.post("/game/{game_id}/explore")
-def api_explore(game_id: str):
+def api_explore(game_id: str) -> dict:
     state = _get_state(game_id)
     if not state:
         raise HTTPException(status_code=404, detail="Game not found")
@@ -174,7 +178,7 @@ def api_explore(game_id: str):
 
 
 @router.post("/game/{game_id}/event/{event_id}/resolve")
-def api_resolve_event(game_id: str, event_id: str, req: ResolveEventRequest):
+def api_resolve_event(game_id: str, event_id: str, req: ResolveEventRequest) -> dict:
     state = _get_state(game_id)
     if not state:
         raise HTTPException(status_code=404, detail="Game not found")
@@ -190,7 +194,7 @@ def api_resolve_event(game_id: str, event_id: str, req: ResolveEventRequest):
 
 
 @router.get("/game/{game_id}/log")
-def api_log(game_id: str):
+def api_log(game_id: str) -> dict:
     state = _get_state(game_id)
     if not state:
         raise HTTPException(status_code=404, detail="Game not found")
@@ -202,7 +206,7 @@ def api_log(game_id: str):
 
 
 @router.get("/game/{game_id}/discoveries")
-def api_discoveries(game_id: str):
+def api_discoveries(game_id: str) -> dict:
     state = _get_state(game_id)
     if not state:
         raise HTTPException(status_code=404, detail="Game not found")
@@ -213,7 +217,7 @@ def api_discoveries(game_id: str):
 
 
 @router.post("/game/{game_id}/trade")
-def api_trade(game_id: str, req: TradeRequest):
+def api_trade(game_id: str, req: TradeRequest) -> dict:
     state = _get_state(game_id)
     if not state:
         raise HTTPException(status_code=404, detail="Game not found")
@@ -228,7 +232,7 @@ def api_trade(game_id: str, req: TradeRequest):
 
 
 @router.post("/game/{game_id}/upgrade")
-def api_upgrade(game_id: str, req: UpgradeRequest):
+def api_upgrade(game_id: str, req: UpgradeRequest) -> dict:
     state = _get_state(game_id)
     if not state:
         raise HTTPException(status_code=404, detail="Game not found")
@@ -243,7 +247,7 @@ def api_upgrade(game_id: str, req: UpgradeRequest):
 
 
 @router.get("/game/{game_id}/upgrades")
-def api_upgrades_info(game_id: str):
+def api_upgrades_info(game_id: str) -> dict:
     state = _get_state(game_id)
     if not state:
         raise HTTPException(status_code=404, detail="Game not found")
@@ -254,7 +258,7 @@ def api_upgrades_info(game_id: str):
 
 
 @router.get("/game/{game_id}/nearby")
-def api_nearby(game_id: str):
+def api_nearby(game_id: str) -> dict:
     state = _get_state(game_id)
     if not state:
         raise HTTPException(status_code=404, detail="Game not found")
@@ -267,7 +271,7 @@ def api_nearby(game_id: str):
 
 
 @router.post("/game/{game_id}/save")
-def api_save(game_id: str):
+def api_save(game_id: str) -> dict:
     state = _get_state(game_id)
     if not state:
         raise HTTPException(status_code=404, detail="Game not found")
@@ -276,7 +280,7 @@ def api_save(game_id: str):
 
 
 @router.post("/game/{game_id}/load")
-def api_load(game_id: str):
+def api_load(game_id: str) -> dict:
     state = game_load_func(game_id)
     if not state:
         raise HTTPException(status_code=404, detail="Save not found for this game")
@@ -288,18 +292,19 @@ def api_load(game_id: str):
 
 
 @router.get("/leaderboard")
-def api_leaderboard():
+def api_leaderboard() -> dict:
     return {
         "leaderboard": get_leaderboard(limit=10),
     }
 
 
-def _full_state_response(state):
+def _full_state_response(state: GameState) -> dict:
+    current_system = state.get_current_system()
     return {
         "game_id": state.id,
         "seed": state.seed,
         "ship": state.ship.to_dict(),
-        "current_system": state.get_current_system().to_dict() if state.get_current_system() else None,
+        "current_system": current_system.to_dict() if current_system else None,
         "discoveries": [d.to_dict() for d in state.discoveries],
         "events_pending": [e.to_dict() for e in state.events if not e.resolved],
         "log_entries": list(reversed(state.log_entries))[:20],

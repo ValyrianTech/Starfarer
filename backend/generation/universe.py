@@ -9,16 +9,16 @@ from backend.config import (
 from backend.models.system import StarSystem, Body
 
 
-def seeded_random(seed, *extra):
+def seeded_random(seed: int, *extra: str) -> random.Random:
     rng = random.Random(str(seed) + "".join(str(e) for e in extra))
     return rng
 
 
-def _pick_weighted(rng, items, weights):
+def _pick_weighted(rng: random.Random, items: list[str], weights: list[int]) -> str:
     return rng.choices(items, weights=weights, k=1)[0]
 
 
-def _system_name(rng, idx, x, y):
+def _system_name(rng: random.Random, idx: int, x: float, y: float) -> str:
     prefixes = ["Proxima", "Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta", "Nova", "Kepler", "Gliese"]
     suffixes = ["Prime", "Majoris", "Minoris", "Centauri", "Draconis", "Lyrae", "Andromedae", "Cygni", "Rigel", "Vega"]
     sector = chr(65 + rng.randint(0, 25))
@@ -29,12 +29,12 @@ def _system_name(rng, idx, x, y):
         return f"{rng.choice(suffixes)} {sector}{num}"
 
 
-def _star_type(rng):
+def _star_type(rng: random.Random) -> str:
     weights = [1, 3, 5, 10, 20, 25, 36]
     return rng.choices(STAR_SPECTRAL_TYPES, weights=weights, k=1)[0]
 
 
-def _generate_body_name(rng, body_type, idx, parent_name):
+def _generate_body_name(rng: random.Random, body_type: str, idx: int, parent_name: str) -> str:
     if body_type == "planet":
         name_pool = PLANET_NAMES.copy()
         rng.shuffle(name_pool)
@@ -48,7 +48,7 @@ def _generate_body_name(rng, body_type, idx, parent_name):
     return f"Body {idx}"
 
 
-def _biome_for_body(rng, star_type, distance, body_type):
+def _biome_for_body(rng: random.Random, star_type: str, distance: float, body_type: str) -> str:
     if body_type == "asteroid_belt":
         return "barren"
     if body_type == "moon":
@@ -67,7 +67,7 @@ def _biome_for_body(rng, star_type, distance, body_type):
         return rng.choice(["tundra", "barren"])
 
 
-def _body_description(rng, body_type, biome, star_type):
+def _body_description(rng: random.Random, body_type: str, biome: str, star_type: str) -> str:
     descs = {
         "desert": [
             "A vast expanse of rust-colored dunes stretches beneath twin suns.",

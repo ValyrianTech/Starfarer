@@ -22,7 +22,7 @@ class GameState:
     systems_visited: int = 0
     game_started: str = ""
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if not self.game_started:
             self.game_started = datetime.now(timezone.utc).isoformat()
 
