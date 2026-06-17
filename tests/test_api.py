@@ -12,12 +12,12 @@ client = TestClient(app)
 
 
 @pytest.fixture(autouse=True)
-def setup_db():
+def setup_db() -> None:
     init_db()
 
 
 class TestAPIHealth:
-    def test_health(self):
+    def test_health(self) -> None:
         resp = client.get("/api/health")
         assert resp.status_code == 200
         assert resp.json()["status"] == "ok"
@@ -25,28 +25,28 @@ class TestAPIHealth:
 
 
 class TestAPIGameCreation:
-    def test_create_game_default(self):
+    def test_create_game_default(self) -> None:
         resp = client.post("/api/game/new", json={})
         assert resp.status_code == 200
         data = resp.json()
         assert "game_id" in data
         assert data["state"]["ship"]["name"] == "Serendipity"
 
-    def test_create_game_custom(self):
+    def test_create_game_custom(self) -> None:
         resp = client.post("/api/game/new", json={"seed": 999, "ship_name": "Voyager"})
         assert resp.status_code == 200
         data = resp.json()
         assert data["state"]["ship"]["name"] == "Voyager"
         assert data["state"]["seed"] == 999
 
-    def test_create_game_with_custom_id(self):
+    def test_create_game_with_custom_id(self) -> None:
         resp = client.post("/api/game/new", json={"game_id": "test-game-id"})
         assert resp.status_code == 200
         assert resp.json()["game_id"] == "test-game-id"
 
 
 class TestAPIGameFlow:
-    def test_full_game_flow(self):
+    def test_full_game_flow(self) -> None:
         resp = client.post("/api/game/new", json={"seed": 42})
         assert resp.status_code == 200
         game_id = resp.json()["game_id"]
@@ -102,23 +102,23 @@ class TestAPIGameFlow:
 
 
 class TestAPIEdgeCases:
-    def test_nonexistent_game(self):
+    def test_nonexistent_game(self) -> None:
         resp = client.get("/api/game/nonexistent")
         assert resp.status_code == 404
 
-    def test_nonexistent_system(self):
+    def test_nonexistent_system(self) -> None:
         resp = client.post("/api/game/new", json={})
         game_id = resp.json()["game_id"]
         resp = client.get(f"/api/game/{game_id}/system/fake_sys")
         assert resp.status_code == 404
 
-    def test_jump_to_nonexistent_system(self):
+    def test_jump_to_nonexistent_system(self) -> None:
         resp = client.post("/api/game/new", json={"seed": 42})
         game_id = resp.json()["game_id"]
         resp = client.post(f"/api/game/{game_id}/jump/fake_sys")
         assert resp.status_code == 404
 
-    def test_buy_fuel(self):
+    def test_buy_fuel(self) -> None:
         resp = client.post("/api/game/new", json={"seed": 42})
         game_id = resp.json()["game_id"]
         resp = client.post(f"/api/game/{game_id}/trade", json={
@@ -126,14 +126,14 @@ class TestAPIEdgeCases:
         })
         assert resp.status_code in (200, 400)
 
-    def test_upgrade_info(self):
+    def test_upgrade_info(self) -> None:
         resp = client.post("/api/game/new", json={})
         game_id = resp.json()["game_id"]
         resp = client.get(f"/api/game/{game_id}/upgrades")
         assert resp.status_code == 200
         assert len(resp.json()["upgrades"]) > 0
 
-    def test_leaderboard(self):
+    def test_leaderboard(self) -> None:
         resp = client.get("/api/leaderboard")
         assert resp.status_code == 200
         assert "leaderboard" in resp.json()
