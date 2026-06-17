@@ -62,6 +62,7 @@ class TestNavigation:
     def test_can_jump_same_system(self) -> None:
         state = new_game(seed=42)
         cur = state.get_current_system()
+        assert cur is not None
         ok, cost, msg = can_jump(state.ship, cur, cur)
         assert ok is False
         assert "Already" in msg
@@ -308,6 +309,7 @@ class TestTradingAdvanced:
         """Selling a discovery by category should remove it and grant credits."""
         state = new_game(seed=42)
         sys = state.get_current_system()
+        assert sys is not None
         planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
         if not planet:
             return
@@ -325,6 +327,7 @@ class TestTradingAdvanced:
         """Selling a discovery by name should remove it and grant credits."""
         state = new_game(seed=42)
         sys = state.get_current_system()
+        assert sys is not None
         planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
         if not planet:
             return
@@ -388,6 +391,7 @@ class TestTradingAdvanced:
         """Trade should fail when system has no trading facilities."""
         state = new_game(seed=42)
         sys = state.get_current_system()
+        assert sys is not None
         sys.phenomenon = "black_hole"
         ok, msg = perform_trade(state, "buy", "fuel", 1)
         assert ok is False
@@ -468,6 +472,7 @@ class TestEventsAdvanced:
         """Trigger event with phenomenon should bias toward certain event types."""
         state = new_game(seed=42)
         sys = state.get_current_system()
+        assert sys is not None
         sys.phenomenon = "black_hole"
         for i in range(200):
             state.log_entries = [{"msg": str(i + j)} for j in range(i % 5)]

@@ -69,7 +69,7 @@ def perform_jump(state: GameState, target_system: StarSystem, fuel_cost: int | f
     :rtype: str
     """
     current = state.get_current_system() or state.systems.get(state.ship.current_system_id)
-    state.ship.fuel -= fuel_cost
+    state.ship.fuel -= int(fuel_cost)
 
     decay = 1
     if state.ship.upgrades.get("life_support", 0) > 0:

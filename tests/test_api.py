@@ -529,6 +529,7 @@ class TestAPIEventTriggerPaths:
         state = GAME_STORE.get(game_id)
         assert state is not None
         sys = state.get_current_system()
+        assert sys is not None
         planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
         if not planet:
             return
@@ -546,7 +547,7 @@ class TestAPIEventTriggerPaths:
         import asyncio
         from backend.main import lifespan, DATA_DIR
 
-        async def run_lifespan():
+        async def run_lifespan() -> None:
             async with lifespan(app):
                 assert os.path.isdir(DATA_DIR)
 
