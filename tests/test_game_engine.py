@@ -9,8 +9,7 @@ from backend.game.engine import (
 from backend.game.trading import get_upgrade_info, purchase_upgrade, perform_trade
 from backend.game.manager import new_game, get_galaxy, get_system_detail, game_save, load_or_create, get_game_state
 from backend.generation.events import trigger_event, resolve_event, EVENT_TEMPLATES
-from backend.config import SCAN_FUEL_COST, EXPLORE_FUEL_COST
-from backend.models.ship import Ship
+from backend.config import SCAN_FUEL_COST
 
 
 class TestGameManager:
@@ -78,6 +77,7 @@ class TestNavigation:
         state = new_game(seed=42)
         perform_scan(state)
         sys = state.get_current_system()
+        assert sys is not None
         assert sys.scanned is True
 
     def test_get_nearby_systems(self) -> None:
@@ -89,6 +89,7 @@ class TestNavigation:
     def test_land_on_valid_body(self) -> None:
         state = new_game(seed=42)
         sys = state.get_current_system()
+        assert sys is not None
         planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
         if planet:
             ok, msg = land_on_body(state, planet.id)
@@ -103,6 +104,7 @@ class TestNavigation:
     def test_explore_surface(self) -> None:
         state = new_game(seed=42)
         sys = state.get_current_system()
+        assert sys is not None
         planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
         if planet:
             land_on_body(state, planet.id)
@@ -283,6 +285,7 @@ class TestExploreEdgeCases:
         """Explore should return empty when not enough fuel."""
         state = new_game(seed=42)
         sys = state.get_current_system()
+        assert sys is not None
         planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
         if planet:
             land_on_body(state, planet.id)

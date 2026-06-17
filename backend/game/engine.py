@@ -7,7 +7,7 @@ landing, surface exploration, and nearby system discovery.
 
 import random
 import uuid
-from typing import Any
+from typing import Any, Optional
 
 from backend.config import (
     JUMP_FUEL_COST_PER_LY, SCAN_FUEL_COST, EXPLORE_FUEL_COST,
@@ -20,7 +20,7 @@ from backend.models.discovery import Discovery
 from backend.generation.universe import distance_between
 
 
-def can_jump(ship: Ship, target: StarSystem, current: StarSystem) -> tuple[bool, float, str]:
+def can_jump(ship: Ship, target: StarSystem, current: Optional[StarSystem]) -> tuple[bool, float, str]:
     """Check whether a jump to a target system is possible.
 
     Validates that the ship has sufficient fuel and jump range to
@@ -52,7 +52,7 @@ def can_jump(ship: Ship, target: StarSystem, current: StarSystem) -> tuple[bool,
     return True, fuel_cost, ""
 
 
-def perform_jump(state: GameState, target_system: StarSystem, fuel_cost: int) -> str:
+def perform_jump(state: GameState, target_system: StarSystem, fuel_cost: int | float) -> str:
     """Execute a hyperspace jump to the target star system.
 
     Deducts fuel, applies morale decay (modified by life support

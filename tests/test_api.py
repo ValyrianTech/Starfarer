@@ -543,7 +543,6 @@ class TestAPIEventTriggerPaths:
 
     def test_lifespan_init(self) -> None:
         """Lifespan context manager should initialize DB and directories."""
-        import tempfile
         import asyncio
         from backend.main import lifespan, DATA_DIR
 
