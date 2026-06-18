@@ -195,11 +195,11 @@ def api_jump(game_id: str, sys_id: str) -> dict:
         raise HTTPException(status_code=400, detail=f"Cannot jump to {target.name}: {msg}")
 
     result = perform_jump(state, target, int(fuel_cost))
-    game_save(state)
 
     event = trigger_event(state)
     if event:
         state.events.append(event)
+    game_save(state)
 
     current_system = state.get_current_system()
     return {
@@ -228,11 +228,11 @@ def api_scan(game_id: str) -> dict:
     if not state:
         raise HTTPException(status_code=404, detail="Game not found")
     result = perform_scan(state)
-    game_save(state)
 
     event = trigger_event(state)
     if event:
         state.events.append(event)  # pragma: no cover  # probabilistic event trigger
+    game_save(state)
 
     current = state.get_current_system()
     return {
@@ -289,11 +289,11 @@ def api_explore(game_id: str) -> dict:
     if not state:
         raise HTTPException(status_code=404, detail="Game not found")
     discoveries = explore_surface(state)
-    game_save(state)
 
     event = trigger_event(state)
     if event:
         state.events.append(event)
+    game_save(state)
 
     return {
         "result": f"Explored. Found {len(discoveries)} points of interest.",

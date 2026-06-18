@@ -607,3 +607,69 @@ class TestAPIEventTriggerPaths:
                 assert os.path.isdir(DATA_DIR)
 
         asyncio.run(run_lifespan())
+
+
+class TestAPIEventPersistence:
+    """Tests that triggered events are persisted to the database."""
+
+    def test_jump_event_persisted_to_db(self) -> None:
+        """Event triggered by jump should be saved to DB."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "jump-persist"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        state.ship.morale = 20  # Force event trigger
+        nearby = get_nearby_systems(state)
+        target_id = nearby[0]["id"]
+        GAME_STORE[game_id] = state
+        game_save(state)
+        resp = client.post(f"/api/game/{game_id}/jump/{target_id}")
+        assert resp.status_code == 200
+        # Clear in-memory cache and reload from DB
+        GAME_STORE.pop(game_id, None)
+        resp = client.get(f"/api/game/{game_id}")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["events_pending"]) > 0, "No pending events found after reload from DB"
+
+    def test_scan_event_persisted_to_db(self) -> None:
+        """Event triggered by scan should be saved to DB."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "scan-persist"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        state.ship.morale = 20  # Force event trigger
+        GAME_STORE[game_id] = state
+        game_save(state)
+        resp = client.post(f"/api/game/{game_id}/scan")
+        assert resp.status_code == 200
+        # Clear in-memory cache and reload from DB
+        GAME_STORE.pop(game_id, None)
+        resp = client.get(f"/api/game/{game_id}")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["events_pending"]) > 0, "No pending events found after reload from DB"
+
+    def test_explore_event_persisted_to_db(self) -> None:
+        """Event triggered by explore should be saved to DB."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "explore-persist"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        sys = state.get_current_system()
+        assert sys is not None
+        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        if not planet:
+            return  # pragma: no cover  # no planet in starting system
+        land_on_body(state, planet.id)
+        state.ship.morale = 20  # Force event trigger
+        GAME_STORE[game_id] = state
+        game_save(state)
+        resp = client.post(f"/api/game/{game_id}/explore")
+        assert resp.status_code == 200
+        # Clear in-memory cache and reload from DB
+        GAME_STORE.pop(game_id, None)
+        resp = client.get(f"/api/game/{game_id}")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["events_pending"]) > 0, "No pending events found after reload from DB"
