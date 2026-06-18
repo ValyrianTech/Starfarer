@@ -89,7 +89,7 @@ EVENT_TEMPLATES = [
         "title": "Wormhole Anomaly",
         "flavor": "Instruments go haywire as a swirling vortex of spacetime tears open nearby. It appears stable, briefly.",
         "choices": [
-            {"text": "Enter the wormhole", "outcome": "fuel:-30; morales:20; Emerged in an uncharted region of space!"},
+            {"text": "Enter the wormhole", "outcome": "fuel:-30; morale:20; Emerged in an uncharted region of space!"},
             {"text": "Study it from a safe distance", "outcome": "credits:100; Valuable scientific data collected."},
             {"text": "Flee immediately", "outcome": "fuel:-15; A wise precaution, perhaps."},
         ],
