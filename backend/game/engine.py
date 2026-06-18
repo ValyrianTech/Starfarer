@@ -5,6 +5,7 @@ Provides functions for hyperspace jumps, system scanning, surface
 landing, surface exploration, and nearby system discovery.
 """
 
+import hashlib
 import random
 import uuid
 from typing import Any, Optional
@@ -188,6 +189,12 @@ def land_on_body(state: GameState, body_id: str) -> tuple[bool, str]:
     return True, f"Landed on {target.name}."
 
 
+def _deterministic_hash(*args) -> int:
+    """Produce a deterministic integer from the given arguments."""
+    seed_str = "".join(str(a) for a in args)
+    return int(hashlib.md5(seed_str.encode()).hexdigest(), 16)
+
+
 def explore_surface(state: GameState) -> list[Discovery]:
     """Explore the surface of the currently landed-on body.
 
@@ -218,7 +225,7 @@ def explore_surface(state: GameState) -> list[Discovery]:
     ship.fuel -= EXPLORE_FUEL_COST
 
     discoveries = []
-    item_rng = random.Random(state.seed + len(state.discoveries) + hash(body.id))
+    item_rng = random.Random(state.seed + len(state.discoveries) + _deterministic_hash(body.id))
 
     num_finds = min(body.poi_count, item_rng.randint(1, 3))
     for i in range(num_finds):

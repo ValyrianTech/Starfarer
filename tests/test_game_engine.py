@@ -8,7 +8,7 @@ from backend.game.engine import (
 )
 from backend.game.trading import get_upgrade_info, purchase_upgrade, perform_trade
 from backend.game.manager import new_game, get_galaxy, get_system_detail, game_save, load_or_create, get_game_state
-from backend.generation.events import trigger_event, resolve_event, EVENT_TEMPLATES
+from backend.generation.events import trigger_event, resolve_event, EVENT_TEMPLATES, _deterministic_hash
 from backend.config import SCAN_FUEL_COST
 
 
@@ -601,7 +601,7 @@ class TestTriggerEventPhenomenonBranch:
                 state.events = list(range(extra_events))
                 state.log_entries = [{"type": "test", "message": str(i)} for i in range(extra_logs)]
                 import random as rnd_mod
-                rng = rnd_mod.Random(state.seed + hash(sys.id) + len(state.events) + len(state.log_entries))
+                rng = rnd_mod.Random(state.seed + _deterministic_hash(sys.id, len(state.events), len(state.log_entries)))
                 if rng.random() < 0.35:
                     if not (sys.phenomenon != "none" and rng.random() < 0.5):
                         found = True
