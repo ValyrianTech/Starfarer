@@ -532,7 +532,7 @@ class TestAPIEventTriggerPaths:
         assert sys is not None
         planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
         if not planet:
-            return
+            return  # pragma: no cover  # no planet in starting system
         land_on_body(state, planet.id)
         state.ship.morale = 20
         GAME_STORE[game_id] = state
