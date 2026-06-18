@@ -72,11 +72,9 @@ def perform_jump(state: GameState, target_system: StarSystem, fuel_cost: int | f
     current = state.get_current_system() or state.systems.get(state.ship.current_system_id)
     state.ship.fuel -= int(fuel_cost)
 
-    decay = 1
-    if state.ship.upgrades.get("life_support", 0) > 0:
-        decay = max(0, 1 - state.ship.upgrades["life_support"])
-
-    state.ship.morale = max(0, state.ship.morale - (MORALE_DECAY_PER_JUMP * decay))
+    life_support_level = state.ship.morale_decay_reduction
+    morale_decay = max(1, MORALE_DECAY_PER_JUMP - life_support_level)
+    state.ship.morale = max(0, state.ship.morale - morale_decay)
     state.ship.current_system_id = target_system.id
     state.ship.current_body_id = None
     target_system.visited = True
