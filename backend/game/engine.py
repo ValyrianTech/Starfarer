@@ -1,20 +1,43 @@
+"""
+Core game engine module for navigation and exploration.
+
+Provides functions for hyperspace jumps, system scanning, surface
+landing, surface exploration, and nearby system discovery.
+"""
+
 import random
-import math
 import uuid
+from typing import Any, Optional
 
 from backend.config import (
     JUMP_FUEL_COST_PER_LY, SCAN_FUEL_COST, EXPLORE_FUEL_COST,
-    MORALE_DECAY_PER_JUMP, MORALE_LOW_THRESHOLD,
+    MORALE_DECAY_PER_JUMP,
 )
 from backend.models.game_state import GameState
 from backend.models.ship import Ship
 from backend.models.system import StarSystem, Body
-from backend.models.event import Event, Choice
 from backend.models.discovery import Discovery
 from backend.generation.universe import distance_between
 
 
-def can_jump(ship: Ship, target: StarSystem, current: StarSystem) -> tuple[bool, float, str]:
+def can_jump(ship: Ship, target: StarSystem, current: Optional[StarSystem]) -> tuple[bool, float, str]:
+    """Check whether a jump to a target system is possible.
+
+    Validates that the ship has sufficient fuel and jump range to
+    reach the target system from the current system.
+
+    :param ship: The player's ship.
+    :type ship: Ship
+    :param target: The target star system to jump to.
+    :type target: StarSystem
+    :param current: The ship's current star system.
+    :type current: StarSystem
+    :returns: A tuple of ``(can_jump, fuel_cost, message)`` where
+        ``can_jump`` indicates whether the jump is allowed,
+        ``fuel_cost`` is the estimated fuel required, and ``message``
+        is an empty string on success or an error description.
+    :rtype: tuple[bool, float, str]
+    """
     if ship.current_system_id == target.id:
         return False, 0, "Already in this system."
     if not current:
@@ -29,9 +52,24 @@ def can_jump(ship: Ship, target: StarSystem, current: StarSystem) -> tuple[bool,
     return True, fuel_cost, ""
 
 
-def perform_jump(state: GameState, target_system: StarSystem, fuel_cost: int) -> str:
+def perform_jump(state: GameState, target_system: StarSystem, fuel_cost: int | float) -> str:
+    """Execute a hyperspace jump to the target star system.
+
+    Deducts fuel, applies morale decay (modified by life support
+    upgrades), updates the ship's location, marks the target system
+    as visited, and logs the jump.
+
+    :param state: The current game state.
+    :type state: GameState
+    :param target_system: The destination star system.
+    :type target_system: StarSystem
+    :param fuel_cost: The amount of fuel to deduct.
+    :type fuel_cost: int
+    :returns: A status message describing the jump result.
+    :rtype: str
+    """
     current = state.get_current_system() or state.systems.get(state.ship.current_system_id)
-    state.ship.fuel -= fuel_cost
+    state.ship.fuel -= int(fuel_cost)
 
     decay = 1
     if state.ship.upgrades.get("life_support", 0) > 0:
@@ -56,6 +94,16 @@ def perform_jump(state: GameState, target_system: StarSystem, fuel_cost: int) ->
 
 
 def perform_scan(state: GameState) -> str:
+    """Scan the current star system for orbital bodies.
+
+    Deducts scan fuel cost, marks the current system as scanned,
+    and logs the number of bodies detected.
+
+    :param state: The current game state.
+    :type state: GameState
+    :returns: A status message describing the scan result.
+    :rtype: str
+    """
     ship = state.ship
     if ship.fuel < SCAN_FUEL_COST:
         return "Not enough fuel to scan."
@@ -69,11 +117,24 @@ def perform_scan(state: GameState) -> str:
 
 
 def get_nearby_systems(state: GameState) -> list[dict]:
+    """Find all systems within jump range of the current system.
+
+    Calculates distance and fuel cost to every other system in the
+    galaxy and returns those within the ship's jump range, sorted
+    by distance.
+
+    :param state: The current game state.
+    :type state: GameState
+    :returns: A list of dictionaries with system info including
+        id, name, distance_ly, fuel_cost, star_type, star_color,
+        phenomenon, visited, scanned, and reachable flags.
+    :rtype: list[dict]
+    """
     ship = state.ship
     current = state.get_current_system()
     if not current:
         return []
-    nearby = []
+    nearby: list[dict[str, Any]] = []
     for sys_id, sys_data in state.systems.items():
         if sys_id == ship.current_system_id:
             continue
@@ -98,6 +159,19 @@ def get_nearby_systems(state: GameState) -> list[dict]:
 
 
 def land_on_body(state: GameState, body_id: str) -> tuple[bool, str]:
+    """Land the ship on a specified celestial body.
+
+    Searches the current system's bodies for the given body ID,
+    updates the ship's location, marks the body as explored, and
+    logs the landing.
+
+    :param state: The current game state.
+    :type state: GameState
+    :param body_id: The unique identifier of the body to land on.
+    :type body_id: str
+    :returns: A tuple of ``(success, message)``.
+    :rtype: tuple[bool, str]
+    """
     system = state.get_current_system()
     if not system:
         return False, "No current system."
@@ -115,6 +189,17 @@ def land_on_body(state: GameState, body_id: str) -> tuple[bool, str]:
 
 
 def explore_surface(state: GameState) -> list[Discovery]:
+    """Explore the surface of the currently landed-on body.
+
+    Deducts explore fuel cost and generates a random number of
+    discoveries based on the body's points of interest count.
+    Discoveries are appended to the game state and returned.
+
+    :param state: The current game state.
+    :type state: GameState
+    :returns: A list of newly generated :class:`Discovery` objects.
+    :rtype: list[Discovery]
+    """
     system = state.get_current_system()
     if not system:
         return []
@@ -147,6 +232,29 @@ def explore_surface(state: GameState) -> list[Discovery]:
 
 
 def _generate_discovery(rng: random.Random, category: str, body: Body, system: StarSystem, state: GameState) -> Discovery:
+    """Generate a single discovery for a surface exploration.
+
+    Creates a randomised discovery (mineral, artifact, lifeform,
+    signal, or ruin) with a name, description, and credit value
+    tied to the current system and body.
+
+    :param rng: The seeded random number generator for discovery
+        details.
+    :type rng: random.Random
+    :param category: The category of discovery (``"mineral"``,
+        ``"artifact"``, ``"lifeform"``, ``"signal"``, or
+        ``"ruin"``).
+    :type category: str
+    :param body: The celestial body being explored.
+    :type body: Body
+    :param system: The star system containing the body.
+    :type system: StarSystem
+    :param state: The current game state (used only for signature;
+        not mutated).
+    :type state: GameState
+    :returns: A newly generated :class:`Discovery`.
+    :rtype: Discovery
+    """
     names = {
         "mineral": ["Plasmic Crystal", "Void Ore", "Stellar Fragment", "Obsidian Shard", "Nebula Dust"],
         "artifact": ["Ancient Relic", "Alien Device", "Glyph Tablet", "Memory Core", "Void Key"],

@@ -1,9 +1,23 @@
+"""
+Data model for the player's starship.
+
+Defines the :class:`Ship` dataclass representing the player's vessel, its
+current stats, maximum capacities, current location, and installed upgrades.
+"""
+
 from dataclasses import dataclass, field
 from typing import Optional
 
 
 @dataclass
 class Ship:
+    """Represents the player's starship and its current status.
+
+    Tracks all ship statistics including fuel, hull integrity, cargo,
+    crew count, morale, credits, jump range, scanner level, max capacities,
+    current location, and installed upgrade levels.
+    """
+
     name: str = "Serendipity"
     fuel: int = 80
     hull: int = 100
@@ -29,6 +43,11 @@ class Ship:
     })
 
     def to_dict(self) -> dict:
+        """Serialize the ship to a dictionary.
+
+        :returns: A dictionary representation of the ship.
+        :rtype: dict
+        """
         return {
             "name": self.name,
             "fuel": self.fuel,
@@ -50,6 +69,13 @@ class Ship:
 
     @classmethod
     def from_dict(cls, d: dict) -> "Ship":
+        """Deserialize a ship from a dictionary.
+
+        :param d: The dictionary containing ship data.
+        :type d: dict
+        :returns: A new Ship instance.
+        :rtype: Ship
+        """
         return cls(
             name=d.get("name", "Serendipity"),
             fuel=d.get("fuel", 80),

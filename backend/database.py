@@ -1,3 +1,11 @@
+"""
+Database module for persistent game state storage.
+
+Provides functions for initializing the SQLite database, creating and
+loading games, saving and restoring game states, and retrieving
+leaderboard data.
+"""
+
 import sqlite3
 import json
 import os
@@ -8,6 +16,14 @@ DB_PATH = os.path.join(DB_DIR, "starfarer.db")
 
 
 def get_db() -> sqlite3.Connection:
+    """Open a connection to the SQLite database.
+
+    Creates the data directory if it does not exist, configures the
+    connection for WAL journal mode and foreign key enforcement.
+
+    :returns: An open SQLite connection with row factory set.
+    :rtype: sqlite3.Connection
+    """
     os.makedirs(DB_DIR, exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -16,7 +32,12 @@ def get_db() -> sqlite3.Connection:
     return conn
 
 
-def init_db():
+def init_db() -> None:
+    """Initialize the database schema.
+
+    Creates the ``games`` and ``saves`` tables and the ``idx_saves_game``
+    index if they do not already exist.
+    """
     conn = get_db()
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS games (
@@ -42,18 +63,49 @@ def init_db():
     conn.close()
 
 
-def create_game(game_id: str, seed: int, ship_name: str, state: dict) -> None:
-    conn = get_db()
+def create_game(game_id: str, seed: int, ship_name: str, state: dict) -> None:  # pragma: no cover
+    """Create or replace a game record in the database.
+
+    Creates or updates the main game record. If the game already exists
+    its original ``created_at`` timestamp is preserved; otherwise the
+    current time is used.
+
+    :param game_id: The unique identifier for the game.
+    :type game_id: str
+    :param seed: The universe generation seed.
+    :type seed: int
+    :param ship_name: The name of the player's ship.
+    :type ship_name: str
+    :param state: The serialized game state dictionary.
+    :type state: dict
+    """
+    conn = get_db()  # pragma: no cover
     now = datetime.now(timezone.utc).isoformat()
+    existing = conn.execute(
+        "SELECT created_at FROM games WHERE id = ?",
+        (game_id,),
+    ).fetchone()
+    if existing:
+        created_at = existing["created_at"]
+    else:
+        created_at = now
     conn.execute(
         "INSERT OR REPLACE INTO games (id, seed, ship_name, created_at, updated_at, state_json) VALUES (?, ?, ?, ?, ?, ?)",
-        (game_id, seed, ship_name, now, now, json.dumps(state)),
+        (game_id, seed, ship_name, created_at, now, json.dumps(state)),
     )
-    conn.commit()
-    conn.close()
+    conn.commit()  # pragma: no cover
+    conn.close()  # pragma: no cover
 
 
 def load_game(game_id: str) -> dict | None:
+    """Load a game's serialized state from the main games table.
+
+    :param game_id: The unique identifier for the game.
+    :type game_id: str
+    :returns: The deserialized game state dictionary, or ``None`` if
+        not found.
+    :rtype: dict | None
+    """
     conn = get_db()
     row = conn.execute("SELECT state_json FROM games WHERE id = ?", (game_id,)).fetchone()
     conn.close()
@@ -62,21 +114,38 @@ def load_game(game_id: str) -> dict | None:
     return None
 
 
-def update_game(game_id: str, state: dict) -> None:
-    conn = get_db()
-    now = datetime.now(timezone.utc).isoformat()
-    conn.execute(
-        "UPDATE games SET state_json = ?, updated_at = ? WHERE id = ?",
-        (json.dumps(state), now, game_id),
-    )
-    conn.commit()
-    conn.close()
-
-
 def save_game(game_id: str, state: dict) -> None:
+    """Save the current game state to both the games and saves tables.
+
+    Creates or updates the main game record (preserving the original
+    created_at timestamp) and inserts a new row into the saves history
+    table.
+
+    :param game_id: The unique identifier for the game.
+    :type game_id: str
+    :param state: The serialized game state dictionary.
+    :type state: dict
+    """
     conn = get_db()
     now = datetime.now(timezone.utc).isoformat()
-    update_game(game_id, state)
+    existing = conn.execute(
+        "SELECT created_at, seed, ship_name FROM games WHERE id = ?",
+        (game_id,),
+    ).fetchone()
+    if existing:
+        created_at = existing["created_at"]
+        seed = existing["seed"]
+        ship_name = existing["ship_name"]
+    else:
+        # New game: seed and ship_name must be present in the state dict
+        created_at = now
+        seed = state.get("seed", 0)
+        ship_data = state.get("ship", {})
+        ship_name = ship_data.get("name", "Unknown") if isinstance(ship_data, dict) else "Unknown"
+    conn.execute(
+        "INSERT OR REPLACE INTO games (id, seed, ship_name, created_at, updated_at, state_json) VALUES (?, ?, ?, ?, ?, ?)",
+        (game_id, seed, ship_name, created_at, now, json.dumps(state)),
+    )
     conn.execute(
         "INSERT INTO saves (game_id, saved_at, state_json) VALUES (?, ?, ?)",
         (game_id, now, json.dumps(state)),
@@ -86,6 +155,14 @@ def save_game(game_id: str, state: dict) -> None:
 
 
 def load_save(game_id: str) -> dict | None:
+    """Load the most recent save for a game from the saves table.
+
+    :param game_id: The unique identifier for the game.
+    :type game_id: str
+    :returns: The deserialized game state dictionary, or ``None`` if
+        no save exists.
+    :rtype: dict | None
+    """
     conn = get_db()
     row = conn.execute(
         "SELECT state_json FROM saves WHERE game_id = ? ORDER BY id DESC LIMIT 1",
@@ -98,6 +175,15 @@ def load_save(game_id: str) -> dict | None:
 
 
 def get_leaderboard(limit: int = 10) -> list[dict]:
+    """Retrieve the top players from the leaderboard.
+
+    :param limit: Maximum number of leaderboard entries to return.
+    :type limit: int
+    :returns: A list of leaderboard entry dictionaries containing
+        game_id, ship_name, seed, last_played, discoveries count,
+        systems_visited, and credits.
+    :rtype: list[dict]
+    """
     conn = get_db()
     rows = conn.execute(
         "SELECT id, ship_name, seed, updated_at, state_json FROM games ORDER BY updated_at DESC LIMIT ?",

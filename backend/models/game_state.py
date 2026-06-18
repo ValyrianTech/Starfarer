@@ -1,3 +1,11 @@
+"""
+Core game state data model.
+
+Defines the :class:`GameState` dataclass which holds the complete state of
+a game session including the ship, star systems, events, discoveries, lore,
+and log entries.
+"""
+
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Optional
@@ -11,6 +19,14 @@ from backend.models.discovery import Discovery, LoreFragment
 
 @dataclass
 class GameState:
+    """Holds the complete state of a single game session.
+
+    This is the central data structure that ties together the ship,
+    all star systems, pending events, discoveries, lore fragments,
+    and the ship's log. It is persisted to SQLite on save and
+    reconstructed on load.
+    """
+
     id: str
     seed: int
     ship: Ship
@@ -22,14 +38,33 @@ class GameState:
     systems_visited: int = 0
     game_started: str = ""
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
+        """Initialize the ``game_started`` timestamp if not already set.
+
+        Sets ``game_started`` to the current UTC ISO format timestamp
+        when the game state is first created.
+        """
         if not self.game_started:
             self.game_started = datetime.now(timezone.utc).isoformat()
 
     def get_current_system(self) -> Optional[StarSystem]:
+        """Retrieve the star system the ship is currently in.
+
+        :returns: The current :class:`StarSystem`, or ``None`` if the
+            system ID is not found in the systems dictionary.
+        :rtype: Optional[StarSystem]
+        """
         return self.systems.get(self.ship.current_system_id)
 
     def add_log(self, entry_type: str, message: str) -> None:
+        """Append a new entry to the ship's log.
+
+        :param entry_type: The category of the log entry (e.g.
+            ``"navigation"``, ``"exploration"``, ``"event"``).
+        :type entry_type: str
+        :param message: The human-readable log message.
+        :type message: str
+        """
         self.log_entries.append({
             "id": str(uuid.uuid4())[:8],
             "type": entry_type,
@@ -38,6 +73,17 @@ class GameState:
         })
 
     def apply_choice_outcome(self, outcome: str) -> dict:
+        """Parse an outcome string and apply its effects to the ship.
+
+        The outcome string uses a semicolon-separated ``key:value`` format
+        (e.g. ``"credits:50; fuel:-10; hull:-5"``). Stat values are clamped
+        to their valid ranges after application.
+
+        :param outcome: Semicolon-separated stat effects.
+        :type outcome: str
+        :returns: A dictionary mapping stat names to their applied deltas.
+        :rtype: dict
+        """
         effects = {"fuel": 0, "hull": 0, "morale": 0, "credits": 0, "cargo": 0}
         parts = outcome.split(";")
         for part in parts:
@@ -60,6 +106,13 @@ class GameState:
         return effects
 
     def state_summary(self) -> dict:
+        """Generate a compact summary of the current game state.
+
+        :returns: A dictionary with key fields including game_id, seed,
+            ship stats, current system, pending events count, discovery
+            count, and systems visited.
+        :rtype: dict
+        """
         system = self.get_current_system()
         return {
             "game_id": self.id,
