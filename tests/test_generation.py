@@ -2,7 +2,7 @@ import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from backend.generation.universe import generate_universe, distance_between, _ensure_connectivity
+from backend.generation.universe import generate_universe, distance_between
 from backend.models.system import StarSystem
 from backend.models.ship import Ship
 from backend.models.game_state import GameState
