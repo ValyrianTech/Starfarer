@@ -215,12 +215,15 @@ def explore_surface(state: GameState) -> list[Discovery]:
     if not body:
         return []
 
-    ship.fuel -= EXPLORE_FUEL_COST
-
     discoveries = []
     item_rng = random.Random(state.seed + len(state.discoveries) + deterministic_hash(body.id))
 
     num_finds = min(body.poi_count, item_rng.randint(1, 3))
+    if num_finds == 0:
+        return []
+
+    ship.fuel -= EXPLORE_FUEL_COST
+
     for i in range(num_finds):
         cat = item_rng.choice(["mineral", "artifact", "lifeform", "signal", "ruin"])
         disc = _generate_discovery(item_rng, cat, body, system, state)
