@@ -378,6 +378,9 @@ def _ensure_connectivity(systems: dict[str, StarSystem], rng: random.Random) -> 
                     closest_dist = d
                     closest_idx = j
             if closest_idx is not None:
+                if closest_dist < 1e-9:
+                    # Systems are at the same coordinates; skip the move
+                    continue
                 target = sys_list[closest_idx]
                 target.x = sys.x + (target.x - sys.x) * (MAX_INITIAL_JUMP - 5) / closest_dist
                 target.y = sys.y + (target.y - sys.y) * (MAX_INITIAL_JUMP - 5) / closest_dist
