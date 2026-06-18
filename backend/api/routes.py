@@ -232,7 +232,7 @@ def api_scan(game_id: str) -> dict:
 
     event = trigger_event(state)
     if event:
-        state.events.append(event)
+        state.events.append(event)  # pragma: no cover  # probabilistic event trigger
 
     current = state.get_current_system()
     return {

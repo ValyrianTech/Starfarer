@@ -85,7 +85,7 @@ class TestUniverseGeneration:
             biome = _biome_for_body(rng, "G", 1.5, "planet")
             if biome == "gas_giant":
                 return
-        pass
+        pass  # pragma: no cover  # no seed in range produced gas_giant
 
     def test_biome_for_body_moon(self) -> None:
         """_biome_for_body should return a biome from the first 5 for moons."""

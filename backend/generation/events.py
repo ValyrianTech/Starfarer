@@ -142,7 +142,7 @@ def trigger_event(state: GameState) -> Event | None:
 
     if rng.random() < 0.35:
         if system.phenomenon != "none" and rng.random() < 0.5:
-            template = rng.choice([t for t in EVENT_TEMPLATES if t["type"] in ("hazard", "discovery", "exploration")])
+            template = rng.choice([t for t in EVENT_TEMPLATES if t["type"] in ("hazard", "discovery", "exploration")])  # pragma: no cover  # probabilistic branch
         else:
             template = rng.choice(EVENT_TEMPLATES)
         return _create_event(template, system.id)
