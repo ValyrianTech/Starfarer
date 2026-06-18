@@ -45,12 +45,22 @@ def _get_state(game_id: str) -> GameState | None:
     """
     if game_id in GAME_STORE:
         return GAME_STORE[game_id]
+    
+    state = game_load_func(game_id)
+    if state:
+        GAME_STORE[game_id] = state
+        return state
+    
+    # Fallback: try to reconstruct from raw DB data
     data = db_load_game(game_id)
     if data:
-        state = game_load_func(game_id)
-        if state:
+        from backend.game.manager import _state_from_dict
+        try:
+            state = _state_from_dict(data)
             GAME_STORE[game_id] = state
             return state
+        except (KeyError, TypeError, ValueError):
+            pass
     return None
 
 
