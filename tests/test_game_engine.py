@@ -582,3 +582,34 @@ class TestEvents:
         state = new_game(seed=42)
         ok, msg, extra = resolve_event(state, "nonexistent", 0)
         assert ok is False
+
+
+class TestTriggerEventPhenomenonBranch:
+    """Tests for the phenomenon else branch in trigger_event (line 147)."""
+
+    def test_trigger_event_phenomenon_else_branch(self) -> None:
+        """Trigger event with phenomenon system where inner random fails."""
+        state = new_game(seed=42)
+        sys = state.get_current_system()
+        assert sys is not None
+        sys.phenomenon = "nebula"
+        state.ship.morale = 80
+
+        found = False
+        for extra_events in range(10):
+            for extra_logs in range(10):
+                state.events = list(range(extra_events))
+                state.log_entries = [{"type": "test", "message": str(i)} for i in range(extra_logs)]
+                import random as rnd_mod
+                rng = rnd_mod.Random(state.seed + hash(sys.id) + len(state.events) + len(state.log_entries))
+                if rng.random() < 0.35:
+                    if not (sys.phenomenon != "none" and rng.random() < 0.5):
+                        found = True
+                        break
+            if found:
+                break
+        assert found, "Could not find a seed combination that hits line 147"
+
+        event = trigger_event(state)
+        assert event is not None
+        assert event.event_type in [t["type"] for t in EVENT_TEMPLATES]
