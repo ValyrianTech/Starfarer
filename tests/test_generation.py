@@ -2,7 +2,7 @@ import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from backend.generation.universe import generate_universe, distance_between
+from backend.generation.universe import generate_universe, distance_between, _ensure_connectivity, NEIGHBOR_DISTANCE_THRESHOLD
 from backend.models.system import StarSystem
 from backend.models.ship import Ship
 from backend.models.game_state import GameState
@@ -111,6 +111,48 @@ class TestUniverseGeneration:
             desc = _body_description(rng, "planet", biome, "G")
             assert isinstance(desc, str)
             assert len(desc) > 0
+
+
+    def test_ensure_connectivity_single_pass(self) -> None:
+        """_ensure_connectivity fixes a basic isolated system in one pass."""
+        rng = random.Random(42)
+        a = StarSystem(id="a", name="A", x=500, y=500, star_type="G",
+                       star_color="#fff", phenomenon="none", phenomenon_desc="")
+        b = StarSystem(id="b", name="B", x=565, y=500, star_type="K",
+                       star_color="#ffa", phenomenon="none", phenomenon_desc="")
+        systems = {"a": a, "b": b}
+
+        _ensure_connectivity(systems, rng)
+
+        assert distance_between(a, b) <= NEIGHBOR_DISTANCE_THRESHOLD
+
+    def test_ensure_connectivity_multi_pass(self) -> None:
+        """Fixing one isolated system creates another, requiring a second pass.
+
+        Layout: A(500,500), B(565,500), C(565,560)
+        - A-B = 65 > 60, A isolated
+        - B-C = 60, B and C are neighbors
+        - A-C = sqrt(65^2 + 60^2) ≈ 88.5 < 95 (allows convergence)
+
+        Pass 1: A isolated, closest=B at 65. B moves toward A to (535,500).
+                Now B-C = sqrt(30^2+60^2) ≈ 67.1 > 60, so C becomes isolated.
+        Pass 2: C isolated, closest=B at ~67.1. B moves toward C.
+                After the move, A-B ≈ 57.1 ≤ 60 and C-B = 35 ≤ 60.
+                All systems connected.
+        """
+        rng = random.Random(42)
+        a = StarSystem(id="a", name="A", x=500, y=500, star_type="G",
+                       star_color="#fff", phenomenon="none", phenomenon_desc="")
+        b = StarSystem(id="b", name="B", x=565, y=500, star_type="K",
+                       star_color="#ffa", phenomenon="none", phenomenon_desc="")
+        c = StarSystem(id="c", name="C", x=565, y=560, star_type="M",
+                       star_color="#f00", phenomenon="none", phenomenon_desc="")
+        systems = {"a": a, "b": b, "c": c}
+
+        _ensure_connectivity(systems, rng)
+
+        assert distance_between(a, b) <= NEIGHBOR_DISTANCE_THRESHOLD
+        assert distance_between(b, c) <= NEIGHBOR_DISTANCE_THRESHOLD
 
 
 class TestShipModel:
