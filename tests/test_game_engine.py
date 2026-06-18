@@ -456,6 +456,29 @@ class TestTradingAdvanced:
         assert ok is True
         assert state.ship.max_fuel > max_fuel_before
 
+    def test_purchase_upgrade_life_support(self) -> None:
+        """Purchasing a life support upgrade should increase morale decay reduction."""
+        state = new_game(seed=42)
+        state.ship.credits = 10000
+        reduction_before = state.ship.morale_decay_reduction
+        ok, msg = purchase_upgrade(state, "life_support")
+        assert ok is True
+        assert state.ship.morale_decay_reduction > reduction_before
+
+    def test_trade_invalid_action(self) -> None:
+        """Trade with an invalid action should fail with descriptive message."""
+        state = new_game(seed=42)
+        ok, msg = perform_trade(state, "steal", "fuel", 1)
+        assert ok is False
+        assert "Cannot trade fuel" in msg
+
+    def test_trade_buy_unknown_item(self) -> None:
+        """Buying an unknown item should fail with descriptive message."""
+        state = new_game(seed=42)
+        ok, msg = perform_trade(state, "buy", "weapons", 1)
+        assert ok is False
+        assert "Cannot trade weapons" in msg
+
 
 class TestEventsAdvanced:
     """Tests for event generation covering morale, phenomena, and edge cases."""

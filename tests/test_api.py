@@ -188,6 +188,63 @@ class TestAPIDBFallback:
         resp = client.get(f"/api/game/{game_id}/discoveries")
         assert resp.status_code == 200
 
+    def test_get_game_via_db_fallback(self) -> None:
+        """GET /game/{id} should work via raw DB fallback when game_load returns None."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "db-fb-game-v2"})
+        game_id = resp.json()["game_id"]
+        GAME_STORE.pop(game_id, None)
+        with patch("backend.api.routes.game_load_func", return_value=None):
+            resp = client.get(f"/api/game/{game_id}")
+            assert resp.status_code == 200
+            assert resp.json()["game_id"] == game_id
+
+    def test_galaxy_via_db_fallback(self) -> None:
+        """Galaxy endpoint should work via raw DB fallback when game_load returns None."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "db-fb-gal-v2"})
+        game_id = resp.json()["game_id"]
+        GAME_STORE.pop(game_id, None)
+        with patch("backend.api.routes.game_load_func", return_value=None):
+            resp = client.get(f"/api/game/{game_id}/galaxy")
+            assert resp.status_code == 200
+
+    def test_system_detail_via_db_fallback(self) -> None:
+        """System detail endpoint should work via raw DB fallback when game_load returns None."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "db-fb-sys-v2"})
+        game_id = resp.json()["game_id"]
+        cur_sys = resp.json()["state"]["ship"]["current_system_id"]
+        GAME_STORE.pop(game_id, None)
+        with patch("backend.api.routes.game_load_func", return_value=None):
+            resp = client.get(f"/api/game/{game_id}/system/{cur_sys}")
+            assert resp.status_code == 200
+
+    def test_log_via_db_fallback(self) -> None:
+        """Log endpoint should work via raw DB fallback when game_load returns None."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "db-fb-log-v2"})
+        game_id = resp.json()["game_id"]
+        GAME_STORE.pop(game_id, None)
+        with patch("backend.api.routes.game_load_func", return_value=None):
+            resp = client.get(f"/api/game/{game_id}/log")
+            assert resp.status_code == 200
+
+    def test_discoveries_via_db_fallback(self) -> None:
+        """Discoveries endpoint should work via raw DB fallback when game_load returns None."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "db-fb-disc-v2"})
+        game_id = resp.json()["game_id"]
+        GAME_STORE.pop(game_id, None)
+        with patch("backend.api.routes.game_load_func", return_value=None):
+            resp = client.get(f"/api/game/{game_id}/discoveries")
+            assert resp.status_code == 200
+
+    def test_get_game_db_fallback_exception(self) -> None:
+        """GET /game/{id} returns 404 when both game_load and raw DB fallback fail."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "db-fb-fail"})
+        game_id = resp.json()["game_id"]
+        GAME_STORE.pop(game_id, None)
+        with patch("backend.api.routes.game_load_func", return_value=None), \
+             patch("backend.api.routes.db_load_game", return_value={"bad": "data"}):
+            resp = client.get(f"/api/game/{game_id}")
+            assert resp.status_code == 404
+
 
 class TestAPIAllEndpoints404:
     """Tests that all endpoints return 404 for nonexistent games."""
