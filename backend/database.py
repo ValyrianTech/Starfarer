@@ -66,6 +66,10 @@ def init_db() -> None:
 def create_game(game_id: str, seed: int, ship_name: str, state: dict) -> None:
     """Create or replace a game record in the database.
 
+    Creates or updates the main game record. If the game already exists
+    its original ``created_at`` timestamp is preserved; otherwise the
+    current time is used.
+
     :param game_id: The unique identifier for the game.
     :type game_id: str
     :param seed: The universe generation seed.
@@ -77,9 +81,17 @@ def create_game(game_id: str, seed: int, ship_name: str, state: dict) -> None:
     """
     conn = get_db()
     now = datetime.now(timezone.utc).isoformat()
+    existing = conn.execute(
+        "SELECT created_at FROM games WHERE id = ?",
+        (game_id,),
+    ).fetchone()
+    if existing:
+        created_at = existing["created_at"]
+    else:
+        created_at = now
     conn.execute(
         "INSERT OR REPLACE INTO games (id, seed, ship_name, created_at, updated_at, state_json) VALUES (?, ?, ?, ?, ?, ?)",
-        (game_id, seed, ship_name, now, now, json.dumps(state)),
+        (game_id, seed, ship_name, created_at, now, json.dumps(state)),
     )
     conn.commit()
     conn.close()
