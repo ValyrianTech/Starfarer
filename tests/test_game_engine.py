@@ -302,6 +302,20 @@ class TestExploreEdgeCases:
         discoveries = explore_surface(state)
         assert discoveries == []
 
+    def test_explore_surface_zero_poi_count(self) -> None:
+        """Explore should not deduct fuel when poi_count is 0."""
+        state = new_game(seed=42)
+        sys = state.get_current_system()
+        assert sys is not None
+        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        if planet:
+            land_on_body(state, planet.id)
+            planet.poi_count = 0
+            fuel_before = state.ship.fuel
+            discoveries = explore_surface(state)
+            assert discoveries == []
+            assert state.ship.fuel == fuel_before  # fuel should NOT be deducted
+
 
 class TestTradingAdvanced:
     """Tests for trading functions covering sell, repair, and edge cases."""
