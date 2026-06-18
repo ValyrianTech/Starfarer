@@ -85,6 +85,8 @@ def purchase_upgrade(state: GameState, upgrade_id: str) -> tuple[bool, str]:
         ship.max_hull += effect["max_hull"]
     if "max_fuel" in effect:
         ship.max_fuel += effect["max_fuel"]
+    if "morale_decay_reduction" in effect:
+        ship.morale_decay_reduction += effect["morale_decay_reduction"]
 
     state.add_log("upgrade", f"Upgraded {upgrade_id} to level {current_level + 1}.")
     return True, f"Upgraded {upgrade_id} to level {current_level + 1}."

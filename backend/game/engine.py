@@ -17,6 +17,7 @@ from backend.models.game_state import GameState
 from backend.models.ship import Ship
 from backend.models.system import StarSystem, Body
 from backend.models.discovery import Discovery
+from backend.utils import deterministic_hash
 from backend.generation.universe import distance_between
 
 
@@ -71,11 +72,9 @@ def perform_jump(state: GameState, target_system: StarSystem, fuel_cost: int | f
     current = state.get_current_system() or state.systems.get(state.ship.current_system_id)
     state.ship.fuel -= int(fuel_cost)
 
-    decay = 1
-    if state.ship.upgrades.get("life_support", 0) > 0:
-        decay = max(0, 1 - state.ship.upgrades["life_support"])
-
-    state.ship.morale = max(0, state.ship.morale - (MORALE_DECAY_PER_JUMP * decay))
+    life_support_level = state.ship.morale_decay_reduction
+    morale_decay = max(1, MORALE_DECAY_PER_JUMP - life_support_level)
+    state.ship.morale = max(0, state.ship.morale - morale_decay)
     state.ship.current_system_id = target_system.id
     state.ship.current_body_id = None
     target_system.visited = True
@@ -188,6 +187,7 @@ def land_on_body(state: GameState, body_id: str) -> tuple[bool, str]:
     return True, f"Landed on {target.name}."
 
 
+
 def explore_surface(state: GameState) -> list[Discovery]:
     """Explore the surface of the currently landed-on body.
 
@@ -218,7 +218,7 @@ def explore_surface(state: GameState) -> list[Discovery]:
     ship.fuel -= EXPLORE_FUEL_COST
 
     discoveries = []
-    item_rng = random.Random(state.seed + len(state.discoveries) + hash(body.id))
+    item_rng = random.Random(state.seed + len(state.discoveries) + deterministic_hash(body.id))
 
     num_finds = min(body.poi_count, item_rng.randint(1, 3))
     for i in range(num_finds):

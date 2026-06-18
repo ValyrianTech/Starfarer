@@ -10,6 +10,7 @@ import uuid
 
 from backend.models.game_state import GameState
 from backend.models.event import Event, Choice
+from backend.utils import deterministic_hash
 
 
 EVENT_TEMPLATES = [
@@ -88,7 +89,7 @@ EVENT_TEMPLATES = [
         "title": "Wormhole Anomaly",
         "flavor": "Instruments go haywire as a swirling vortex of spacetime tears open nearby. It appears stable, briefly.",
         "choices": [
-            {"text": "Enter the wormhole", "outcome": "fuel:-30; morales:20; Emerged in an uncharted region of space!"},
+            {"text": "Enter the wormhole", "outcome": "fuel:-30; morale:20; Emerged in an uncharted region of space!"},
             {"text": "Study it from a safe distance", "outcome": "credits:100; Valuable scientific data collected."},
             {"text": "Flee immediately", "outcome": "fuel:-15; A wise precaution, perhaps."},
         ],
@@ -116,6 +117,7 @@ EVENT_TEMPLATES = [
 ]
 
 
+
 def trigger_event(state: GameState) -> Event | None:
     """Possibly trigger a procedural event based on the current game state.
 
@@ -135,10 +137,10 @@ def trigger_event(state: GameState) -> Event | None:
 
     if state.ship.morale < 30:
         crew_events = [t for t in EVENT_TEMPLATES if t["type"] == "crew" or t["type"] == "crisis"]
-        template = crew_events[hash(system.id + str(len(state.log_entries))) % len(crew_events)]
+        template = crew_events[deterministic_hash(system.id, str(len(state.log_entries))) % len(crew_events)]
         return _create_event(template, system.id)
 
-    rng = random.Random(state.seed + hash(system.id) + len(state.events) + len(state.log_entries))
+    rng = random.Random(state.seed + deterministic_hash(system.id, len(state.events), len(state.log_entries)))
 
     if rng.random() < 0.35:
         if system.phenomenon != "none" and rng.random() < 0.5:

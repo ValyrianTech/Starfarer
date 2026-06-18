@@ -9,6 +9,7 @@ from backend.game.engine import (
 from backend.game.trading import get_upgrade_info, purchase_upgrade, perform_trade
 from backend.game.manager import new_game, get_galaxy, get_system_detail, game_save, load_or_create, get_game_state
 from backend.generation.events import trigger_event, resolve_event, EVENT_TEMPLATES
+from backend.utils import deterministic_hash
 from backend.config import SCAN_FUEL_COST
 
 
@@ -190,7 +191,7 @@ class TestPerformJumpEdgeCases:
     def test_perform_jump_with_life_support_upgrade(self) -> None:
         """Jump with life support upgrade should reduce morale decay."""
         state = new_game(seed=42)
-        state.ship.upgrades["life_support"] = 2
+        state.ship.morale_decay_reduction = 2
         cur = state.get_current_system()
         nearby = get_nearby_systems(state)
         reachable = [n for n in nearby if n["reachable"]]
@@ -456,6 +457,29 @@ class TestTradingAdvanced:
         assert ok is True
         assert state.ship.max_fuel > max_fuel_before
 
+    def test_purchase_upgrade_life_support(self) -> None:
+        """Purchasing a life support upgrade should increase morale decay reduction."""
+        state = new_game(seed=42)
+        state.ship.credits = 10000
+        reduction_before = state.ship.morale_decay_reduction
+        ok, msg = purchase_upgrade(state, "life_support")
+        assert ok is True
+        assert state.ship.morale_decay_reduction > reduction_before
+
+    def test_trade_invalid_action(self) -> None:
+        """Trade with an invalid action should fail with descriptive message."""
+        state = new_game(seed=42)
+        ok, msg = perform_trade(state, "steal", "fuel", 1)
+        assert ok is False
+        assert "Cannot trade fuel" in msg
+
+    def test_trade_buy_unknown_item(self) -> None:
+        """Buying an unknown item should fail with descriptive message."""
+        state = new_game(seed=42)
+        ok, msg = perform_trade(state, "buy", "weapons", 1)
+        assert ok is False
+        assert "Cannot trade weapons" in msg
+
 
 class TestEventsAdvanced:
     """Tests for event generation covering morale, phenomena, and edge cases."""
@@ -601,7 +625,7 @@ class TestTriggerEventPhenomenonBranch:
                 state.events = list(range(extra_events))
                 state.log_entries = [{"type": "test", "message": str(i)} for i in range(extra_logs)]
                 import random as rnd_mod
-                rng = rnd_mod.Random(state.seed + hash(sys.id) + len(state.events) + len(state.log_entries))
+                rng = rnd_mod.Random(state.seed + deterministic_hash(sys.id, len(state.events), len(state.log_entries)))
                 if rng.random() < 0.35:
                     if not (sys.phenomenon != "none" and rng.random() < 0.5):
                         found = True

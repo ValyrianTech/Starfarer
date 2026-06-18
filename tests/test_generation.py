@@ -2,7 +2,7 @@ import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from backend.generation.universe import generate_universe, distance_between, _ensure_connectivity
+from backend.generation.universe import generate_universe, distance_between
 from backend.models.system import StarSystem
 from backend.models.ship import Ship
 from backend.models.game_state import GameState
@@ -181,32 +181,46 @@ class TestGameState:
         assert effects["cargo"] == 5
         assert state.ship.cargo == 15
 
+    def test_apply_choice_outcome_crew(self) -> None:
+        """apply_choice_outcome should parse and apply crew changes."""
+        ship = Ship(crew=5, max_crew=10)
+        state = GameState(id="test-crew", seed=42, ship=ship)
+        effects = state.apply_choice_outcome("crew:-1")
+        assert effects["crew"] == -1
+        assert state.ship.crew == 4
+
     def test_apply_choice_outcome_multiple_stats(self) -> None:
         """apply_choice_outcome with all stat types should apply all effects."""
-        ship = Ship(fuel=50, hull=50, morale=50, credits=500, cargo=10, max_fuel=100, max_hull=100, max_cargo=50)
+        ship = Ship(fuel=50, hull=50, morale=50, credits=500, cargo=10, crew=50, max_fuel=100, max_hull=100, max_cargo=50, max_crew=100)
         state = GameState(id="test-all", seed=42, ship=ship)
-        effects = state.apply_choice_outcome("fuel:-10; hull:10; morale:5; credits:200; cargo:-2")
+        effects = state.apply_choice_outcome("fuel:-10; hull:10; morale:5; credits:200; cargo:-2; crew:-1")
         assert effects["fuel"] == -10
         assert effects["hull"] == 10
         assert effects["morale"] == 5
         assert effects["credits"] == 200
         assert effects["cargo"] == -2
+        assert effects["crew"] == -1
         assert state.ship.fuel == 40
         assert state.ship.hull == 60
         assert state.ship.morale == 55
         assert state.ship.credits == 700
         assert state.ship.cargo == 8
+        assert state.ship.crew == 49
 
     def test_apply_choice_outcome_clamping_max_min(self) -> None:
         """apply_choice_outcome should clamp stats to min/max bounds."""
-        ship = Ship(fuel=5, hull=95, morale=5, credits=10, cargo=0, max_fuel=100, max_hull=100, max_cargo=50)
+        ship = Ship(fuel=5, hull=95, morale=5, credits=10, cargo=0, crew=5, max_fuel=100, max_hull=100, max_cargo=50, max_crew=10)
         state = GameState(id="test-clamp", seed=42, ship=ship)
-        state.apply_choice_outcome("fuel:-20; hull:20; morale:-10; credits:-50; cargo:-10")
+        state.apply_choice_outcome("fuel:-20; hull:20; morale:-10; credits:-50; cargo:-10; crew:-60")
         assert state.ship.fuel == 0
         assert state.ship.hull == 100
         assert state.ship.morale == 0
         assert state.ship.credits == 0
         assert state.ship.cargo == 0
+        assert state.ship.crew == 0
+
+        state.apply_choice_outcome("crew:200")
+        assert state.ship.crew == state.ship.max_crew
 
 
 class TestEventModel:
