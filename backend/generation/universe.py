@@ -381,6 +381,8 @@ def _ensure_connectivity(systems: dict[str, StarSystem], rng: random.Random) -> 
                 target = sys_list[closest_idx]
                 target.x = sys.x + (target.x - sys.x) * (MAX_INITIAL_JUMP - 5) / closest_dist
                 target.y = sys.y + (target.y - sys.y) * (MAX_INITIAL_JUMP - 5) / closest_dist
+                target.x = max(50, min(GALAXY_WIDTH - 50, target.x))
+                target.y = max(50, min(GALAXY_HEIGHT - 50, target.y))
 
 
 def distance_between(sys1: StarSystem, sys2: StarSystem) -> float:
