@@ -84,7 +84,7 @@ class GameState:
         :returns: A dictionary mapping stat names to their applied deltas.
         :rtype: dict
         """
-        effects = {"fuel": 0, "hull": 0, "morale": 0, "credits": 0, "cargo": 0}
+        effects = {"fuel": 0, "hull": 0, "morale": 0, "credits": 0, "cargo": 0, "crew": 0}
         parts = outcome.split(";")
         for part in parts:
             part = part.strip()
@@ -98,11 +98,14 @@ class GameState:
                 effects["credits"] = int(part.split(":")[1])
             elif part.startswith("cargo:"):
                 effects["cargo"] = int(part.split(":")[1])
+            elif part.startswith("crew:"):
+                effects["crew"] = int(part.split(":")[1])
         self.ship.fuel = max(0, min(self.ship.max_fuel, self.ship.fuel + effects["fuel"]))
         self.ship.hull = max(0, min(self.ship.max_hull, self.ship.hull + effects["hull"]))
         self.ship.morale = max(0, min(100, self.ship.morale + effects["morale"]))
         self.ship.credits = max(0, self.ship.credits + effects["credits"])
         self.ship.cargo = max(0, min(self.ship.max_cargo, self.ship.cargo + effects["cargo"]))
+        self.ship.crew = max(0, min(self.ship.max_crew, self.ship.crew + effects["crew"]))
         return effects
 
     def state_summary(self) -> dict:
