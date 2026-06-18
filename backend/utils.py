@@ -1,3 +1,5 @@
+"""Utility functions for the Starfarer backend, including hashing utilities."""
+
 import hashlib
 
 
