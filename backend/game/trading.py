@@ -139,7 +139,7 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
         if not matching:
             return False, f"No discoveries matching '{item}' to sell."
         disc = max(matching, key=lambda d: d.value)
-        sell_price = int(disc.value * price_mod * quantity)
+        sell_price = int(disc.value * price_mod)
         state.ship.credits += sell_price
         state.discoveries.remove(disc)
         state.add_log("trade", f"Sold {disc.name} for {sell_price} credits.")
