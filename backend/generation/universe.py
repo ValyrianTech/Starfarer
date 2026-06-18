@@ -380,7 +380,9 @@ def _ensure_connectivity(systems: dict[str, StarSystem], rng: random.Random) -> 
             if closest_idx is not None:
                 if closest_dist < 1e-9:
                     # Systems are at the same coordinates; skip the move
-                    continue
+                    continue  # pragma: no cover
+                    # unreachable: same-coord systems are always within NEIGHBOR_DISTANCE_THRESHOLD (60)
+                    # so they would never be flagged as isolated (has_neighbor would be True)
                 target = sys_list[closest_idx]
                 target.x = sys.x + (target.x - sys.x) * (MAX_INITIAL_JUMP - 5) / closest_dist
                 target.y = sys.y + (target.y - sys.y) * (MAX_INITIAL_JUMP - 5) / closest_dist
