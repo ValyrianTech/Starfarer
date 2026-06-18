@@ -6,6 +6,7 @@ upgrades, and trading resources (fuel, repairs, selling discoveries)
 at trading stations.
 """
 
+import hashlib
 import random
 
 from backend.config import UPGRADE_COSTS, UPGRADE_EFFECTS, UPGRADE_MAX_LEVELS
@@ -126,7 +127,9 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
     if not is_station:
         return False, "No trading facilities in this system."
 
-    rng = random.Random(state.seed + hash(system.id) + len(state.log_entries))
+    seed_str = str(state.seed) + system.id + str(len(state.log_entries))
+    det_seed = int(hashlib.md5(seed_str.encode()).hexdigest(), 16)
+    rng = random.Random(det_seed)
     price_mod = rng.uniform(0.7, 1.5)
 
     if action == "sell":
