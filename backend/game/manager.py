@@ -8,7 +8,7 @@ querying galaxy and system data.
 
 import uuid
 
-from backend.database import create_game, load_game, save_game as db_save, load_save
+from backend.database import load_game, save_game as db_save, load_save
 from backend.config import (
     DEFAULT_SEED, DEFAULT_SHIP_NAME, INITIAL_FUEL, INITIAL_HULL,
     INITIAL_CARGO, INITIAL_CREW, INITIAL_MORALE, INITIAL_CREDITS,
@@ -167,7 +167,6 @@ def game_save(state: GameState) -> None:
     :type state: GameState
     """
     data = _state_to_dict(state)
-    create_game(state.id, state.seed, state.ship.name, data)
     db_save(state.id, data)
 
 

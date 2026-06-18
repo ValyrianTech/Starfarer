@@ -102,29 +102,12 @@ def load_game(game_id: str) -> dict | None:
     return None
 
 
-def update_game(game_id: str, state: dict) -> None:
-    """Update an existing game's serialized state and timestamp.
-
-    :param game_id: The unique identifier for the game.
-    :type game_id: str
-    :param state: The serialized game state dictionary.
-    :type state: dict
-    """
-    conn = get_db()
-    now = datetime.now(timezone.utc).isoformat()
-    conn.execute(
-        "UPDATE games SET state_json = ?, updated_at = ? WHERE id = ?",
-        (json.dumps(state), now, game_id),
-    )
-    conn.commit()
-    conn.close()
-
-
 def save_game(game_id: str, state: dict) -> None:
     """Save the current game state to both the games and saves tables.
 
-    Updates the main game record and inserts a new row into the saves
-    history table.
+    Creates or updates the main game record (preserving the original
+    created_at timestamp) and inserts a new row into the saves history
+    table.
 
     :param game_id: The unique identifier for the game.
     :type game_id: str
@@ -133,7 +116,22 @@ def save_game(game_id: str, state: dict) -> None:
     """
     conn = get_db()
     now = datetime.now(timezone.utc).isoformat()
-    update_game(game_id, state)
+    existing = conn.execute(
+        "SELECT created_at, seed, ship_name FROM games WHERE id = ?",
+        (game_id,),
+    ).fetchone()
+    if existing:
+        created_at = existing["created_at"]
+        seed = existing["seed"]
+        ship_name = existing["ship_name"]
+    else:
+        created_at = now
+        seed = state.get("seed", 0)
+        ship_name = state.get("ship", {}).get("name", "Unknown")
+    conn.execute(
+        "INSERT OR REPLACE INTO games (id, seed, ship_name, created_at, updated_at, state_json) VALUES (?, ?, ?, ?, ?, ?)",
+        (game_id, seed, ship_name, created_at, now, json.dumps(state)),
+    )
     conn.execute(
         "INSERT INTO saves (game_id, saved_at, state_json) VALUES (?, ?, ?)",
         (game_id, now, json.dumps(state)),
