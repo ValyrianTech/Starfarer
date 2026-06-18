@@ -24,7 +24,7 @@ from backend.game.engine import (
     land_on_body, explore_surface,
 )
 from backend.game.trading import get_upgrade_info, purchase_upgrade, perform_trade
-from backend.database import get_leaderboard, load_game as db_load_game
+from backend.database import get_leaderboard
 
 START_TIME = time.time()
 
@@ -51,16 +51,6 @@ def _get_state(game_id: str) -> GameState | None:
         GAME_STORE[game_id] = state
         return state
     
-    # Fallback: try to reconstruct from raw DB data
-    data = db_load_game(game_id)
-    if data:
-        from backend.game.manager import _state_from_dict
-        try:
-            state = _state_from_dict(data)
-            GAME_STORE[game_id] = state
-            return state
-        except (KeyError, TypeError, ValueError):
-            pass
     return None
 
 
