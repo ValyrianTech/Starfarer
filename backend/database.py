@@ -139,8 +139,9 @@ def save_game(game_id: str, state: dict) -> None:
     else:
         # New game: seed and ship_name must be present in the state dict
         created_at = now
-        seed = state["seed"]
-        ship_name = state["ship"]["name"]
+        seed = state.get("seed", 0)
+        ship_data = state.get("ship", {})
+        ship_name = ship_data.get("name", "Unknown") if isinstance(ship_data, dict) else "Unknown"
     conn.execute(
         "INSERT OR REPLACE INTO games (id, seed, ship_name, created_at, updated_at, state_json) VALUES (?, ?, ?, ?, ?, ?)",
         (game_id, seed, ship_name, created_at, now, json.dumps(state)),
