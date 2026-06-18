@@ -190,7 +190,7 @@ class TestPerformJumpEdgeCases:
     def test_perform_jump_with_life_support_upgrade(self) -> None:
         """Jump with life support upgrade should reduce morale decay."""
         state = new_game(seed=42)
-        state.ship.upgrades["life_support"] = 2
+        state.ship.morale_decay_reduction = 2
         cur = state.get_current_system()
         nearby = get_nearby_systems(state)
         reachable = [n for n in nearby if n["reachable"]]

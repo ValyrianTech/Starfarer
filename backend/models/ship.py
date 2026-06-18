@@ -33,6 +33,7 @@ class Ship:
     max_crew: int = 10
     current_system_id: str = ""
     current_body_id: Optional[str] = None
+    morale_decay_reduction: int = 0
     upgrades: dict = field(default_factory=lambda: {
         "hyperdrive": 0,
         "scanner": 0,
@@ -64,6 +65,7 @@ class Ship:
             "max_crew": self.max_crew,
             "current_system_id": self.current_system_id,
             "current_body_id": self.current_body_id,
+            "morale_decay_reduction": self.morale_decay_reduction,
             "upgrades": self.upgrades,
         }
 
@@ -92,6 +94,7 @@ class Ship:
             max_crew=d.get("max_crew", 10),
             current_system_id=d.get("current_system_id", ""),
             current_body_id=d.get("current_body_id"),
+            morale_decay_reduction=d.get("morale_decay_reduction", 0),
             upgrades=d.get("upgrades", {
                 "hyperdrive": 0, "scanner": 0, "cargo_hold": 0,
                 "hull_plating": 0, "fuel_tanks": 0, "life_support": 0,
