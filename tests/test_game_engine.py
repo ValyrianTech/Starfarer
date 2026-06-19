@@ -467,7 +467,7 @@ class TestTradingAdvanced:
         assert state.ship.credits > credits_before
 
     def test_sell_quantity_exceeds_available(self) -> None:
-        """Selling with quantity exceeding available discoveries should sell all."""
+        """Selling with quantity exceeding available discoveries should return an error."""
         state = new_game(seed=42)
         sys = state.get_current_system()
         assert sys is not None
@@ -482,17 +482,14 @@ class TestTradingAdvanced:
         if len(same_cat) == 0:
             return  # pragma: no cover
         count_before = len(state.discoveries)
-        cat_count = len(same_cat)
         credits_before = state.ship.credits
         # Request to sell more than available
         ok, msg = perform_trade(state, "sell", cat, 999)
-        assert ok is True
-        assert "item(s)" in msg
-        # All matching discoveries should be sold
-        remaining = [d for d in state.discoveries if d.category == cat]
-        assert len(remaining) == 0
-        assert len(state.discoveries) == count_before - cat_count
-        assert state.ship.credits > credits_before
+        assert ok is False
+        assert "Only" in msg
+        assert "requested" in msg
+        assert len(state.discoveries) == count_before
+        assert state.ship.credits == credits_before
 
     def test_sell_multiple_by_name(self) -> None:
         """Selling multiple discoveries by name should work."""
