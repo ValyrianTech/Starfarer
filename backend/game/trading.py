@@ -136,12 +136,12 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
         state.add_log("trade", f"Sold {disc.name} for {sell_price} credits.")
         return True, f"Sold {disc.name} for {sell_price} credits."
 
-    FUEL_PRICE_RANGE = (30, 50)
+    FUEL_BASE_PRICE = 30
 
     if action == "buy":
         if item == "fuel":
             amount = min(quantity, state.ship.max_fuel - state.ship.fuel)
-            cost = int(amount * FUEL_PRICE_RANGE[0] * price_mod)
+            cost = int(amount * FUEL_BASE_PRICE * price_mod)
             if state.ship.credits < cost:
                 return False, f"Not enough credits. Need {cost}."
             state.ship.credits -= cost
