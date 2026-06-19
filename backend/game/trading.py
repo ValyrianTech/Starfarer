@@ -92,6 +92,19 @@ def purchase_upgrade(state: GameState, upgrade_id: str) -> tuple[bool, str]:
     return True, f"Upgraded {upgrade_id} to level {current_level + 1}."
 
 
+def _validate_quantity(quantity: int) -> str | None:
+    """Validate that quantity is a positive integer.
+
+    :param quantity: The quantity to validate.
+    :type quantity: int
+    :returns: An error message string if invalid, or None if valid.
+    :rtype: str | None
+    """
+    if isinstance(quantity, bool) or not isinstance(quantity, int) or quantity <= 0:
+        return "Quantity must be a positive integer."
+    return None
+
+
 def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -> tuple[bool, str]:
     """Perform a buy or sell trade action at the current system.
 
@@ -125,8 +138,9 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
     price_mod = rng.uniform(0.7, 1.5)
 
     if action == "sell":
-        if isinstance(quantity, bool) or not isinstance(quantity, int) or quantity <= 0:
-            return False, "Quantity must be a positive integer."
+        error = _validate_quantity(quantity)
+        if error:
+            return False, error
         # Try exact name match first
         name_matches = [d for d in state.discoveries if d.name == item]
         if name_matches:
@@ -155,8 +169,9 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
 
     if action == "buy":
         if item == "fuel":
-            if isinstance(quantity, bool) or not isinstance(quantity, int) or quantity <= 0:
-                return False, "Quantity must be a positive integer."
+            error = _validate_quantity(quantity)
+            if error:
+                return False, error
             amount = min(quantity, state.ship.max_fuel - state.ship.fuel)
             cost = int(amount * FUEL_BASE_PRICE * price_mod)
             if state.ship.credits < cost:
@@ -167,8 +182,9 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
             return True, f"Purchased {amount} fuel for {cost} credits."
 
         if item == "repair":
-            if isinstance(quantity, bool) or not isinstance(quantity, int) or quantity <= 0:
-                return False, "Quantity must be a positive integer."
+            error = _validate_quantity(quantity)
+            if error:
+                return False, error
             repair_amount = min(quantity * 20, state.ship.max_hull - state.ship.hull)
             cost = int(repair_amount * 2)
             if state.ship.credits < cost:
