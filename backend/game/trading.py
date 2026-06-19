@@ -127,7 +127,13 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
     if action == "sell":
         if quantity <= 0:
             return False, "Quantity must be positive."
-        matching = [d for d in state.discoveries if d.category == item or d.name == item]
+        # Try exact name match first
+        name_matches = [d for d in state.discoveries if d.name == item]
+        if name_matches:
+            matching = name_matches
+        else:
+            # Fall back to category match
+            matching = [d for d in state.discoveries if d.category == item]
         if not matching:
             return False, f"No discoveries matching '{item}' to sell."
         total_price = 0
@@ -212,10 +218,14 @@ def perform_bulk_sell(state: GameState, items: list[dict]) -> tuple[bool, str]:
             errors.append(f"Invalid quantity {quantity} for '{item_name}'.")
             continue
 
-        matching = [
-            d for d in state.discoveries
-            if (d.category == item_name or d.name == item_name) and d.id not in sold_ids
-        ]
+        available = [d for d in state.discoveries if d.id not in sold_ids]
+        # Try exact name match first
+        name_matches = [d for d in available if d.name == item_name]
+        if name_matches:
+            matching = name_matches
+        else:
+            # Fall back to category match
+            matching = [d for d in available if d.category == item_name]
         if not matching:
             errors.append(f"No discoveries matching '{item_name}' to sell.")
             continue
