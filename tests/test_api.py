@@ -3,6 +3,7 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 import pytest
+from datetime import datetime, timezone
 from fastapi.testclient import TestClient
 from unittest.mock import patch
 
@@ -242,6 +243,111 @@ class TestAPIDBFallback:
         with patch("backend.api.routes.game_load_func", return_value=None):
             resp = client.get(f"/api/game/{game_id}")
             assert resp.status_code == 404
+
+
+class TestAPILeaderboardMalformedState:
+    """Tests the leaderboard endpoint's handling of malformed state_json in the database."""
+
+    def test_leaderboard_skips_malformed_json(self) -> None:
+        """Insert a game with invalid JSON in state_json; leaderboard should skip it."""
+        from backend.database import get_db
+        now = datetime.now(timezone.utc).isoformat()
+        conn = get_db()
+        try:
+            conn.execute(
+                "INSERT OR REPLACE INTO games (id, seed, ship_name, created_at, updated_at, state_json) VALUES (?, ?, ?, ?, ?, ?)",
+                ("malformed-json-test", 1, "Test Ship", now, now, '{invalid')
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        resp = client.get("/api/leaderboard")
+        assert resp.status_code == 200
+        data = resp.json()
+        ids = [entry["game_id"] for entry in data["leaderboard"]]
+        assert "malformed-json-test" not in ids
+
+    def test_leaderboard_skips_empty_state_json(self) -> None:
+        """Insert a game with an empty string in state_json; leaderboard should skip it."""
+        from backend.database import get_db
+        now = datetime.now(timezone.utc).isoformat()
+        conn = get_db()
+        try:
+            conn.execute(
+                "INSERT OR REPLACE INTO games (id, seed, ship_name, created_at, updated_at, state_json) VALUES (?, ?, ?, ?, ?, ?)",
+                ("empty-json-test", 1, "Test Ship", now, now, '')
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        resp = client.get("/api/leaderboard")
+        assert resp.status_code == 200
+        data = resp.json()
+        ids = [entry["game_id"] for entry in data["leaderboard"]]
+        assert "empty-json-test" not in ids
+
+    def test_leaderboard_skips_null_state_json(self) -> None:
+        """Insert a game with a non-string state_json value (causes TypeError); leaderboard should skip it."""
+        from backend.database import get_db
+        now = datetime.now(timezone.utc).isoformat()
+        conn = get_db()
+        try:
+            conn.execute(
+                "INSERT OR REPLACE INTO games (id, seed, ship_name, created_at, updated_at, state_json) VALUES (?, ?, ?, ?, ?, ?)",
+                ("null-json-test", 1, "Test Ship", now, now, 123)
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        resp = client.get("/api/leaderboard")
+        assert resp.status_code == 200
+        data = resp.json()
+        ids = [entry["game_id"] for entry in data["leaderboard"]]
+        assert "null-json-test" not in ids
+
+    def test_leaderboard_mixed_valid_and_malformed(self) -> None:
+        """Insert mixed valid and malformed entries; only valid ones should appear in the leaderboard."""
+        from backend.database import get_db
+        now = datetime.now(timezone.utc).isoformat()
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "mixed-valid-1"})
+        assert resp.status_code == 200
+        conn = get_db()
+        try:
+            conn.execute(
+                "INSERT OR REPLACE INTO games (id, seed, ship_name, created_at, updated_at, state_json) VALUES (?, ?, ?, ?, ?, ?)",
+                ("mixed-malformed-1", 1, "Bad Ship", now, now, '{bad json')
+            )
+            conn.execute(
+                "INSERT OR REPLACE INTO games (id, seed, ship_name, created_at, updated_at, state_json) VALUES (?, ?, ?, ?, ?, ?)",
+                ("mixed-malformed-2", 1, "Empty Ship", now, now, '')
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        resp = client.get("/api/leaderboard")
+        assert resp.status_code == 200
+        data = resp.json()
+        ids = [entry["game_id"] for entry in data["leaderboard"]]
+        assert "mixed-valid-1" in ids
+        assert "mixed-malformed-1" not in ids
+        assert "mixed-malformed-2" not in ids
+
+    def test_get_leaderboard_direct_malformed(self) -> None:
+        """Directly call get_leaderboard with malformed state_json to ensure coverage of except block."""
+        from backend.database import get_db, get_leaderboard
+        now = datetime.now(timezone.utc).isoformat()
+        conn = get_db()
+        try:
+            conn.execute(
+                "INSERT OR REPLACE INTO games (id, seed, ship_name, created_at, updated_at, state_json) VALUES (?, ?, ?, ?, ?, ?)",
+                ("direct-malformed-test", 1, "Test Ship", now, now, '{invalid')
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        result = get_leaderboard(limit=10)
+        ids = [entry["game_id"] for entry in result]
+        assert "direct-malformed-test" not in ids
 
 
 class TestAPIAllEndpoints404:
