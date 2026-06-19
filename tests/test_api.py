@@ -882,9 +882,17 @@ class TestAPIBulkSell:
         assert resp.status_code == 200
         data = resp.json()
         assert data["ship"]["credits"] > 1000
-        assert "result" in data
-        assert "Sold" in data["result"]
-        assert "credits" in data["result"]
+        assert "game_id" in data
+        assert "seed" in data
+        assert "ship" in data
+        assert "current_system" in data
+        assert "discoveries" in data
+        assert "events_pending" in data
+        assert "log_entries" in data
+        assert "systems_visited" in data
+        assert "systems_total" in data
+        assert "game_started" in data
+        assert len(data["discoveries"]) < 3
 
     def test_bulk_sell_multiple_of_same_category(self) -> None:
         """Sell multiple items of the same category."""
@@ -897,7 +905,16 @@ class TestAPIBulkSell:
         assert resp.status_code == 200
         data = resp.json()
         assert data["ship"]["credits"] > 1000
-        assert "result" in data
+        assert "game_id" in data
+        assert "seed" in data
+        assert "ship" in data
+        assert "current_system" in data
+        assert "discoveries" in data
+        assert "events_pending" in data
+        assert "log_entries" in data
+        assert "systems_visited" in data
+        assert "systems_total" in data
+        assert "game_started" in data
 
     def test_bulk_sell_partial_failure(self) -> None:
         """Partial failure when some items don't exist."""
@@ -911,9 +928,17 @@ class TestAPIBulkSell:
         assert resp.status_code == 200
         data = resp.json()
         assert data["ship"]["credits"] > 1000
-        assert "result" in data
-        assert "Sold" in data["result"]
-        assert "No discoveries matching" in data["result"]
+        assert "game_id" in data
+        assert "seed" in data
+        assert "ship" in data
+        assert "current_system" in data
+        assert "discoveries" in data
+        assert "events_pending" in data
+        assert "log_entries" in data
+        assert "systems_visited" in data
+        assert "systems_total" in data
+        assert "game_started" in data
+        assert len(data["discoveries"]) < 3
 
     def test_bulk_sell_all_nonexistent(self) -> None:
         """All items nonexistent should return 400."""
@@ -1004,7 +1029,16 @@ class TestAPIBulkSell:
         assert resp.status_code == 200
         data = resp.json()
         assert data["ship"]["credits"] > 1000
-        assert "Sold" in data["result"]
+        assert "game_id" in data
+        assert "seed" in data
+        assert "ship" in data
+        assert "current_system" in data
+        assert "discoveries" in data
+        assert "events_pending" in data
+        assert "log_entries" in data
+        assert "systems_visited" in data
+        assert "systems_total" in data
+        assert "game_started" in data
 
     def test_bulk_sell_by_name_priority_over_category(self) -> None:
         """Name match takes priority over category match in bulk sell."""
@@ -1031,7 +1065,16 @@ class TestAPIBulkSell:
         assert resp.status_code == 200
         data = resp.json()
         assert data["ship"]["credits"] > 1000
-        assert "Sold" in data["result"]
+        assert "game_id" in data
+        assert "seed" in data
+        assert "ship" in data
+        assert "current_system" in data
+        assert "discoveries" in data
+        assert "events_pending" in data
+        assert "log_entries" in data
+        assert "systems_visited" in data
+        assert "systems_total" in data
+        assert "game_started" in data
 
 
 class TestPerformBulkSellDirect:
