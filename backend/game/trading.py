@@ -171,3 +171,96 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
             return True, f"Repaired hull by {repair_amount} for {cost} credits."
 
     return False, f"Cannot trade {item}."
+
+
+def perform_bulk_sell(state: GameState, items: list[dict]) -> tuple[bool, str, dict]:
+    """Sell multiple discoveries in a single transaction.
+
+    Validates that all requested items exist in the ship's discoveries.
+    Items that don't exist are reported as errors, but the sale of
+    available items still proceeds (partial failure).
+
+    :param state: The current game state.
+    :type state: GameState
+    :param items: A list of dicts with ``"item"`` and ``"quantity"`` keys.
+    :type items: list[dict]
+    :returns: A tuple of ``(success, message, full_state_dict)``.
+    :rtype: tuple[bool, str, dict]
+    """
+    system = state.get_current_system()
+    if not system:
+        return False, "Not in a system.", {}
+
+    is_station = system.phenomenon in ("none", "nebula", "ancient_gate")
+    if not is_station:
+        return False, "No trading facilities in this system.", {}
+
+    det_seed = deterministic_hash(state.seed, system.id, len(state.log_entries))
+    rng = random.Random(det_seed)
+    price_mod = rng.uniform(0.7, 1.5)
+
+    sold_ids: set[str] = set()
+    errors: list[str] = []
+    total_price = 0
+    sold_count = 0
+
+    for item_dict in items:
+        item_name = item_dict["item"]
+        quantity = item_dict["quantity"]
+
+        if quantity <= 0:
+            errors.append(f"Invalid quantity {quantity} for '{item_name}'.")
+            continue
+
+        matching = [
+            d for d in state.discoveries
+            if (d.category == item_name or d.name == item_name) and d.id not in sold_ids
+        ]
+        if not matching:
+            errors.append(f"No discoveries matching '{item_name}' to sell.")
+            continue
+
+        matching.sort(key=lambda d: d.value, reverse=True)
+        to_sell = matching[:quantity] if quantity < len(matching) else matching
+
+        for disc in to_sell:
+            sell_price = int(disc.value * price_mod)
+            total_price += sell_price
+            sold_count += 1
+            sold_ids.add(disc.id)
+
+    if sold_count == 0:
+        msg = "No items could be sold."
+        if errors:
+            msg += " " + " ".join(errors)
+        return False, msg, {}
+
+    for disc_id in sold_ids:
+        state.discoveries = [d for d in state.discoveries if d.id != disc_id]
+
+    state.ship.credits += total_price
+
+    log_msg = f"Bulk sold {sold_count} item(s) for {total_price} credits."
+    if errors:
+        log_msg += f" ({len(errors)} partial failure(s))"
+    state.add_log("trade", log_msg)
+
+    success_msg = f"Sold {sold_count} item(s) for {total_price} credits."
+    if errors:
+        success_msg += " " + " ".join(errors)
+
+    current_system = state.get_current_system()
+    full_state = {
+        "game_id": state.id,
+        "seed": state.seed,
+        "ship": state.ship.to_dict(),
+        "current_system": current_system.to_dict() if current_system else None,
+        "discoveries": [d.to_dict() for d in state.discoveries],
+        "events_pending": [e.to_dict() for e in state.events if not e.resolved],
+        "log_entries": list(reversed(state.log_entries))[:20],
+        "systems_visited": state.systems_visited,
+        "systems_total": len(state.systems),
+        "game_started": state.game_started,
+    }
+
+    return True, success_msg, full_state
