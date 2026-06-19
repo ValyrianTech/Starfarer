@@ -1074,3 +1074,13 @@ class TestPerformBulkSellDirect:
         success, message = perform_bulk_sell(state, [{"item": "artifact", "quantity": "abc"}])
         assert not success
         assert "Invalid quantity" in message
+
+    def test_quantity_exceeds_available(self) -> None:
+        """Quantity exceeding available matches should sell all and report error."""
+        state = self._create_test_state()
+        # Only 1 discovery with category "artifact" exists
+        success, message = perform_bulk_sell(state, [{"item": "artifact", "quantity": 5}])
+        assert success
+        assert "Sold" in message
+        assert "Only" in message and "requested 5" in message
+        assert len(state.discoveries) == 1  # Only the mineral discovery remains
