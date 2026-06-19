@@ -882,6 +882,7 @@ class TestAPIBulkSell:
             "items": []
         })
         assert resp.status_code == 400
+        assert resp.json()["detail"] == "Items list must not be empty."
 
     def test_bulk_sell_invalid_quantity_zero(self) -> None:
         """Quantity of 0 should return 400."""
