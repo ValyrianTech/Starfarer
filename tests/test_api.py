@@ -583,6 +583,65 @@ class TestAPIAdvancedFlow:
         assert "leaderboard" in data
         assert isinstance(data["leaderboard"], list)
 
+    def test_trade_sell_by_name_exact_match(self) -> None:
+        """Sell by name matches discovery name, not category via trade endpoint."""
+        from backend.models.discovery import Discovery
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "trade-name-match"})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        current_sys = state.get_current_system()
+        current_sys.phenomenon = "none"
+        state.discoveries.append(
+            Discovery(id="trade-name-match-disc-1", category="mineral", name="artifact",
+                      description="Test", value=200, system_id=current_sys.id)
+        )
+        GAME_STORE[game_id] = state
+        game_save(state)
+        resp = client.post(f"/api/game/{game_id}/trade", json={
+            "action": "sell", "item": "artifact", "quantity": 1
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["ship"]["credits"] > 1000
+        assert "Sold" in data["result"]
+        state_resp = client.get(f"/api/game/{game_id}")
+        assert state_resp.status_code == 200
+        state_data = state_resp.json()
+        assert len(state_data["discoveries"]) == 0
+
+    def test_trade_sell_by_name_priority_over_category(self) -> None:
+        """Name match takes priority over category match via trade endpoint."""
+        from backend.models.discovery import Discovery
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "trade-name-prio"})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        current_sys = state.get_current_system()
+        current_sys.phenomenon = "none"
+        state.discoveries.append(
+            Discovery(id="trade-name-prio-disc-1", category="artifact", name="Ancient Relic",
+                      description="Old relic", value=200, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="trade-name-prio-disc-2", category="mineral", name="artifact",
+                      description="Named artifact", value=150, system_id=current_sys.id)
+        )
+        GAME_STORE[game_id] = state
+        game_save(state)
+        resp = client.post(f"/api/game/{game_id}/trade", json={
+            "action": "sell", "item": "artifact", "quantity": 1
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["ship"]["credits"] > 1000
+        assert "Sold" in data["result"]
+        state_resp = client.get(f"/api/game/{game_id}")
+        assert state_resp.status_code == 200
+        state_data = state_resp.json()
+        assert len(state_data["discoveries"]) == 1
+        assert state_data["discoveries"][0]["name"] == "Ancient Relic"
+
 
 class TestAPIInternalFunctions:
     """Tests for internal helper functions in routes.py."""
@@ -924,3 +983,56 @@ class TestAPIBulkSell:
             "items": [{"item": "artifact", "quantity": 1}]
         })
         assert resp.status_code == 400
+
+    def test_bulk_sell_by_name_exact_match(self) -> None:
+        """Sell by name matches discovery name, not category."""
+        from backend.models.discovery import Discovery
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "bulk-name-match"})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        current_sys = state.get_current_system()
+        current_sys.phenomenon = "none"
+        state.discoveries.append(
+            Discovery(id="bulk-name-match-disc-1", category="mineral", name="artifact",
+                      description="Test", value=200, system_id=current_sys.id)
+        )
+        GAME_STORE[game_id] = state
+        game_save(state)
+        resp = client.post(f"/api/game/{game_id}/trade/bulk-sell", json={
+            "items": [{"item": "artifact", "quantity": 1}]
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["ship"]["credits"] > 1000
+        assert len(data["discoveries"]) == 0
+        assert "Sold" in data["result"]
+
+    def test_bulk_sell_by_name_priority_over_category(self) -> None:
+        """Name match takes priority over category match in bulk sell."""
+        from backend.models.discovery import Discovery
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "bulk-name-prio"})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        current_sys = state.get_current_system()
+        current_sys.phenomenon = "none"
+        state.discoveries.append(
+            Discovery(id="bulk-name-prio-disc-1", category="artifact", name="Ancient Relic",
+                      description="Old relic", value=200, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="bulk-name-prio-disc-2", category="mineral", name="artifact",
+                      description="Named artifact", value=150, system_id=current_sys.id)
+        )
+        GAME_STORE[game_id] = state
+        game_save(state)
+        resp = client.post(f"/api/game/{game_id}/trade/bulk-sell", json={
+            "items": [{"item": "artifact", "quantity": 1}]
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["ship"]["credits"] > 1000
+        assert len(data["discoveries"]) == 1
+        assert data["discoveries"][0]["name"] == "Ancient Relic"
+        assert "Sold" in data["result"]
