@@ -194,6 +194,8 @@ def get_leaderboard(limit: int = 10) -> list[dict]:
     for row in rows:
         try:
             state = json.loads(row["state_json"])
+            if not isinstance(state, dict):
+                continue  # Skip malformed entries
         except (json.JSONDecodeError, TypeError):
             continue  # Skip malformed entries
         results.append({
