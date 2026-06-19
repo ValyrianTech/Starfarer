@@ -779,3 +779,140 @@ class TestAPIEventPersistence:
         assert resp.status_code == 200
         data = resp.json()
         assert len(data["events_pending"]) > 0, "No pending events found after reload from DB"
+
+
+class TestAPIBulkSell:
+    """Tests for the bulk sell endpoint."""
+
+    def _create_game_with_discoveries(self, game_id: str) -> str:
+        """Helper to create a game and add test discoveries."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": game_id})
+        assert resp.status_code == 200
+        gid = resp.json()["game_id"]
+        state = GAME_STORE[gid]
+        current_sys = state.get_current_system()
+        current_sys.phenomenon = "none"
+        from backend.models.discovery import Discovery
+        state.discoveries.append(
+            Discovery(id=f"{game_id}-disc-1", category="artifact", name="Ancient Relic",
+                      description="Old relic", value=200, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id=f"{game_id}-disc-2", category="mineral", name="Glowing Crystal",
+                      description="Shiny", value=150, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id=f"{game_id}-disc-3", category="artifact", name="Mystic Orb",
+                      description="Glowing orb", value=300, system_id=current_sys.id)
+        )
+        GAME_STORE[gid] = state
+        game_save(state)
+        return gid
+
+    def test_bulk_sell_success(self) -> None:
+        """Sell multiple discoveries of different categories."""
+        game_id = self._create_game_with_discoveries("bulk-sell-ok")
+        resp = client.post(f"/api/game/{game_id}/trade/bulk-sell", json={
+            "items": [
+                {"item": "artifact", "quantity": 1},
+                {"item": "mineral", "quantity": 1}
+            ]
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["game_id"] == game_id
+        assert data["ship"]["credits"] > 1000
+        assert len(data["discoveries"]) == 1
+
+    def test_bulk_sell_multiple_of_same_category(self) -> None:
+        """Sell multiple items of the same category."""
+        game_id = self._create_game_with_discoveries("bulk-sell-multi")
+        resp = client.post(f"/api/game/{game_id}/trade/bulk-sell", json={
+            "items": [
+                {"item": "artifact", "quantity": 2}
+            ]
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["ship"]["credits"] > 1000
+        assert len(data["discoveries"]) == 1
+
+    def test_bulk_sell_partial_failure(self) -> None:
+        """Partial failure when some items don't exist."""
+        game_id = self._create_game_with_discoveries("bulk-sell-partial")
+        resp = client.post(f"/api/game/{game_id}/trade/bulk-sell", json={
+            "items": [
+                {"item": "artifact", "quantity": 1},
+                {"item": "nonexistent_item_xyz", "quantity": 5}
+            ]
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["ship"]["credits"] > 1000
+
+    def test_bulk_sell_all_nonexistent(self) -> None:
+        """All items nonexistent should return 400."""
+        game_id = self._create_game_with_discoveries("bulk-sell-all-bad")
+        resp = client.post(f"/api/game/{game_id}/trade/bulk-sell", json={
+            "items": [
+                {"item": "nonexistent_a", "quantity": 1},
+                {"item": "nonexistent_b", "quantity": 1}
+            ]
+        })
+        assert resp.status_code == 400
+
+    def test_bulk_sell_invalid_game_id(self) -> None:
+        """Nonexistent game ID should return 404."""
+        resp = client.post("/api/game/nonexistent-gid/trade/bulk-sell", json={
+            "items": [{"item": "artifact", "quantity": 1}]
+        })
+        assert resp.status_code == 404
+
+    def test_bulk_sell_empty_items(self) -> None:
+        """Empty items list should return 400."""
+        game_id = self._create_game_with_discoveries("bulk-sell-empty")
+        resp = client.post(f"/api/game/{game_id}/trade/bulk-sell", json={
+            "items": []
+        })
+        assert resp.status_code == 400
+
+    def test_bulk_sell_invalid_quantity_zero(self) -> None:
+        """Quantity of 0 should return 400."""
+        game_id = self._create_game_with_discoveries("bulk-sell-qty0")
+        resp = client.post(f"/api/game/{game_id}/trade/bulk-sell", json={
+            "items": [{"item": "artifact", "quantity": 0}]
+        })
+        assert resp.status_code == 400
+
+    def test_bulk_sell_invalid_quantity_negative(self) -> None:
+        """Negative quantity should return 400."""
+        game_id = self._create_game_with_discoveries("bulk-sell-qtyneg")
+        resp = client.post(f"/api/game/{game_id}/trade/bulk-sell", json={
+            "items": [{"item": "artifact", "quantity": -1}]
+        })
+        assert resp.status_code == 400
+
+    def test_bulk_sell_no_current_system(self) -> None:
+        """Bulk sell with no current system should return 400."""
+        game_id = self._create_game_with_discoveries("bulk-sell-no-sys")
+        state = GAME_STORE[game_id]
+        state.ship.current_system_id = "nonexistent_system_xyz"
+        GAME_STORE[game_id] = state
+        game_save(state)
+        resp = client.post(f"/api/game/{game_id}/trade/bulk-sell", json={
+            "items": [{"item": "artifact", "quantity": 1}]
+        })
+        assert resp.status_code == 400
+
+    def test_bulk_sell_no_trading_facilities(self) -> None:
+        """Bulk sell without trading facilities should return 400."""
+        game_id = self._create_game_with_discoveries("bulk-sell-no-trade")
+        state = GAME_STORE[game_id]
+        current_sys = state.get_current_system()
+        current_sys.phenomenon = "black_hole"
+        GAME_STORE[game_id] = state
+        game_save(state)
+        resp = client.post(f"/api/game/{game_id}/trade/bulk-sell", json={
+            "items": [{"item": "artifact", "quantity": 1}]
+        })
+        assert resp.status_code == 400
