@@ -10,6 +10,7 @@ import uuid
 
 from backend.models.game_state import GameState
 from backend.models.event import Event, Choice
+from backend.config import MORALE_LOW_THRESHOLD
 from backend.utils import deterministic_hash
 
 
@@ -135,7 +136,7 @@ def trigger_event(state: GameState) -> Event | None:
     if not system:
         return None
 
-    if state.ship.morale < 30:
+    if state.ship.morale < MORALE_LOW_THRESHOLD:
         crew_events = [t for t in EVENT_TEMPLATES if t["type"] == "crew" or t["type"] == "crisis"]
         template = crew_events[deterministic_hash(system.id, str(len(state.log_entries))) % len(crew_events)]
         return _create_event(template, system.id)
