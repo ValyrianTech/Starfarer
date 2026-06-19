@@ -358,10 +358,9 @@ def _ensure_connectivity(systems: dict[str, StarSystem], rng: random.Random) -> 
     :param rng: The seeded random number generator.
     :type rng: random.Random
     """
-    sys_list = list(systems.values())
     max_iters = 10
 
-    def _find_and_fix_isolated():
+    def _find_and_fix_isolated(sys_list):
         """Run one pass: find isolated systems and fix them.
 
         :returns: ``True`` if any fixes were applied, ``False`` otherwise.
@@ -402,7 +401,8 @@ def _ensure_connectivity(systems: dict[str, StarSystem], rng: random.Random) -> 
         return fixed
 
     for _ in range(max_iters):
-        if not _find_and_fix_isolated():
+        sys_list = list(systems.values())
+        if not _find_and_fix_isolated(sys_list):
             break
 
 
