@@ -11,6 +11,8 @@ from backend.main import app
 from backend.database import init_db
 from backend.game.manager import GAME_STORE, new_game, game_save
 from backend.game.engine import get_nearby_systems, land_on_body
+from backend.game.trading import perform_bulk_sell
+from backend.models.game_state import GameState
 
 client = TestClient(app)
 
@@ -1036,3 +1038,45 @@ class TestAPIBulkSell:
         assert len(data["discoveries"]) == 1
         assert data["discoveries"][0]["name"] == "Ancient Relic"
         assert "Sold" in data["result"]
+
+
+class TestPerformBulkSellDirect:
+    """Direct unit tests for perform_bulk_sell defensive input validation."""
+
+    def _create_test_state(self) -> GameState:
+        """Create a game state with a trading station and some discoveries."""
+        state = new_game(seed=42, ship_name="TestShip")
+        current_sys = state.get_current_system()
+        current_sys.phenomenon = "none"
+        from backend.models.discovery import Discovery
+        state.discoveries.append(
+            Discovery(id="direct-test-disc-1", category="artifact", name="Ancient Relic",
+                      description="Old relic", value=200, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="direct-test-disc-2", category="mineral", name="Glowing Crystal",
+                      description="Shiny", value=150, system_id=current_sys.id)
+        )
+        return state
+
+    def test_missing_item_key(self) -> None:
+        """Missing 'item' key should return error gracefully."""
+        state = self._create_test_state()
+        success, message = perform_bulk_sell(state, [{"quantity": 5}])
+        assert not success
+        assert "missing required 'item' field" in message
+
+    def test_missing_quantity_key(self) -> None:
+        """Missing 'quantity' key should default to 1 and succeed."""
+        state = self._create_test_state()
+        success, message = perform_bulk_sell(state, [{"item": "artifact"}])
+        assert success
+        assert "Sold" in message
+        assert len(state.discoveries) == 1  # One item sold, one remains
+
+    def test_non_integer_quantity(self) -> None:
+        """Non-integer quantity should return error gracefully."""
+        state = self._create_test_state()
+        success, message = perform_bulk_sell(state, [{"item": "artifact", "quantity": "abc"}])
+        assert not success
+        assert "Invalid quantity" in message
