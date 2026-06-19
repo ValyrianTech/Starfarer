@@ -888,7 +888,7 @@ class TestBulkSell:
         cat = state.discoveries[0].category
         credits_before = state.ship.credits
         count_before = len(state.discoveries)
-        ok, msg = perform_bulk_sell(state, [{"item": cat, "quantity": 2}])
+        ok, msg, sold_count, total_price = perform_bulk_sell(state, [{"item": cat, "quantity": 2}])
         assert ok is True
         assert "Sold" in msg
         assert state.ship.credits > credits_before
@@ -904,7 +904,7 @@ class TestBulkSell:
             return  # pragma: no cover
         land_on_body(state, planet.id)
         explore_surface(state)
-        ok, msg = perform_bulk_sell(state, [{"item": "artifact", "quantity": True}])
+        ok, msg, sold_count, total_price = perform_bulk_sell(state, [{"item": "artifact", "quantity": True}])
         assert ok is False
         assert "Invalid quantity" in msg
 
@@ -912,7 +912,7 @@ class TestBulkSell:
         """No current system returns error."""
         state = new_game(seed=42)
         state.ship.current_system_id = "nonexistent"
-        ok, msg = perform_bulk_sell(state, [{"item": "artifact", "quantity": 1}])
+        ok, msg, sold_count, total_price = perform_bulk_sell(state, [{"item": "artifact", "quantity": 1}])
         assert ok is False
         assert "Not in a system" in msg
 
@@ -922,7 +922,7 @@ class TestBulkSell:
         sys = state.get_current_system()
         assert sys is not None
         sys.phenomenon = "black_hole"
-        ok, msg = perform_bulk_sell(state, [{"item": "artifact", "quantity": 1}])
+        ok, msg, sold_count, total_price = perform_bulk_sell(state, [{"item": "artifact", "quantity": 1}])
         assert ok is False
         assert "No trading facilities" in msg
 
@@ -936,7 +936,7 @@ class TestBulkSell:
             return  # pragma: no cover
         land_on_body(state, planet.id)
         explore_surface(state)
-        ok, msg = perform_bulk_sell(state, [{"quantity": 1}])
+        ok, msg, sold_count, total_price = perform_bulk_sell(state, [{"quantity": 1}])
         assert ok is False
         assert "missing required" in msg
 
@@ -950,7 +950,7 @@ class TestBulkSell:
             return  # pragma: no cover
         land_on_body(state, planet.id)
         explore_surface(state)
-        ok, msg = perform_bulk_sell(state, [{"item": "artifact", "quantity": "three"}])
+        ok, msg, sold_count, total_price = perform_bulk_sell(state, [{"item": "artifact", "quantity": "three"}])
         assert ok is False
         assert "Invalid quantity" in msg
 
@@ -964,7 +964,7 @@ class TestBulkSell:
             return  # pragma: no cover
         land_on_body(state, planet.id)
         explore_surface(state)
-        ok, msg = perform_bulk_sell(state, [{"item": "artifact", "quantity": -1}])
+        ok, msg, sold_count, total_price = perform_bulk_sell(state, [{"item": "artifact", "quantity": -1}])
         assert ok is False
         assert "Invalid quantity" in msg
 
@@ -978,7 +978,7 @@ class TestBulkSell:
             return  # pragma: no cover
         land_on_body(state, planet.id)
         explore_surface(state)
-        ok, msg = perform_bulk_sell(state, [{"item": "artifact", "quantity": 0}])
+        ok, msg, sold_count, total_price = perform_bulk_sell(state, [{"item": "artifact", "quantity": 0}])
         assert ok is False
         assert "Invalid quantity" in msg
 
@@ -992,7 +992,7 @@ class TestBulkSell:
             return  # pragma: no cover
         land_on_body(state, planet.id)
         explore_surface(state)
-        ok, msg = perform_bulk_sell(state, [{"item": "nonexistent_category", "quantity": 1}])
+        ok, msg, sold_count, total_price = perform_bulk_sell(state, [{"item": "nonexistent_category", "quantity": 1}])
         assert ok is False
         assert "No discoveries matching" in msg
 
@@ -1009,7 +1009,7 @@ class TestBulkSell:
         assert len(state.discoveries) > 0
         cat = state.discoveries[0].category
         credits_before = state.ship.credits
-        ok, msg = perform_bulk_sell(state, [
+        ok, msg, sold_count, total_price = perform_bulk_sell(state, [
             {"item": cat, "quantity": 1},
             {"item": "nonexistent_category", "quantity": 1},
         ])
@@ -1038,7 +1038,7 @@ class TestBulkSell:
         )
         state.discoveries.append(disc)
         credits_before = state.ship.credits
-        ok, msg = perform_bulk_sell(state, [{"item": "Mysterious Artifact", "quantity": 1}])
+        ok, msg, sold_count, total_price = perform_bulk_sell(state, [{"item": "Mysterious Artifact", "quantity": 1}])
         assert ok is True
         assert "Sold 1 item(s)" in msg
         assert state.ship.credits > credits_before
@@ -1054,7 +1054,7 @@ class TestBulkSell:
             return  # pragma: no cover
         land_on_body(state, planet.id)
         explore_surface(state)
-        ok, msg = perform_bulk_sell(state, [
+        ok, msg, sold_count, total_price = perform_bulk_sell(state, [
             {"item": "nonexistent_alpha", "quantity": 1},
             {"item": "nonexistent_beta", "quantity": 1},
         ])
