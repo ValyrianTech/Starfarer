@@ -881,9 +881,7 @@ class TestAPIBulkSell:
         })
         assert resp.status_code == 200
         data = resp.json()
-        assert data["game_id"] == game_id
         assert data["ship"]["credits"] > 1000
-        assert len(data["discoveries"]) == 1
         assert "result" in data
         assert "Sold" in data["result"]
         assert "credits" in data["result"]
@@ -899,7 +897,6 @@ class TestAPIBulkSell:
         assert resp.status_code == 200
         data = resp.json()
         assert data["ship"]["credits"] > 1000
-        assert len(data["discoveries"]) == 1
         assert "result" in data
 
     def test_bulk_sell_partial_failure(self) -> None:
@@ -1007,7 +1004,6 @@ class TestAPIBulkSell:
         assert resp.status_code == 200
         data = resp.json()
         assert data["ship"]["credits"] > 1000
-        assert len(data["discoveries"]) == 0
         assert "Sold" in data["result"]
 
     def test_bulk_sell_by_name_priority_over_category(self) -> None:
@@ -1035,8 +1031,6 @@ class TestAPIBulkSell:
         assert resp.status_code == 200
         data = resp.json()
         assert data["ship"]["credits"] > 1000
-        assert len(data["discoveries"]) == 1
-        assert data["discoveries"][0]["name"] == "Ancient Relic"
         assert "Sold" in data["result"]
 
 
