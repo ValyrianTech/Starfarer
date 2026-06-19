@@ -420,7 +420,7 @@ class TestTradingAdvanced:
         cat = state.discoveries[0].category
         ok, msg = perform_trade(state, "sell", cat, -1)
         assert ok is False
-        assert "Quantity must be positive" in msg
+        assert "Quantity must be a positive integer" in msg
 
     def test_sell_discovery_zero_quantity(self) -> None:
         """Selling with quantity=0 should fail."""
@@ -436,7 +436,7 @@ class TestTradingAdvanced:
         cat = state.discoveries[0].category
         ok, msg = perform_trade(state, "sell", cat, 0)
         assert ok is False
-        assert "Quantity must be positive" in msg
+        assert "Quantity must be a positive integer" in msg
 
     def test_sell_multiple_discoveries(self) -> None:
         """Selling with quantity > 1 should sell multiple discoveries."""
@@ -586,28 +586,28 @@ class TestTradingAdvanced:
         state = new_game(seed=42)
         ok, msg = perform_trade(state, "buy", "fuel", -10)
         assert ok is False
-        assert "Quantity must be positive" in msg
+        assert "Quantity must be a positive integer" in msg
 
     def test_buy_repair_negative_quantity(self) -> None:
         """Buying repairs with a negative quantity should fail."""
         state = new_game(seed=42)
         ok, msg = perform_trade(state, "buy", "repair", -10)
         assert ok is False
-        assert "Quantity must be positive" in msg
+        assert "Quantity must be a positive integer" in msg
 
     def test_buy_fuel_zero_quantity(self) -> None:
         """Buying fuel with quantity=0 should fail."""
         state = new_game(seed=42)
         ok, msg = perform_trade(state, "buy", "fuel", 0)
         assert ok is False
-        assert "Quantity must be positive" in msg
+        assert "Quantity must be a positive integer" in msg
 
     def test_buy_repair_zero_quantity(self) -> None:
         """Buying repairs with quantity=0 should fail."""
         state = new_game(seed=42)
         ok, msg = perform_trade(state, "buy", "repair", 0)
         assert ok is False
-        assert "Quantity must be positive" in msg
+        assert "Quantity must be a positive integer" in msg
 
     def test_purchase_upgrade_unknown(self) -> None:
         """Purchasing an unknown upgrade should fail."""
@@ -684,6 +684,36 @@ class TestTradingAdvanced:
         ok, msg = perform_trade(state, "buy", "weapons", 1)
         assert ok is False
         assert "Cannot trade weapons" in msg
+
+    def test_sell_bool_quantity_rejected(self) -> None:
+        """Selling with quantity=True should fail."""
+        state = new_game(seed=42)
+        sys = state.get_current_system()
+        assert sys is not None
+        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        if not planet:
+            return  # pragma: no cover
+        land_on_body(state, planet.id)
+        explore_surface(state)
+        assert len(state.discoveries) > 0
+        cat = state.discoveries[0].category
+        ok, msg = perform_trade(state, "sell", cat, True)
+        assert ok is False
+        assert "Quantity must be a positive integer" in msg
+
+    def test_buy_fuel_bool_quantity_rejected(self) -> None:
+        """Buying fuel with quantity=True should fail."""
+        state = new_game(seed=42)
+        ok, msg = perform_trade(state, "buy", "fuel", True)
+        assert ok is False
+        assert "Quantity must be a positive integer" in msg
+
+    def test_buy_repair_bool_quantity_rejected(self) -> None:
+        """Buying repair with quantity=True should fail."""
+        state = new_game(seed=42)
+        ok, msg = perform_trade(state, "buy", "repair", True)
+        assert ok is False
+        assert "Quantity must be a positive integer" in msg
 
 
 class TestEventsAdvanced:
