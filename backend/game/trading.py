@@ -218,7 +218,7 @@ def perform_bulk_sell(state: GameState, items: list[dict]) -> tuple[bool, str]:
             errors.append("Item entry missing required 'item' field.")
             continue
 
-        if not isinstance(quantity, int) or quantity <= 0:
+        if isinstance(quantity, bool) or not isinstance(quantity, int) or quantity <= 0:
             errors.append(f"Invalid quantity {quantity} for '{item_name}'.")
             continue
 

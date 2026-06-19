@@ -6,7 +6,7 @@ from backend.game.engine import (
     can_jump, perform_jump, perform_scan, get_nearby_systems,
     land_on_body, explore_surface,
 )
-from backend.game.trading import get_upgrade_info, purchase_upgrade, perform_trade
+from backend.game.trading import get_upgrade_info, purchase_upgrade, perform_trade, perform_bulk_sell
 from backend.game.manager import new_game, get_galaxy, get_system_detail, game_save, load_or_create, get_game_state
 from backend.generation.events import trigger_event, resolve_event, EVENT_TEMPLATES
 from backend.utils import deterministic_hash
@@ -842,3 +842,196 @@ class TestTriggerEventPhenomenonBranch:
         event = trigger_event(state)
         assert event is not None
         assert event.event_type in [t["type"] for t in EVENT_TEMPLATES]
+
+
+class TestBulkSell:
+    """Tests for the perform_bulk_sell function."""
+
+    def test_bulk_sell_success(self) -> None:
+        """Basic successful bulk sell of multiple discoveries."""
+        state = new_game(seed=42)
+        sys = state.get_current_system()
+        assert sys is not None
+        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        if not planet:
+            return  # pragma: no cover
+        land_on_body(state, planet.id)
+        explore_surface(state)
+        assert len(state.discoveries) > 0
+        cat = state.discoveries[0].category
+        credits_before = state.ship.credits
+        count_before = len(state.discoveries)
+        ok, msg = perform_bulk_sell(state, [{"item": cat, "quantity": 2}])
+        assert ok is True
+        assert "Sold" in msg
+        assert state.ship.credits > credits_before
+        assert len(state.discoveries) <= count_before - 1
+
+    def test_bulk_sell_bool_quantity_rejected(self) -> None:
+        """Passing quantity=True should be rejected with an error."""
+        state = new_game(seed=42)
+        sys = state.get_current_system()
+        assert sys is not None
+        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        if not planet:
+            return  # pragma: no cover
+        land_on_body(state, planet.id)
+        explore_surface(state)
+        ok, msg = perform_bulk_sell(state, [{"item": "artifact", "quantity": True}])
+        assert ok is False
+        assert "Invalid quantity" in msg
+
+    def test_bulk_sell_no_system(self) -> None:
+        """No current system returns error."""
+        state = new_game(seed=42)
+        state.ship.current_system_id = "nonexistent"
+        ok, msg = perform_bulk_sell(state, [{"item": "artifact", "quantity": 1}])
+        assert ok is False
+        assert "Not in a system" in msg
+
+    def test_bulk_sell_no_facilities(self) -> None:
+        """System without trading facilities returns error."""
+        state = new_game(seed=42)
+        sys = state.get_current_system()
+        assert sys is not None
+        sys.phenomenon = "black_hole"
+        ok, msg = perform_bulk_sell(state, [{"item": "artifact", "quantity": 1}])
+        assert ok is False
+        assert "No trading facilities" in msg
+
+    def test_bulk_sell_missing_item_field(self) -> None:
+        """Missing 'item' field returns error."""
+        state = new_game(seed=42)
+        sys = state.get_current_system()
+        assert sys is not None
+        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        if not planet:
+            return  # pragma: no cover
+        land_on_body(state, planet.id)
+        explore_surface(state)
+        ok, msg = perform_bulk_sell(state, [{"quantity": 1}])
+        assert ok is False
+        assert "missing required" in msg
+
+    def test_bulk_sell_invalid_quantity_type(self) -> None:
+        """Passing a string or float as quantity should be rejected."""
+        state = new_game(seed=42)
+        sys = state.get_current_system()
+        assert sys is not None
+        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        if not planet:
+            return  # pragma: no cover
+        land_on_body(state, planet.id)
+        explore_surface(state)
+        ok, msg = perform_bulk_sell(state, [{"item": "artifact", "quantity": "three"}])
+        assert ok is False
+        assert "Invalid quantity" in msg
+
+    def test_bulk_sell_negative_quantity(self) -> None:
+        """Negative quantity should be rejected."""
+        state = new_game(seed=42)
+        sys = state.get_current_system()
+        assert sys is not None
+        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        if not planet:
+            return  # pragma: no cover
+        land_on_body(state, planet.id)
+        explore_surface(state)
+        ok, msg = perform_bulk_sell(state, [{"item": "artifact", "quantity": -1}])
+        assert ok is False
+        assert "Invalid quantity" in msg
+
+    def test_bulk_sell_zero_quantity(self) -> None:
+        """Zero quantity should be rejected."""
+        state = new_game(seed=42)
+        sys = state.get_current_system()
+        assert sys is not None
+        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        if not planet:
+            return  # pragma: no cover
+        land_on_body(state, planet.id)
+        explore_surface(state)
+        ok, msg = perform_bulk_sell(state, [{"item": "artifact", "quantity": 0}])
+        assert ok is False
+        assert "Invalid quantity" in msg
+
+    def test_bulk_sell_no_matching_discoveries(self) -> None:
+        """No matching discoveries returns error."""
+        state = new_game(seed=42)
+        sys = state.get_current_system()
+        assert sys is not None
+        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        if not planet:
+            return  # pragma: no cover
+        land_on_body(state, planet.id)
+        explore_surface(state)
+        ok, msg = perform_bulk_sell(state, [{"item": "nonexistent_category", "quantity": 1}])
+        assert ok is False
+        assert "No discoveries matching" in msg
+
+    def test_bulk_sell_partial_failure(self) -> None:
+        """Some items fail but others succeed in a partial failure scenario."""
+        state = new_game(seed=42)
+        sys = state.get_current_system()
+        assert sys is not None
+        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        if not planet:
+            return  # pragma: no cover
+        land_on_body(state, planet.id)
+        explore_surface(state)
+        assert len(state.discoveries) > 0
+        cat = state.discoveries[0].category
+        credits_before = state.ship.credits
+        ok, msg = perform_bulk_sell(state, [
+            {"item": cat, "quantity": 1},
+            {"item": "nonexistent_category", "quantity": 1},
+        ])
+        assert ok is True
+        assert "Sold" in msg
+        assert "No discoveries matching" in msg
+        assert state.ship.credits > credits_before
+
+    def test_bulk_sell_by_exact_name(self) -> None:
+        """Selling by exact name should hit the name_matches branch (line 229)."""
+        from backend.models.discovery import Discovery
+        state = new_game(seed=42)
+        sys = state.get_current_system()
+        assert sys is not None
+        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        if not planet:
+            return  # pragma: no cover
+        land_on_body(state, planet.id)
+        explore_surface(state)
+        disc = Discovery(
+            id="exact_name_disc_1",
+            name="Mysterious Artifact",
+            category="special",
+            description="A strange and valuable artifact.",
+            value=500,
+        )
+        state.discoveries.append(disc)
+        credits_before = state.ship.credits
+        ok, msg = perform_bulk_sell(state, [{"item": "Mysterious Artifact", "quantity": 1}])
+        assert ok is True
+        assert "Sold 1 item(s)" in msg
+        assert state.ship.credits > credits_before
+        assert disc not in state.discoveries
+
+    def test_bulk_sell_sold_count_zero_with_errors(self) -> None:
+        """When all items fail to match, sold_count==0 with errors (line 246-250)."""
+        state = new_game(seed=42)
+        sys = state.get_current_system()
+        assert sys is not None
+        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        if not planet:
+            return  # pragma: no cover
+        land_on_body(state, planet.id)
+        explore_surface(state)
+        ok, msg = perform_bulk_sell(state, [
+            {"item": "nonexistent_alpha", "quantity": 1},
+            {"item": "nonexistent_beta", "quantity": 1},
+        ])
+        assert ok is False
+        assert "No items could be sold." in msg
+        assert "No discoveries matching 'nonexistent_alpha'" in msg
+        assert "No discoveries matching 'nonexistent_beta'" in msg
