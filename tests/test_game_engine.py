@@ -440,6 +440,7 @@ class TestTradingAdvanced:
 
     def test_sell_multiple_discoveries(self) -> None:
         """Selling with quantity > 1 should sell multiple discoveries."""
+        from backend.models.discovery import Discovery
         state = new_game(seed=42)
         sys = state.get_current_system()
         assert sys is not None
@@ -448,20 +449,21 @@ class TestTradingAdvanced:
             return  # pragma: no cover
         land_on_body(state, planet.id)
         explore_surface(state)
-        # Ensure we have at least 2 discoveries
-        if len(state.discoveries) < 2:
-            return  # pragma: no cover
         cat = state.discoveries[0].category
-        # Filter to only same-category discoveries
-        same_cat = [d for d in state.discoveries if d.category == cat]
-        if len(same_cat) < 2:
-            return  # pragma: no cover
-        count_before = len(state.discoveries)
+        d1 = Discovery(id="multi_d1", name="Budget Find", category=cat, description="Cheap", value=100)
+        d2 = Discovery(id="multi_d2", name="Mid Find", category=cat, description="Mid", value=500)
+        d3 = Discovery(id="multi_d3", name="Premium Find", category=cat, description="Premium", value=1000)
+        state.discoveries.clear()
+        for d in [d1, d2, d3]:
+            state.discoveries.append(d)
         credits_before = state.ship.credits
         ok, msg = perform_trade(state, "sell", cat, 2)
         assert ok is True
         assert "item(s)" in msg
-        assert len(state.discoveries) == count_before - 2
+        assert d3 not in state.discoveries
+        assert d2 not in state.discoveries
+        assert d1 in state.discoveries
+        assert len(state.discoveries) == 1
         assert state.ship.credits > credits_before
 
     def test_sell_quantity_exceeds_available(self) -> None:
@@ -494,6 +496,7 @@ class TestTradingAdvanced:
 
     def test_sell_multiple_by_name(self) -> None:
         """Selling multiple discoveries by name should work."""
+        from backend.models.discovery import Discovery
         state = new_game(seed=42)
         sys = state.get_current_system()
         assert sys is not None
@@ -502,17 +505,18 @@ class TestTradingAdvanced:
             return  # pragma: no cover
         land_on_body(state, planet.id)
         explore_surface(state)
-        assert len(state.discoveries) > 0
-        name = state.discoveries[0].name
-        same_name = [d for d in state.discoveries if d.name == name]
-        if len(same_name) < 2:
-            return  # pragma: no cover
-        count_before = len(state.discoveries)
+        d1 = Discovery(id="name_d1", name="Mysterious Orb", category="artifact", description="First orb", value=200)
+        d2 = Discovery(id="name_d2", name="Mysterious Orb", category="relic", description="Second orb", value=300)
+        state.discoveries.clear()
+        state.discoveries.append(d1)
+        state.discoveries.append(d2)
         credits_before = state.ship.credits
-        ok, msg = perform_trade(state, "sell", name, 2)
+        ok, msg = perform_trade(state, "sell", "Mysterious Orb", 2)
         assert ok is True
         assert "item(s)" in msg
-        assert len(state.discoveries) == count_before - 2
+        assert d1 not in state.discoveries
+        assert d2 not in state.discoveries
+        assert len(state.discoveries) == 0
         assert state.ship.credits > credits_before
 
     def test_buy_fuel_success(self) -> None:
