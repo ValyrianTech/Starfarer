@@ -427,6 +427,9 @@ def api_bulk_sell(game_id: str, req: BulkSellRequest) -> dict:
     if not state:
         raise HTTPException(status_code=404, detail="Game not found")
 
+    if not req.items:
+        raise HTTPException(status_code=400, detail="Items list must not be empty.")
+
     items_dicts = [{"item": i.item, "quantity": i.quantity} for i in req.items]
     ok, msg = perform_bulk_sell(state, items_dicts)
 
