@@ -428,13 +428,13 @@ def api_bulk_sell(game_id: str, req: BulkSellRequest) -> dict:
         raise HTTPException(status_code=404, detail="Game not found")
 
     items_dicts = [{"item": i.item, "quantity": i.quantity} for i in req.items]
-    ok, msg, full_state = perform_bulk_sell(state, items_dicts)
+    ok, msg = perform_bulk_sell(state, items_dicts)
 
     if not ok:
         raise HTTPException(status_code=400, detail=msg)
 
     game_save(state)
-    return full_state
+    return _full_state_response(state)
 
 
 @router.post("/game/{game_id}/upgrade")
