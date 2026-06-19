@@ -6,10 +6,10 @@ upgrades, and trading resources (fuel, repairs, selling discoveries)
 at trading stations.
 """
 
-import hashlib
 import random
 
 from backend.config import UPGRADE_COSTS, UPGRADE_EFFECTS, UPGRADE_MAX_LEVELS
+from backend.utils import deterministic_hash
 from backend.models.game_state import GameState
 from backend.models.ship import Ship
 
@@ -120,26 +120,35 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
     if not is_station:
         return False, "No trading facilities in this system."
 
-    seed_str = str(state.seed) + system.id + str(len(state.log_entries))
-    det_seed = int(hashlib.md5(seed_str.encode()).hexdigest(), 16)
+    det_seed = deterministic_hash(state.seed, system.id, len(state.log_entries))
     rng = random.Random(det_seed)
     price_mod = rng.uniform(0.7, 1.5)
 
     if action == "sell":
+        if quantity <= 0:
+            return False, "Quantity must be positive."
         matching = [d for d in state.discoveries if d.category == item or d.name == item]
         if not matching:
             return False, f"No discoveries matching '{item}' to sell."
-        disc = max(matching, key=lambda d: d.value)
-        sell_price = int(disc.value * price_mod)
-        state.ship.credits += sell_price
-        state.discoveries.remove(disc)
-        state.add_log("trade", f"Sold {disc.name} for {sell_price} credits.")
-        return True, f"Sold {disc.name} for {sell_price} credits."
+        total_price = 0
+        sold_items = []
+        matching.sort(key=lambda d: d.value, reverse=True)
+        to_sell = matching[:quantity] if quantity < len(matching) else matching
+        for disc in to_sell:
+            sell_price = int(disc.value * price_mod)
+            total_price += sell_price
+            sold_items.append(disc.name)
+            state.discoveries.remove(disc)
+        state.ship.credits += total_price
+        state.add_log("trade", f"Sold {len(sold_items)} item(s) for {total_price} credits.")
+        return True, f"Sold {len(sold_items)} item(s) for {total_price} credits."
 
     FUEL_BASE_PRICE = 30
 
     if action == "buy":
         if item == "fuel":
+            if quantity <= 0:
+                return False, "Quantity must be positive."
             amount = min(quantity, state.ship.max_fuel - state.ship.fuel)
             cost = int(amount * FUEL_BASE_PRICE * price_mod)
             if state.ship.credits < cost:
@@ -150,6 +159,8 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
             return True, f"Purchased {amount} fuel for {cost} credits."
 
         if item == "repair":
+            if quantity <= 0:
+                return False, "Quantity must be positive."
             repair_amount = min(quantity * 20, state.ship.max_hull - state.ship.hull)
             cost = int(repair_amount * 2)
             if state.ship.credits < cost:

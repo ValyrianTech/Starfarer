@@ -406,6 +406,119 @@ class TestTradingAdvanced:
         assert low_value_disc in state.discoveries
         assert state.ship.credits >= credits_before + int(9999 * 0.7)
 
+    def test_sell_discovery_negative_quantity(self) -> None:
+        """Selling with a negative quantity should fail."""
+        state = new_game(seed=42)
+        sys = state.get_current_system()
+        assert sys is not None
+        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        if not planet:
+            return  # pragma: no cover
+        land_on_body(state, planet.id)
+        explore_surface(state)
+        assert len(state.discoveries) > 0
+        cat = state.discoveries[0].category
+        ok, msg = perform_trade(state, "sell", cat, -1)
+        assert ok is False
+        assert "Quantity must be positive" in msg
+
+    def test_sell_discovery_zero_quantity(self) -> None:
+        """Selling with quantity=0 should fail."""
+        state = new_game(seed=42)
+        sys = state.get_current_system()
+        assert sys is not None
+        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        if not planet:
+            return  # pragma: no cover
+        land_on_body(state, planet.id)
+        explore_surface(state)
+        assert len(state.discoveries) > 0
+        cat = state.discoveries[0].category
+        ok, msg = perform_trade(state, "sell", cat, 0)
+        assert ok is False
+        assert "Quantity must be positive" in msg
+
+    def test_sell_multiple_discoveries(self) -> None:
+        """Selling with quantity > 1 should sell multiple discoveries."""
+        from backend.models.discovery import Discovery
+        state = new_game(seed=42)
+        sys = state.get_current_system()
+        assert sys is not None
+        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        if not planet:
+            return  # pragma: no cover
+        land_on_body(state, planet.id)
+        explore_surface(state)
+        cat = state.discoveries[0].category
+        d1 = Discovery(id="multi_d1", name="Budget Find", category=cat, description="Cheap", value=100)
+        d2 = Discovery(id="multi_d2", name="Mid Find", category=cat, description="Mid", value=500)
+        d3 = Discovery(id="multi_d3", name="Premium Find", category=cat, description="Premium", value=1000)
+        state.discoveries.clear()
+        for d in [d1, d2, d3]:
+            state.discoveries.append(d)
+        credits_before = state.ship.credits
+        ok, msg = perform_trade(state, "sell", cat, 2)
+        assert ok is True
+        assert "item(s)" in msg
+        assert d3 not in state.discoveries
+        assert d2 not in state.discoveries
+        assert d1 in state.discoveries
+        assert len(state.discoveries) == 1
+        assert state.ship.credits > credits_before
+
+    def test_sell_quantity_exceeds_available(self) -> None:
+        """Selling with quantity exceeding available discoveries should sell all."""
+        state = new_game(seed=42)
+        sys = state.get_current_system()
+        assert sys is not None
+        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        if not planet:
+            return  # pragma: no cover
+        land_on_body(state, planet.id)
+        explore_surface(state)
+        assert len(state.discoveries) > 0
+        cat = state.discoveries[0].category
+        same_cat = [d for d in state.discoveries if d.category == cat]
+        if len(same_cat) == 0:
+            return  # pragma: no cover
+        count_before = len(state.discoveries)
+        cat_count = len(same_cat)
+        credits_before = state.ship.credits
+        # Request to sell more than available
+        ok, msg = perform_trade(state, "sell", cat, 999)
+        assert ok is True
+        assert "item(s)" in msg
+        # All matching discoveries should be sold
+        remaining = [d for d in state.discoveries if d.category == cat]
+        assert len(remaining) == 0
+        assert len(state.discoveries) == count_before - cat_count
+        assert state.ship.credits > credits_before
+
+    def test_sell_multiple_by_name(self) -> None:
+        """Selling multiple discoveries by name should work."""
+        from backend.models.discovery import Discovery
+        state = new_game(seed=42)
+        sys = state.get_current_system()
+        assert sys is not None
+        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        if not planet:
+            return  # pragma: no cover
+        land_on_body(state, planet.id)
+        explore_surface(state)
+        d1 = Discovery(id="name_d1", name="Mysterious Orb", category="artifact", description="First orb", value=200)
+        d2 = Discovery(id="name_d2", name="Mysterious Orb", category="relic", description="Second orb", value=300)
+        state.discoveries.clear()
+        state.discoveries.append(d1)
+        state.discoveries.append(d2)
+        credits_before = state.ship.credits
+        ok, msg = perform_trade(state, "sell", "Mysterious Orb", 2)
+        assert ok is True
+        assert "item(s)" in msg
+        assert d1 not in state.discoveries
+        assert d2 not in state.discoveries
+        assert len(state.discoveries) == 0
+        assert state.ship.credits > credits_before
+
     def test_buy_fuel_success(self) -> None:
         """Buying fuel should deduct credits and add fuel."""
         state = new_game(seed=42)
@@ -467,6 +580,34 @@ class TestTradingAdvanced:
         state = new_game(seed=42)
         ok, msg = perform_trade(state, "buy", "nonexistent", 1)
         assert ok is False
+
+    def test_buy_fuel_negative_quantity(self) -> None:
+        """Buying fuel with a negative quantity should fail."""
+        state = new_game(seed=42)
+        ok, msg = perform_trade(state, "buy", "fuel", -10)
+        assert ok is False
+        assert "Quantity must be positive" in msg
+
+    def test_buy_repair_negative_quantity(self) -> None:
+        """Buying repairs with a negative quantity should fail."""
+        state = new_game(seed=42)
+        ok, msg = perform_trade(state, "buy", "repair", -10)
+        assert ok is False
+        assert "Quantity must be positive" in msg
+
+    def test_buy_fuel_zero_quantity(self) -> None:
+        """Buying fuel with quantity=0 should fail."""
+        state = new_game(seed=42)
+        ok, msg = perform_trade(state, "buy", "fuel", 0)
+        assert ok is False
+        assert "Quantity must be positive" in msg
+
+    def test_buy_repair_zero_quantity(self) -> None:
+        """Buying repairs with quantity=0 should fail."""
+        state = new_game(seed=42)
+        ok, msg = perform_trade(state, "buy", "repair", 0)
+        assert ok is False
+        assert "Quantity must be positive" in msg
 
     def test_purchase_upgrade_unknown(self) -> None:
         """Purchasing an unknown upgrade should fail."""
