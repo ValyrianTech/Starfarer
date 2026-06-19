@@ -360,7 +360,7 @@ def _ensure_connectivity(systems: dict[str, StarSystem], rng: random.Random) -> 
     """
     max_iters = 10
 
-    def _find_and_fix_isolated(sys_list):
+    def _find_and_fix_isolated(sys_list: list[StarSystem]) -> bool:
         """Run one pass: find isolated systems and fix them.
 
         :returns: ``True`` if any fixes were applied, ``False`` otherwise.
