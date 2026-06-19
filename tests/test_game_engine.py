@@ -468,6 +468,34 @@ class TestTradingAdvanced:
         ok, msg = perform_trade(state, "buy", "nonexistent", 1)
         assert ok is False
 
+    def test_buy_fuel_negative_quantity(self) -> None:
+        """Buying fuel with a negative quantity should fail."""
+        state = new_game(seed=42)
+        ok, msg = perform_trade(state, "buy", "fuel", -10)
+        assert ok is False
+        assert "Quantity must be positive" in msg
+
+    def test_buy_repair_negative_quantity(self) -> None:
+        """Buying repairs with a negative quantity should fail."""
+        state = new_game(seed=42)
+        ok, msg = perform_trade(state, "buy", "repair", -10)
+        assert ok is False
+        assert "Quantity must be positive" in msg
+
+    def test_buy_fuel_zero_quantity(self) -> None:
+        """Buying fuel with quantity=0 should fail."""
+        state = new_game(seed=42)
+        ok, msg = perform_trade(state, "buy", "fuel", 0)
+        assert ok is False
+        assert "Quantity must be positive" in msg
+
+    def test_buy_repair_zero_quantity(self) -> None:
+        """Buying repairs with quantity=0 should fail."""
+        state = new_game(seed=42)
+        ok, msg = perform_trade(state, "buy", "repair", 0)
+        assert ok is False
+        assert "Quantity must be positive" in msg
+
     def test_purchase_upgrade_unknown(self) -> None:
         """Purchasing an unknown upgrade should fail."""
         state = new_game(seed=42)
