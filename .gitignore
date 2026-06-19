@@ -8,3 +8,5 @@ data/save/
 .DS_Store
 .SWE/
 *.py,cover
+
+.coverage

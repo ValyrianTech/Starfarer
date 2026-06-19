@@ -347,47 +347,63 @@ def generate_universe(seed: int, system_count: int = GALAXY_SYSTEM_COUNT) -> dic
 def _ensure_connectivity(systems: dict[str, StarSystem], rng: random.Random) -> None:
     """Ensure every star system has at least one neighbor nearby.
 
-    Iterates over all systems and checks whether each has at least
-    one other system within ``NEIGHBOR_DISTANCE_THRESHOLD``. For any
-    isolated system, moves its closest neighbor closer so that the
-    galaxy graph remains connected.
+    Uses a multi-pass approach: an initial pass detects and fixes isolated
+    systems by moving their closest neighbor closer, followed by iterative
+    verification passes that recheck all systems and apply the same fix
+    until no isolated systems remain.  A maximum iteration limit prevents
+    infinite loops.
 
     :param systems: The dictionary of star systems keyed by system ID.
     :type systems: dict[str, StarSystem]
     :param rng: The seeded random number generator.
     :type rng: random.Random
     """
-    sys_list = list(systems.values())
-    for i, sys in enumerate(sys_list):
-        has_neighbor = False
-        for j, other in enumerate(sys_list):
-            if i == j:
-                continue
-            d = distance_between(sys, other)
-            if d <= NEIGHBOR_DISTANCE_THRESHOLD:
-                has_neighbor = True
-                break
-        if not has_neighbor:
-            closest_idx = None
-            closest_dist = float("inf")
+    max_iters = 10
+
+    def _find_and_fix_isolated(sys_list):
+        """Run one pass: find isolated systems and fix them.
+
+        :returns: ``True`` if any fixes were applied, ``False`` otherwise.
+        :rtype: bool
+        """
+        fixed = False
+        for i, sys in enumerate(sys_list):
+            has_neighbor = False
             for j, other in enumerate(sys_list):
                 if i == j:
                     continue
                 d = distance_between(sys, other)
-                if d < closest_dist:
-                    closest_dist = d
-                    closest_idx = j
-            if closest_idx is not None:
-                if closest_dist < 1e-9:
-                    # Systems are at the same coordinates; skip the move
-                    continue  # pragma: no cover
-                    # unreachable: same-coord systems are always within NEIGHBOR_DISTANCE_THRESHOLD (60)
-                    # so they would never be flagged as isolated (has_neighbor would be True)
-                target = sys_list[closest_idx]
-                target.x = sys.x + (target.x - sys.x) * (MAX_INITIAL_JUMP - 5) / closest_dist
-                target.y = sys.y + (target.y - sys.y) * (MAX_INITIAL_JUMP - 5) / closest_dist
-                target.x = max(50, min(GALAXY_WIDTH - 50, target.x))
-                target.y = max(50, min(GALAXY_HEIGHT - 50, target.y))
+                if d <= NEIGHBOR_DISTANCE_THRESHOLD:
+                    has_neighbor = True
+                    break
+            if not has_neighbor:
+                closest_idx = None
+                closest_dist = float("inf")
+                for j, other in enumerate(sys_list):
+                    if i == j:
+                        continue
+                    d = distance_between(sys, other)
+                    if d < closest_dist:
+                        closest_dist = d
+                        closest_idx = j
+                if closest_idx is not None:
+                    if closest_dist < 1e-9:
+                        # Systems are at the same coordinates; skip the move
+                        continue  # pragma: no cover
+                        # unreachable: same-coord systems are always within NEIGHBOR_DISTANCE_THRESHOLD (60)
+                        # so they would never be flagged as isolated (has_neighbor would be True)
+                    target = sys_list[closest_idx]
+                    target.x = sys.x + (target.x - sys.x) * (MAX_INITIAL_JUMP - 5) / closest_dist
+                    target.y = sys.y + (target.y - sys.y) * (MAX_INITIAL_JUMP - 5) / closest_dist
+                    target.x = max(50, min(GALAXY_WIDTH - 50, target.x))
+                    target.y = max(50, min(GALAXY_HEIGHT - 50, target.y))
+                    fixed = True
+        return fixed
+
+    for _ in range(max_iters):
+        sys_list = list(systems.values())
+        if not _find_and_fix_isolated(sys_list):
+            break
 
 
 def distance_between(sys1: StarSystem, sys2: StarSystem) -> float:

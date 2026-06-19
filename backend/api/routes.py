@@ -24,7 +24,7 @@ from backend.game.engine import (
     land_on_body, explore_surface,
 )
 from backend.game.trading import get_upgrade_info, purchase_upgrade, perform_trade
-from backend.database import get_leaderboard, load_game as db_load_game
+from backend.database import get_leaderboard
 
 START_TIME = time.time()
 
@@ -51,16 +51,6 @@ def _get_state(game_id: str) -> GameState | None:
         GAME_STORE[game_id] = state
         return state
     
-    # Fallback: try to reconstruct from raw DB data
-    data = db_load_game(game_id)
-    if data:
-        from backend.game.manager import _state_from_dict
-        try:
-            state = _state_from_dict(data)
-            GAME_STORE[game_id] = state
-            return state
-        except (KeyError, TypeError, ValueError):
-            pass
     return None
 
 
@@ -205,11 +195,11 @@ def api_jump(game_id: str, sys_id: str) -> dict:
         raise HTTPException(status_code=400, detail=f"Cannot jump to {target.name}: {msg}")
 
     result = perform_jump(state, target, int(fuel_cost))
-    game_save(state)
 
     event = trigger_event(state)
     if event:
         state.events.append(event)
+    game_save(state)
 
     current_system = state.get_current_system()
     return {
@@ -238,11 +228,11 @@ def api_scan(game_id: str) -> dict:
     if not state:
         raise HTTPException(status_code=404, detail="Game not found")
     result = perform_scan(state)
-    game_save(state)
 
     event = trigger_event(state)
     if event:
         state.events.append(event)  # pragma: no cover  # probabilistic event trigger
+    game_save(state)
 
     current = state.get_current_system()
     return {
@@ -299,11 +289,11 @@ def api_explore(game_id: str) -> dict:
     if not state:
         raise HTTPException(status_code=404, detail="Game not found")
     discoveries = explore_surface(state)
-    game_save(state)
 
     event = trigger_event(state)
     if event:
         state.events.append(event)
+    game_save(state)
 
     return {
         "result": f"Explored. Found {len(discoveries)} points of interest.",

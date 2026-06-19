@@ -189,59 +189,57 @@ class TestAPIDBFallback:
         assert resp.status_code == 200
 
     def test_get_game_via_db_fallback(self) -> None:
-        """GET /game/{id} should work via raw DB fallback when game_load returns None."""
+        """GET /game/{id} should return 404 when game_load returns None."""
         resp = client.post("/api/game/new", json={"seed": 42, "game_id": "db-fb-game-v2"})
         game_id = resp.json()["game_id"]
         GAME_STORE.pop(game_id, None)
         with patch("backend.api.routes.game_load_func", return_value=None):
             resp = client.get(f"/api/game/{game_id}")
-            assert resp.status_code == 200
-            assert resp.json()["game_id"] == game_id
+            assert resp.status_code == 404
 
     def test_galaxy_via_db_fallback(self) -> None:
-        """Galaxy endpoint should work via raw DB fallback when game_load returns None."""
+        """Galaxy endpoint should return 404 when game_load returns None."""
         resp = client.post("/api/game/new", json={"seed": 42, "game_id": "db-fb-gal-v2"})
         game_id = resp.json()["game_id"]
         GAME_STORE.pop(game_id, None)
         with patch("backend.api.routes.game_load_func", return_value=None):
             resp = client.get(f"/api/game/{game_id}/galaxy")
-            assert resp.status_code == 200
+            assert resp.status_code == 404
 
     def test_system_detail_via_db_fallback(self) -> None:
-        """System detail endpoint should work via raw DB fallback when game_load returns None."""
+        """System detail endpoint should return 404 when game_load returns None."""
         resp = client.post("/api/game/new", json={"seed": 42, "game_id": "db-fb-sys-v2"})
         game_id = resp.json()["game_id"]
         cur_sys = resp.json()["state"]["ship"]["current_system_id"]
         GAME_STORE.pop(game_id, None)
         with patch("backend.api.routes.game_load_func", return_value=None):
             resp = client.get(f"/api/game/{game_id}/system/{cur_sys}")
-            assert resp.status_code == 200
+            assert resp.status_code == 404
 
     def test_log_via_db_fallback(self) -> None:
-        """Log endpoint should work via raw DB fallback when game_load returns None."""
+        """Log endpoint should return 404 when game_load returns None."""
         resp = client.post("/api/game/new", json={"seed": 42, "game_id": "db-fb-log-v2"})
         game_id = resp.json()["game_id"]
         GAME_STORE.pop(game_id, None)
         with patch("backend.api.routes.game_load_func", return_value=None):
             resp = client.get(f"/api/game/{game_id}/log")
-            assert resp.status_code == 200
+            assert resp.status_code == 404
 
     def test_discoveries_via_db_fallback(self) -> None:
-        """Discoveries endpoint should work via raw DB fallback when game_load returns None."""
+        """Discoveries endpoint should return 404 when game_load returns None."""
         resp = client.post("/api/game/new", json={"seed": 42, "game_id": "db-fb-disc-v2"})
         game_id = resp.json()["game_id"]
         GAME_STORE.pop(game_id, None)
         with patch("backend.api.routes.game_load_func", return_value=None):
             resp = client.get(f"/api/game/{game_id}/discoveries")
-            assert resp.status_code == 200
+            assert resp.status_code == 404
 
     def test_get_game_db_fallback_exception(self) -> None:
-        """GET /game/{id} returns 404 when both game_load and raw DB fallback fail."""
+        """GET /game/{id} returns 404 when game_load returns None."""
         resp = client.post("/api/game/new", json={"seed": 42, "game_id": "db-fb-fail"})
         game_id = resp.json()["game_id"]
         GAME_STORE.pop(game_id, None)
-        with patch("backend.api.routes.game_load_func", return_value=None), \
-             patch("backend.api.routes.db_load_game", return_value={"bad": "data"}):
+        with patch("backend.api.routes.game_load_func", return_value=None):
             resp = client.get(f"/api/game/{game_id}")
             assert resp.status_code == 404
 
@@ -609,3 +607,69 @@ class TestAPIEventTriggerPaths:
                 assert os.path.isdir(DATA_DIR)
 
         asyncio.run(run_lifespan())
+
+
+class TestAPIEventPersistence:
+    """Tests that triggered events are persisted to the database."""
+
+    def test_jump_event_persisted_to_db(self) -> None:
+        """Event triggered by jump should be saved to DB."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "jump-persist"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        state.ship.morale = 20  # Force event trigger
+        nearby = get_nearby_systems(state)
+        target_id = nearby[0]["id"]
+        GAME_STORE[game_id] = state
+        game_save(state)
+        resp = client.post(f"/api/game/{game_id}/jump/{target_id}")
+        assert resp.status_code == 200
+        # Clear in-memory cache and reload from DB
+        GAME_STORE.pop(game_id, None)
+        resp = client.get(f"/api/game/{game_id}")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["events_pending"]) > 0, "No pending events found after reload from DB"
+
+    def test_scan_event_persisted_to_db(self) -> None:
+        """Event triggered by scan should be saved to DB."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "scan-persist"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        state.ship.morale = 20  # Force event trigger
+        GAME_STORE[game_id] = state
+        game_save(state)
+        resp = client.post(f"/api/game/{game_id}/scan")
+        assert resp.status_code == 200
+        # Clear in-memory cache and reload from DB
+        GAME_STORE.pop(game_id, None)
+        resp = client.get(f"/api/game/{game_id}")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["events_pending"]) > 0, "No pending events found after reload from DB"
+
+    def test_explore_event_persisted_to_db(self) -> None:
+        """Event triggered by explore should be saved to DB."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "explore-persist"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        sys = state.get_current_system()
+        assert sys is not None
+        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        if not planet:
+            return  # pragma: no cover  # no planet in starting system
+        land_on_body(state, planet.id)
+        state.ship.morale = 20  # Force event trigger
+        GAME_STORE[game_id] = state
+        game_save(state)
+        resp = client.post(f"/api/game/{game_id}/explore")
+        assert resp.status_code == 200
+        # Clear in-memory cache and reload from DB
+        GAME_STORE.pop(game_id, None)
+        resp = client.get(f"/api/game/{game_id}")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["events_pending"]) > 0, "No pending events found after reload from DB"

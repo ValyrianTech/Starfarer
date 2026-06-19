@@ -112,15 +112,6 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
     :returns: A tuple of ``(success, message)``.
     :rtype: tuple[bool, str]
     """
-    trade_prices = {
-        "fuel": (30, 50),
-        "food": (10, 25),
-        "minerals": (40, 80),
-        "technology": (60, 150),
-        "artifacts": (80, 300),
-        "information": (20, 100),
-    }
-
     system = state.get_current_system()
     if not system:
         return False, "Not in a system."
@@ -135,18 +126,22 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
     price_mod = rng.uniform(0.7, 1.5)
 
     if action == "sell":
-        for disc in state.discoveries:
-            if disc.category == item or disc.name == item:
-                sell_price = int(disc.value * price_mod * quantity)
-                state.ship.credits += sell_price
-                state.discoveries.remove(disc)
-                state.add_log("trade", f"Sold {disc.name} for {sell_price} credits.")
-                return True, f"Sold {disc.name} for {sell_price} credits."
+        matching = [d for d in state.discoveries if d.category == item or d.name == item]
+        if not matching:
+            return False, f"No discoveries matching '{item}' to sell."
+        disc = max(matching, key=lambda d: d.value)
+        sell_price = int(disc.value * price_mod)
+        state.ship.credits += sell_price
+        state.discoveries.remove(disc)
+        state.add_log("trade", f"Sold {disc.name} for {sell_price} credits.")
+        return True, f"Sold {disc.name} for {sell_price} credits."
+
+    FUEL_BASE_PRICE = 30
 
     if action == "buy":
         if item == "fuel":
             amount = min(quantity, state.ship.max_fuel - state.ship.fuel)
-            cost = int(amount * trade_prices.get("fuel", [30, 50])[0] * price_mod)
+            cost = int(amount * FUEL_BASE_PRICE * price_mod)
             if state.ship.credits < cost:
                 return False, f"Not enough credits. Need {cost}."
             state.ship.credits -= cost

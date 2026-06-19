@@ -302,6 +302,20 @@ class TestExploreEdgeCases:
         discoveries = explore_surface(state)
         assert discoveries == []
 
+    def test_explore_surface_zero_poi_count(self) -> None:
+        """Explore should not deduct fuel when poi_count is 0."""
+        state = new_game(seed=42)
+        sys = state.get_current_system()
+        assert sys is not None
+        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        if planet:
+            land_on_body(state, planet.id)
+            planet.poi_count = 0
+            fuel_before = state.ship.fuel
+            discoveries = explore_surface(state)
+            assert discoveries == []
+            assert state.ship.fuel == fuel_before  # fuel should NOT be deducted
+
 
 class TestTradingAdvanced:
     """Tests for trading functions covering sell, repair, and edge cases."""
@@ -341,6 +355,56 @@ class TestTradingAdvanced:
         assert ok is True
         assert "Sold" in msg
         assert state.ship.credits > credits_before
+
+    def test_sell_discovery_no_match(self) -> None:
+        """Selling a non-existent discovery should return False."""
+        state = new_game(seed=42)
+        sys = state.get_current_system()
+        assert sys is not None
+        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        if not planet:
+            return  # pragma: no cover
+        land_on_body(state, planet.id)
+        explore_surface(state)
+        ok, msg = perform_trade(state, "sell", "nonexistent_category", 1)
+        assert ok is False
+        assert "No discoveries matching" in msg
+
+    def test_sell_discovery_sells_highest_value(self) -> None:
+        """Selling by category should sell the highest-value discovery."""
+        state = new_game(seed=42)
+        sys = state.get_current_system()
+        assert sys is not None
+        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        if not planet:
+            return  # pragma: no cover
+        land_on_body(state, planet.id)
+        explore_surface(state)
+        cat = state.discoveries[0].category
+        from backend.models.discovery import Discovery
+        high_value_disc = Discovery(
+            id="high_value_test_disc",
+            name="High Value Find",
+            category=cat,
+            description="A very valuable discovery",
+            value=9999,
+        )
+        low_value_disc = Discovery(
+            id="low_value_test_disc",
+            name="Low Value Find",
+            category=cat,
+            description="A modest discovery",
+            value=10,
+        )
+        state.discoveries.clear()
+        state.discoveries.append(low_value_disc)
+        state.discoveries.append(high_value_disc)
+        credits_before = state.ship.credits
+        ok, msg = perform_trade(state, "sell", cat, 1)
+        assert ok is True
+        assert high_value_disc not in state.discoveries
+        assert low_value_disc in state.discoveries
+        assert state.ship.credits >= credits_before + int(9999 * 0.7)
 
     def test_buy_fuel_success(self) -> None:
         """Buying fuel should deduct credits and add fuel."""
