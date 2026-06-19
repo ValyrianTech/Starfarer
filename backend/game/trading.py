@@ -173,7 +173,7 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
     return False, f"Cannot trade {item}."
 
 
-def perform_bulk_sell(state: GameState, items: list[dict]) -> tuple[bool, str, dict]:
+def perform_bulk_sell(state: GameState, items: list[dict]) -> tuple[bool, str]:
     """Sell multiple discoveries in a single transaction.
 
     Validates that all requested items exist in the ship's discoveries.
@@ -184,16 +184,16 @@ def perform_bulk_sell(state: GameState, items: list[dict]) -> tuple[bool, str, d
     :type state: GameState
     :param items: A list of dicts with ``"item"`` and ``"quantity"`` keys.
     :type items: list[dict]
-    :returns: A tuple of ``(success, message, full_state_dict)``.
-    :rtype: tuple[bool, str, dict]
+    :returns: A tuple of ``(success, message)``.
+    :rtype: tuple[bool, str]
     """
     system = state.get_current_system()
     if not system:
-        return False, "Not in a system.", {}
+        return False, "Not in a system."
 
     is_station = system.phenomenon in ("none", "nebula", "ancient_gate")
     if not is_station:
-        return False, "No trading facilities in this system.", {}
+        return False, "No trading facilities in this system."
 
     det_seed = deterministic_hash(state.seed, system.id, len(state.log_entries))
     rng = random.Random(det_seed)
@@ -233,10 +233,9 @@ def perform_bulk_sell(state: GameState, items: list[dict]) -> tuple[bool, str, d
         msg = "No items could be sold."
         if errors:
             msg += " " + " ".join(errors)
-        return False, msg, {}
+        return False, msg
 
-    for disc_id in sold_ids:
-        state.discoveries = [d for d in state.discoveries if d.id != disc_id]
+    state.discoveries = [d for d in state.discoveries if d.id not in sold_ids]
 
     state.ship.credits += total_price
 
@@ -249,18 +248,4 @@ def perform_bulk_sell(state: GameState, items: list[dict]) -> tuple[bool, str, d
     if errors:
         success_msg += " " + " ".join(errors)
 
-    current_system = state.get_current_system()
-    full_state = {
-        "game_id": state.id,
-        "seed": state.seed,
-        "ship": state.ship.to_dict(),
-        "current_system": current_system.to_dict() if current_system else None,
-        "discoveries": [d.to_dict() for d in state.discoveries],
-        "events_pending": [e.to_dict() for e in state.events if not e.resolved],
-        "log_entries": list(reversed(state.log_entries))[:20],
-        "systems_visited": state.systems_visited,
-        "systems_total": len(state.systems),
-        "game_started": state.game_started,
-    }
-
-    return True, success_msg, full_state
+    return True, success_msg
