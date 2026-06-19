@@ -126,15 +126,23 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
     price_mod = rng.uniform(0.7, 1.5)
 
     if action == "sell":
+        if quantity <= 0:
+            return False, "Quantity must be positive."
         matching = [d for d in state.discoveries if d.category == item or d.name == item]
         if not matching:
             return False, f"No discoveries matching '{item}' to sell."
-        disc = max(matching, key=lambda d: d.value)
-        sell_price = int(disc.value * price_mod)
-        state.ship.credits += sell_price
-        state.discoveries.remove(disc)
-        state.add_log("trade", f"Sold {disc.name} for {sell_price} credits.")
-        return True, f"Sold {disc.name} for {sell_price} credits."
+        total_price = 0
+        sold_items = []
+        matching.sort(key=lambda d: d.value, reverse=True)
+        to_sell = matching[:quantity] if quantity < len(matching) else matching
+        for disc in to_sell:
+            sell_price = int(disc.value * price_mod)
+            total_price += sell_price
+            sold_items.append(disc.name)
+            state.discoveries.remove(disc)
+        state.ship.credits += total_price
+        state.add_log("trade", f"Sold {len(sold_items)} item(s) for {total_price} credits.")
+        return True, f"Sold {len(sold_items)} item(s) for {total_price} credits."
 
     FUEL_BASE_PRICE = 30
 

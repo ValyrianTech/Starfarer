@@ -406,6 +406,115 @@ class TestTradingAdvanced:
         assert low_value_disc in state.discoveries
         assert state.ship.credits >= credits_before + int(9999 * 0.7)
 
+    def test_sell_discovery_negative_quantity(self) -> None:
+        """Selling with a negative quantity should fail."""
+        state = new_game(seed=42)
+        sys = state.get_current_system()
+        assert sys is not None
+        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        if not planet:
+            return  # pragma: no cover
+        land_on_body(state, planet.id)
+        explore_surface(state)
+        assert len(state.discoveries) > 0
+        cat = state.discoveries[0].category
+        ok, msg = perform_trade(state, "sell", cat, -1)
+        assert ok is False
+        assert "Quantity must be positive" in msg
+
+    def test_sell_discovery_zero_quantity(self) -> None:
+        """Selling with quantity=0 should fail."""
+        state = new_game(seed=42)
+        sys = state.get_current_system()
+        assert sys is not None
+        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        if not planet:
+            return  # pragma: no cover
+        land_on_body(state, planet.id)
+        explore_surface(state)
+        assert len(state.discoveries) > 0
+        cat = state.discoveries[0].category
+        ok, msg = perform_trade(state, "sell", cat, 0)
+        assert ok is False
+        assert "Quantity must be positive" in msg
+
+    def test_sell_multiple_discoveries(self) -> None:
+        """Selling with quantity > 1 should sell multiple discoveries."""
+        state = new_game(seed=42)
+        sys = state.get_current_system()
+        assert sys is not None
+        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        if not planet:
+            return  # pragma: no cover
+        land_on_body(state, planet.id)
+        explore_surface(state)
+        # Ensure we have at least 2 discoveries
+        if len(state.discoveries) < 2:
+            return  # pragma: no cover
+        cat = state.discoveries[0].category
+        # Filter to only same-category discoveries
+        same_cat = [d for d in state.discoveries if d.category == cat]
+        if len(same_cat) < 2:
+            return  # pragma: no cover
+        count_before = len(state.discoveries)
+        credits_before = state.ship.credits
+        ok, msg = perform_trade(state, "sell", cat, 2)
+        assert ok is True
+        assert "item(s)" in msg
+        assert len(state.discoveries) == count_before - 2
+        assert state.ship.credits > credits_before
+
+    def test_sell_quantity_exceeds_available(self) -> None:
+        """Selling with quantity exceeding available discoveries should sell all."""
+        state = new_game(seed=42)
+        sys = state.get_current_system()
+        assert sys is not None
+        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        if not planet:
+            return  # pragma: no cover
+        land_on_body(state, planet.id)
+        explore_surface(state)
+        assert len(state.discoveries) > 0
+        cat = state.discoveries[0].category
+        same_cat = [d for d in state.discoveries if d.category == cat]
+        if len(same_cat) == 0:
+            return  # pragma: no cover
+        count_before = len(state.discoveries)
+        cat_count = len(same_cat)
+        credits_before = state.ship.credits
+        # Request to sell more than available
+        ok, msg = perform_trade(state, "sell", cat, 999)
+        assert ok is True
+        assert "item(s)" in msg
+        # All matching discoveries should be sold
+        remaining = [d for d in state.discoveries if d.category == cat]
+        assert len(remaining) == 0
+        assert len(state.discoveries) == count_before - cat_count
+        assert state.ship.credits > credits_before
+
+    def test_sell_multiple_by_name(self) -> None:
+        """Selling multiple discoveries by name should work."""
+        state = new_game(seed=42)
+        sys = state.get_current_system()
+        assert sys is not None
+        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        if not planet:
+            return  # pragma: no cover
+        land_on_body(state, planet.id)
+        explore_surface(state)
+        assert len(state.discoveries) > 0
+        name = state.discoveries[0].name
+        same_name = [d for d in state.discoveries if d.name == name]
+        if len(same_name) < 2:
+            return  # pragma: no cover
+        count_before = len(state.discoveries)
+        credits_before = state.ship.credits
+        ok, msg = perform_trade(state, "sell", name, 2)
+        assert ok is True
+        assert "item(s)" in msg
+        assert len(state.discoveries) == count_before - 2
+        assert state.ship.credits > credits_before
+
     def test_buy_fuel_success(self) -> None:
         """Buying fuel should deduct credits and add fuel."""
         state = new_game(seed=42)
