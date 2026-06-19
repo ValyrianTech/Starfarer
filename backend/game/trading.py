@@ -235,7 +235,11 @@ def perform_bulk_sell(state: GameState, items: list[dict]) -> tuple[bool, str]:
             continue
 
         matching.sort(key=lambda d: d.value, reverse=True)
-        to_sell = matching[:quantity] if quantity < len(matching) else matching
+        if quantity > len(matching):
+            errors.append(f"Only {len(matching)} item(s) found matching '{item_name}', requested {quantity}.")
+            to_sell = matching
+        else:
+            to_sell = matching[:quantity]
 
         for disc in to_sell:
             sell_price = int(disc.value * price_mod)
