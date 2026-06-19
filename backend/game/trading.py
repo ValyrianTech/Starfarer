@@ -139,7 +139,9 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
         total_price = 0
         sold_items = []
         matching.sort(key=lambda d: d.value, reverse=True)
-        to_sell = matching[:quantity] if quantity < len(matching) else matching
+        if quantity > len(matching):
+            return False, f"Only {len(matching)} item(s) found matching '{item}', requested {quantity}."
+        to_sell = matching[:quantity]
         for disc in to_sell:
             sell_price = int(disc.value * price_mod)
             total_price += sell_price
