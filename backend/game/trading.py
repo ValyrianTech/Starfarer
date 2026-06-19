@@ -211,10 +211,14 @@ def perform_bulk_sell(state: GameState, items: list[dict]) -> tuple[bool, str]:
     sold_count = 0
 
     for item_dict in items:
-        item_name = item_dict["item"]
-        quantity = item_dict["quantity"]
+        item_name = item_dict.get("item")
+        quantity = item_dict.get("quantity", 1)
 
-        if quantity <= 0:
+        if item_name is None:
+            errors.append("Item entry missing required 'item' field.")
+            continue
+
+        if not isinstance(quantity, int) or quantity <= 0:
             errors.append(f"Invalid quantity {quantity} for '{item_name}'.")
             continue
 
