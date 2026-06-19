@@ -125,8 +125,8 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
     price_mod = rng.uniform(0.7, 1.5)
 
     if action == "sell":
-        if quantity <= 0:
-            return False, "Quantity must be positive."
+        if isinstance(quantity, bool) or not isinstance(quantity, int) or quantity <= 0:
+            return False, "Quantity must be a positive integer."
         # Try exact name match first
         name_matches = [d for d in state.discoveries if d.name == item]
         if name_matches:
@@ -153,8 +153,8 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
 
     if action == "buy":
         if item == "fuel":
-            if quantity <= 0:
-                return False, "Quantity must be positive."
+            if isinstance(quantity, bool) or not isinstance(quantity, int) or quantity <= 0:
+                return False, "Quantity must be a positive integer."
             amount = min(quantity, state.ship.max_fuel - state.ship.fuel)
             cost = int(amount * FUEL_BASE_PRICE * price_mod)
             if state.ship.credits < cost:
@@ -165,8 +165,8 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
             return True, f"Purchased {amount} fuel for {cost} credits."
 
         if item == "repair":
-            if quantity <= 0:
-                return False, "Quantity must be positive."
+            if isinstance(quantity, bool) or not isinstance(quantity, int) or quantity <= 0:
+                return False, "Quantity must be a positive integer."
             repair_amount = min(quantity * 20, state.ship.max_hull - state.ship.hull)
             cost = int(repair_amount * 2)
             if state.ship.credits < cost:
