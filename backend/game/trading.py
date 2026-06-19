@@ -181,7 +181,7 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
     return False, f"Cannot trade {item}."
 
 
-def perform_bulk_sell(state: GameState, items: list[dict]) -> tuple[bool, str]:
+def perform_bulk_sell(state: GameState, items: list[dict]) -> tuple[bool, str, int, int]:
     """Sell multiple discoveries in a single transaction.
 
     Validates that all requested items exist in the ship's discoveries.
@@ -192,16 +192,16 @@ def perform_bulk_sell(state: GameState, items: list[dict]) -> tuple[bool, str]:
     :type state: GameState
     :param items: A list of dicts with ``"item"`` and ``"quantity"`` keys.
     :type items: list[dict]
-    :returns: A tuple of ``(success, message)``.
-    :rtype: tuple[bool, str]
+    :returns: A tuple of ``(success, message, sold_count, total_price)``.
+    :rtype: tuple[bool, str, int, int]
     """
     system = state.get_current_system()
     if not system:
-        return False, "Not in a system."
+        return False, "Not in a system.", 0, 0
 
     is_station = system.phenomenon in ("none", "nebula", "ancient_gate")
     if not is_station:
-        return False, "No trading facilities in this system."
+        return False, "No trading facilities in this system.", 0, 0
 
     det_seed = deterministic_hash(state.seed, system.id, len(state.log_entries))
     rng = random.Random(det_seed)
@@ -253,7 +253,7 @@ def perform_bulk_sell(state: GameState, items: list[dict]) -> tuple[bool, str]:
         msg = "No items could be sold."
         if errors:
             msg += " " + " ".join(errors)
-        return False, msg
+        return False, msg, 0, 0
 
     state.discoveries = [d for d in state.discoveries if d.id not in sold_ids]
 
@@ -268,4 +268,4 @@ def perform_bulk_sell(state: GameState, items: list[dict]) -> tuple[bool, str]:
     if errors:
         success_msg += " " + " ".join(errors)
 
-    return True, success_msg
+    return True, success_msg, sold_count, total_price
