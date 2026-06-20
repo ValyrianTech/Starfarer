@@ -90,6 +90,7 @@ def distribute_lore_fragments(
         except ValueError as e:
             if "No eligible bodies in system" in str(e):
                 continue
+            logging.warning("Unexpected ValueError in lore distribution: %s", e)
             break
 
         frag.discovery_id = f"{chosen_sys_id}::{chosen_body_id}"
