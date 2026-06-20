@@ -230,23 +230,24 @@ def explore_surface(state: GameState) -> list[Discovery]:
 
     ship.fuel -= EXPLORE_FUEL_COST
 
-    lore_frag = get_fragment_for_body(system.id, body.id, state.lore_fragments)
+    if num_finds > 0:
+        lore_frag = get_fragment_for_body(system.id, body.id, state.lore_fragments)
 
-    for i in range(num_finds):
-        cat = item_rng.choice(["mineral", "artifact", "lifeform", "signal", "ruin"])
-        disc = _generate_discovery(item_rng, cat, body, system)
+        for i in range(num_finds):
+            cat = item_rng.choice(["mineral", "artifact", "lifeform", "signal", "ruin"])
+            disc = _generate_discovery(item_rng, cat, body, system)
 
-        if lore_frag and not lore_frag.discovered:
-            # First discovery of this lore fragment — link it to this discovery
-            disc.lore_fragment_id = lore_frag.id
-            lore_frag.discovered = True
-            state.add_log("lore", f"Discovered lore fragment: {lore_frag.title} ({lore_frag.id}).")
-        elif lore_frag and lore_frag.discovered:
-            # Lore fragment already discovered (in this action or a previous one)
-            logger.warning(f"Lore fragment {lore_frag.id} ({lore_frag.title}) already discovered but found on body {body.id}.")
+            if lore_frag and not lore_frag.discovered:
+                # First discovery of this lore fragment — link it to this discovery
+                disc.lore_fragment_id = lore_frag.id
+                lore_frag.discovered = True
+                state.add_log("lore", f"Discovered lore fragment: {lore_frag.title} ({lore_frag.id}).")
+            elif lore_frag and lore_frag.discovered:
+                # Lore fragment already discovered (in this action or a previous one)
+                logger.warning(f"Lore fragment {lore_frag.id} ({lore_frag.title}) already discovered but found on body {body.id}.")
 
-        discoveries.append(disc)
-        state.discoveries.append(disc)
+            discoveries.append(disc)
+            state.discoveries.append(disc)
 
     state.add_log("exploration", f"Explored {body.name}. Found {len(discoveries)} points of interest.")
     return discoveries
