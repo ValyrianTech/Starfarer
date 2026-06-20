@@ -10,7 +10,6 @@ from backend.game.engine import (
 from backend.game.trading import get_upgrade_info, purchase_upgrade, perform_trade, perform_bulk_sell
 from backend.game.manager import new_game, get_galaxy, get_system_detail, game_save, load_or_create, get_game_state
 from backend.generation.events import trigger_event, resolve_event, EVENT_TEMPLATES
-from backend.utils import deterministic_hash
 from backend.config import SCAN_FUEL_COST
 
 
@@ -1113,7 +1112,6 @@ class TestDatabaseModule:
     def test_create_game_existing_preserves_created_at(self) -> None:
         """create_game should preserve created_at when updating existing game."""
         from backend.database import init_db, create_game, get_db
-        import json
         init_db()
         create_game("db-create-existing", 42, "OldShip", {"v": 1})
         conn = get_db()
