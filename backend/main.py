@@ -61,9 +61,15 @@ app.include_router(router)
 
 
 if os.path.isdir(FRONTEND_DIR):
-    app.mount("/css", StaticFiles(directory=os.path.join(FRONTEND_DIR, "css")), name="css")
-    app.mount("/js", StaticFiles(directory=os.path.join(FRONTEND_DIR, "js")), name="js")
-    app.mount("/assets", StaticFiles(directory=os.path.join(FRONTEND_DIR, "assets")), name="assets")
+    css_dir = os.path.join(FRONTEND_DIR, "css")
+    if os.path.isdir(css_dir):
+        app.mount("/css", StaticFiles(directory=css_dir), name="css")
+    js_dir = os.path.join(FRONTEND_DIR, "js")
+    if os.path.isdir(js_dir):
+        app.mount("/js", StaticFiles(directory=js_dir), name="js")
+    assets_dir = os.path.join(FRONTEND_DIR, "assets")
+    if os.path.isdir(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
 
 @app.get("/")

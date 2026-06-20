@@ -1127,3 +1127,95 @@ class TestPerformBulkSellDirect:
         assert "Sold" in message
         assert "Only" in message and "requested 5" in message
         assert len(state.discoveries) == 1  # Only the mineral discovery remains
+
+
+class TestRoutesFullStateResponse:
+    """Tests for _full_state_response helper."""
+
+    def test_full_state_response_with_current_system(self) -> None:
+        """_full_state_response should include current_system when ship is in a system."""
+        from backend.api.routes import _full_state_response
+        state = new_game(seed=42)
+        resp = _full_state_response(state)
+        assert resp["game_id"] == state.id
+        assert resp["seed"] == state.seed
+        assert resp["current_system"] is not None
+        assert isinstance(resp["discoveries"], list)
+        assert isinstance(resp["events_pending"], list)
+        assert isinstance(resp["log_entries"], list)
+        assert resp["systems_visited"] == state.systems_visited
+        assert resp["systems_total"] == len(state.systems)
+        assert resp["game_started"] == state.game_started
+        assert "ship" in resp
+
+    def test_full_state_response_no_current_system(self) -> None:
+        """_full_state_response should have None current_system when ship has no system."""
+        from backend.api.routes import _full_state_response
+        state = new_game(seed=42)
+        state.ship.current_system_id = "nonexistent"
+        resp = _full_state_response(state)
+        assert resp["current_system"] is None
+
+
+class TestRoutesGetState:
+    """Tests for _get_state helper."""
+
+    def test_get_state_from_store(self) -> None:
+        """_get_state should return game from GAME_STORE if present."""
+        from backend.api.routes import _get_state
+        from backend.game.manager import GAME_STORE
+        state = new_game(seed=42, ship_name="GTStore")
+        try:
+            GAME_STORE[state.id] = state
+            result = _get_state(state.id)
+            assert result is not None
+            assert result.id == state.id
+        finally:
+            GAME_STORE.pop(state.id, None)
+
+    def test_get_state_from_db(self) -> None:
+        """_get_state should load from DB when not in GAME_STORE."""
+        from backend.api.routes import _get_state
+        from backend.game.manager import GAME_STORE, game_save
+        from backend.database import init_db
+        init_db()
+        state = new_game(seed=42, ship_name="GTDB")
+        try:
+            GAME_STORE[state.id] = state
+            game_save(state)
+            GAME_STORE.pop(state.id, None)
+            result = _get_state(state.id)
+            assert result is not None
+            assert result.id == state.id
+        finally:
+            GAME_STORE.pop(state.id, None)
+
+    def test_get_state_not_found(self) -> None:
+        """_get_state should return None when game not in store or DB."""
+        from backend.api.routes import _get_state
+        from backend.game.manager import GAME_STORE
+        GAME_STORE.pop("totally-nonexistent-id", None)
+        result = _get_state("totally-nonexistent-id")
+        assert result is None
+
+
+class TestAPIMainIndex:
+    """Tests for main.py index endpoint."""
+
+    def test_index_responds_ok(self) -> None:
+        """Index endpoint should return 200."""
+        resp = client.get("/")
+        assert resp.status_code == 200
+
+    def test_index_responds_non_empty(self) -> None:
+        """Index endpoint should not be empty."""
+        resp = client.get("/")
+        content = resp.text
+        assert len(content) > 0
+
+    def test_assets_mount_exists(self) -> None:
+        """Assets mount should be active when directory exists."""
+        import os as _os
+        from backend.main import FRONTEND_DIR
+        assets_dir = _os.path.join(FRONTEND_DIR, "assets")
+        assert _os.path.isdir(assets_dir), "Assets directory should exist"

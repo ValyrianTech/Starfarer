@@ -3,12 +3,13 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from backend.generation.universe import generate_universe, distance_between, _ensure_connectivity, NEIGHBOR_DISTANCE_THRESHOLD
-from backend.models.system import StarSystem
+from backend.models.system import StarSystem, Body
 from backend.models.ship import Ship
 from backend.models.game_state import GameState
 from backend.models.event import Event, Choice
 from backend.models.discovery import Discovery, LoreFragment
 from backend.config import GALAXY_SYSTEM_COUNT
+from backend.game.manager import new_game
 import random
 
 
@@ -374,3 +375,124 @@ class TestDiscoveryModel:
         restored = LoreFragment.from_dict(d)
         assert restored.arc == "The Architects"
         assert restored.discovered is False
+
+
+class TestBodyModel:
+    """Tests for Body model serialization."""
+
+    def test_body_to_dict_and_back(self) -> None:
+        """Body should roundtrip through to_dict/from_dict."""
+        body = Body(id="b_1", name="Test Planet", body_type="planet",
+                    biome="desert", size=5, distance_from_star=0.5,
+                    description="A test planet.", poi_count=3, explored=True)
+        d = body.to_dict()
+        restored = Body.from_dict(d)
+        assert restored.id == "b_1"
+        assert restored.name == "Test Planet"
+        assert restored.body_type == "planet"
+        assert restored.biome == "desert"
+        assert restored.size == 5
+        assert restored.distance_from_star == 0.5
+        assert restored.description == "A test planet."
+        assert restored.poi_count == 3
+        assert restored.explored is True
+
+    def test_body_from_dict_defaults(self) -> None:
+        """Body.from_dict should handle missing optional fields."""
+        body = Body.from_dict({
+            "id": "b_min", "name": "Min", "body_type": "moon",
+            "biome": "barren", "size": 1, "distance_from_star": 0.3,
+        })
+        assert body.description == ""
+        assert body.poi_count == 0
+        assert body.explored is False
+
+
+class TestStarSystemModel:
+    """Tests for StarSystem model serialization."""
+
+    def test_star_system_to_dict_and_back(self) -> None:
+        """StarSystem should roundtrip through to_dict/from_dict with bodies."""
+        b1 = Body(id="b1", name="Planet1", body_type="planet", biome="jungle",
+                  size=4, distance_from_star=0.3, description="A jungle world.")
+        system = StarSystem(id="s_1", name="Test System", x=100.0, y=200.0,
+                            star_type="G", star_color="#fff", phenomenon="nebula",
+                            phenomenon_desc="A nebula.", bodies=[b1],
+                            visited=True, scanned=True)
+        d = system.to_dict()
+        restored = StarSystem.from_dict(d)
+        assert restored.id == "s_1"
+        assert restored.name == "Test System"
+        assert restored.x == 100.0
+        assert restored.y == 200.0
+        assert restored.star_type == "G"
+        assert restored.star_color == "#fff"
+        assert restored.phenomenon == "nebula"
+        assert restored.phenomenon_desc == "A nebula."
+        assert restored.visited is True
+        assert restored.scanned is True
+        assert len(restored.bodies) == 1
+        assert restored.bodies[0].name == "Planet1"
+
+    def test_star_system_from_dict_defaults(self) -> None:
+        """StarSystem.from_dict should handle missing optional fields."""
+        system = StarSystem.from_dict({
+            "id": "s_min", "name": "Min Sys", "x": 0.0, "y": 0.0,
+            "star_type": "M", "star_color": "#f00", "phenomenon": "none",
+            "phenomenon_desc": "",
+        })
+        assert system.bodies == []
+        assert system.visited is False
+        assert system.scanned is False
+
+
+class TestGameStateModel:
+    """Additional tests for GameState model."""
+
+    def test_state_summary_with_system(self) -> None:
+        """state_summary should include current_system when one exists."""
+        ship = Ship()
+        state = new_game(seed=42)
+        summary = state.state_summary()
+        assert summary["game_id"] == state.id
+        assert summary["seed"] == state.seed
+        assert summary["current_system"] is not None
+        assert "ship" in summary
+        assert "event_count" in summary
+        assert "discovery_count" in summary
+        assert "systems_visited" in summary
+        assert "log_count" in summary
+        assert "game_started" in summary
+
+    def test_state_summary_no_current_system(self) -> None:
+        """state_summary should have None current_system when no system."""
+        ship = Ship(current_system_id="nonexistent")
+        state = GameState(id="no-sys", seed=42, ship=ship)
+        summary = state.state_summary()
+        assert summary["current_system"] is None
+
+
+class TestGenerationBodyDescription:
+    """Tests for _body_description covering unknown biome fallback."""
+
+    def test_body_description_unknown_biome(self) -> None:
+        """_body_description should fall back to default for unknown biome."""
+        from backend.generation.universe import _body_description
+        import random as rnd_mod
+        rng = rnd_mod.Random(42)
+        desc = _body_description(rng, "planet", "unknown_biome_xyz", "G")
+        assert isinstance(desc, str)
+        assert len(desc) > 0
+        assert desc == "An unremarkable celestial body."
+
+    def test_body_description_all_known_biomes(self) -> None:
+        """_body_description should return valid strings for all defined biomes."""
+        from backend.generation.universe import _body_description
+        from backend.config import BIOME_TYPES
+        import random as rnd_mod
+        rng = rnd_mod.Random(42)
+        for biome in BIOME_TYPES:
+            desc = _body_description(rng, "planet", biome, "G")
+            assert isinstance(desc, str)
+            assert len(desc) > 0
+            assert desc != "An unremarkable celestial body."
