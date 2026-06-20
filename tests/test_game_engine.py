@@ -893,11 +893,15 @@ class TestTriggerEventPhenomenonBranch:
         system.phenomenon = "nebula"
         state.ship.morale = 80
 
-        rng = random.Random(7)
-        rng.random()  # Consume first value; next two are < 0.35 and >= 0.5
+        rng = random.Random(37)  # was 7 — seed 37: v2=0.092 (<0.35), v3=0.618 (>=0.5), v4→index 8 "encounter"
+        rng.random()  # Consume first value
 
         event = trigger_event(state, rng_override=rng)
         assert event is not None
+        # Verify we hit the else branch: event type should NOT be restricted
+        # to ("hazard", "discovery", "exploration")
+        assert event.event_type not in ("hazard", "discovery", "exploration"), \
+            "Expected else branch (unrestricted event type), got phenomenon-biased selection"
 
 
 class TestBulkSell:
