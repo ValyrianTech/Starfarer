@@ -1248,7 +1248,7 @@ class TestEngineGenerateDiscovery:
         body = system.bodies[0] if system.bodies else None
         assert body is not None
         from backend.game.engine import _generate_discovery
-        disc = _generate_discovery(rng, "mineral", body, system, state)
+        disc = _generate_discovery(rng, "mineral", body, system)
         assert disc.category == "mineral"
         assert disc.name in ["Plasmic Crystal", "Void Ore", "Stellar Fragment", "Obsidian Shard", "Nebula Dust"]
         assert disc.value > 0
@@ -1265,7 +1265,7 @@ class TestEngineGenerateDiscovery:
         body = system.bodies[0] if system.bodies else None
         assert body is not None
         from backend.game.engine import _generate_discovery
-        disc = _generate_discovery(rng, "artifact", body, system, state)
+        disc = _generate_discovery(rng, "artifact", body, system)
         assert disc.category == "artifact"
         assert disc.name in ["Ancient Relic", "Alien Device", "Glyph Tablet", "Memory Core", "Void Key"]
 
@@ -1279,7 +1279,7 @@ class TestEngineGenerateDiscovery:
         body = system.bodies[0] if system.bodies else None
         assert body is not None
         from backend.game.engine import _generate_discovery
-        disc = _generate_discovery(rng, "lifeform", body, system, state)
+        disc = _generate_discovery(rng, "lifeform", body, system)
         assert disc.category == "lifeform"
         assert disc.name in ["Glowvine", "Crystal Mite", "Void Spore", "Plasma Jelly", "Singing Stone"]
 
@@ -1293,7 +1293,7 @@ class TestEngineGenerateDiscovery:
         body = system.bodies[0] if system.bodies else None
         assert body is not None
         from backend.game.engine import _generate_discovery
-        disc = _generate_discovery(rng, "signal", body, system, state)
+        disc = _generate_discovery(rng, "signal", body, system)
         assert disc.category == "signal"
         assert disc.name in ["Distress Beacon", "Encrypted Transmission", "Nav Echo", "Subspace Ripple", "Ghost Signal"]
 
@@ -1307,7 +1307,7 @@ class TestEngineGenerateDiscovery:
         body = system.bodies[0] if system.bodies else None
         assert body is not None
         from backend.game.engine import _generate_discovery
-        disc = _generate_discovery(rng, "ruin", body, system, state)
+        disc = _generate_discovery(rng, "ruin", body, system)
         assert disc.category == "ruin"
         assert disc.name in ["Weathered Pillar", "Sunken Chamber", "Broken Obelisk", "Overgrown Temple", "Fallen Tower"]
 
