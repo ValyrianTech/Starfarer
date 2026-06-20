@@ -218,12 +218,13 @@ def explore_surface(state: GameState) -> list[Discovery]:
     if not body:
         return []
 
+    if body.poi_count == 0:
+        return []
+
     discoveries = []
     item_rng = random.Random(state.seed + len(state.discoveries) + deterministic_hash(body.id))
 
     num_finds = min(body.poi_count, item_rng.randint(1, 3))
-    if num_finds == 0:
-        return []
 
     ship.fuel -= EXPLORE_FUEL_COST
 
