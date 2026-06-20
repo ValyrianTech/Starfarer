@@ -6,7 +6,6 @@ landing, surface exploration, and nearby system discovery.
 """
 
 import random
-import uuid
 import logging
 from typing import Any, Optional
 
@@ -308,7 +307,7 @@ def _generate_discovery(rng: random.Random, category: str, body: Body, system: S
             "Strange symbols cover every surface.",
         ],
     }
-    d_id = str(uuid.uuid4())[:12]
+    d_id = f"{rng.getrandbits(48):012x}"
     name = rng.choice(names[category])
     desc = rng.choice(descs[category])
     value = rng.randint(10, 200)
