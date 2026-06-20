@@ -8,6 +8,7 @@ and querying fragments by system or body.
 
 import random
 from typing import Optional
+import logging
 
 from backend.generation.lore_content import FRAGMENT_DATA
 from backend.models.discovery import LoreFragment
@@ -99,6 +100,7 @@ def distribute_lore_fragments(
             placement[chosen_sys_id] = []
         placement[chosen_sys_id].append(frag)
 
+    logging.warning("Only %d/%d lore fragments could be placed", sum(len(f) for f in placement.values()), len(fragments))
     return placement
 
 
