@@ -1178,7 +1178,6 @@ class TestDatabaseModule:
         init_db()
         save_game("lb-test-1", {"seed": 42, "discoveries": [1, 2], "systems_visited": 5, "ship": {"credits": 500, "name": "LB1"}})
         result = get_leaderboard(limit=10)
-        ids = [e["game_id"] for e in result]
         assert len(result) > 0
 
     def test_get_leaderboard_empty(self) -> None:
