@@ -1172,3 +1172,51 @@ class TestLoreDistribution:
                 assert frag.discovery_id not in discovery_ids, \
                     f"Duplicate discovery_id: {frag.discovery_id}"
                 discovery_ids.add(frag.discovery_id)
+
+    def test_distribute_continues_on_unexpected_value_error(self, caplog) -> None:
+        """When _pick_lore_location raises an unexpected ValueError (not 'No eligible bodies in system'),
+        distribute_lore_fragments should continue to the next fragment, not break the loop."""
+        import logging
+        import unittest.mock as mock
+        from backend.generation.lore import distribute_lore_fragments, _pick_lore_location
+
+        caplog.set_level(logging.WARNING)
+
+        # Create a system with bodies that can host fragments
+        body1 = Body(
+            id="b1", name="Body1", body_type="planet", biome="ocean",
+            size=3, distance_from_star=0.5, poi_count=1
+        )
+        body2 = Body(
+            id="b2", name="Body2", body_type="planet", biome="jungle",
+            size=3, distance_from_star=0.5, poi_count=1
+        )
+        system = StarSystem(
+            id="s1", name="TestSys", x=0.0, y=0.0,
+            star_type="G", star_color="#fff",
+            phenomenon="none", phenomenon_desc="",
+            bodies=[body1, body2],
+        )
+        systems = {"s1": system}
+
+        # Patch _pick_lore_location to raise ValueError on first call, then work normally
+        call_count = [0]
+        original_func = _pick_lore_location
+
+        def mock_pick(rng, systems, counts, max_per_system, used_bodies=None):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                raise ValueError("No eligible systems available for lore placement")
+            return original_func(rng, systems, counts, max_per_system, used_bodies)
+
+        with mock.patch("backend.generation.lore._pick_lore_location", side_effect=mock_pick):
+            placement = distribute_lore_fragments(42, systems, max_per_system=2)
+
+        # Should have placed fragments despite the first call raising an unexpected ValueError
+        total_placed = sum(len(frags) for frags in placement.values())
+        assert total_placed > 0, "Should have placed some fragments despite the error"
+
+        # Should have logged a warning about the unexpected ValueError
+        warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("Unexpected ValueError" in msg for msg in warning_messages), \
+            f"Expected warning about unexpected ValueError, got: {warning_messages}"
