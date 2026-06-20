@@ -19,6 +19,7 @@ from backend.models.system import StarSystem, Body
 from backend.models.discovery import Discovery
 from backend.utils import deterministic_hash
 from backend.generation.universe import distance_between
+from backend.generation.lore import get_fragment_for_body
 
 
 def can_jump(ship: Ship, target: StarSystem, current: Optional[StarSystem]) -> tuple[bool, float, str]:
@@ -225,8 +226,6 @@ def explore_surface(state: GameState) -> list[Discovery]:
         return []
 
     ship.fuel -= EXPLORE_FUEL_COST
-
-    from backend.generation.lore import get_fragment_for_body
 
     lore_frag = get_fragment_for_body(system.id, body.id, state.lore_fragments)
     lore_assigned = False
