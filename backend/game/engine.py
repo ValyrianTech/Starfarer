@@ -247,7 +247,7 @@ def explore_surface(state: GameState) -> list[Discovery]:
             if lore_frag.id in discovered_this_action:
                 logger.info(f"Lore fragment {lore_frag.id} ({lore_frag.title}) already discovered in this explore action.")
             else:
-                logger.warning(f"Lore fragment {lore_frag.id} ({lore_frag.title}) already discovered in a previous exploration but found on body {body.id}.")
+                logger.warning(f"Lore fragment {lore_frag.id} ({lore_frag.title}) already discovered but found on body {body.id}.")
 
         discoveries.append(disc)
         state.discoveries.append(disc)
