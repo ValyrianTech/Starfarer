@@ -1332,6 +1332,17 @@ class TestAPILore:
         arcs_with_collected = [a for a in data["arcs"].values() if a["collected"] > 0]
         assert len(arcs_with_collected) > 0
 
+    def test_lore_endpoint_collected_after_discovery_no_lore(self) -> None:
+        """Cover guard clause when no lore fragments found (line 1320)."""
+        import backend.generation.lore as lore_mod
+
+        original = lore_mod.get_lore_fragments_for_system
+        lore_mod.get_lore_fragments_for_system = lambda sys_id, lore_frags: []
+        try:
+            self.test_lore_endpoint_collected_after_discovery()
+        finally:
+            lore_mod.get_lore_fragments_for_system = original
+
 
 class TestAPIMainIndex:
     """Tests for main.py index endpoint."""
