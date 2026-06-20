@@ -132,13 +132,9 @@ class TestUniverseGeneration:
         Layout: A(500,500), B(565,500), C(565,560)
         - A-B = 65 > 60, A isolated
         - B-C = 60, B and C are neighbors
-        - A-C = sqrt(65^2 + 60^2) ≈ 88.5 < 95 (allows convergence)
 
-        Pass 1: A isolated, closest=B at 65. B moves toward A to (535,500).
-                Now B-C = sqrt(30^2+60^2) ≈ 67.1 > 60, so C becomes isolated.
-        Pass 2: C isolated, closest=B at ~67.1. B moves toward C.
-                After the move, A-B ≈ 57.1 ≤ 60 and C-B = 35 ≤ 60.
-                All systems connected.
+        Pass 1: A isolated, closest=B at 65. A moves toward B to (555,500).
+                Now A-B = 10 ≤ 60, B-C = 60 ≤ 60. All connected.
         """
         rng = random.Random(42)
         a = StarSystem(id="a", name="A", x=500, y=500, star_type="G",
