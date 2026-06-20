@@ -141,6 +141,8 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
         error = _validate_quantity(quantity)
         if error:
             return False, error
+        if not item or not isinstance(item, str):
+            return False, "Item must be a non-empty string."
         # Try exact name match first
         name_matches = [d for d in state.discoveries if d.name == item]
         if name_matches:
@@ -173,6 +175,8 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
             if error:
                 return False, error
             amount = min(quantity, state.ship.max_fuel - state.ship.fuel)
+            if amount <= 0:
+                return False, "Fuel tank is already full."
             cost = int(amount * FUEL_BASE_PRICE * price_mod)
             if state.ship.credits < cost:
                 return False, f"Not enough credits. Need {cost}."
@@ -186,6 +190,8 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
             if error:
                 return False, error
             repair_amount = min(quantity * 20, state.ship.max_hull - state.ship.hull)
+            if repair_amount <= 0:
+                return False, "Hull is already at maximum."
             cost = int(repair_amount * 2)
             if state.ship.credits < cost:
                 return False, f"Not enough credits. Need {cost}."

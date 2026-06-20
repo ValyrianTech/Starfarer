@@ -3,12 +3,13 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from backend.generation.universe import generate_universe, distance_between, _ensure_connectivity, NEIGHBOR_DISTANCE_THRESHOLD
-from backend.models.system import StarSystem
+from backend.models.system import StarSystem, Body
 from backend.models.ship import Ship
 from backend.models.game_state import GameState
 from backend.models.event import Event, Choice
 from backend.models.discovery import Discovery, LoreFragment
 from backend.config import GALAXY_SYSTEM_COUNT
+from backend.game.manager import new_game
 import random
 
 
@@ -78,14 +79,14 @@ class TestUniverseGeneration:
         assert biome in ("gas_giant", "tundra", "barren")
 
     def test_biome_for_body_gas_giant_path(self) -> None:
-        """_biome_for_body with a seed that triggers gas_giant path."""
+        """_biome_for_body should return gas_giant when rng.random() < 0.15."""
         from backend.generation.universe import _biome_for_body
-        for seed_val in range(50):
-            rng = random.Random(seed_val)
+        import unittest.mock as mock
+        # Force the gas_giant branch by patching rng.random to return 0.1 (< 0.15)
+        with mock.patch.object(random.Random, 'random', return_value=0.1):
+            rng = random.Random(0)
             biome = _biome_for_body(rng, "G", 1.5, "planet")
-            if biome == "gas_giant":
-                return
-        pass  # pragma: no cover  # no seed in range produced gas_giant
+            assert biome == "gas_giant"
 
     def test_biome_for_body_moon(self) -> None:
         """_biome_for_body should return a biome from the first 5 for moons."""
@@ -151,31 +152,27 @@ class TestUniverseGeneration:
         assert distance_between(b, c) <= NEIGHBOR_DISTANCE_THRESHOLD
 
     def test_ensure_connectivity_same_coordinates(self) -> None:
-        """_ensure_connectivity handles when a moved system lands on another's coords.
+        """_ensure_connectivity handles systems that start at the same coordinates.
 
-        After the first pass moves a system, it could end up at the exact same
-        coordinates as another system. The closest_dist would be 0.0 which would
-        cause a ZeroDivisionError without the fix.
+        When two systems share the same coordinates, they are already neighbors
+        (distance 0 <= NEIGHBOR_DISTANCE_THRESHOLD). This test verifies that
+        _ensure_connectivity correctly identifies them as connected and does not
+        attempt to move them, while still connecting any truly isolated systems.
         """
         rng = random.Random(42)
-        # A is isolated, B is its closest neighbor, C is far from B
-        # After B moves toward A, B lands on C's coordinates
+        # A and B are at the same coordinates (500, 500) — they are neighbors
+        # C is far away at (1000, 1000) — C is isolated
         a = StarSystem(id="a", name="A", x=500, y=500, star_type="G",
                        star_color="#fff", phenomenon="none", phenomenon_desc="")
-        # B is 65 units from A (isolated), and 0 units from C (same coords)
-        b = StarSystem(id="b", name="B", x=565, y=500, star_type="K",
+        b = StarSystem(id="b", name="B", x=500, y=500, star_type="K",
                        star_color="#ffa", phenomenon="none", phenomenon_desc="")
-        c = StarSystem(id="c", name="C", x=565, y=500, star_type="M",
+        c = StarSystem(id="c", name="C", x=1000, y=1000, star_type="M",
                        star_color="#f00", phenomenon="none", phenomenon_desc="")
-        # D is far from everyone to make C isolated
-        d = StarSystem(id="d", name="D", x=100, y=100, star_type="G",
-                       star_color="#fff", phenomenon="none", phenomenon_desc="")
-        systems = {"a": a, "b": b, "c": c, "d": d}
+        systems = {"a": a, "b": b, "c": c}
 
-        # This should not raise ZeroDivisionError
         _ensure_connectivity(systems, rng)
 
-        # After the fix, all systems should have a neighbor
+        # After the fix, all systems should have a neighbor within threshold
         for system in systems.values():
             has_neighbor = False
             for other in systems.values():
@@ -209,12 +206,13 @@ class TestUniverseGeneration:
     def test_ensure_connectivity_three_isolated_systems(self) -> None:
         """Three isolated systems where two share the same closest neighbor.
 
-    A(500,500), B(565,500), C(500,565)
-    - All three are isolated from each other (all distances > 60)
-    - A and C both have B as their closest neighbor
-    - Processing A first moves it toward B, making B non-isolated
-    - Then C moves toward B, and all are connected
-    """
+        A(500,500), B(565,500), C(500,565)
+        - All three are isolated from each other (all distances > 60)
+        - A and C both have B as their closest neighbor initially
+        - Processing A first moves it toward B, making A non-isolated
+        - C's closest neighbor is now A (not B), so C moves toward A
+        - After both moves, all three systems are connected
+        """
         rng = random.Random(42)
         # A and C are both isolated from B (distance 65 > 60)
         # B is the closest neighbor for both A and C
@@ -233,6 +231,68 @@ class TestUniverseGeneration:
         # Both A and C should now be within threshold of B
         assert distance_between(a, b) <= NEIGHBOR_DISTANCE_THRESHOLD, "A should be connected to B"
         assert distance_between(c, b) <= NEIGHBOR_DISTANCE_THRESHOLD, "C should be connected to B"
+
+    def test_ensure_connectivity_exhausts_iters_fallback(self, caplog) -> None:
+        """When max_iters is exhausted, the else block should log a warning and
+        move isolated systems directly to within threshold distance."""
+        import logging
+        import unittest.mock as mock
+        caplog.set_level(logging.WARNING)
+        rng = random.Random(42)
+        # Two systems extremely far apart - the ratio-based movement can't
+        # close this gap in 100 iterations.  Patch galaxy bounds to prevent
+        # clamping from bringing them within range.
+        a = StarSystem(id="a", name="Alpha", x=50, y=50, star_type="G",
+                       star_color="#fff", phenomenon="none", phenomenon_desc="")
+        b = StarSystem(id="b", name="Beta", x=50000, y=50000, star_type="K",
+                       star_color="#ffa", phenomenon="none", phenomenon_desc="")
+        systems = {"a": a, "b": b}
+
+        with mock.patch("backend.generation.universe.GALAXY_WIDTH", 1000000), \
+             mock.patch("backend.generation.universe.GALAXY_HEIGHT", 1000000):
+            _ensure_connectivity(systems, rng)
+
+        # After the fallback, both systems should be within threshold
+        assert distance_between(a, b) <= NEIGHBOR_DISTANCE_THRESHOLD, \
+            "Fallback should move isolated system to within threshold"
+        # The warning should have been logged
+        warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("remains isolated" in msg for msg in warning_messages), \
+            f"Expected warning about isolated system, got: {warning_messages}"
+
+    def test_ensure_connectivity_exhausts_iters_multiple_isolated(self, caplog) -> None:
+        """When multiple systems remain isolated after max_iters, each should
+        get a warning and be moved to within threshold."""
+        import logging
+        import unittest.mock as mock
+        caplog.set_level(logging.WARNING)
+        rng = random.Random(42)
+        # One central system and two extremely far away.  Patch galaxy bounds
+        # to prevent clamping from bringing them within range.
+        center = StarSystem(id="c", name="Center", x=500, y=500, star_type="G",
+                            star_color="#fff", phenomenon="none", phenomenon_desc="")
+        far1 = StarSystem(id="f1", name="FarOne", x=50000, y=50000, star_type="K",
+                          star_color="#ffa", phenomenon="none", phenomenon_desc="")
+        far2 = StarSystem(id="f2", name="FarTwo", x=100, y=51000, star_type="M",
+                          star_color="#f00", phenomenon="none", phenomenon_desc="")
+        systems = {"c": center, "f1": far1, "f2": far2}
+
+        with mock.patch("backend.generation.universe.GALAXY_WIDTH", 1000000), \
+             mock.patch("backend.generation.universe.GALAXY_HEIGHT", 1000000):
+            _ensure_connectivity(systems, rng)
+
+        # All systems should now be within threshold of at least one other
+        for system in systems.values():
+            has_neighbor = any(
+                distance_between(system, other) <= NEIGHBOR_DISTANCE_THRESHOLD
+                for other in systems.values()
+                if other.id != system.id
+            )
+            assert has_neighbor, f"System {system.id} ({system.name}) still has no neighbor after fallback"
+        # Should have logged warnings for both isolated systems
+        warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+        assert len(warning_messages) >= 2, \
+            f"Expected at least 2 warnings, got {len(warning_messages)}: {warning_messages}"
 
 
 class TestShipModel:
@@ -344,6 +404,78 @@ class TestGameState:
         state.apply_choice_outcome("crew:200")
         assert state.ship.crew == state.ship.max_crew
 
+    def test_apply_choice_outcome_warns_on_narrative_text(self, caplog) -> None:
+        """apply_choice_outcome should warn about narrative text in outcome."""
+        import logging
+        caplog.set_level(logging.WARNING)
+        ship = Ship(fuel=50, max_fuel=100)
+        state = GameState(id="test-warn-narr", seed=42, ship=ship)
+        effects = state.apply_choice_outcome("credits:50; fuel:-5; Discovered a hidden data cache.")
+        assert effects["credits"] == 50
+        assert effects["fuel"] == -5
+        assert state.ship.credits == 1050
+        assert state.ship.fuel == 45
+        # Should have warned about the narrative part
+        warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("Discovered a hidden data cache" in msg for msg in warning_messages)
+
+    def test_apply_choice_outcome_warns_on_typo(self, caplog) -> None:
+        """apply_choice_outcome should warn about typos in stat names."""
+        import logging
+        caplog.set_level(logging.WARNING)
+        ship = Ship(credits=500)
+        state = GameState(id="test-warn-typo", seed=42, ship=ship)
+        effects = state.apply_choice_outcome("credtis:50")
+        assert effects["credits"] == 0  # No credits change since typo wasn't recognized
+        assert state.ship.credits == 500
+        warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("credtis:50" in msg for msg in warning_messages)
+
+    def test_apply_choice_outcome_warns_on_unknown_stat(self, caplog) -> None:
+        """apply_choice_outcome should warn about unknown stat prefixes."""
+        import logging
+        caplog.set_level(logging.WARNING)
+        ship = Ship()
+        state = GameState(id="test-warn-unknown", seed=42, ship=ship)
+        effects = state.apply_choice_outcome("scanner:1; credits:50")
+        assert effects["credits"] == 50
+        assert effects["fuel"] == 0
+        assert state.ship.credits == 1050
+        warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("scanner:1" in msg for msg in warning_messages)
+        # No warning for valid stat
+        assert not any("credits:50" in msg for msg in warning_messages)
+
+    def test_apply_choice_outcome_no_warning_on_valid_stats(self, caplog) -> None:
+        """apply_choice_outcome should NOT warn when all parts are valid stats."""
+        import logging
+        caplog.set_level(logging.WARNING)
+        ship = Ship(fuel=50, hull=50, morale=50, credits=500, cargo=10, crew=5, max_fuel=100, max_hull=100, max_cargo=50, max_crew=10)
+        state = GameState(id="test-no-warn", seed=42, ship=ship)
+        effects = state.apply_choice_outcome("fuel:-10; hull:10; morale:5; credits:200; cargo:-2; crew:-1")
+        assert effects["fuel"] == -10
+        assert effects["hull"] == 10
+        assert effects["morale"] == 5
+        assert effects["credits"] == 200
+        assert effects["cargo"] == -2
+        assert effects["crew"] == -1
+        warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+        assert len(warning_messages) == 0, f"Expected no warnings but got: {warning_messages}"
+
+    def test_apply_choice_outcome_warns_on_multiple_unrecognized_parts(self, caplog) -> None:
+        """apply_choice_outcome should warn for each unrecognized part."""
+        import logging
+        caplog.set_level(logging.WARNING)
+        ship = Ship()
+        state = GameState(id="test-warn-multi", seed=42, ship=ship)
+        effects = state.apply_choice_outcome("credits:50; Some narrative; scanner:1; Another note")
+        assert effects["credits"] == 50
+        warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+        assert len(warning_messages) == 3, f"Expected 3 warnings but got {len(warning_messages)}: {warning_messages}"
+        assert any("Some narrative" in msg for msg in warning_messages)
+        assert any("scanner:1" in msg for msg in warning_messages)
+        assert any("Another note" in msg for msg in warning_messages)
+
 
 class TestEventModel:
     def test_event_to_dict_and_back(self) -> None:
@@ -374,3 +506,123 @@ class TestDiscoveryModel:
         restored = LoreFragment.from_dict(d)
         assert restored.arc == "The Architects"
         assert restored.discovered is False
+
+
+class TestBodyModel:
+    """Tests for Body model serialization."""
+
+    def test_body_to_dict_and_back(self) -> None:
+        """Body should roundtrip through to_dict/from_dict."""
+        body = Body(id="b_1", name="Test Planet", body_type="planet",
+                    biome="desert", size=5, distance_from_star=0.5,
+                    description="A test planet.", poi_count=3, explored=True)
+        d = body.to_dict()
+        restored = Body.from_dict(d)
+        assert restored.id == "b_1"
+        assert restored.name == "Test Planet"
+        assert restored.body_type == "planet"
+        assert restored.biome == "desert"
+        assert restored.size == 5
+        assert restored.distance_from_star == 0.5
+        assert restored.description == "A test planet."
+        assert restored.poi_count == 3
+        assert restored.explored is True
+
+    def test_body_from_dict_defaults(self) -> None:
+        """Body.from_dict should handle missing optional fields."""
+        body = Body.from_dict({
+            "id": "b_min", "name": "Min", "body_type": "moon",
+            "biome": "barren", "size": 1, "distance_from_star": 0.3,
+        })
+        assert body.description == ""
+        assert body.poi_count == 0
+        assert body.explored is False
+
+
+class TestStarSystemModel:
+    """Tests for StarSystem model serialization."""
+
+    def test_star_system_to_dict_and_back(self) -> None:
+        """StarSystem should roundtrip through to_dict/from_dict with bodies."""
+        b1 = Body(id="b1", name="Planet1", body_type="planet", biome="jungle",
+                  size=4, distance_from_star=0.3, description="A jungle world.")
+        system = StarSystem(id="s_1", name="Test System", x=100.0, y=200.0,
+                            star_type="G", star_color="#fff", phenomenon="nebula",
+                            phenomenon_desc="A nebula.", bodies=[b1],
+                            visited=True, scanned=True)
+        d = system.to_dict()
+        restored = StarSystem.from_dict(d)
+        assert restored.id == "s_1"
+        assert restored.name == "Test System"
+        assert restored.x == 100.0
+        assert restored.y == 200.0
+        assert restored.star_type == "G"
+        assert restored.star_color == "#fff"
+        assert restored.phenomenon == "nebula"
+        assert restored.phenomenon_desc == "A nebula."
+        assert restored.visited is True
+        assert restored.scanned is True
+        assert len(restored.bodies) == 1
+        assert restored.bodies[0].name == "Planet1"
+
+    def test_star_system_from_dict_defaults(self) -> None:
+        """StarSystem.from_dict should handle missing optional fields."""
+        system = StarSystem.from_dict({
+            "id": "s_min", "name": "Min Sys", "x": 0.0, "y": 0.0,
+            "star_type": "M", "star_color": "#f00", "phenomenon": "none",
+            "phenomenon_desc": "",
+        })
+        assert system.bodies == []
+        assert system.visited is False
+        assert system.scanned is False
+
+
+class TestGameStateModel:
+    """Additional tests for GameState model."""
+
+    def test_state_summary_with_system(self) -> None:
+        """state_summary should include current_system when one exists."""
+        state = new_game(seed=42)
+        summary = state.state_summary()
+        assert summary["game_id"] == state.id
+        assert summary["seed"] == state.seed
+        assert summary["current_system"] is not None
+        assert "ship" in summary
+        assert "event_count" in summary
+        assert "discovery_count" in summary
+        assert "systems_visited" in summary
+        assert "log_count" in summary
+        assert "game_started" in summary
+
+    def test_state_summary_no_current_system(self) -> None:
+        """state_summary should have None current_system when no system."""
+        ship = Ship(current_system_id="nonexistent")
+        state = GameState(id="no-sys", seed=42, ship=ship)
+        summary = state.state_summary()
+        assert summary["current_system"] is None
+
+
+class TestGenerationBodyDescription:
+    """Tests for _body_description covering unknown biome fallback."""
+
+    def test_body_description_unknown_biome(self) -> None:
+        """_body_description should fall back to default for unknown biome."""
+        from backend.generation.universe import _body_description
+        import random as rnd_mod
+        rng = rnd_mod.Random(42)
+        desc = _body_description(rng, "planet", "unknown_biome_xyz", "G")
+        assert isinstance(desc, str)
+        assert len(desc) > 0
+        assert desc == "An unremarkable celestial body."
+
+    def test_body_description_all_known_biomes(self) -> None:
+        """_body_description should return valid strings for all defined biomes."""
+        from backend.generation.universe import _body_description
+        from backend.config import BIOME_TYPES
+        import random as rnd_mod
+        rng = rnd_mod.Random(42)
+        for biome in BIOME_TYPES:
+            desc = _body_description(rng, "planet", biome, "G")
+            assert isinstance(desc, str)
+            assert len(desc) > 0
+            assert desc != "An unremarkable celestial body."

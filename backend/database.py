@@ -63,7 +63,7 @@ def init_db() -> None:
     conn.close()
 
 
-def create_game(game_id: str, seed: int, ship_name: str, state: dict) -> None:  # pragma: no cover
+def create_game(game_id: str, seed: int, ship_name: str, state: dict) -> None:
     """Create or replace a game record in the database.
 
     Creates or updates the main game record. If the game already exists
@@ -79,22 +79,22 @@ def create_game(game_id: str, seed: int, ship_name: str, state: dict) -> None:  
     :param state: The serialized game state dictionary.
     :type state: dict
     """
-    conn = get_db()  # pragma: no cover
-    now = datetime.now(timezone.utc).isoformat()  # pragma: no cover
-    existing = conn.execute(  # pragma: no cover
+    conn = get_db()
+    now = datetime.now(timezone.utc).isoformat()
+    existing = conn.execute(
         "SELECT created_at FROM games WHERE id = ?",
         (game_id,),
-    ).fetchone()  # pragma: no cover
-    if existing:  # pragma: no cover
-        created_at = existing["created_at"]  # pragma: no cover
-    else:  # pragma: no cover
-        created_at = now  # pragma: no cover
-    conn.execute(  # pragma: no cover
+    ).fetchone()
+    if existing:
+        created_at = existing["created_at"]
+    else:
+        created_at = now
+    conn.execute(
         "INSERT OR REPLACE INTO games (id, seed, ship_name, created_at, updated_at, state_json) VALUES (?, ?, ?, ?, ?, ?)",
         (game_id, seed, ship_name, created_at, now, json.dumps(state)),
-    )  # pragma: no cover
-    conn.commit()  # pragma: no cover
-    conn.close()  # pragma: no cover
+    )
+    conn.commit()
+    conn.close()
 
 
 def load_game(game_id: str) -> dict | None:

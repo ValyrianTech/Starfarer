@@ -1,5 +1,6 @@
 import sys
 import os
+import random
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from backend.game.engine import (
@@ -867,34 +868,40 @@ class TestEvents:
 
 
 class TestTriggerEventPhenomenonBranch:
-    """Tests for the phenomenon else branch in trigger_event (line 147)."""
+    """Tests for the phenomenon branch in trigger_event."""
 
-    def test_trigger_event_phenomenon_else_branch(self) -> None:
-        """Trigger event with phenomenon system where inner random fails."""
+    def test_trigger_event_phenomenon_biased(self) -> None:
+        """Trigger event with phenomenon should bias toward hazard/discovery/exploration."""
         state = new_game(seed=42)
         system = state.get_current_system()
         assert system is not None
         system.phenomenon = "nebula"
         state.ship.morale = 80
 
-        found = False
-        for extra_events in range(10):
-            for extra_logs in range(10):
-                state.events = list(range(extra_events))
-                state.log_entries = [{"type": "test", "message": str(i)} for i in range(extra_logs)]
-                import random as rnd_mod
-                rng = rnd_mod.Random(state.seed + deterministic_hash(system.id, len(state.events), len(state.log_entries)))
-                if rng.random() < 0.35:
-                    if not (system.phenomenon != "none" and rng.random() < 0.5):
-                        found = True
-                        break
-            if found:
-                break
-        assert found, "Could not find a seed combination that hits line 147"
+        rng = random.Random(42)
+        rng.random()  # Consume first value; next two are < 0.35 and < 0.5
 
-        event = trigger_event(state)
+        event = trigger_event(state, rng_override=rng)
         assert event is not None
-        assert event.event_type in [t["type"] for t in EVENT_TEMPLATES]
+        assert event.event_type in ("hazard", "discovery", "exploration")
+
+    def test_trigger_event_phenomenon_else_branch(self) -> None:
+        """Trigger event with phenomenon where inner random fails (falls to else branch)."""
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        system.phenomenon = "nebula"
+        state.ship.morale = 80
+
+        rng = random.Random(37)  # was 7 — seed 37: v2=0.092 (<0.35), v3=0.618 (>=0.5), v4→index 8 "encounter"
+        rng.random()  # Consume first value
+
+        event = trigger_event(state, rng_override=rng)
+        assert event is not None
+        # Verify we hit the else branch: event type should NOT be restricted
+        # to ("hazard", "discovery", "exploration")
+        assert event.event_type not in ("hazard", "discovery", "exploration"), \
+            "Expected else branch (unrestricted event type), got phenomenon-biased selection"
 
 
 class TestBulkSell:
@@ -1088,3 +1095,350 @@ class TestBulkSell:
         assert "No items could be sold." in msg
         assert "No discoveries matching 'nonexistent_alpha'" in msg
         assert "No discoveries matching 'nonexistent_beta'" in msg
+
+
+class TestDatabaseModule:
+    """Direct unit tests for database.py functions."""
+
+    def test_create_game_new(self) -> None:
+        """create_game should create a new game record."""
+        from backend.database import init_db, create_game, load_game
+        init_db()
+        create_game("db-create-new", 42, "NewShip", {"fuel": 80, "test": True})
+        loaded = load_game("db-create-new")
+        assert loaded is not None
+        assert loaded["fuel"] == 80
+        assert loaded["test"] is True
+
+    def test_create_game_existing_preserves_created_at(self) -> None:
+        """create_game should preserve created_at when updating existing game."""
+        from backend.database import init_db, create_game, get_db
+        import json
+        init_db()
+        create_game("db-create-existing", 42, "OldShip", {"v": 1})
+        conn = get_db()
+        try:
+            row = conn.execute("SELECT created_at FROM games WHERE id = ?", ("db-create-existing",)).fetchone()
+            assert row is not None
+            orig_created_at = row["created_at"]
+            create_game("db-create-existing", 99, "NewShip", {"v": 2})
+            row2 = conn.execute("SELECT created_at FROM games WHERE id = ?", ("db-create-existing",)).fetchone()
+            assert row2["created_at"] == orig_created_at
+        finally:
+            conn.close()
+
+    def test_load_game_returns_none(self) -> None:
+        """load_game should return None for nonexistent game."""
+        from backend.database import init_db, load_game
+        init_db()
+        result = load_game("nonexistent-game-id-xyz")
+        assert result is None
+
+    def test_load_save_returns_none(self) -> None:
+        """load_save should return None when no saves exist."""
+        from backend.database import init_db, load_save
+        init_db()
+        result = load_save("game-with-no-saves")
+        assert result is None
+
+    def test_load_save_returns_data(self) -> None:
+        """load_save should return the most recent save."""
+        from backend.database import init_db, save_game, load_save
+        init_db()
+        save_game("load-save-test", {"seed": 42, "test": True})
+        result = load_save("load-save-test")
+        assert result is not None
+        assert result["test"] is True
+
+    def test_save_game_existing_preserves_created_at(self) -> None:
+        """save_game should preserve created_at when updating existing game."""
+        from backend.database import init_db, save_game, get_db
+        init_db()
+        save_game("save-existing-test", {"seed": 42, "fuel": 80})
+        conn = get_db()
+        try:
+            row = conn.execute("SELECT created_at FROM games WHERE id = ?", ("save-existing-test",)).fetchone()
+            orig = row["created_at"]
+            save_game("save-existing-test", {"seed": 42, "fuel": 50})
+            row2 = conn.execute("SELECT created_at FROM games WHERE id = ?", ("save-existing-test",)).fetchone()
+            assert row2["created_at"] == orig
+        finally:
+            conn.close()
+
+    def test_save_game_new_existing_record_else_branch(self) -> None:
+        """save_game should handle new game (no existing record)."""
+        from backend.database import init_db, save_game, load_game
+        init_db()
+        save_game("save-new-game-test", {"seed": 42, "ship": {"name": "TestShip"}, "fuel": 80})
+        loaded = load_game("save-new-game-test")
+        assert loaded is not None
+        assert loaded["fuel"] == 80
+
+    def test_get_leaderboard_with_entries(self) -> None:
+        """get_leaderboard should return valid entries."""
+        from backend.database import init_db, save_game, get_leaderboard
+        init_db()
+        save_game("lb-test-1", {"seed": 42, "discoveries": [1, 2], "systems_visited": 5, "ship": {"credits": 500, "name": "LB1"}})
+        result = get_leaderboard(limit=10)
+        ids = [e["game_id"] for e in result]
+        assert len(result) > 0
+
+    def test_get_leaderboard_empty(self) -> None:
+        """get_leaderboard should return empty list when no games exist."""
+        from backend.database import init_db, get_leaderboard, get_db
+        init_db()
+        conn = get_db()
+        try:
+            conn.execute("DELETE FROM saves")
+            conn.execute("DELETE FROM games")
+            conn.commit()
+        finally:
+            conn.close()
+        result = get_leaderboard(limit=5)
+        assert result == []
+
+
+class TestManagerGetSystemDetail:
+    """Tests for get_system_detail edge cases."""
+
+    def test_get_system_detail_non_current(self) -> None:
+        """get_system_detail for a non-current system should return nearby=[]."""
+        state = new_game(seed=42)
+        current_id = state.ship.current_system_id
+        other_ids = [sid for sid in state.systems if sid != current_id]
+        other_id = other_ids[0] if other_ids else None
+        if other_id is None:
+            return  # pragma: no cover
+        detail = get_system_detail(state, other_id)
+        assert detail is not None
+        assert detail["is_current"] is False
+        assert detail["nearby_systems"] == []
+
+    def test_get_system_detail_not_found(self) -> None:
+        """get_system_detail should return None for nonexistent system."""
+        state = new_game(seed=42)
+        detail = get_system_detail(state, "nonexistent_sys_id")
+        assert detail is None
+
+
+class TestEventCreateEvent:
+    """Tests for _create_event."""
+
+    def test_create_event_creates_valid_event(self) -> None:
+        """_create_event should create a valid Event with all fields populated."""
+        from backend.generation.events import _create_event, EVENT_TEMPLATES
+        event = _create_event(EVENT_TEMPLATES[0], "sys_test")
+        assert event.id is not None
+        assert len(event.id) > 0
+        assert event.title == EVENT_TEMPLATES[0]["title"]
+        assert event.flavor == EVENT_TEMPLATES[0]["flavor"]
+        assert event.event_type == EVENT_TEMPLATES[0]["type"]
+        assert event.system_id == "sys_test"
+        assert len(event.choices) == len(EVENT_TEMPLATES[0]["choices"])
+        assert event.resolved is False
+        assert event.chosen is None
+        for choice in event.choices:
+            assert choice.text != ""
+            assert choice.outcome != ""
+
+
+class TestEngineGenerateDiscovery:
+    """Tests for _generate_discovery covering each category."""
+
+    def test_generate_discovery_mineral(self) -> None:
+        """_generate_discovery should create valid mineral discovery."""
+        import random as rnd_mod
+        rng = rnd_mod.Random(42)
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        body = system.bodies[0] if system.bodies else None
+        assert body is not None
+        from backend.game.engine import _generate_discovery
+        disc = _generate_discovery(rng, "mineral", body, system)
+        assert disc.category == "mineral"
+        assert disc.name in ["Plasmic Crystal", "Void Ore", "Stellar Fragment", "Obsidian Shard", "Nebula Dust"]
+        assert disc.value > 0
+        assert disc.system_id == system.id
+        assert disc.body_id == body.id
+
+    def test_generate_discovery_artifact(self) -> None:
+        """_generate_discovery should create valid artifact discovery."""
+        import random as rnd_mod
+        rng = rnd_mod.Random(99)
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        body = system.bodies[0] if system.bodies else None
+        assert body is not None
+        from backend.game.engine import _generate_discovery
+        disc = _generate_discovery(rng, "artifact", body, system)
+        assert disc.category == "artifact"
+        assert disc.name in ["Ancient Relic", "Alien Device", "Glyph Tablet", "Memory Core", "Void Key"]
+
+    def test_generate_discovery_lifeform(self) -> None:
+        """_generate_discovery should create valid lifeform discovery."""
+        import random as rnd_mod
+        rng = rnd_mod.Random(123)
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        body = system.bodies[0] if system.bodies else None
+        assert body is not None
+        from backend.game.engine import _generate_discovery
+        disc = _generate_discovery(rng, "lifeform", body, system)
+        assert disc.category == "lifeform"
+        assert disc.name in ["Glowvine", "Crystal Mite", "Void Spore", "Plasma Jelly", "Singing Stone"]
+
+    def test_generate_discovery_signal(self) -> None:
+        """_generate_discovery should create valid signal discovery."""
+        import random as rnd_mod
+        rng = rnd_mod.Random(456)
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        body = system.bodies[0] if system.bodies else None
+        assert body is not None
+        from backend.game.engine import _generate_discovery
+        disc = _generate_discovery(rng, "signal", body, system)
+        assert disc.category == "signal"
+        assert disc.name in ["Distress Beacon", "Encrypted Transmission", "Nav Echo", "Subspace Ripple", "Ghost Signal"]
+
+    def test_generate_discovery_ruin(self) -> None:
+        """_generate_discovery should create valid ruin discovery."""
+        import random as rnd_mod
+        rng = rnd_mod.Random(789)
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        body = system.bodies[0] if system.bodies else None
+        assert body is not None
+        from backend.game.engine import _generate_discovery
+        disc = _generate_discovery(rng, "ruin", body, system)
+        assert disc.category == "ruin"
+        assert disc.name in ["Weathered Pillar", "Sunken Chamber", "Broken Obelisk", "Overgrown Temple", "Fallen Tower"]
+
+
+class TestTradingValidateQuantity:
+    """Tests for _validate_quantity covering edge cases."""
+
+    def test_validate_quantity_bool(self) -> None:
+        """_validate_quantity should reject bool."""
+        from backend.game.trading import _validate_quantity
+        result = _validate_quantity(True)
+        assert result is not None
+        assert "positive integer" in result
+
+    def test_validate_quantity_negative(self) -> None:
+        """_validate_quantity should reject negative ints."""
+        from backend.game.trading import _validate_quantity
+        result = _validate_quantity(-1)
+        assert result is not None
+        assert "positive integer" in result
+
+    def test_validate_quantity_zero(self) -> None:
+        """_validate_quantity should reject zero."""
+        from backend.game.trading import _validate_quantity
+        result = _validate_quantity(0)
+        assert result is not None
+        assert "positive integer" in result
+
+    def test_validate_quantity_valid(self) -> None:
+        """_validate_quantity should accept positive int."""
+        from backend.game.trading import _validate_quantity
+        result = _validate_quantity(5)
+        assert result is None
+
+
+class TestTradingPerformTradeEdgeCases:
+    """Additional edge case tests for perform_trade."""
+
+    def test_trade_sell_no_current_system(self) -> None:
+        """Sell trade should fail when not in a system."""
+        state = new_game(seed=42)
+        state.ship.current_system_id = "nonexistent"
+        ok, msg = perform_trade(state, "sell", "mineral", 1)
+        assert ok is False
+        assert "Not in a system" in msg
+
+    def test_trade_sell_no_trading_facilities(self) -> None:
+        """Sell trade should fail when system has no trading facilities."""
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        system.phenomenon = "black_hole"
+        ok, msg = perform_trade(state, "sell", "mineral", 1)
+        assert ok is False
+        assert "No trading facilities" in msg
+
+    def test_buy_fuel_full_tank(self) -> None:
+        """Buying fuel with a full tank should return an error."""
+        state = new_game(seed=42)
+        state.ship.fuel = state.ship.max_fuel
+        ok, msg = perform_trade(state, "buy", "fuel", 10)
+        assert ok is False
+        assert "Fuel tank is already full." == msg
+
+    def test_buy_repair_full_hull(self) -> None:
+        """Buying repairs with full hull should return an error."""
+        state = new_game(seed=42)
+        state.ship.hull = state.ship.max_hull
+        ok, msg = perform_trade(state, "buy", "repair", 1)
+        assert ok is False
+        assert "Hull is already at maximum." == msg
+
+    def test_sell_empty_string_item(self) -> None:
+        """Selling with an empty string item should return an error."""
+        state = new_game(seed=42)
+        ok, msg = perform_trade(state, "sell", "", 1)
+        assert ok is False
+        assert msg == "Item must be a non-empty string."
+
+    def test_sell_non_string_item(self) -> None:
+        """Selling with a non-string item should return an error."""
+        state = new_game(seed=42)
+        ok, msg = perform_trade(state, "sell", 123, 1)
+        assert ok is False
+        assert msg == "Item must be a non-empty string."
+
+
+class TestDatabaseGetLeaderboard:
+    """Tests for get_leaderboard with various malformed entries."""
+
+    def test_leaderboard_malformed_non_dict(self) -> None:
+        """json.loads returns a non-dict; leaderboard should skip it."""
+        from backend.database import init_db, get_db, get_leaderboard
+        from datetime import datetime, timezone
+        init_db()
+        now = datetime.now(timezone.utc).isoformat()
+        conn = get_db()
+        try:
+            conn.execute(
+                "INSERT OR REPLACE INTO games (id, seed, ship_name, created_at, updated_at, state_json) VALUES (?, ?, ?, ?, ?, ?)",
+                ("lb-non-dict", 1, "Test", now, now, '123')
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        result = get_leaderboard(limit=10)
+        ids = [e["game_id"] for e in result]
+        assert "lb-non-dict" not in ids
+
+    def test_leaderboard_skips_bad_json(self) -> None:
+        """get_leaderboard should skip entries that can't be JSON parsed."""
+        from backend.database import init_db, get_db, get_leaderboard
+        from datetime import datetime, timezone
+        init_db()
+        now = datetime.now(timezone.utc).isoformat()
+        conn = get_db()
+        try:
+            conn.execute(
+                "INSERT OR REPLACE INTO games (id, seed, ship_name, created_at, updated_at, state_json) VALUES (?, ?, ?, ?, ?, ?)",
+                ("lb-bad-json", 1, "Test", now, now, '{bad')
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        result = get_leaderboard(limit=10)
+        ids = [e["game_id"] for e in result]
+        assert "lb-bad-json" not in ids

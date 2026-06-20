@@ -226,7 +226,7 @@ def explore_surface(state: GameState) -> list[Discovery]:
 
     for i in range(num_finds):
         cat = item_rng.choice(["mineral", "artifact", "lifeform", "signal", "ruin"])
-        disc = _generate_discovery(item_rng, cat, body, system, state)
+        disc = _generate_discovery(item_rng, cat, body, system)
         discoveries.append(disc)
         state.discoveries.append(disc)
 
@@ -234,7 +234,7 @@ def explore_surface(state: GameState) -> list[Discovery]:
     return discoveries
 
 
-def _generate_discovery(rng: random.Random, category: str, body: Body, system: StarSystem, state: GameState) -> Discovery:
+def _generate_discovery(rng: random.Random, category: str, body: Body, system: StarSystem) -> Discovery:
     """Generate a single discovery for a surface exploration.
 
     Creates a randomised discovery (mineral, artifact, lifeform,
@@ -252,9 +252,6 @@ def _generate_discovery(rng: random.Random, category: str, body: Body, system: S
     :type body: Body
     :param system: The star system containing the body.
     :type system: StarSystem
-    :param state: The current game state (used only for signature;
-        not mutated).
-    :type state: GameState
     :returns: A newly generated :class:`Discovery`.
     :rtype: Discovery
     """
