@@ -100,7 +100,12 @@ def distribute_lore_fragments(
             placement[chosen_sys_id] = []
         placement[chosen_sys_id].append(frag)
 
-    logging.warning("Only %d/%d lore fragments could be placed", sum(len(f) for f in placement.values()), len(fragments))
+    placed = sum(len(f) for f in placement.values())
+    total = len(fragments)
+    if placed == total:
+        logging.info("All %d lore fragments placed successfully", placed)
+    else:
+        logging.warning("Only %d/%d lore fragments could be placed", placed, total)
     return placement
 
 
