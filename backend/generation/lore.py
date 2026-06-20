@@ -87,7 +87,9 @@ def distribute_lore_fragments(
             chosen_sys_id, chosen_body_id = _pick_lore_location(
                 rng, systems, system_fragment_count, max_per_system, used_bodies
             )
-        except ValueError:
+        except ValueError as e:
+            if "No eligible bodies in system" in str(e):
+                continue
             break
 
         frag.discovery_id = f"{chosen_sys_id}::{chosen_body_id}"
