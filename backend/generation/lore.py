@@ -79,16 +79,18 @@ def distribute_lore_fragments(
 
     system_fragment_count: dict[str, int] = {}
     placement: dict[str, list[LoreFragment]] = {}
+    used_bodies: set[tuple[str, str]] = set()
 
     for frag in fragments:
         try:
             chosen_sys_id, chosen_body_id = _pick_lore_location(
-                rng, systems, system_fragment_count, max_per_system
+                rng, systems, system_fragment_count, max_per_system, used_bodies
             )
         except ValueError:
             break
 
         frag.discovery_id = f"{chosen_sys_id}::{chosen_body_id}"
+        used_bodies.add((chosen_sys_id, chosen_body_id))
 
         system_fragment_count[chosen_sys_id] = \
             system_fragment_count.get(chosen_sys_id, 0) + 1
@@ -105,12 +107,14 @@ def _pick_lore_location(
     systems: dict[str, StarSystem],
     counts: dict[str, int],
     max_per_system: int,
+    used_bodies: frozenset | set = frozenset(),
 ) -> tuple[str, str]:
     """Pick a random system and body to host a lore fragment.
 
     Systems are weighted by the combined biome scores of their bodies.
     A random body within the chosen system is then selected. Systems
-    already at *max_per_system* are excluded.
+    already at *max_per_system* are excluded. Bodies already assigned
+    to a fragment (in *used_bodies*) are excluded.
 
     :param rng: Seeded random number generator.
     :type rng: random.Random
@@ -120,9 +124,11 @@ def _pick_lore_location(
     :type counts: dict[str, int]
     :param max_per_system: Maximum fragments per system.
     :type max_per_system: int
+    :param used_bodies: Set of ``(system_id, body_id)`` tuples already assigned.
+    :type used_bodies: set[tuple[str, str]]
     :returns: A tuple of ``(system_id, body_id)``.
     :rtype: tuple[str, str]
-    :raises ValueError: If no eligible system is available.
+    :raises ValueError: If no eligible system or body is available.
     """
     eligible_systems: list[str] = []
     weights: list[int] = []
@@ -144,11 +150,15 @@ def _pick_lore_location(
     system = systems[chosen_sys_id]
 
     bodies = [b for b in system.bodies if b.poi_count > 0]
-    if not bodies:
-        raise ValueError(f"No discoverable bodies in system {chosen_sys_id}")
+    eligible_bodies = [
+        b for b in bodies
+        if (chosen_sys_id, b.id) not in used_bodies
+    ]
+    if not eligible_bodies:
+        raise ValueError(f"No eligible bodies in system {chosen_sys_id}")
 
-    body_weights = [BIOME_WEIGHTS.get(b.biome, 1) for b in bodies]
-    chosen_body = rng.choices(bodies, weights=body_weights, k=1)[0]
+    body_weights = [BIOME_WEIGHTS.get(b.biome, 1) for b in eligible_bodies]
+    chosen_body = rng.choices(eligible_bodies, weights=body_weights, k=1)[0]
 
     return chosen_sys_id, chosen_body.id
 
