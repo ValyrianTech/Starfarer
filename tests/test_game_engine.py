@@ -238,9 +238,9 @@ class TestPerformJumpEdgeCases:
         assert cur is not None
         # Find a system with a phenomenon
         target = None
-        for sys in state.systems.values():
-            if sys.phenomenon != "none" and sys.id != state.ship.current_system_id:
-                target = sys
+        for system in state.systems.values():
+            if system.phenomenon != "none" and system.id != state.ship.current_system_id:
+                target = system
                 break
         if target is None:
             return  # pragma: no cover  # no phenomenon system found
