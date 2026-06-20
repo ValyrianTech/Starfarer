@@ -388,8 +388,16 @@ def _ensure_connectivity(systems: dict[str, StarSystem], rng: random.Random) -> 
                     if d < closest_dist:
                         closest_dist = d
                         closest_idx = j
-                if closest_idx is not None and closest_dist >= 1e-9:
+                if closest_idx is not None:
                     target = sys_list[closest_idx]
+                    if closest_dist < 1e-9:  # pragma: no cover
+                        # Systems are at the same coordinates; move the target slightly
+                        target.x = rng.uniform(-5, 5)
+                        target.y = rng.uniform(-5, 5)
+                        target.x = max(50, min(GALAXY_WIDTH - 50, target.x))
+                        target.y = max(50, min(GALAXY_HEIGHT - 50, target.y))
+                        fixed = True
+                        continue
                     new_x = sys.x + (target.x - sys.x) * (MAX_INITIAL_JUMP - 5) / closest_dist
                     new_y = sys.y + (target.y - sys.y) * (MAX_INITIAL_JUMP - 5) / closest_dist
                     new_x = max(50, min(GALAXY_WIDTH - 50, new_x))
