@@ -336,8 +336,8 @@ def generate_universe(seed: int, system_count: int = GALAXY_SYSTEM_COUNT) -> dic
 
     systems = {}
     for i in range(system_count):
-        sys = generate_system(system_rng, i, galaxy_rng)
-        systems[sys.id] = sys
+        system = generate_system(system_rng, i, galaxy_rng)
+        systems[system.id] = system
 
     _ensure_connectivity(systems, galaxy_rng)
 
@@ -369,12 +369,12 @@ def _ensure_connectivity(systems: dict[str, StarSystem], rng: random.Random) -> 
         fixed = False
         modifications = []  # List of (system, new_x, new_y) tuples
 
-        for i, sys in enumerate(sys_list):
+        for i, system in enumerate(sys_list):
             has_neighbor = False
             for j, other in enumerate(sys_list):
                 if i == j:
                     continue
-                d = distance_between(sys, other)
+                d = distance_between(system, other)
                 if d <= NEIGHBOR_DISTANCE_THRESHOLD:
                     has_neighbor = True
                     break
@@ -384,7 +384,7 @@ def _ensure_connectivity(systems: dict[str, StarSystem], rng: random.Random) -> 
                 for j, other in enumerate(sys_list):
                     if i == j:
                         continue
-                    d = distance_between(sys, other)
+                    d = distance_between(system, other)
                     if d < closest_dist:
                         closest_dist = d
                         closest_idx = j
@@ -398,8 +398,8 @@ def _ensure_connectivity(systems: dict[str, StarSystem], rng: random.Random) -> 
                         target.y = max(50, min(GALAXY_HEIGHT - 50, target.y))
                         fixed = True
                         continue
-                    new_x = sys.x + (target.x - sys.x) * (MAX_INITIAL_JUMP - 5) / closest_dist
-                    new_y = sys.y + (target.y - sys.y) * (MAX_INITIAL_JUMP - 5) / closest_dist
+                    new_x = system.x + (target.x - system.x) * (MAX_INITIAL_JUMP - 5) / closest_dist
+                    new_y = system.y + (target.y - system.y) * (MAX_INITIAL_JUMP - 5) / closest_dist
                     new_x = max(50, min(GALAXY_WIDTH - 50, new_x))
                     new_y = max(50, min(GALAXY_HEIGHT - 50, new_y))
                     modifications.append((target, new_x, new_y))
