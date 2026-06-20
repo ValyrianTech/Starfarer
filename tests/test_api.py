@@ -168,7 +168,7 @@ class TestAPIDBFallback:
 
     def test_system_detail_from_db_fallback(self) -> None:
         """System detail endpoint should work via DB fallback."""
-        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "sys-fallback"})
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "system-fallback"})
         game_id = resp.json()["game_id"]
         cur_sys = resp.json()["state"]["ship"]["current_system_id"]
         GAME_STORE.pop(game_id, None)
@@ -211,7 +211,7 @@ class TestAPIDBFallback:
 
     def test_system_detail_via_db_fallback(self) -> None:
         """System detail endpoint should return 404 when game_load returns None."""
-        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "db-fb-sys-v2"})
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "db-fb-system-v2"})
         game_id = resp.json()["game_id"]
         cur_sys = resp.json()["state"]["ship"]["current_system_id"]
         GAME_STORE.pop(game_id, None)
@@ -667,7 +667,7 @@ class TestAPIInternalFunctions:
 
     def test_jump_no_current_system(self) -> None:
         """Jump should return 400 when ship has no current system."""
-        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "jump-no-sys"})
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "jump-no-system"})
         game_id = resp.json()["game_id"]
         nearby = client.get(f"/api/game/{game_id}/nearby").json()
         target_id = nearby["nearby"][0]["id"]
@@ -750,9 +750,9 @@ class TestAPIEventTriggerPaths:
         game_id = resp.json()["game_id"]
         state = GAME_STORE.get(game_id)
         assert state is not None
-        sys = state.get_current_system()
-        assert sys is not None
-        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
         if not planet:
             return  # pragma: no cover  # no planet in starting system
         land_on_body(state, planet.id)
@@ -823,9 +823,9 @@ class TestAPIEventPersistence:
         game_id = resp.json()["game_id"]
         state = GAME_STORE.get(game_id)
         assert state is not None
-        sys = state.get_current_system()
-        assert sys is not None
-        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
         if not planet:
             return  # pragma: no cover  # no planet in starting system
         land_on_body(state, planet.id)
@@ -985,7 +985,7 @@ class TestAPIBulkSell:
 
     def test_bulk_sell_no_current_system(self) -> None:
         """Bulk sell with no current system should return 400."""
-        game_id = self._create_game_with_discoveries("bulk-sell-no-sys")
+        game_id = self._create_game_with_discoveries("bulk-sell-no-system")
         state = GAME_STORE[game_id]
         state.ship.current_system_id = "nonexistent_system_xyz"
         GAME_STORE[game_id] = state

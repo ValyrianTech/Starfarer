@@ -180,15 +180,15 @@ class TestUniverseGeneration:
         _ensure_connectivity(systems, rng)
 
         # After the fix, all systems should have a neighbor
-        for sys in systems.values():
+        for system in systems.values():
             has_neighbor = False
             for other in systems.values():
-                if sys.id == other.id:
+                if system.id == other.id:
                     continue
-                if distance_between(sys, other) <= NEIGHBOR_DISTANCE_THRESHOLD:
+                if distance_between(system, other) <= NEIGHBOR_DISTANCE_THRESHOLD:
                     has_neighbor = True
                     break
-            assert has_neighbor, f"System {sys.id} ({sys.name}) has no neighbor"
+            assert has_neighbor, f"System {system.id} ({system.name}) has no neighbor"
 
 
 class TestShipModel:

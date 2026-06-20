@@ -78,9 +78,9 @@ class TestNavigation:
     def test_scan_marks_scanned(self) -> None:
         state = new_game(seed=42)
         perform_scan(state)
-        sys = state.get_current_system()
-        assert sys is not None
-        assert sys.scanned is True
+        system = state.get_current_system()
+        assert system is not None
+        assert system.scanned is True
 
     def test_get_nearby_systems(self) -> None:
         state = new_game(seed=42)
@@ -90,9 +90,9 @@ class TestNavigation:
 
     def test_land_on_valid_body(self) -> None:
         state = new_game(seed=42)
-        sys = state.get_current_system()
-        assert sys is not None
-        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
         if planet:
             ok, msg = land_on_body(state, planet.id)
             assert ok is True
@@ -105,9 +105,9 @@ class TestNavigation:
 
     def test_explore_surface(self) -> None:
         state = new_game(seed=42)
-        sys = state.get_current_system()
-        assert sys is not None
-        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
         if planet:
             land_on_body(state, planet.id)
             discoveries = explore_surface(state)
@@ -238,9 +238,9 @@ class TestPerformJumpEdgeCases:
         assert cur is not None
         # Find a system with a phenomenon
         target = None
-        for sys in state.systems.values():
-            if sys.phenomenon != "none" and sys.id != state.ship.current_system_id:
-                target = sys
+        for system in state.systems.values():
+            if system.phenomenon != "none" and system.id != state.ship.current_system_id:
+                target = system
                 break
         if target is None:
             return  # pragma: no cover  # no phenomenon system found
@@ -312,9 +312,9 @@ class TestExploreEdgeCases:
     def test_explore_not_enough_fuel(self) -> None:
         """Explore should return empty when not enough fuel."""
         state = new_game(seed=42)
-        sys = state.get_current_system()
-        assert sys is not None
-        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
         if planet:
             land_on_body(state, planet.id)
             state.ship.fuel = 1
@@ -331,9 +331,9 @@ class TestExploreEdgeCases:
     def test_explore_surface_zero_poi_count(self) -> None:
         """Explore should not deduct fuel when poi_count is 0."""
         state = new_game(seed=42)
-        sys = state.get_current_system()
-        assert sys is not None
-        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
         if planet:
             land_on_body(state, planet.id)
             planet.poi_count = 0
@@ -349,9 +349,9 @@ class TestTradingAdvanced:
     def test_sell_discovery_by_category(self) -> None:
         """Selling a discovery by category should remove it and grant credits."""
         state = new_game(seed=42)
-        sys = state.get_current_system()
-        assert sys is not None
-        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
         if not planet:
             return  # pragma: no cover  # no planet in starting system
         land_on_body(state, planet.id)
@@ -367,9 +367,9 @@ class TestTradingAdvanced:
     def test_sell_discovery_by_name(self) -> None:
         """Selling a discovery by name should remove it and grant credits."""
         state = new_game(seed=42)
-        sys = state.get_current_system()
-        assert sys is not None
-        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
         if not planet:
             return  # pragma: no cover  # no planet in starting system
         land_on_body(state, planet.id)
@@ -385,9 +385,9 @@ class TestTradingAdvanced:
     def test_sell_discovery_no_match(self) -> None:
         """Selling a non-existent discovery should return False."""
         state = new_game(seed=42)
-        sys = state.get_current_system()
-        assert sys is not None
-        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
         if not planet:
             return  # pragma: no cover
         land_on_body(state, planet.id)
@@ -399,9 +399,9 @@ class TestTradingAdvanced:
     def test_sell_discovery_sells_highest_value(self) -> None:
         """Selling by category should sell the highest-value discovery."""
         state = new_game(seed=42)
-        sys = state.get_current_system()
-        assert sys is not None
-        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
         if not planet:
             return  # pragma: no cover
         land_on_body(state, planet.id)
@@ -435,9 +435,9 @@ class TestTradingAdvanced:
     def test_sell_discovery_negative_quantity(self) -> None:
         """Selling with a negative quantity should fail."""
         state = new_game(seed=42)
-        sys = state.get_current_system()
-        assert sys is not None
-        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
         if not planet:
             return  # pragma: no cover
         land_on_body(state, planet.id)
@@ -451,9 +451,9 @@ class TestTradingAdvanced:
     def test_sell_discovery_zero_quantity(self) -> None:
         """Selling with quantity=0 should fail."""
         state = new_game(seed=42)
-        sys = state.get_current_system()
-        assert sys is not None
-        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
         if not planet:
             return  # pragma: no cover
         land_on_body(state, planet.id)
@@ -468,9 +468,9 @@ class TestTradingAdvanced:
         """Selling with quantity > 1 should sell multiple discoveries."""
         from backend.models.discovery import Discovery
         state = new_game(seed=42)
-        sys = state.get_current_system()
-        assert sys is not None
-        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
         if not planet:
             return  # pragma: no cover
         land_on_body(state, planet.id)
@@ -495,9 +495,9 @@ class TestTradingAdvanced:
     def test_sell_quantity_exceeds_available(self) -> None:
         """Selling with quantity exceeding available discoveries should return an error."""
         state = new_game(seed=42)
-        sys = state.get_current_system()
-        assert sys is not None
-        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
         if not planet:
             return  # pragma: no cover
         land_on_body(state, planet.id)
@@ -521,9 +521,9 @@ class TestTradingAdvanced:
         """Selling multiple discoveries by name should work."""
         from backend.models.discovery import Discovery
         state = new_game(seed=42)
-        sys = state.get_current_system()
-        assert sys is not None
-        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
         if not planet:
             return  # pragma: no cover
         land_on_body(state, planet.id)
@@ -591,9 +591,9 @@ class TestTradingAdvanced:
     def test_trade_no_facilities(self) -> None:
         """Trade should fail when system has no trading facilities."""
         state = new_game(seed=42)
-        sys = state.get_current_system()
-        assert sys is not None
-        sys.phenomenon = "black_hole"
+        system = state.get_current_system()
+        assert system is not None
+        system.phenomenon = "black_hole"
         ok, msg = perform_trade(state, "buy", "fuel", 1)
         assert ok is False
         assert "No trading facilities" in msg
@@ -711,9 +711,9 @@ class TestTradingAdvanced:
     def test_sell_bool_quantity_rejected(self) -> None:
         """Selling with quantity=True should fail."""
         state = new_game(seed=42)
-        sys = state.get_current_system()
-        assert sys is not None
-        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
         if not planet:
             return  # pragma: no cover
         land_on_body(state, planet.id)
@@ -753,9 +753,9 @@ class TestEventsAdvanced:
     def test_trigger_event_phenomenon_system(self) -> None:
         """Trigger event with phenomenon should bias toward certain event types."""
         state = new_game(seed=42)
-        sys = state.get_current_system()
-        assert sys is not None
-        sys.phenomenon = "black_hole"
+        system = state.get_current_system()
+        assert system is not None
+        system.phenomenon = "black_hole"
         state.ship.morale = 20
         event = trigger_event(state)
         assert event is not None
@@ -872,9 +872,9 @@ class TestTriggerEventPhenomenonBranch:
     def test_trigger_event_phenomenon_else_branch(self) -> None:
         """Trigger event with phenomenon system where inner random fails."""
         state = new_game(seed=42)
-        sys = state.get_current_system()
-        assert sys is not None
-        sys.phenomenon = "nebula"
+        system = state.get_current_system()
+        assert system is not None
+        system.phenomenon = "nebula"
         state.ship.morale = 80
 
         found = False
@@ -883,9 +883,9 @@ class TestTriggerEventPhenomenonBranch:
                 state.events = list(range(extra_events))
                 state.log_entries = [{"type": "test", "message": str(i)} for i in range(extra_logs)]
                 import random as rnd_mod
-                rng = rnd_mod.Random(state.seed + deterministic_hash(sys.id, len(state.events), len(state.log_entries)))
+                rng = rnd_mod.Random(state.seed + deterministic_hash(system.id, len(state.events), len(state.log_entries)))
                 if rng.random() < 0.35:
-                    if not (sys.phenomenon != "none" and rng.random() < 0.5):
+                    if not (system.phenomenon != "none" and rng.random() < 0.5):
                         found = True
                         break
             if found:
@@ -903,9 +903,9 @@ class TestBulkSell:
     def test_bulk_sell_success(self) -> None:
         """Basic successful bulk sell of multiple discoveries."""
         state = new_game(seed=42)
-        sys = state.get_current_system()
-        assert sys is not None
-        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
         if not planet:
             return  # pragma: no cover
         land_on_body(state, planet.id)
@@ -923,9 +923,9 @@ class TestBulkSell:
     def test_bulk_sell_bool_quantity_rejected(self) -> None:
         """Passing quantity=True should be rejected with an error."""
         state = new_game(seed=42)
-        sys = state.get_current_system()
-        assert sys is not None
-        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
         if not planet:
             return  # pragma: no cover
         land_on_body(state, planet.id)
@@ -945,9 +945,9 @@ class TestBulkSell:
     def test_bulk_sell_no_facilities(self) -> None:
         """System without trading facilities returns error."""
         state = new_game(seed=42)
-        sys = state.get_current_system()
-        assert sys is not None
-        sys.phenomenon = "black_hole"
+        system = state.get_current_system()
+        assert system is not None
+        system.phenomenon = "black_hole"
         ok, msg, sold_count, total_price = perform_bulk_sell(state, [{"item": "artifact", "quantity": 1}])
         assert ok is False
         assert "No trading facilities" in msg
@@ -955,9 +955,9 @@ class TestBulkSell:
     def test_bulk_sell_missing_item_field(self) -> None:
         """Missing 'item' field returns error."""
         state = new_game(seed=42)
-        sys = state.get_current_system()
-        assert sys is not None
-        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
         if not planet:
             return  # pragma: no cover
         land_on_body(state, planet.id)
@@ -969,9 +969,9 @@ class TestBulkSell:
     def test_bulk_sell_invalid_quantity_type(self) -> None:
         """Passing a string or float as quantity should be rejected."""
         state = new_game(seed=42)
-        sys = state.get_current_system()
-        assert sys is not None
-        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
         if not planet:
             return  # pragma: no cover
         land_on_body(state, planet.id)
@@ -983,9 +983,9 @@ class TestBulkSell:
     def test_bulk_sell_negative_quantity(self) -> None:
         """Negative quantity should be rejected."""
         state = new_game(seed=42)
-        sys = state.get_current_system()
-        assert sys is not None
-        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
         if not planet:
             return  # pragma: no cover
         land_on_body(state, planet.id)
@@ -997,9 +997,9 @@ class TestBulkSell:
     def test_bulk_sell_zero_quantity(self) -> None:
         """Zero quantity should be rejected."""
         state = new_game(seed=42)
-        sys = state.get_current_system()
-        assert sys is not None
-        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
         if not planet:
             return  # pragma: no cover
         land_on_body(state, planet.id)
@@ -1011,9 +1011,9 @@ class TestBulkSell:
     def test_bulk_sell_no_matching_discoveries(self) -> None:
         """No matching discoveries returns error."""
         state = new_game(seed=42)
-        sys = state.get_current_system()
-        assert sys is not None
-        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
         if not planet:
             return  # pragma: no cover
         land_on_body(state, planet.id)
@@ -1025,9 +1025,9 @@ class TestBulkSell:
     def test_bulk_sell_partial_failure(self) -> None:
         """Some items fail but others succeed in a partial failure scenario."""
         state = new_game(seed=42)
-        sys = state.get_current_system()
-        assert sys is not None
-        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
         if not planet:
             return  # pragma: no cover
         land_on_body(state, planet.id)
@@ -1048,9 +1048,9 @@ class TestBulkSell:
         """Selling by exact name should hit the name_matches branch (line 229)."""
         from backend.models.discovery import Discovery
         state = new_game(seed=42)
-        sys = state.get_current_system()
-        assert sys is not None
-        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
         if not planet:
             return  # pragma: no cover
         land_on_body(state, planet.id)
@@ -1073,9 +1073,9 @@ class TestBulkSell:
     def test_bulk_sell_sold_count_zero_with_errors(self) -> None:
         """When all items fail to match, sold_count==0 with errors (line 246-250)."""
         state = new_game(seed=42)
-        sys = state.get_current_system()
-        assert sys is not None
-        planet = next((b for b in sys.bodies if b.body_type == "planet"), None)
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
         if not planet:
             return  # pragma: no cover
         land_on_body(state, planet.id)
