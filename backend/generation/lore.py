@@ -138,7 +138,8 @@ def _pick_lore_location(
             continue
         score = 0
         for body in system.bodies:
-            score += BIOME_WEIGHTS.get(body.biome, 1)
+            if body.poi_count > 0:
+                score += BIOME_WEIGHTS.get(body.biome, 1)
         if score > 0:
             eligible_systems.append(sys_id)
             weights.append(score)
