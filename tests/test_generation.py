@@ -843,10 +843,10 @@ class TestLoreDistribution:
         placement = distribute_lore_fragments(42, systems, max_per_system=0)
         assert placement == {}
 
-    def test_distribute_lore_warns_on_partial_placement(self, caplog) -> None:
-        """distribute_lore_fragments warns when not all fragments can be placed."""
+    def test_distribute_lore_logs_on_partial_placement(self, caplog) -> None:
+        """distribute_lore_fragments logs when not all fragments can be placed."""
         import logging
-        caplog.set_level(logging.WARNING)
+        caplog.set_level(logging.INFO)
 
         from backend.generation.lore import distribute_lore_fragments
 
@@ -864,9 +864,9 @@ class TestLoreDistribution:
         placement = distribute_lore_fragments(42, systems, max_per_system=1)
         assert len(placement) <= 1
 
-        warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
-        assert any("lore fragments could be placed" in msg for msg in warning_messages), \
-            f"Expected partial placement warning, got: {warning_messages}"
+        info_messages = [r.message for r in caplog.records if r.levelno == logging.INFO]
+        assert any("lore fragments could be placed" in msg for msg in info_messages), \
+            f"Expected partial placement info log, got: {info_messages}"
 
     def test_pick_lore_location_raises_when_no_eligible(self) -> None:
         """_pick_lore_location raises ValueError when all systems at max capacity."""

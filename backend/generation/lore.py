@@ -105,7 +105,7 @@ def distribute_lore_fragments(
     if placed == total:
         logging.info("All %d lore fragments placed successfully", placed)
     else:
-        logging.warning("Only %d/%d lore fragments could be placed", placed, total)
+        logging.info("Only %d/%d lore fragments could be placed", placed, total)
     return placement
 
 
