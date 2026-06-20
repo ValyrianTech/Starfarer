@@ -215,8 +215,6 @@ def get_lore_fragments_for_system(
     """
     results: list[LoreFragment] = []
     for frag in lore_fragments:
-        if frag.discovery_id:
-            parts = frag.discovery_id.split("::")
-            if len(parts) == 2 and parts[0] == system_id:
-                results.append(frag)
+        if frag.discovery_id and frag.discovery_id.startswith(f"{system_id}::"):
+            results.append(frag)
     return results
