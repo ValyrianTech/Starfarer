@@ -7,6 +7,7 @@ for triggering random events and resolving player choices against them.
 
 import random
 import uuid
+from typing import Optional
 
 from backend.models.game_state import GameState
 from backend.models.event import Event, Choice
@@ -119,7 +120,7 @@ EVENT_TEMPLATES = [
 
 
 
-def trigger_event(state: GameState) -> Event | None:
+def trigger_event(state: GameState, rng_override: Optional[random.Random] = None) -> Event | None:
     """Possibly trigger a procedural event based on the current game state.
 
     Events have a base 35% chance of triggering after a jump, scan, or
@@ -129,6 +130,10 @@ def trigger_event(state: GameState) -> Event | None:
 
     :param state: The current game state.
     :type state: GameState
+    :param rng_override: Optional pre-seeded :class:`random.Random`
+        instance to use instead of creating one from state. Useful
+        for deterministic testing of probabilistic branches.
+    :type rng_override: Optional[random.Random]
     :returns: A new :class:`Event` if triggered, or ``None`` otherwise.
     :rtype: Event | None
     """
@@ -141,11 +146,11 @@ def trigger_event(state: GameState) -> Event | None:
         template = crew_events[deterministic_hash(system.id, str(len(state.log_entries))) % len(crew_events)]
         return _create_event(template, system.id)
 
-    rng = random.Random(state.seed + deterministic_hash(system.id, len(state.events), len(state.log_entries)))
+    rng = rng_override or random.Random(state.seed + deterministic_hash(system.id, len(state.events), len(state.log_entries)))
 
     if rng.random() < 0.35:
         if system.phenomenon != "none" and rng.random() < 0.5:
-            template = rng.choice([t for t in EVENT_TEMPLATES if t["type"] in ("hazard", "discovery", "exploration")])  # pragma: no cover  # probabilistic branch
+            template = rng.choice([t for t in EVENT_TEMPLATES if t["type"] in ("hazard", "discovery", "exploration")])
         else:
             template = rng.choice(EVENT_TEMPLATES)
         return _create_event(template, system.id)
