@@ -1220,7 +1220,7 @@ class TestAPILore:
         assert set(data["arcs"].keys()) == expected_arcs
 
     def test_lore_endpoint_arc_has_fragments(self) -> None:
-        """Each arc should have 5 fragments."""
+        """Each arc should have 5 fragments with fragment_number."""
         resp = client.post("/api/game/new", json={"seed": 42})
         game_id = resp.json()["game_id"]
 
@@ -1233,6 +1233,11 @@ class TestAPILore:
             assert arc_data["collected"] == 0
             assert len(arc_data["fragments"]) == 5
             assert arc_data["display_name"]
+            for frag in arc_data["fragments"]:
+                assert "fragment_number" in frag
+                assert isinstance(frag["fragment_number"], int)
+                assert frag["fragment_number"] >= 1
+                assert frag["fragment_number"] <= 5
 
     def test_lore_endpoint_nonexistent_game(self) -> None:
         """Lore endpoint should 404 for nonexistent game."""

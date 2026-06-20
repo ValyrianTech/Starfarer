@@ -23,8 +23,8 @@ function renderLoreView(arcsData, progress, arcOrder) {
     `;
 
     const sorted = (arc.fragments || []).slice().sort((a, b) => {
-      const na = parseInt(a.id.split('_').pop()) || 0;
-      const nb = parseInt(b.id.split('_').pop()) || 0;
+      const na = a.fragment_number || 0;
+      const nb = b.fragment_number || 0;
       return na - nb;
     });
 
@@ -33,7 +33,7 @@ function renderLoreView(arcsData, progress, arcOrder) {
       html += `
         <div class="lore-fragment ${discovered ? '' : 'locked'}">
           <div class="fragment-header">
-            <span class="fragment-number">#${frag.id.split('_').pop()}</span>
+            <span class="fragment-number">#${frag.fragment_number}</span>
             <span class="fragment-title">${discovered ? frag.title : 'Unknown Fragment'}</span>
             <span class="fragment-status">${discovered ? 'DISCOVERED' : 'LOCKED'}</span>
           </div>

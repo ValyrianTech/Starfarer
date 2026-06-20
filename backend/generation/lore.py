@@ -44,6 +44,7 @@ def get_all_lore_fragments() -> list[LoreFragment]:
             arc=str(data["arc"]),
             title=str(data["title"]),
             text=str(data["text"]),
+            fragment_number=data["fragment_number"],
         ))
     return fragments
 
