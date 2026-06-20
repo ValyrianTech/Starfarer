@@ -9,7 +9,8 @@ function renderLoreView(arcsData, progress, arcOrder) {
     </div>
   `;
 
-  for (const arcId of arcOrder) {
+  const order = arcOrder || Object.keys(arcsData);
+  for (const arcId of order) {
     const arc = arcsData[arcId];
     if (!arc) continue;
 
