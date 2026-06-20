@@ -230,19 +230,22 @@ def explore_surface(state: GameState) -> list[Discovery]:
     ship.fuel -= EXPLORE_FUEL_COST
 
     lore_frag = get_fragment_for_body(system.id, body.id, state.lore_fragments)
-    lore_assigned = False
+    discovered_this_action: set[str] = set()
 
     for i in range(num_finds):
         cat = item_rng.choice(["mineral", "artifact", "lifeform", "signal", "ruin"])
         disc = _generate_discovery(item_rng, cat, body, system)
 
-        if lore_frag and not lore_assigned and not lore_frag.discovered:
+        if lore_frag and not lore_frag.discovered:
             disc.lore_fragment_id = lore_frag.id
             lore_frag.discovered = True
-            lore_assigned = True
+            discovered_this_action.add(lore_frag.id)
             state.add_log("lore", f"Discovered lore fragment: {lore_frag.title} ({lore_frag.id}).")
-        elif lore_frag and not lore_assigned and lore_frag.discovered:
-            logging.warning(f"Lore fragment {lore_frag.id} ({lore_frag.title}) is already discovered but found on body {body.id}.")
+        elif lore_frag and lore_frag.discovered:
+            if lore_frag.id in discovered_this_action:
+                logging.info(f"Lore fragment {lore_frag.id} ({lore_frag.title}) already discovered in this explore action.")
+            else:
+                logging.warning(f"Lore fragment {lore_frag.id} ({lore_frag.title}) already discovered in a previous exploration but found on body {body.id}.")
 
         discoveries.append(disc)
         state.discoveries.append(disc)

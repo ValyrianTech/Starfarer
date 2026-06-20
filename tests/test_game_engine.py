@@ -1663,6 +1663,36 @@ class TestLoreExploration:
         finally:
             self._find_system_with_lore = original
 
+    def test_explore_already_discovered_in_same_action(self, caplog: pytest.LogCaptureFixture) -> None:
+        """Subsequent iterations of the same explore action should log info about already-discovered lore."""
+        import logging
+        from unittest.mock import patch
+
+        state = new_game(seed=42)
+        state.ship.fuel = 1000
+
+        sys_id, body_id, frag = self._find_system_with_lore(state)
+        if not sys_id:
+            return  # pragma: no cover
+
+        system = state.systems[sys_id]
+        for b in system.bodies:
+            if b.id == body_id:
+                b.poi_count = 3
+                break
+
+        state.ship.current_system_id = sys_id
+        state.ship.current_body_id = body_id
+
+        with patch("random.Random.randint", return_value=3):
+            with caplog.at_level(logging.INFO):
+                explore_surface(state)
+
+        assert any(
+            frag.id in record.message and "already discovered in this explore action" in record.message
+            for record in caplog.records
+        ), f"Expected info about lore fragment {frag.id} already discovered in this action, got: {[r.message for r in caplog.records]}"
+
     def test_explore_body_without_lore_no_planet(self) -> None:
         """Cover guard clause in test_explore_body_without_lore when no planet exists."""
         from backend.models.system import Body as B
