@@ -5,7 +5,7 @@ const ARC_DISPLAY_NAMES = {
   wanderer: "The Wanderer",
 };
 
-function renderLoreView(arcsData, progress) {
+function renderLoreView(arcsData, progress, arcOrder) {
   const container = $('#lore-content');
   if (!container) return;
 
@@ -15,8 +15,6 @@ function renderLoreView(arcsData, progress) {
       <p class="lore-progress">Fragments collected: ${progress.collected} / ${progress.total}</p>
     </div>
   `;
-
-  const arcOrder = ["architects", "void_signal", "fracture", "wanderer"];
 
   for (const arcId of arcOrder) {
     const arc = arcsData[arcId];
@@ -62,7 +60,7 @@ function renderLoreView(arcsData, progress) {
 async function loadLore(gameId) {
   try {
     const data = await API.lore(gameId);
-    renderLoreView(data.arcs, data.progress);
+    renderLoreView(data.arcs, data.progress, data.arc_order);
   } catch (e) {
     console.error('Load lore error:', e);
   }
