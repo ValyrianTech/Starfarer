@@ -6,6 +6,7 @@ a game session including the ship, star systems, events, discoveries, lore,
 and log entries.
 """
 
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Optional
@@ -15,6 +16,8 @@ from backend.models.ship import Ship
 from backend.models.system import StarSystem
 from backend.models.event import Event
 from backend.models.discovery import Discovery, LoreFragment
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -100,6 +103,9 @@ class GameState:
                 effects["cargo"] = int(part.split(":")[1])
             elif part.startswith("crew:"):
                 effects["crew"] = int(part.split(":")[1])
+            else:
+                # Narrative text or unrecognized stat - warn so typos aren't silently ignored
+                logger.warning("Unrecognized outcome part: %s", part)
         self.ship.fuel = max(0, min(self.ship.max_fuel, self.ship.fuel + effects["fuel"]))
         self.ship.hull = max(0, min(self.ship.max_hull, self.ship.hull + effects["hull"]))
         self.ship.morale = max(0, min(100, self.ship.morale + effects["morale"]))

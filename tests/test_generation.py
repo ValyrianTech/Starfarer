@@ -342,6 +342,78 @@ class TestGameState:
         state.apply_choice_outcome("crew:200")
         assert state.ship.crew == state.ship.max_crew
 
+    def test_apply_choice_outcome_warns_on_narrative_text(self, caplog) -> None:
+        """apply_choice_outcome should warn about narrative text in outcome."""
+        import logging
+        caplog.set_level(logging.WARNING)
+        ship = Ship(fuel=50, max_fuel=100)
+        state = GameState(id="test-warn-narr", seed=42, ship=ship)
+        effects = state.apply_choice_outcome("credits:50; fuel:-5; Discovered a hidden data cache.")
+        assert effects["credits"] == 50
+        assert effects["fuel"] == -5
+        assert state.ship.credits == 1050
+        assert state.ship.fuel == 45
+        # Should have warned about the narrative part
+        warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("Discovered a hidden data cache" in msg for msg in warning_messages)
+
+    def test_apply_choice_outcome_warns_on_typo(self, caplog) -> None:
+        """apply_choice_outcome should warn about typos in stat names."""
+        import logging
+        caplog.set_level(logging.WARNING)
+        ship = Ship(credits=500)
+        state = GameState(id="test-warn-typo", seed=42, ship=ship)
+        effects = state.apply_choice_outcome("credtis:50")
+        assert effects["credits"] == 0  # No credits change since typo wasn't recognized
+        assert state.ship.credits == 500
+        warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("credtis:50" in msg for msg in warning_messages)
+
+    def test_apply_choice_outcome_warns_on_unknown_stat(self, caplog) -> None:
+        """apply_choice_outcome should warn about unknown stat prefixes."""
+        import logging
+        caplog.set_level(logging.WARNING)
+        ship = Ship()
+        state = GameState(id="test-warn-unknown", seed=42, ship=ship)
+        effects = state.apply_choice_outcome("scanner:1; credits:50")
+        assert effects["credits"] == 50
+        assert effects["fuel"] == 0
+        assert state.ship.credits == 1050
+        warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("scanner:1" in msg for msg in warning_messages)
+        # No warning for valid stat
+        assert not any("credits:50" in msg for msg in warning_messages)
+
+    def test_apply_choice_outcome_no_warning_on_valid_stats(self, caplog) -> None:
+        """apply_choice_outcome should NOT warn when all parts are valid stats."""
+        import logging
+        caplog.set_level(logging.WARNING)
+        ship = Ship(fuel=50, hull=50, morale=50, credits=500, cargo=10, crew=5, max_fuel=100, max_hull=100, max_cargo=50, max_crew=10)
+        state = GameState(id="test-no-warn", seed=42, ship=ship)
+        effects = state.apply_choice_outcome("fuel:-10; hull:10; morale:5; credits:200; cargo:-2; crew:-1")
+        assert effects["fuel"] == -10
+        assert effects["hull"] == 10
+        assert effects["morale"] == 5
+        assert effects["credits"] == 200
+        assert effects["cargo"] == -2
+        assert effects["crew"] == -1
+        warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+        assert len(warning_messages) == 0, f"Expected no warnings but got: {warning_messages}"
+
+    def test_apply_choice_outcome_warns_on_multiple_unrecognized_parts(self, caplog) -> None:
+        """apply_choice_outcome should warn for each unrecognized part."""
+        import logging
+        caplog.set_level(logging.WARNING)
+        ship = Ship()
+        state = GameState(id="test-warn-multi", seed=42, ship=ship)
+        effects = state.apply_choice_outcome("credits:50; Some narrative; scanner:1; Another note")
+        assert effects["credits"] == 50
+        warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+        assert len(warning_messages) == 3, f"Expected 3 warnings but got {len(warning_messages)}: {warning_messages}"
+        assert any("Some narrative" in msg for msg in warning_messages)
+        assert any("scanner:1" in msg for msg in warning_messages)
+        assert any("Another note" in msg for msg in warning_messages)
+
 
 class TestEventModel:
     def test_event_to_dict_and_back(self) -> None:
