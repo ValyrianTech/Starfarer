@@ -367,6 +367,8 @@ def _ensure_connectivity(systems: dict[str, StarSystem], rng: random.Random) -> 
         :rtype: bool
         """
         fixed = False
+        modifications = []  # List of (system, new_x, new_y) tuples
+
         for i, sys in enumerate(sys_list):
             has_neighbor = False
             for j, other in enumerate(sys_list):
@@ -387,17 +389,27 @@ def _ensure_connectivity(systems: dict[str, StarSystem], rng: random.Random) -> 
                         closest_dist = d
                         closest_idx = j
                 if closest_idx is not None:
-                    if closest_dist < 1e-9:
-                        # Systems are at the same coordinates; skip the move
-                        continue  # pragma: no cover
-                        # unreachable: same-coord systems are always within NEIGHBOR_DISTANCE_THRESHOLD (60)
-                        # so they would never be flagged as isolated (has_neighbor would be True)
                     target = sys_list[closest_idx]
-                    target.x = sys.x + (target.x - sys.x) * (MAX_INITIAL_JUMP - 5) / closest_dist
-                    target.y = sys.y + (target.y - sys.y) * (MAX_INITIAL_JUMP - 5) / closest_dist
-                    target.x = max(50, min(GALAXY_WIDTH - 50, target.x))
-                    target.y = max(50, min(GALAXY_HEIGHT - 50, target.y))
+                    if closest_dist < 1e-9:  # pragma: no cover
+                        # Systems are at the same coordinates; move the target slightly
+                        target.x = rng.uniform(-5, 5)
+                        target.y = rng.uniform(-5, 5)
+                        target.x = max(50, min(GALAXY_WIDTH - 50, target.x))
+                        target.y = max(50, min(GALAXY_HEIGHT - 50, target.y))
+                        fixed = True
+                        continue
+                    new_x = sys.x + (target.x - sys.x) * (MAX_INITIAL_JUMP - 5) / closest_dist
+                    new_y = sys.y + (target.y - sys.y) * (MAX_INITIAL_JUMP - 5) / closest_dist
+                    new_x = max(50, min(GALAXY_WIDTH - 50, new_x))
+                    new_y = max(50, min(GALAXY_HEIGHT - 50, new_y))
+                    modifications.append((target, new_x, new_y))
                     fixed = True
+
+        # Apply all modifications after iteration
+        for target, new_x, new_y in modifications:
+            target.x = new_x
+            target.y = new_y
+
         return fixed
 
     for _ in range(max_iters):

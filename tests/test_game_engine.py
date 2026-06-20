@@ -231,6 +231,32 @@ class TestPerformJumpEdgeCases:
             _ = perform_jump(state, target, cost)
             assert state.ship.current_system_id == target.id
 
+    def test_perform_jump_with_phenomenon(self) -> None:
+        """Jump to a system with a phenomenon should log the phenomenon detection."""
+        state = new_game(seed=42)
+        cur = state.get_current_system()
+        assert cur is not None
+        # Find a system with a phenomenon
+        target = None
+        for sys in state.systems.values():
+            if sys.phenomenon != "none" and sys.id != state.ship.current_system_id:
+                target = sys
+                break
+        if target is None:
+            return  # pragma: no cover  # no phenomenon system found
+        # Ensure ship can reach it
+        state.ship.jump_range = 999
+        state.ship.fuel = 999
+        ok, cost, _ = can_jump(state.ship, target, cur)
+        assert ok is True
+        log_count_before = len(state.log_entries)
+        _ = perform_jump(state, target, cost)
+        assert state.ship.current_system_id == target.id
+        # Check that a phenomenon log was added
+        assert len(state.log_entries) > log_count_before
+        phenomenon_logs = [e for e in state.log_entries if "phenomenon" in e.get("message", "")]
+        assert len(phenomenon_logs) > 0
+
 
 class TestScanEdgeCases:
     """Tests for perform_scan covering edge cases."""
