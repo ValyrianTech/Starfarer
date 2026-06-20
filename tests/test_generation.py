@@ -448,7 +448,6 @@ class TestGameStateModel:
 
     def test_state_summary_with_system(self) -> None:
         """state_summary should include current_system when one exists."""
-        ship = Ship()
         state = new_game(seed=42)
         summary = state.state_summary()
         assert summary["game_id"] == state.id
