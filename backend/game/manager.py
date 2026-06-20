@@ -42,7 +42,7 @@ def new_game(seed: int | None = None, ship_name: str | None = None) -> GameState
     name = ship_name if ship_name else DEFAULT_SHIP_NAME
     game_id = str(uuid.uuid4())
 
-    systems = generate_universe(s)
+    systems, lore_fragments = generate_universe(s)
     first_sys_id = list(systems.keys())[0]
 
     ship = Ship(
@@ -52,7 +52,7 @@ def new_game(seed: int | None = None, ship_name: str | None = None) -> GameState
         current_system_id=first_sys_id,
     )
 
-    state = GameState(id=game_id, seed=s, ship=ship, systems=systems)
+    state = GameState(id=game_id, seed=s, ship=ship, systems=systems, lore_fragments=lore_fragments)
     first_sys = state.get_current_system()
     if first_sys:
         first_sys.visited = True

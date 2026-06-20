@@ -38,6 +38,7 @@ function renderShipStatus(ship) {
       <div style="display:flex;gap:0.4rem;margin-top:0.5rem;">
         <button data-action="show-galaxy" class="ui-button" style="font-size:0.7rem;padding:0.3rem 0.5rem;">Galaxy</button>
         <button data-action="show-log" class="ui-button" style="font-size:0.7rem;padding:0.3rem 0.5rem;">Log</button>
+        <button data-action="show-lore" class="ui-button" style="font-size:0.7rem;padding:0.3rem 0.5rem;">Lore</button>
         <button data-action="save-game" class="ui-button" style="font-size:0.7rem;padding:0.3rem 0.5rem;">Save</button>
       </div>
     </div>

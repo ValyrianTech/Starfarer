@@ -194,6 +194,8 @@ def explore_surface(state: GameState) -> list[Discovery]:
     Deducts explore fuel cost and generates a random number of
     discoveries based on the body's points of interest count.
     Discoveries are appended to the game state and returned.
+    If a lore fragment is attached to the current body, it is
+    linked to one of the generated discoveries.
 
     :param state: The current game state.
     :type state: GameState
@@ -224,9 +226,22 @@ def explore_surface(state: GameState) -> list[Discovery]:
 
     ship.fuel -= EXPLORE_FUEL_COST
 
+    from backend.generation.lore import get_fragment_for_body
+
+    lore_frag = get_fragment_for_body(system.id, body.id, state.lore_fragments)
+    lore_assigned = False
+
     for i in range(num_finds):
         cat = item_rng.choice(["mineral", "artifact", "lifeform", "signal", "ruin"])
         disc = _generate_discovery(item_rng, cat, body, system)
+
+        if lore_frag and not lore_assigned and not lore_frag.discovered:
+            disc.lore_fragment_id = lore_frag.id
+            lore_frag.discovered = True
+            lore_frag.discovery_id = f"{system.id}::{body.id}"
+            lore_assigned = True
+            state.add_log("lore", f"Discovered lore fragment: {lore_frag.title} ({lore_frag.id}).")
+
         discoveries.append(disc)
         state.discoveries.append(disc)
 
