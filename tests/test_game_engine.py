@@ -1664,7 +1664,7 @@ class TestLoreExploration:
             self._find_system_with_lore = original
 
     def test_explore_already_discovered_in_same_action(self, caplog: pytest.LogCaptureFixture) -> None:
-        """Subsequent iterations of the same explore action should log info about already-discovered lore."""
+        """Subsequent iterations of the same explore action should log warning about already-discovered lore."""
         import logging
         from unittest.mock import patch
 
@@ -1685,13 +1685,13 @@ class TestLoreExploration:
         state.ship.current_body_id = body_id
 
         with patch("random.Random.randint", return_value=3):
-            with caplog.at_level(logging.INFO):
+            with caplog.at_level(logging.WARNING):
                 explore_surface(state)
 
         assert any(
-            frag.id in record.message and "already discovered in this explore action" in record.message
+            frag.id in record.message and "already discovered but found on body" in record.message
             for record in caplog.records
-        ), f"Expected info about lore fragment {frag.id} already discovered in this action, got: {[r.message for r in caplog.records]}"
+        ), f"Expected warning about lore fragment {frag.id} already discovered, got: {[r.message for r in caplog.records]}"
 
     def test_explore_body_without_lore_no_planet(self) -> None:
         """Cover guard clause in test_explore_body_without_lore when no planet exists."""
