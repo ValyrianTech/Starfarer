@@ -629,7 +629,7 @@ class TestTradingAdvanced:
         state = new_game(seed=42)
         system = state.get_current_system()
         assert system is not None
-        system.phenomenon = "black_hole"
+        system.has_trading_station = False
         ok, msg = perform_trade(state, "buy", "fuel", 1)
         assert ok is False
         assert "No trading facilities" in msg
@@ -989,7 +989,7 @@ class TestBulkSell:
         state = new_game(seed=42)
         system = state.get_current_system()
         assert system is not None
-        system.phenomenon = "black_hole"
+        system.has_trading_station = False
         ok, msg, sold_count, total_price = perform_bulk_sell(state, [{"item": "artifact", "quantity": 1}])
         assert ok is False
         assert "No trading facilities" in msg
@@ -1399,7 +1399,7 @@ class TestTradingPerformTradeEdgeCases:
         state = new_game(seed=42)
         system = state.get_current_system()
         assert system is not None
-        system.phenomenon = "black_hole"
+        system.has_trading_station = False
         ok, msg = perform_trade(state, "sell", "mineral", 1)
         assert ok is False
         assert "No trading facilities" in msg

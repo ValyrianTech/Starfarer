@@ -601,6 +601,17 @@ class TestStarSystemModel:
         assert system.visited is False
         assert system.scanned is False
 
+    def test_has_trading_station_generation(self) -> None:
+        """Systems with phenomenon='none' have has_trading_station=True, others False."""
+        systems, _ = generate_universe(42)
+        for sys_id, system in systems.items():
+            if system.phenomenon == "none":
+                assert system.has_trading_station is True, \
+                    f"System {sys_id} with phenomenon='none' should have has_trading_station=True"
+            else:
+                assert system.has_trading_station is False, \
+                    f"System {sys_id} with phenomenon='{system.phenomenon}' should have has_trading_station=False"
+
 
 class TestGameStateModel:
     """Additional tests for GameState model."""
