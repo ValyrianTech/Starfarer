@@ -1,5 +1,6 @@
 import sys
 import os
+import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from backend.generation.universe import generate_universe, distance_between, _ensure_connectivity, NEIGHBOR_DISTANCE_THRESHOLD
@@ -15,12 +16,13 @@ import random
 
 class TestUniverseGeneration:
     def test_generates_correct_number_of_systems(self) -> None:
-        systems = generate_universe(42)
+        systems, lore = generate_universe(42)
         assert len(systems) == GALAXY_SYSTEM_COUNT
+        assert len(lore) == 20
 
     def test_deterministic(self) -> None:
-        s1 = generate_universe(42)
-        s2 = generate_universe(42)
+        s1, l1 = generate_universe(42)
+        s2, l2 = generate_universe(42)
         assert set(s1.keys()) == set(s2.keys())
         for k in s1:
             assert s1[k].name == s2[k].name
@@ -29,8 +31,8 @@ class TestUniverseGeneration:
             assert s1[k].star_type == s2[k].star_type
 
     def test_different_seeds_different_universes(self) -> None:
-        s1 = generate_universe(42)
-        s2 = generate_universe(99)
+        s1, l1 = generate_universe(42)
+        s2, l2 = generate_universe(99)
 
         def names(d: dict[str, StarSystem]) -> set[str]:
             return {s.name for s in d.values()}
@@ -38,20 +40,20 @@ class TestUniverseGeneration:
         assert len(names(s1) & names(s2)) < 40
 
     def test_each_system_has_bodies(self) -> None:
-        systems = generate_universe(42)
+        systems, lore = generate_universe(42)
         for system in systems.values():
             assert len(system.bodies) >= 1
             assert len(system.bodies) <= 20
 
     def test_each_system_has_valid_star_type(self) -> None:
         from backend.config import STAR_SPECTRAL_TYPES
-        systems = generate_universe(42)
+        systems, lore = generate_universe(42)
         for system in systems.values():
             assert system.star_type in STAR_SPECTRAL_TYPES
 
     def test_bodies_have_valid_biomes(self) -> None:
         from backend.config import BIOME_TYPES
-        systems = generate_universe(42)
+        systems, lore = generate_universe(42)
         for system in systems.values():
             for body in system.bodies:
                 assert body.biome in BIOME_TYPES or body.body_type == "asteroid_belt"
@@ -626,3 +628,237 @@ class TestGenerationBodyDescription:
             assert isinstance(desc, str)
             assert len(desc) > 0
             assert desc != "An unremarkable celestial body."
+
+
+class TestLoreContent:
+    """Tests for lore fragment content definitions."""
+
+    def test_has_20_fragments(self) -> None:
+        """There should be exactly 20 lore fragments."""
+        from backend.generation.lore_content import FRAGMENT_DATA
+        assert len(FRAGMENT_DATA) == 20
+
+    def test_five_fragments_per_arc(self) -> None:
+        """Each arc should have exactly 5 fragments."""
+        from backend.generation.lore_content import FRAGMENT_DATA, ARC_IDS
+        for arc in ARC_IDS:
+            count = sum(1 for f in FRAGMENT_DATA if f["arc"] == arc)
+            assert count == 5, f"Arc {arc} has {count} fragments, expected 5"
+
+    def test_fragment_numbers_are_sequential(self) -> None:
+        """Fragment numbers within each arc should be 1-5."""
+        from backend.generation.lore_content import FRAGMENT_DATA, ARC_IDS
+        for arc in ARC_IDS:
+            numbers = [f["fragment_number"] for f in FRAGMENT_DATA if f["arc"] == arc]
+            assert sorted(numbers) == [1, 2, 3, 4, 5]
+
+    def test_all_fragments_have_required_fields(self) -> None:
+        """Each fragment must have arc, fragment_number, title, and text."""
+        from backend.generation.lore_content import FRAGMENT_DATA
+        for frag in FRAGMENT_DATA:
+            assert "arc" in frag
+            assert "fragment_number" in frag
+            assert "title" in frag
+            assert "text" in frag
+            assert len(frag["title"]) > 0
+            assert len(frag["text"]) > 0
+
+    def test_arc_display_names_cover_all_arcs(self) -> None:
+        """All arcs in ARC_IDS should have display names."""
+        from backend.generation.lore_content import ARC_IDS, ARC_DISPLAY_NAMES
+        for arc in ARC_IDS:
+            assert arc in ARC_DISPLAY_NAMES
+            assert len(ARC_DISPLAY_NAMES[arc]) > 0
+
+    def test_unique_fragment_ids_generated(self) -> None:
+        """get_all_lore_fragments should produce 20 unique IDs."""
+        from backend.generation.lore import get_all_lore_fragments
+        fragments = get_all_lore_fragments()
+        ids = {f.id for f in fragments}
+        assert len(ids) == 20
+        assert len(fragments) == 20
+
+
+class TestLoreDistribution:
+    """Tests for lore fragment distribution logic."""
+
+    def test_distribute_all_20_fragments(self) -> None:
+        """All 20 fragments should be assigned to systems."""
+        from backend.generation.lore import distribute_lore_fragments
+
+        systems, _ = generate_universe(42)
+        placement = distribute_lore_fragments(42, systems)
+
+        total_placed = sum(len(frags) for frags in placement.values())
+        assert total_placed == 20
+
+    def test_distribution_is_deterministic(self) -> None:
+        """Same seed should produce identical fragment placement."""
+        from backend.generation.lore import distribute_lore_fragments
+
+        systems1, _ = generate_universe(42)
+        systems2, _ = generate_universe(42)
+
+        placement1 = distribute_lore_fragments(42, systems1)
+        placement2 = distribute_lore_fragments(42, systems2)
+
+        assert set(placement1.keys()) == set(placement2.keys())
+        for sys_id in placement1:
+            frags1 = sorted(placement1[sys_id], key=lambda f: f.id)
+            frags2 = sorted(placement2[sys_id], key=lambda f: f.id)
+            assert [f.id for f in frags1] == [f.id for f in frags2]
+
+    def test_no_system_exceeds_max_fragments(self) -> None:
+        """No system should have more than 2 lore fragments."""
+        from backend.generation.lore import distribute_lore_fragments
+
+        systems, _ = generate_universe(42)
+        placement = distribute_lore_fragments(42, systems, max_per_system=2)
+
+        for sys_id, frags in placement.items():
+            assert len(frags) <= 2, f"System {sys_id} has {len(frags)} fragments"
+
+    def test_fragments_have_discovery_id_set(self) -> None:
+        """Each placed fragment should have discovery_id in format sys_id::body_id."""
+        from backend.generation.lore import distribute_lore_fragments
+
+        systems, _ = generate_universe(42)
+        placement = distribute_lore_fragments(42, systems)
+
+        for sys_id, frags in placement.items():
+            for frag in frags:
+                assert frag.discovery_id is not None
+                parts = frag.discovery_id.split("::")
+                assert len(parts) == 2
+                assert parts[0] == sys_id
+
+    def test_get_fragment_for_body(self) -> None:
+        """get_fragment_for_body should return the correct fragment."""
+        from backend.generation.lore import distribute_lore_fragments, get_fragment_for_body
+
+        systems, _ = generate_universe(42)
+        placement = distribute_lore_fragments(42, systems)
+        all_frags = []
+        for frags in placement.values():
+            all_frags.extend(frags)
+
+        for sys_id, frags in placement.items():
+            for frag in frags:
+                parts = frag.discovery_id.split("::")
+                body_id = parts[1]
+                result = get_fragment_for_body(sys_id, body_id, all_frags)
+                assert result is not None
+                assert result.id == frag.id
+
+    def test_get_fragment_for_body_returns_none_for_no_match(self) -> None:
+        """get_fragment_for_body should return None for non-matching body."""
+        from backend.generation.lore import get_fragment_for_body
+        from backend.generation.universe import generate_universe
+
+        _, lore = generate_universe(42)
+        result = get_fragment_for_body("sys_nonexistent", "body_nonexistent", lore)
+        assert result is None
+
+    def test_get_lore_fragments_for_system(self) -> None:
+        """get_lore_fragments_for_system should return all fragments in a system."""
+        from backend.generation.lore import distribute_lore_fragments, get_lore_fragments_for_system
+
+        systems, _ = generate_universe(42)
+        placement = distribute_lore_fragments(42, systems)
+        all_frags = []
+        for frags in placement.values():
+            all_frags.extend(frags)
+
+        for sys_id in list(placement.keys())[:5]:
+            result = get_lore_fragments_for_system(sys_id, all_frags)
+            assert len(result) == len(placement[sys_id])
+            assert set(f.id for f in result) == set(f.id for f in placement[sys_id])
+
+    def test_get_lore_fragments_for_system_empty(self) -> None:
+        """get_lore_fragments_for_system should return empty for system with no fragments."""
+        from backend.generation.lore import get_lore_fragments_for_system
+
+        empty_sys_id = "sys_empty"
+        result = get_lore_fragments_for_system(empty_sys_id, [])
+        assert result == []
+
+    def test_lore_fragments_present_in_generate_universe(self) -> None:
+        """generate_universe should return 20 lore fragments as second tuple element."""
+        systems, lore = generate_universe(42)
+        assert len(lore) == 20
+        assert len(systems) == 50
+
+    def test_lore_distribution_covers_multiple_systems(self) -> None:
+        """Lore fragments should be spread across more than one system."""
+        from backend.generation.lore import distribute_lore_fragments
+
+        systems, _ = generate_universe(42)
+        placement = distribute_lore_fragments(42, systems)
+        assert len(placement) > 1, "Fragments should be on multiple systems"
+
+    def test_different_seeds_different_distribution(self) -> None:
+        """Different seeds should produce different fragment placements."""
+        from backend.generation.lore import distribute_lore_fragments
+
+        systems1, _ = generate_universe(42)
+        systems2, _ = generate_universe(99)
+
+        placement1 = distribute_lore_fragments(42, systems1)
+        placement2 = distribute_lore_fragments(99, systems2)
+
+        ids1 = set()
+        for frags in placement1.values():
+            for f in frags:
+                ids1.add(f.discovery_id)
+        ids2 = set()
+        for frags in placement2.values():
+            for f in frags:
+                ids2.add(f.discovery_id)
+        assert ids1 != ids2, "Different seeds should produce different placements"
+
+    def test_lore_distribution_with_custom_max_per_system(self) -> None:
+        """Should respect custom max_per_system value."""
+        from backend.generation.lore import distribute_lore_fragments
+
+        systems, _ = generate_universe(42)
+        placement = distribute_lore_fragments(42, systems, max_per_system=1)
+        for sys_id, frags in placement.items():
+            assert len(frags) <= 1, f"System {sys_id} has {len(frags)} fragments with max_per_system=1"
+
+    def test_distribute_lore_graceful_when_no_systems_eligible(self) -> None:
+        """distribute_lore_fragments returns empty when no systems are eligible (max=0)."""
+        from backend.generation.lore import distribute_lore_fragments
+
+        body = Body(
+            id="b1", name="TestBody", body_type="planet", biome="barren",
+            size=3, distance_from_star=0.5, poi_count=1
+        )
+        system = StarSystem(
+            id="s1", name="TestSys", x=0.0, y=0.0,
+            star_type="G", star_color="#fff",
+            phenomenon="none", phenomenon_desc="",
+            bodies=[body],
+        )
+        systems = {"s1": system}
+        placement = distribute_lore_fragments(42, systems, max_per_system=0)
+        assert placement == {}
+
+    def test_pick_lore_location_raises_when_no_eligible(self) -> None:
+        """_pick_lore_location raises ValueError when all systems at max capacity."""
+        from backend.generation.lore import _pick_lore_location
+
+        body = Body(
+            id="b1", name="TestBody", body_type="planet", biome="barren",
+            size=3, distance_from_star=0.5, poi_count=1
+        )
+        system = StarSystem(
+            id="s1", name="TestSys", x=0.0, y=0.0,
+            star_type="G", star_color="#fff",
+            phenomenon="none", phenomenon_desc="",
+            bodies=[body],
+        )
+        systems = {"s1": system}
+        counts = {"s1": 1}
+        rng = random.Random(42)
+        with pytest.raises(ValueError, match="No eligible systems available"):
+            _pick_lore_location(rng, systems, counts, max_per_system=1)

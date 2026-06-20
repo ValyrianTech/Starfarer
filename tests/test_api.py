@@ -1199,6 +1199,140 @@ class TestRoutesGetState:
         assert result is None
 
 
+class TestAPILore:
+    """Tests for the lore fragment API endpoints."""
+
+    def test_lore_endpoint_returns_structured_data(self) -> None:
+        """GET /api/game/{id}/lore should return arcs and progress."""
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+
+        resp = client.get(f"/api/game/{game_id}/lore")
+        assert resp.status_code == 200
+        data = resp.json()
+
+        assert "arcs" in data
+        assert "progress" in data
+        assert data["progress"]["total"] == 20
+        assert data["progress"]["collected"] == 0
+
+        expected_arcs = {"architects", "void_signal", "fracture", "wanderer"}
+        assert set(data["arcs"].keys()) == expected_arcs
+
+    def test_lore_endpoint_arc_has_fragments(self) -> None:
+        """Each arc should have 5 fragments."""
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+
+        resp = client.get(f"/api/game/{game_id}/lore")
+        assert resp.status_code == 200
+        data = resp.json()
+
+        for arc_id, arc_data in data["arcs"].items():
+            assert arc_data["total"] == 5
+            assert arc_data["collected"] == 0
+            assert len(arc_data["fragments"]) == 5
+            assert arc_data["display_name"]
+
+    def test_lore_endpoint_nonexistent_game(self) -> None:
+        """Lore endpoint should 404 for nonexistent game."""
+        resp = client.get("/api/game/nonexistent/lore")
+        assert resp.status_code == 404
+
+    def test_lore_progress_updates_on_discovery(self) -> None:
+        """After discovering a lore fragment, progress should reflect it."""
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+
+        full_state = client.get(f"/api/game/{game_id}").json()
+
+        ship = full_state["ship"]
+        cur_sys_id = ship["current_system_id"]
+
+        sys_detail = client.get(f"/api/game/{game_id}/system/{cur_sys_id}").json()
+        system = sys_detail["system"]
+        bodies = system.get("bodies", [])
+
+        if bodies:
+            client.post(f"/api/game/{game_id}/land/{bodies[0]['id']}")
+            client.post(f"/api/game/{game_id}/explore")
+
+        resp = client.get(f"/api/game/{game_id}/lore")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "progress" in data
+
+    def test_full_state_includes_lore_stats(self) -> None:
+        """GET /api/game/{id} should include lore_fragments_collected and _total."""
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+
+        resp = client.get(f"/api/game/{game_id}")
+        assert resp.status_code == 200
+        data = resp.json()
+
+        assert "lore_fragments_collected" in data
+        assert "lore_fragments_total" in data
+        assert data["lore_fragments_total"] == 20
+        assert data["lore_fragments_collected"] == 0
+
+    def test_discoveries_endpoint_includes_lore_fragment_id(self) -> None:
+        """When a discovery has a lore fragment, it should show in discoveries."""
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+
+        ship = client.get(f"/api/game/{game_id}").json()["ship"]
+        cur_sys_id = ship["current_system_id"]
+
+        sys_detail = client.get(f"/api/game/{game_id}/system/{cur_sys_id}").json()
+        system = sys_detail["system"]
+        bodies = system.get("bodies", [])
+
+        if bodies:
+            client.post(f"/api/game/{game_id}/land/{bodies[0]['id']}")
+            client.post(f"/api/game/{game_id}/explore")
+
+        resp = client.get(f"/api/game/{game_id}/discoveries")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "discoveries" in data
+        for disc in data["discoveries"]:
+            assert "lore_fragment_id" in disc
+
+    def test_lore_endpoint_collected_after_discovery(self) -> None:
+        """After discovering a lore fragment, lore endpoint shows collected > 0."""
+        from backend.generation.lore import get_lore_fragments_for_system
+
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+
+        target_sys_id = None
+        target_body_id = None
+        for sys_id in state.systems:
+            frags = get_lore_fragments_for_system(sys_id, state.lore_fragments)
+            if frags:
+                target_sys_id = sys_id
+                target_body_id = frags[0].discovery_id.split("::")[1]
+                break
+
+        if not target_sys_id:
+            return
+
+        state.ship.current_system_id = target_sys_id
+        state.ship.fuel = 1000
+
+        client.post(f"/api/game/{game_id}/land/{target_body_id}")
+        client.post(f"/api/game/{game_id}/explore")
+
+        resp = client.get(f"/api/game/{game_id}/lore")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["progress"]["collected"] > 0
+        arcs_with_collected = [a for a in data["arcs"].values() if a["collected"] > 0]
+        assert len(arcs_with_collected) > 0
+
+
 class TestAPIMainIndex:
     """Tests for main.py index endpoint."""
 

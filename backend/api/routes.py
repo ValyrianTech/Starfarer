@@ -25,6 +25,7 @@ from backend.game.engine import (
 )
 from backend.game.trading import get_upgrade_info, purchase_upgrade, perform_trade, perform_bulk_sell
 from backend.database import get_leaderboard
+from backend.generation.lore_content import ARC_DISPLAY_NAMES
 
 START_TIME = time.time()
 
@@ -375,6 +376,54 @@ def api_discoveries(game_id: str) -> dict:
     }
 
 
+@router.get("/game/{game_id}/lore")
+def api_lore(game_id: str) -> dict:
+    """Retrieve all lore fragments grouped by story arc.
+
+    Returns lore fragments organized by arc with discovered/undiscovered
+    status. Also includes overall collection progress.
+
+    :param game_id: The unique identifier of the game.
+    :type game_id: str
+    :returns: A dictionary with ``arcs`` (dict of arc ID to arc data)
+        and ``progress`` (collected/total counts).
+    :rtype: dict
+    :raises HTTPException: 404 if the game is not found.
+    """
+    state = _get_state(game_id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Game not found")
+
+    arcs: dict[str, dict] = {}
+    for arc_id, display_name in ARC_DISPLAY_NAMES.items():
+        arcs[arc_id] = {
+            "arc_id": arc_id,
+            "display_name": display_name,
+            "fragments": [],
+            "collected": 0,
+            "total": 0,
+        }
+
+    for lore in state.lore_fragments:
+        arc = lore.arc
+        if arc in arcs:
+            arcs[arc]["fragments"].append(lore.to_dict())
+            arcs[arc]["total"] += 1
+            if lore.discovered:
+                arcs[arc]["collected"] += 1
+
+    lore_collected = sum(1 for lf in state.lore_fragments if lf.discovered)
+    lore_total = len(state.lore_fragments)
+
+    return {
+        "arcs": arcs,
+        "progress": {
+            "collected": lore_collected,
+            "total": lore_total,
+        },
+    }
+
+
 @router.post("/game/{game_id}/trade")
 def api_trade(game_id: str, req: TradeRequest) -> dict:
     """Perform a buy or sell trade action.
@@ -580,6 +629,7 @@ def _full_state_response(state: GameState) -> dict:
     :rtype: dict
     """
     current_system = state.get_current_system()
+    lore_collected = sum(1 for lf in state.lore_fragments if lf.discovered)
     return {
         "game_id": state.id,
         "seed": state.seed,
@@ -591,4 +641,6 @@ def _full_state_response(state: GameState) -> dict:
         "systems_visited": state.systems_visited,
         "systems_total": len(state.systems),
         "game_started": state.game_started,
+        "lore_fragments_collected": lore_collected,
+        "lore_fragments_total": len(state.lore_fragments),
     }

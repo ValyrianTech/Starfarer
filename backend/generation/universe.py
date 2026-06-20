@@ -314,12 +314,13 @@ MAX_INITIAL_JUMP = 40
 NEIGHBOR_DISTANCE_THRESHOLD = 60
 
 
-def generate_universe(seed: int, system_count: int = GALAXY_SYSTEM_COUNT) -> dict[str, StarSystem]:
-    """Generate the complete galaxy of star systems.
+def generate_universe(seed: int, system_count: int = GALAXY_SYSTEM_COUNT) -> tuple[dict[str, StarSystem], list]:
+    """Generate the complete galaxy of star systems with lore fragments.
 
     Creates the specified number of star systems using deterministic,
     seed-based RNGs for layout and details. Ensures every system has
-    at least one neighbor within a reasonable distance.
+    at least one neighbor within a reasonable distance. Also distributes
+    lore fragments across the galaxy.
 
     :param seed: The universe generation seed for deterministic
         reproducibility.
@@ -327,10 +328,14 @@ def generate_universe(seed: int, system_count: int = GALAXY_SYSTEM_COUNT) -> dic
     :param system_count: The number of star systems to generate
         (defaults to ``GALAXY_SYSTEM_COUNT``).
     :type system_count: int
-    :returns: A dictionary mapping system IDs to :class:`StarSystem`
-        instances.
-    :rtype: dict[str, StarSystem]
+    :returns: A tuple of ``(systems, lore_fragments)`` where
+        ``systems`` is a dict mapping system IDs to :class:`StarSystem`
+        instances and ``lore_fragments`` is a list of placed
+        :class:`LoreFragment` objects.
+    :rtype: tuple[dict[str, StarSystem], list]
     """
+    from backend.generation.lore import distribute_lore_fragments
+
     galaxy_rng = seeded_random(seed, "galaxy_layout")
     system_rng = seeded_random(seed, "system_detail")
 
@@ -341,7 +346,13 @@ def generate_universe(seed: int, system_count: int = GALAXY_SYSTEM_COUNT) -> dic
 
     _ensure_connectivity(systems, galaxy_rng)
 
-    return systems
+    placement = distribute_lore_fragments(seed, systems)
+
+    lore_fragments = []
+    for sys_id, frags in placement.items():
+        lore_fragments.extend(frags)
+
+    return systems, lore_fragments
 
 
 def _ensure_connectivity(systems: dict[str, StarSystem], rng: random.Random) -> None:

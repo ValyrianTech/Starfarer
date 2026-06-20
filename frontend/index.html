@@ -1,1 +1,75 @@
-<!DOCTYPE html><html><head><title>Starfarer</title></head><body><h1>Starfarer</h1></body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Starfarer: Echoes of the Void</title>
+  <link rel="stylesheet" href="/css/main.css">
+  <link rel="stylesheet" href="/css/ui.css">
+  <link rel="stylesheet" href="/css/galaxy.css">
+  <link rel="stylesheet" href="/css/system.css">
+  <link rel="stylesheet" href="/css/surface.css">
+  <link rel="stylesheet" href="/css/lore.css">
+</head>
+<body>
+  <div id="app">
+    <canvas id="starfield" class="starfield-canvas"></canvas>
+
+    <div id="screen-menu" class="screen active">
+      <div id="menu-content" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:1rem;z-index:1;position:relative;">
+        <h1 style="font-size:2.2rem;color:var(--color-star);">Starfarer</h1>
+        <p style="color:var(--color-text-dim);">Echoes of the Void</p>
+        <div style="display:flex;flex-direction:column;gap:0.5rem;align-items:center;">
+          <div style="display:flex;gap:0.5rem;align-items:center;">
+            <label style="font-size:0.8rem;color:var(--color-text-dim);">Seed:</label>
+            <input id="new-game-seed" type="number" placeholder="42" style="width:80px;background:var(--color-panel-bg);border:1px solid var(--color-border);color:var(--color-text);padding:0.3rem;font-family:inherit;border-radius:4px;">
+            <label style="font-size:0.8rem;color:var(--color-text-dim);margin-left:0.5rem;">Ship:</label>
+            <input id="new-game-ship-name" type="text" placeholder="Serendipity" style="width:140px;background:var(--color-panel-bg);border:1px solid var(--color-border);color:var(--color-text);padding:0.3rem;font-family:inherit;border-radius:4px;">
+          </div>
+          <button data-action="new-game" class="ui-button">New Game</button>
+          <button data-action="continue-game" class="ui-button">Continue</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="screen-galaxy" class="screen">
+      <canvas id="galaxy-canvas" class="starfield-canvas"></canvas>
+      <div id="galaxy-system-info" class="galaxy-hud ui-panel"></div>
+      <div class="galaxy-legend">
+        <span><span class="legend-dot visited"></span> Visited</span>
+        <span><span class="legend-dot unvisited"></span> Unvisited</span>
+        <span><span class="legend-dot current"></span> Current</span>
+      </div>
+    </div>
+
+    <div id="screen-system" class="screen">
+      <div id="system-content" style="overflow-y:auto;flex:1;z-index:1;position:relative;"></div>
+    </div>
+
+    <div id="screen-surface" class="screen">
+      <div id="surface-content" style="overflow-y:auto;flex:1;z-index:1;position:relative;"></div>
+    </div>
+
+    <div id="screen-log" class="screen">
+      <div id="log-content" style="overflow-y:auto;flex:1;padding:1rem;z-index:1;position:relative;"></div>
+    </div>
+
+    <div id="screen-lore" class="screen">
+      <div id="lore-content" style="overflow-y:auto;flex:1;padding:1rem;z-index:1;position:relative;"></div>
+    </div>
+  </div>
+
+  <div id="ship-panel"></div>
+  <div id="event-modal"></div>
+
+  <script src="/js/utils.js"></script>
+  <script src="/js/api.js"></script>
+  <script src="/js/ship.js"></script>
+  <script src="/js/galaxy.js"></script>
+  <script src="/js/system.js"></script>
+  <script src="/js/events.js"></script>
+  <script src="/js/log.js"></script>
+  <script src="/js/lore.js"></script>
+  <script src="/js/main.js"></script>
+</body>
+</html>

@@ -123,6 +123,7 @@ class GameState:
         :rtype: dict
         """
         system = self.get_current_system()
+        lore_collected = sum(1 for lf in self.lore_fragments if lf.discovered)
         return {
             "game_id": self.id,
             "seed": self.seed,
@@ -133,4 +134,6 @@ class GameState:
             "systems_visited": self.systems_visited,
             "log_count": len(self.log_entries),
             "game_started": self.game_started,
+            "lore_fragments_collected": lore_collected,
+            "lore_fragments_total": len(self.lore_fragments),
         }
