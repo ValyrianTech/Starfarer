@@ -152,15 +152,16 @@ class TestUniverseGeneration:
         assert distance_between(b, c) <= NEIGHBOR_DISTANCE_THRESHOLD
 
     def test_ensure_connectivity_same_coordinates(self) -> None:
-        """_ensure_connectivity handles when an isolated system's closest neighbor is at distance 0.
+        """_ensure_connectivity handles systems that start at the same coordinates.
 
-        This triggers the closest_dist < 1e-9 branch by placing two systems at the exact same
-        coordinates, where both are isolated from all other systems.
+        When two systems share the same coordinates, they are already neighbors
+        (distance 0 <= NEIGHBOR_DISTANCE_THRESHOLD). This test verifies that
+        _ensure_connectivity correctly identifies them as connected and does not
+        attempt to move them, while still connecting any truly isolated systems.
         """
         rng = random.Random(42)
-        # A and B are at the same coordinates (500, 500)
-        # C is far away at (1000, 1000), so A and B are isolated from C
-        # A's closest neighbor is B at distance 0, and vice versa
+        # A and B are at the same coordinates (500, 500) — they are neighbors
+        # C is far away at (1000, 1000) — C is isolated
         a = StarSystem(id="a", name="A", x=500, y=500, star_type="G",
                        star_color="#fff", phenomenon="none", phenomenon_desc="")
         b = StarSystem(id="b", name="B", x=500, y=500, star_type="K",
@@ -169,7 +170,6 @@ class TestUniverseGeneration:
                        star_color="#f00", phenomenon="none", phenomenon_desc="")
         systems = {"a": a, "b": b, "c": c}
 
-        # This should not raise ZeroDivisionError
         _ensure_connectivity(systems, rng)
 
         # After the fix, all systems should have a neighbor within threshold
