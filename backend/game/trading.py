@@ -141,6 +141,8 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
         error = _validate_quantity(quantity)
         if error:
             return False, error
+        if not item or not isinstance(item, str):
+            return False, "Item must be a non-empty string."
         # Try exact name match first
         name_matches = [d for d in state.discoveries if d.name == item]
         if name_matches:
