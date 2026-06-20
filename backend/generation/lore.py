@@ -114,7 +114,7 @@ def _pick_lore_location(
     systems: dict[str, StarSystem],
     counts: dict[str, int],
     max_per_system: int,
-    used_bodies: set[tuple[str, str]] = frozenset(),
+    used_bodies: set[tuple[str, str]] | None = None,
 ) -> tuple[str, str]:
     """Pick a random system and body to host a lore fragment.
 
@@ -132,11 +132,14 @@ def _pick_lore_location(
     :param max_per_system: Maximum fragments per system.
     :type max_per_system: int
     :param used_bodies: Set of ``(system_id, body_id)`` tuples already assigned.
-    :type used_bodies: set[tuple[str, str]]
+        Defaults to an empty set.
+    :type used_bodies: set[tuple[str, str]] | None
     :returns: A tuple of ``(system_id, body_id)``.
     :rtype: tuple[str, str]
     :raises ValueError: If no eligible system or body is available.
     """
+    if used_bodies is None:
+        used_bodies = set()
     eligible_systems: list[str] = []
     weights: list[int] = []
 

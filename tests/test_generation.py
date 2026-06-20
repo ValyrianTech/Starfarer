@@ -1016,6 +1016,29 @@ class TestLoreDistribution:
         with pytest.raises(ValueError, match="No eligible bodies in system"):
             _pick_lore_location(rng, systems, counts, 2, used)
 
+    def test_pick_lore_location_default_used_bodies(self) -> None:
+        """_pick_lore_location should work when called without used_bodies argument."""
+        from backend.generation.lore import _pick_lore_location
+        import random as rnd_mod
+
+        body = Body(
+            id="b1", name="Body1", body_type="planet", biome="ocean",
+            size=3, distance_from_star=0.5, poi_count=1
+        )
+        system = StarSystem(
+            id="s1", name="TestSys", x=0.0, y=0.0,
+            star_type="G", star_color="#fff",
+            phenomenon="none", phenomenon_desc="",
+            bodies=[body],
+        )
+        systems = {"s1": system}
+        counts: dict[str, int] = {}
+
+        rng = rnd_mod.Random(42)
+        sys_id, body_id = _pick_lore_location(rng, systems, counts, 2)
+        assert sys_id == "s1"
+        assert body_id == "b1"
+
     def test_distribute_fragments_no_duplicate_bodies(self) -> None:
         """With max_per_system=2, fragments on the same system must be on different bodies."""
         from backend.generation.lore import distribute_lore_fragments
