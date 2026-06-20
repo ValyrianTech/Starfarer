@@ -22,6 +22,8 @@ from backend.utils import deterministic_hash
 from backend.generation.universe import distance_between
 from backend.generation.lore import get_fragment_for_body
 
+logger = logging.getLogger(__name__)
+
 
 def can_jump(ship: Ship, target: StarSystem, current: Optional[StarSystem]) -> tuple[bool, float, str]:
     """Check whether a jump to a target system is possible.
@@ -243,9 +245,9 @@ def explore_surface(state: GameState) -> list[Discovery]:
             state.add_log("lore", f"Discovered lore fragment: {lore_frag.title} ({lore_frag.id}).")
         elif lore_frag and lore_frag.discovered:
             if lore_frag.id in discovered_this_action:
-                logging.info(f"Lore fragment {lore_frag.id} ({lore_frag.title}) already discovered in this explore action.")
+                logger.info(f"Lore fragment {lore_frag.id} ({lore_frag.title}) already discovered in this explore action.")
             else:
-                logging.warning(f"Lore fragment {lore_frag.id} ({lore_frag.title}) already discovered in a previous exploration but found on body {body.id}.")
+                logger.warning(f"Lore fragment {lore_frag.id} ({lore_frag.title}) already discovered in a previous exploration but found on body {body.id}.")
 
         discoveries.append(disc)
         state.discoveries.append(disc)
