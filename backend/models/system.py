@@ -85,6 +85,7 @@ class StarSystem:
     star_color: str
     phenomenon: str
     phenomenon_desc: str
+    has_trading_station: bool = False
     bodies: list[Body] = field(default_factory=list)
     visited: bool = False
     scanned: bool = False
@@ -104,6 +105,7 @@ class StarSystem:
             "star_color": self.star_color,
             "phenomenon": self.phenomenon,
             "phenomenon_desc": self.phenomenon_desc,
+            "has_trading_station": self.has_trading_station,
             "bodies": [b.to_dict() for b in self.bodies],
             "visited": self.visited,
             "scanned": self.scanned,
@@ -127,6 +129,7 @@ class StarSystem:
             star_color=d["star_color"],
             phenomenon=d["phenomenon"],
             phenomenon_desc=d["phenomenon_desc"],
+            has_trading_station=d.get("has_trading_station", False),
             bodies=[Body.from_dict(b) for b in d.get("bodies", [])],
             visited=d.get("visited", False),
             scanned=d.get("scanned", False),

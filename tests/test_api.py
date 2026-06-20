@@ -593,7 +593,7 @@ class TestAPIAdvancedFlow:
         game_id = resp.json()["game_id"]
         state = GAME_STORE[game_id]
         current_sys = state.get_current_system()
-        current_sys.phenomenon = "none"
+        current_sys.has_trading_station = True
         state.discoveries.append(
             Discovery(id="trade-name-match-disc-1", category="mineral", name="artifact",
                       description="Test", value=200, system_id=current_sys.id)
@@ -620,7 +620,7 @@ class TestAPIAdvancedFlow:
         game_id = resp.json()["game_id"]
         state = GAME_STORE[game_id]
         current_sys = state.get_current_system()
-        current_sys.phenomenon = "none"
+        current_sys.has_trading_station = True
         state.discoveries.append(
             Discovery(id="trade-name-prio-disc-1", category="artifact", name="Ancient Relic",
                       description="Old relic", value=200, system_id=current_sys.id)
@@ -852,7 +852,7 @@ class TestAPIBulkSell:
         gid = resp.json()["game_id"]
         state = GAME_STORE[gid]
         current_sys = state.get_current_system()
-        current_sys.phenomenon = "none"
+        current_sys.has_trading_station = True
         from backend.models.discovery import Discovery
         state.discoveries.append(
             Discovery(id=f"{game_id}-disc-1", category="artifact", name="Ancient Relic",
@@ -1000,7 +1000,7 @@ class TestAPIBulkSell:
         game_id = self._create_game_with_discoveries("bulk-sell-no-trade")
         state = GAME_STORE[game_id]
         current_sys = state.get_current_system()
-        current_sys.phenomenon = "black_hole"
+        current_sys.has_trading_station = False
         GAME_STORE[game_id] = state
         game_save(state)
         resp = client.post(f"/api/game/{game_id}/trade/bulk-sell", json={
@@ -1016,7 +1016,7 @@ class TestAPIBulkSell:
         game_id = resp.json()["game_id"]
         state = GAME_STORE[game_id]
         current_sys = state.get_current_system()
-        current_sys.phenomenon = "none"
+        current_sys.has_trading_station = True
         state.discoveries.append(
             Discovery(id="bulk-name-match-disc-1", category="mineral", name="artifact",
                       description="Test", value=200, system_id=current_sys.id)
@@ -1048,7 +1048,7 @@ class TestAPIBulkSell:
         game_id = resp.json()["game_id"]
         state = GAME_STORE[game_id]
         current_sys = state.get_current_system()
-        current_sys.phenomenon = "none"
+        current_sys.has_trading_station = True
         state.discoveries.append(
             Discovery(id="bulk-name-prio-disc-1", category="artifact", name="Ancient Relic",
                       description="Old relic", value=200, system_id=current_sys.id)
@@ -1084,7 +1084,7 @@ class TestPerformBulkSellDirect:
         """Create a game state with a trading station and some discoveries."""
         state = new_game(seed=42, ship_name="TestShip")
         current_sys = state.get_current_system()
-        current_sys.phenomenon = "none"
+        current_sys.has_trading_station = True
         from backend.models.discovery import Discovery
         state.discoveries.append(
             Discovery(id="direct-test-disc-1", category="artifact", name="Ancient Relic",

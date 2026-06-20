@@ -290,6 +290,7 @@ def generate_system(rng: random.Random, idx: int, galaxy_rng: random.Random) -> 
         id=sys_id, name=name, x=x, y=y,
         star_type=star_type, star_color=star_color,
         phenomenon=phenomenon, phenomenon_desc=phenomenon_desc,
+        has_trading_station=(phenomenon == "none"),
         bodies=bodies,
     )
 
