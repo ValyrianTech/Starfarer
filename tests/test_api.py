@@ -1343,6 +1343,20 @@ class TestAPILore:
         finally:
             lore_mod.get_lore_fragments_for_system = original
 
+    def test_lore_endpoint_returns_arc_order(self) -> None:
+        """GET /api/game/{id}/lore should return arc_order matching ARC_DISPLAY_NAMES keys."""
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+
+        resp = client.get(f"/api/game/{game_id}/lore")
+        assert resp.status_code == 200
+        data = resp.json()
+
+        assert "arc_order" in data
+        assert isinstance(data["arc_order"], list)
+        assert len(data["arc_order"]) == 4
+        assert data["arc_order"] == ["architects", "void_signal", "fracture", "wanderer"]
+
 
 class TestAPIMainIndex:
     """Tests for main.py index endpoint."""
