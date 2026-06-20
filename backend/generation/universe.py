@@ -15,25 +15,9 @@ from backend.config import (
     STAR_SPECTRAL_TYPES, STAR_COLORS, SYSTEM_PHENOMENA, PHENOMENON_WEIGHTS,
     PLANET_NAMES, MOON_NAMES, BIOME_TYPES, MIN_ORBITALS, MAX_ORBITALS,
 )
+from backend.utils import seeded_random
+from backend.generation.lore import distribute_lore_fragments
 from backend.models.system import StarSystem, Body
-
-
-def seeded_random(seed: int, *extra: str) -> random.Random:
-    """Create a deterministic random number generator from a seed.
-
-    Combines the base seed with any number of extra string arguments
-    to produce a reproducible RNG instance.
-
-    :param seed: The base universe seed.
-    :type seed: int
-    :param extra: Additional strings to mix into the seed for
-        independent RNG streams.
-    :type extra: str
-    :returns: A seeded :class:`random.Random` instance.
-    :rtype: random.Random
-    """
-    rng = random.Random(str(seed) + "".join(str(e) for e in extra))
-    return rng
 
 
 def _pick_weighted(rng: random.Random, items: list[str], weights: list[int]) -> str:
@@ -334,8 +318,6 @@ def generate_universe(seed: int, system_count: int = GALAXY_SYSTEM_COUNT) -> tup
         :class:`LoreFragment` objects.
     :rtype: tuple[dict[str, StarSystem], list]
     """
-    from backend.generation.lore import distribute_lore_fragments
-
     galaxy_rng = seeded_random(seed, "galaxy_layout")
     system_rng = seeded_random(seed, "system_detail")
 

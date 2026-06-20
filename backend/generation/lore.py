@@ -12,7 +12,7 @@ from typing import Optional
 from backend.generation.lore_content import FRAGMENT_DATA
 from backend.models.discovery import LoreFragment
 from backend.models.system import StarSystem
-from backend.generation.universe import seeded_random
+from backend.utils import seeded_random
 
 # Biome weights for fragment distribution: higher biome types are
 # more likely to host lore fragments, rewarding thorough exploration.
