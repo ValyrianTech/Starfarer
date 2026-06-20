@@ -912,3 +912,108 @@ class TestLoreDistribution:
             for frag in frags:
                 body_id = frag.discovery_id.split("::")[1]
                 assert body_id == "b2", f"Fragment should be on body2, not {body_id}"
+
+    def test_all_discovery_ids_are_unique(self) -> None:
+        """All placed fragments must have unique discovery_ids (no body hosts two fragments)."""
+        from backend.generation.lore import distribute_lore_fragments
+
+        systems, _ = generate_universe(42)
+        placement = distribute_lore_fragments(42, systems)
+
+        discovery_ids: set[str] = set()
+        for sys_id, frags in placement.items():
+            for frag in frags:
+                assert frag.discovery_id not in discovery_ids, \
+                    f"Duplicate discovery_id: {frag.discovery_id}"
+                discovery_ids.add(frag.discovery_id)
+
+        # Ensure the count matches — no fragments got lost
+        assert len(discovery_ids) == sum(len(frags) for frags in placement.values())
+
+    def test_used_bodies_excluded_from_selection(self) -> None:
+        """_pick_lore_location should not select bodies already in used_bodies."""
+        from backend.generation.lore import _pick_lore_location
+        import random as rnd_mod
+
+        body1 = Body(
+            id="b1", name="Body1", body_type="planet", biome="ocean",
+            size=3, distance_from_star=0.5, poi_count=1
+        )
+        body2 = Body(
+            id="b2", name="Body2", body_type="planet", biome="jungle",
+            size=3, distance_from_star=0.5, poi_count=1
+        )
+        system = StarSystem(
+            id="s1", name="TestSys", x=0.0, y=0.0,
+            star_type="G", star_color="#fff",
+            phenomenon="none", phenomenon_desc="",
+            bodies=[body1, body2],
+        )
+        systems = {"s1": system}
+        counts: dict[str, int] = {}
+
+        rng = rnd_mod.Random(42)
+
+        # With body1 used, it must pick body2
+        used: set[tuple[str, str]] = {("s1", "b1")}
+        # Run multiple times to ensure only body2 is ever picked
+        for _ in range(20):
+            sys_id, body_id = _pick_lore_location(rng, systems, counts, 2, used)
+            assert sys_id == "s1"
+            assert body_id == "b2", f"Expected b2 but got {body_id} with used_bodies={used}"
+
+    def test_pick_lore_location_raises_when_all_bodies_used(self) -> None:
+        """_pick_lore_location raises ValueError when all bodies in chosen system are used."""
+        from backend.generation.lore import _pick_lore_location
+        import random as rnd_mod
+
+        body1 = Body(
+            id="b1", name="Body1", body_type="planet", biome="ocean",
+            size=3, distance_from_star=0.5, poi_count=1
+        )
+        body2 = Body(
+            id="b2", name="Body2", body_type="planet", biome="jungle",
+            size=3, distance_from_star=0.5, poi_count=1
+        )
+        system = StarSystem(
+            id="s1", name="TestSys", x=0.0, y=0.0,
+            star_type="G", star_color="#fff",
+            phenomenon="none", phenomenon_desc="",
+            bodies=[body1, body2],
+        )
+        systems = {"s1": system}
+        counts: dict[str, int] = {}
+
+        rng = rnd_mod.Random(42)
+        # Both bodies are already used
+        used: set[tuple[str, str]] = {("s1", "b1"), ("s1", "b2")}
+
+        with pytest.raises(ValueError, match="No eligible bodies in system"):
+            _pick_lore_location(rng, systems, counts, 2, used)
+
+    def test_distribute_fragments_no_duplicate_bodies(self) -> None:
+        """With max_per_system=2, fragments on the same system must be on different bodies."""
+        from backend.generation.lore import distribute_lore_fragments
+
+        body1 = Body(
+            id="b1", name="Body1", body_type="planet", biome="ocean",
+            size=3, distance_from_star=0.5, poi_count=1
+        )
+        body2 = Body(
+            id="b2", name="Body2", body_type="planet", biome="jungle",
+            size=3, distance_from_star=0.5, poi_count=1
+        )
+        system = StarSystem(
+            id="s1", name="TestSys", x=0.0, y=0.0,
+            star_type="G", star_color="#fff",
+            phenomenon="none", phenomenon_desc="",
+            bodies=[body1, body2],
+        )
+        systems = {"s1": system}
+
+        placement = distribute_lore_fragments(42, systems, max_per_system=2)
+
+        if "s1" in placement and len(placement["s1"]) == 2:
+            body_ids = [frag.discovery_id.split("::")[1] for frag in placement["s1"]]
+            assert body_ids[0] != body_ids[1], \
+                f"Two fragments on same body: {body_ids}"
