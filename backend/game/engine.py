@@ -243,6 +243,9 @@ def explore_surface(state: GameState) -> list[Discovery]:
             lore_frag.discovered = True
             discovered_this_action.add(lore_frag.id)
             state.add_log("lore", f"Discovered lore fragment: {lore_frag.title} ({lore_frag.id}).")
+        # Two scenarios when a lore fragment is already marked as discovered:
+        # 1. The fragment was discovered earlier in THIS explore action (same body explored multiple times) -> INFO
+        # 2. The fragment was discovered in a PREVIOUS explore action (different body, same lore fragment) -> WARNING
         elif lore_frag and lore_frag.discovered:
             if lore_frag.id in discovered_this_action:
                 logger.info(f"Lore fragment {lore_frag.id} ({lore_frag.title}) already discovered in this explore action.")
