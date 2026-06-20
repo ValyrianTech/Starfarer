@@ -143,7 +143,10 @@ def _pick_lore_location(
     chosen_sys_id = rng.choices(eligible_systems, weights=weights, k=1)[0]
     system = systems[chosen_sys_id]
 
-    bodies = system.bodies
+    bodies = [b for b in system.bodies if b.poi_count > 0]
+    if not bodies:
+        raise ValueError(f"No discoverable bodies in system {chosen_sys_id}")
+
     body_weights = [BIOME_WEIGHTS.get(b.biome, 1) for b in bodies]
     chosen_body = rng.choices(bodies, weights=body_weights, k=1)[0]
 

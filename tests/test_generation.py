@@ -862,3 +862,53 @@ class TestLoreDistribution:
         rng = random.Random(42)
         with pytest.raises(ValueError, match="No eligible systems available"):
             _pick_lore_location(rng, systems, counts, max_per_system=1)
+
+    def test_lore_not_placed_on_zero_poi_bodies(self) -> None:
+        """Lore fragments should not be placed on bodies with poi_count=0."""
+        from backend.generation.lore import distribute_lore_fragments
+
+        body1 = Body(
+            id="b1", name="Body1", body_type="planet", biome="ocean",
+            size=3, distance_from_star=0.5, poi_count=0
+        )
+        body2 = Body(
+            id="b2", name="Body2", body_type="planet", biome="jungle",
+            size=3, distance_from_star=0.5, poi_count=0
+        )
+        system = StarSystem(
+            id="s1", name="TestSys", x=0.0, y=0.0,
+            star_type="G", star_color="#fff",
+            phenomenon="none", phenomenon_desc="",
+            bodies=[body1, body2],
+        )
+        systems = {"s1": system}
+
+        placement = distribute_lore_fragments(42, systems)
+        assert placement == {}, "No fragments should be placed when all bodies have poi_count=0"
+
+    def test_lore_placed_on_positive_poi_bodies(self) -> None:
+        """Lore fragments should be placed on bodies with poi_count>0."""
+        from backend.generation.lore import distribute_lore_fragments
+
+        body1 = Body(
+            id="b1", name="Body1", body_type="planet", biome="ocean",
+            size=3, distance_from_star=0.5, poi_count=0
+        )
+        body2 = Body(
+            id="b2", name="Body2", body_type="planet", biome="jungle",
+            size=3, distance_from_star=0.5, poi_count=3
+        )
+        system = StarSystem(
+            id="s1", name="TestSys", x=0.0, y=0.0,
+            star_type="G", star_color="#fff",
+            phenomenon="none", phenomenon_desc="",
+            bodies=[body1, body2],
+        )
+        systems = {"s1": system}
+
+        placement = distribute_lore_fragments(42, systems)
+        assert len(placement) > 0
+        for sys_id, frags in placement.items():
+            for frag in frags:
+                body_id = frag.discovery_id.split("::")[1]
+                assert body_id == "b2", f"Fragment should be on body2, not {body_id}"
