@@ -1476,6 +1476,39 @@ class TestDatabaseGetLeaderboard:
         assert "lb-bad-json" not in ids
 
 
+class TestLoreFragmentsCollected:
+    """Tests for the GameState.lore_fragments_collected property."""
+
+    def test_no_lore_fragments_returns_zero(self) -> None:
+        """Property returns 0 when no lore fragments exist."""
+        state = new_game(seed=42)
+        state.lore_fragments = []
+        assert state.lore_fragments_collected == 0
+
+    def test_all_undiscovered_returns_zero(self) -> None:
+        """Property returns 0 when all fragments are undiscovered."""
+        state = new_game(seed=42)
+        assert len(state.lore_fragments) > 0
+        assert all(not lf.discovered for lf in state.lore_fragments)
+        assert state.lore_fragments_collected == 0
+
+    def test_some_discovered_returns_correct_count(self) -> None:
+        """Property returns correct count when some fragments are discovered."""
+        state = new_game(seed=42)
+        for i, lf in enumerate(state.lore_fragments):
+            if i < 7:
+                lf.discovered = True
+        assert state.lore_fragments_collected == 7
+
+    def test_all_discovered_returns_total_count(self) -> None:
+        """Property returns total count when all fragments are discovered."""
+        state = new_game(seed=42)
+        for lf in state.lore_fragments:
+            lf.discovered = True
+        assert state.lore_fragments_collected == len(state.lore_fragments)
+        assert state.lore_fragments_collected == 20
+
+
 class TestLoreExploration:
     """Tests for lore fragment discovery during exploration."""
 

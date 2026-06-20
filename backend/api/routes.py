@@ -629,7 +629,6 @@ def _full_state_response(state: GameState) -> dict:
     :rtype: dict
     """
     current_system = state.get_current_system()
-    lore_collected = sum(1 for lf in state.lore_fragments if lf.discovered)
     return {
         "game_id": state.id,
         "seed": state.seed,
@@ -641,6 +640,6 @@ def _full_state_response(state: GameState) -> dict:
         "systems_visited": state.systems_visited,
         "systems_total": len(state.systems),
         "game_started": state.game_started,
-        "lore_fragments_collected": lore_collected,
+        "lore_fragments_collected": state.lore_fragments_collected,
         "lore_fragments_total": len(state.lore_fragments),
     }
