@@ -206,12 +206,13 @@ class TestUniverseGeneration:
     def test_ensure_connectivity_three_isolated_systems(self) -> None:
         """Three isolated systems where two share the same closest neighbor.
 
-    A(500,500), B(565,500), C(500,565)
-    - All three are isolated from each other (all distances > 60)
-    - A and C both have B as their closest neighbor
-    - Processing A first moves it toward B, making B non-isolated
-    - Then C moves toward B, and all are connected
-    """
+        A(500,500), B(565,500), C(500,565)
+        - All three are isolated from each other (all distances > 60)
+        - A and C both have B as their closest neighbor initially
+        - Processing A first moves it toward B, making A non-isolated
+        - C's closest neighbor is now A (not B), so C moves toward A
+        - After both moves, all three systems are connected
+        """
         rng = random.Random(42)
         # A and C are both isolated from B (distance 65 > 60)
         # B is the closest neighbor for both A and C
