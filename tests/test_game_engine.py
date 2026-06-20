@@ -1364,6 +1364,22 @@ class TestTradingPerformTradeEdgeCases:
         assert ok is False
         assert "No trading facilities" in msg
 
+    def test_buy_fuel_full_tank(self) -> None:
+        """Buying fuel with a full tank should return an error."""
+        state = new_game(seed=42)
+        state.ship.fuel = state.ship.max_fuel
+        ok, msg = perform_trade(state, "buy", "fuel", 10)
+        assert ok is False
+        assert "Fuel tank is already full." == msg
+
+    def test_buy_repair_full_hull(self) -> None:
+        """Buying repairs with full hull should return an error."""
+        state = new_game(seed=42)
+        state.ship.hull = state.ship.max_hull
+        ok, msg = perform_trade(state, "buy", "repair", 1)
+        assert ok is False
+        assert "Hull is already at maximum." == msg
+
 
 class TestDatabaseGetLeaderboard:
     """Tests for get_leaderboard with various malformed entries."""
