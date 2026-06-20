@@ -131,8 +131,9 @@ def _pick_lore_location(
     :type counts: dict[str, int]
     :param max_per_system: Maximum fragments per system.
     :type max_per_system: int
-    :param used_bodies: Set of ``(system_id, body_id)`` tuples already assigned.
-        Defaults to None (converted to an empty set internally).
+    :param used_bodies: Set of ``(system_id, body_id)`` tuples already assigned to a fragment.
+        When ``None`` (the default), no bodies are pre-excluded — the parameter is
+        treated as an empty set internally.
     :type used_bodies: set[tuple[str, str]] | None
     :returns: A tuple of ``(system_id, body_id)``.
     :rtype: tuple[str, str]
