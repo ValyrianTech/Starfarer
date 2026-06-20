@@ -232,6 +232,68 @@ class TestUniverseGeneration:
         assert distance_between(a, b) <= NEIGHBOR_DISTANCE_THRESHOLD, "A should be connected to B"
         assert distance_between(c, b) <= NEIGHBOR_DISTANCE_THRESHOLD, "C should be connected to B"
 
+    def test_ensure_connectivity_exhausts_iters_fallback(self, caplog) -> None:
+        """When max_iters is exhausted, the else block should log a warning and
+        move isolated systems directly to within threshold distance."""
+        import logging
+        import unittest.mock as mock
+        caplog.set_level(logging.WARNING)
+        rng = random.Random(42)
+        # Two systems extremely far apart - the ratio-based movement can't
+        # close this gap in 100 iterations.  Patch galaxy bounds to prevent
+        # clamping from bringing them within range.
+        a = StarSystem(id="a", name="Alpha", x=50, y=50, star_type="G",
+                       star_color="#fff", phenomenon="none", phenomenon_desc="")
+        b = StarSystem(id="b", name="Beta", x=50000, y=50000, star_type="K",
+                       star_color="#ffa", phenomenon="none", phenomenon_desc="")
+        systems = {"a": a, "b": b}
+
+        with mock.patch("backend.generation.universe.GALAXY_WIDTH", 1000000), \
+             mock.patch("backend.generation.universe.GALAXY_HEIGHT", 1000000):
+            _ensure_connectivity(systems, rng)
+
+        # After the fallback, both systems should be within threshold
+        assert distance_between(a, b) <= NEIGHBOR_DISTANCE_THRESHOLD, \
+            "Fallback should move isolated system to within threshold"
+        # The warning should have been logged
+        warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("remains isolated" in msg for msg in warning_messages), \
+            f"Expected warning about isolated system, got: {warning_messages}"
+
+    def test_ensure_connectivity_exhausts_iters_multiple_isolated(self, caplog) -> None:
+        """When multiple systems remain isolated after max_iters, each should
+        get a warning and be moved to within threshold."""
+        import logging
+        import unittest.mock as mock
+        caplog.set_level(logging.WARNING)
+        rng = random.Random(42)
+        # One central system and two extremely far away.  Patch galaxy bounds
+        # to prevent clamping from bringing them within range.
+        center = StarSystem(id="c", name="Center", x=500, y=500, star_type="G",
+                            star_color="#fff", phenomenon="none", phenomenon_desc="")
+        far1 = StarSystem(id="f1", name="FarOne", x=50000, y=50000, star_type="K",
+                          star_color="#ffa", phenomenon="none", phenomenon_desc="")
+        far2 = StarSystem(id="f2", name="FarTwo", x=100, y=51000, star_type="M",
+                          star_color="#f00", phenomenon="none", phenomenon_desc="")
+        systems = {"c": center, "f1": far1, "f2": far2}
+
+        with mock.patch("backend.generation.universe.GALAXY_WIDTH", 1000000), \
+             mock.patch("backend.generation.universe.GALAXY_HEIGHT", 1000000):
+            _ensure_connectivity(systems, rng)
+
+        # All systems should now be within threshold of at least one other
+        for system in systems.values():
+            has_neighbor = any(
+                distance_between(system, other) <= NEIGHBOR_DISTANCE_THRESHOLD
+                for other in systems.values()
+                if other.id != system.id
+            )
+            assert has_neighbor, f"System {system.id} ({system.name}) still has no neighbor after fallback"
+        # Should have logged warnings for both isolated systems
+        warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+        assert len(warning_messages) >= 2, \
+            f"Expected at least 2 warnings, got {len(warning_messages)}: {warning_messages}"
+
 
 class TestShipModel:
     def test_ship_creation(self) -> None:

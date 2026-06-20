@@ -357,7 +357,8 @@ def _ensure_connectivity(systems: dict[str, StarSystem], rng: random.Random) -> 
     :param rng: The seeded random number generator.
     :type rng: random.Random
     """
-    max_iters = 10
+    import logging
+    max_iters = 100
 
     def _find_and_fix_isolated(sys_list: list[StarSystem]) -> bool:
         """Run one pass: find isolated systems and fix them.
@@ -411,6 +412,41 @@ def _ensure_connectivity(systems: dict[str, StarSystem], rng: random.Random) -> 
         sys_list = list(systems.values())
         if not _find_and_fix_isolated(sys_list):
             break
+    else:
+        # max_iters exhausted; check if any systems are still isolated
+        for system in systems.values():
+            has_neighbor = any(
+                distance_between(system, other) <= NEIGHBOR_DISTANCE_THRESHOLD
+                for other in systems.values()
+                if other.id != system.id
+            )
+            if not has_neighbor:
+                logging.warning(
+                    f"System {system.id} ({system.name}) remains isolated after "
+                    f"{max_iters} iterations"
+                )
+                # Fallback: move directly to within threshold distance of closest neighbor
+                closest_id = None
+                closest_dist = float("inf")
+                for other in systems.values():
+                    if other.id == system.id:
+                        continue
+                    d = distance_between(system, other)
+                    if d < closest_dist:
+                        closest_dist = d
+                        closest_id = other.id
+                if closest_id is not None:
+                    target = systems[closest_id]
+                    # Move to exactly (NEIGHBOR_DISTANCE_THRESHOLD - 5) away from target
+                    dx = system.x - target.x
+                    dy = system.y - target.y
+                    dist = math.sqrt(dx * dx + dy * dy)
+                    if dist > 0:
+                        target_dist = NEIGHBOR_DISTANCE_THRESHOLD - 5
+                        system.x = target.x + (dx / dist) * target_dist
+                        system.y = target.y + (dy / dist) * target_dist
+                        system.x = max(50, min(GALAXY_WIDTH - 50, system.x))
+                        system.y = max(50, min(GALAXY_HEIGHT - 50, system.y))
 
 
 def distance_between(sys1: StarSystem, sys2: StarSystem) -> float:
