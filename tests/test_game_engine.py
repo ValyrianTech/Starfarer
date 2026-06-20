@@ -1380,6 +1380,20 @@ class TestTradingPerformTradeEdgeCases:
         assert ok is False
         assert "Hull is already at maximum." == msg
 
+    def test_sell_empty_string_item(self) -> None:
+        """Selling with an empty string item should return an error."""
+        state = new_game(seed=42)
+        ok, msg = perform_trade(state, "sell", "", 1)
+        assert ok is False
+        assert msg == "Item must be a non-empty string."
+
+    def test_sell_non_string_item(self) -> None:
+        """Selling with a non-string item should return an error."""
+        state = new_game(seed=42)
+        ok, msg = perform_trade(state, "sell", 123, 1)
+        assert ok is False
+        assert msg == "Item must be a non-empty string."
+
 
 class TestDatabaseGetLeaderboard:
     """Tests for get_leaderboard with various malformed entries."""
