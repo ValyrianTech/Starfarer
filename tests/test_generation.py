@@ -532,6 +532,23 @@ class TestDiscoveryModel:
         assert [f.fragment_number for f in sorted_frags] == [1, 2, 3]
         assert [f.title for f in sorted_frags] == ["T1", "T2", "T3"]
 
+    def test_lore_fragment_sortable_with_none_or_zero(self) -> None:
+        """Frontend sort key (fragment_number or 0) handles None and zero without breaking."""
+        fragments = [
+            LoreFragment(id="lore_abc_3", arc="test", title="T3", text="...", fragment_number=3),
+            LoreFragment(id="lore_abc_none", arc="test", title="TNone", text="...", fragment_number=None),
+            LoreFragment(id="lore_abc_1", arc="test", title="T1", text="...", fragment_number=1),
+            LoreFragment(id="lore_abc_zero", arc="test", title="TZero", text="...", fragment_number=0),
+            LoreFragment(id="lore_abc_2", arc="test", title="T2", text="...", fragment_number=2),
+        ]
+        sorted_frags = sorted(fragments, key=lambda f: f.fragment_number or 0)
+        sort_keys = [f.fragment_number or 0 for f in sorted_frags]
+        assert sort_keys == [0, 0, 1, 2, 3]
+        none_zero_titles = {sorted_frags[0].title, sorted_frags[1].title}
+        assert none_zero_titles == {"TNone", "TZero"}
+        valid_titles = [f.title for f in sorted_frags[2:]]
+        assert valid_titles == ["T1", "T2", "T3"]
+
 
 class TestBodyModel:
     """Tests for Body model serialization."""
