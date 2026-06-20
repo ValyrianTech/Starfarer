@@ -237,7 +237,6 @@ def explore_surface(state: GameState) -> list[Discovery]:
         if lore_frag and not lore_assigned and not lore_frag.discovered:
             disc.lore_fragment_id = lore_frag.id
             lore_frag.discovered = True
-            lore_frag.discovery_id = f"{system.id}::{body.id}"
             lore_assigned = True
             state.add_log("lore", f"Discovered lore fragment: {lore_frag.title} ({lore_frag.id}).")
 
