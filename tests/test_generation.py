@@ -79,14 +79,14 @@ class TestUniverseGeneration:
         assert biome in ("gas_giant", "tundra", "barren")
 
     def test_biome_for_body_gas_giant_path(self) -> None:
-        """_biome_for_body with a seed that triggers gas_giant path."""
+        """_biome_for_body should return gas_giant when rng.random() < 0.15."""
         from backend.generation.universe import _biome_for_body
-        for seed_val in range(50):
-            rng = random.Random(seed_val)
+        import unittest.mock as mock
+        # Force the gas_giant branch by patching rng.random to return 0.1 (< 0.15)
+        with mock.patch.object(random.Random, 'random', return_value=0.1):
+            rng = random.Random(0)
             biome = _biome_for_body(rng, "G", 1.5, "planet")
-            if biome == "gas_giant":
-                return
-        pass  # pragma: no cover  # no seed in range produced gas_giant
+            assert biome == "gas_giant"
 
     def test_biome_for_body_moon(self) -> None:
         """_biome_for_body should return a biome from the first 5 for moons."""
