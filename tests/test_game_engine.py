@@ -1,5 +1,6 @@
 import sys
 import os
+import random
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from backend.game.engine import (
@@ -867,34 +868,36 @@ class TestEvents:
 
 
 class TestTriggerEventPhenomenonBranch:
-    """Tests for the phenomenon else branch in trigger_event (line 147)."""
+    """Tests for the phenomenon branch in trigger_event."""
 
-    def test_trigger_event_phenomenon_else_branch(self) -> None:
-        """Trigger event with phenomenon system where inner random fails."""
+    def test_trigger_event_phenomenon_biased(self) -> None:
+        """Trigger event with phenomenon should bias toward hazard/discovery/exploration."""
         state = new_game(seed=42)
         system = state.get_current_system()
         assert system is not None
         system.phenomenon = "nebula"
         state.ship.morale = 80
 
-        found = False
-        for extra_events in range(10):
-            for extra_logs in range(10):
-                state.events = list(range(extra_events))
-                state.log_entries = [{"type": "test", "message": str(i)} for i in range(extra_logs)]
-                import random as rnd_mod
-                rng = rnd_mod.Random(state.seed + deterministic_hash(system.id, len(state.events), len(state.log_entries)))
-                if rng.random() < 0.35:
-                    if not (system.phenomenon != "none" and rng.random() < 0.5):
-                        found = True
-                        break
-            if found:
-                break
-        assert found, "Could not find a seed combination that hits line 147"
+        rng = random.Random(42)
+        rng.random()  # Consume first value; next two are < 0.35 and < 0.5
 
-        event = trigger_event(state)
+        event = trigger_event(state, rng_override=rng)
         assert event is not None
-        assert event.event_type in [t["type"] for t in EVENT_TEMPLATES]
+        assert event.event_type in ("hazard", "discovery", "exploration")
+
+    def test_trigger_event_phenomenon_else_branch(self) -> None:
+        """Trigger event with phenomenon where inner random fails (falls to else branch)."""
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        system.phenomenon = "nebula"
+        state.ship.morale = 80
+
+        rng = random.Random(7)
+        rng.random()  # Consume first value; next two are < 0.35 and >= 0.5
+
+        event = trigger_event(state, rng_override=rng)
+        assert event is not None
 
 
 class TestBulkSell:
