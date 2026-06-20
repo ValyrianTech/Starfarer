@@ -1,10 +1,3 @@
-const ARC_DISPLAY_NAMES = {
-  architects: "The Architects",
-  void_signal: "The Void Signal",
-  fracture: "The Fracture",
-  wanderer: "The Wanderer",
-};
-
 function renderLoreView(arcsData, progress, arcOrder) {
   const container = $('#lore-content');
   if (!container) return;
