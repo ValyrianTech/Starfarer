@@ -347,11 +347,10 @@ def generate_universe(seed: int, system_count: int = GALAXY_SYSTEM_COUNT) -> dic
 def _ensure_connectivity(systems: dict[str, StarSystem], rng: random.Random) -> None:
     """Ensure every star system has at least one neighbor nearby.
 
-    Uses a multi-pass approach: an initial pass detects and fixes isolated
-    systems by moving their closest neighbor closer, followed by iterative
-    verification passes that recheck all systems and apply the same fix
-    until no isolated systems remain.  A maximum iteration limit prevents
-    infinite loops.
+    Uses a multi-pass approach: each pass detects isolated systems and moves
+    them toward their closest neighbor until every system has at least one
+    neighbor within NEIGHBOR_DISTANCE_THRESHOLD. A maximum iteration limit
+    prevents infinite loops.
 
     :param systems: The dictionary of star systems keyed by system ID.
     :type systems: dict[str, StarSystem]
