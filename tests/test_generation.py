@@ -503,11 +503,34 @@ class TestDiscoveryModel:
 
     def test_lore_fragment_to_dict_and_back(self) -> None:
         lore = LoreFragment(id="l_1", arc="The Architects", title="First Contact",
-                            text="They came from beyond...", discovered=False)
+                            text="They came from beyond...", discovered=False,
+                            fragment_number=3)
         d = lore.to_dict()
+        assert d["fragment_number"] == 3
         restored = LoreFragment.from_dict(d)
         assert restored.arc == "The Architects"
         assert restored.discovered is False
+        assert restored.fragment_number == 3
+
+    def test_lore_fragment_number_default(self) -> None:
+        """LoreFragment fragment_number should default to 0."""
+        lore = LoreFragment(id="l_test", arc="test", title="Test", text="Test text")
+        assert lore.fragment_number == 0
+        d = lore.to_dict()
+        assert d["fragment_number"] == 0
+        restored = LoreFragment.from_dict(d)
+        assert restored.fragment_number == 0
+
+    def test_lore_fragment_sortable_by_number(self) -> None:
+        """fragment_number should provide a robust sort key (simulating frontend)."""
+        fragments = [
+            LoreFragment(id="lore_abc_3", arc="test", title="T3", text="...", fragment_number=3),
+            LoreFragment(id="lore_abc_1", arc="test", title="T1", text="...", fragment_number=1),
+            LoreFragment(id="lore_abc_2", arc="test", title="T2", text="...", fragment_number=2),
+        ]
+        sorted_frags = sorted(fragments, key=lambda f: f.fragment_number or 0)
+        assert [f.fragment_number for f in sorted_frags] == [1, 2, 3]
+        assert [f.title for f in sorted_frags] == ["T1", "T2", "T3"]
 
 
 class TestBodyModel:
