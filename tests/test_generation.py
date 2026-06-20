@@ -132,13 +132,9 @@ class TestUniverseGeneration:
         Layout: A(500,500), B(565,500), C(565,560)
         - A-B = 65 > 60, A isolated
         - B-C = 60, B and C are neighbors
-        - A-C = sqrt(65^2 + 60^2) ≈ 88.5 < 95 (allows convergence)
 
-        Pass 1: A isolated, closest=B at 65. B moves toward A to (535,500).
-                Now B-C = sqrt(30^2+60^2) ≈ 67.1 > 60, so C becomes isolated.
-        Pass 2: C isolated, closest=B at ~67.1. B moves toward C.
-                After the move, A-B ≈ 57.1 ≤ 60 and C-B = 35 ≤ 60.
-                All systems connected.
+        Pass 1: A isolated, closest=B at 65. A moves toward B to (555,500).
+                Now A-B = 10 ≤ 60, B-C = 60 ≤ 60. All connected.
         """
         rng = random.Random(42)
         a = StarSystem(id="a", name="A", x=500, y=500, star_type="G",
@@ -189,6 +185,54 @@ class TestUniverseGeneration:
                     has_neighbor = True
                     break
             assert has_neighbor, f"System {system.id} ({system.name}) has no neighbor"
+
+    def test_ensure_connectivity_moves_isolated_system(self) -> None:
+        """The isolated system moves toward its closest neighbor (not vice versa)."""
+        rng = random.Random(42)
+        # A is isolated (distance 65 > 60), B has no other neighbor
+        a = StarSystem(id="a", name="A", x=500, y=500, star_type="G",
+                       star_color="#fff", phenomenon="none", phenomenon_desc="")
+        b = StarSystem(id="b", name="B", x=565, y=500, star_type="K",
+                       star_color="#ffa", phenomenon="none", phenomenon_desc="")
+        orig_a_x, orig_a_y = a.x, a.y
+        orig_b_x, orig_b_y = b.x, b.y
+
+        _ensure_connectivity({"a": a, "b": b}, rng)
+
+        # A (isolated) should have moved toward B
+        assert a.x != orig_a_x or a.y != orig_a_y, "Isolated system A should have moved"
+        # B (neighbor) should NOT have moved
+        assert b.x == orig_b_x and b.y == orig_b_y, "Neighbor B should NOT have moved"
+        # After the fix, A and B should be within threshold
+        assert distance_between(a, b) <= NEIGHBOR_DISTANCE_THRESHOLD
+
+    def test_ensure_connectivity_three_isolated_systems(self) -> None:
+        """Three isolated systems where two share the same closest neighbor.
+
+    A(500,500), B(565,500), C(500,565)
+    - All three are isolated from each other (all distances > 60)
+    - A and C both have B as their closest neighbor
+    - Processing A first moves it toward B, making B non-isolated
+    - Then C moves toward B, and all are connected
+    """
+        rng = random.Random(42)
+        # A and C are both isolated from B (distance 65 > 60)
+        # B is the closest neighbor for both A and C
+        a = StarSystem(id="a", name="A", x=500, y=500, star_type="G",
+                       star_color="#fff", phenomenon="none", phenomenon_desc="")
+        b = StarSystem(id="b", name="B", x=565, y=500, star_type="K",
+                       star_color="#ffa", phenomenon="none", phenomenon_desc="")
+        c = StarSystem(id="c", name="C", x=500, y=565, star_type="M",
+                       star_color="#f00", phenomenon="none", phenomenon_desc="")
+        orig_b_x, orig_b_y = b.x, b.y
+
+        _ensure_connectivity({"a": a, "b": b, "c": c}, rng)
+
+        # B should NOT have moved (it's the neighbor, not the isolated system)
+        assert b.x == orig_b_x and b.y == orig_b_y, "Neighbor B should NOT have moved"
+        # Both A and C should now be within threshold of B
+        assert distance_between(a, b) <= NEIGHBOR_DISTANCE_THRESHOLD, "A should be connected to B"
+        assert distance_between(c, b) <= NEIGHBOR_DISTANCE_THRESHOLD, "C should be connected to B"
 
 
 class TestShipModel:

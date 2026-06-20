@@ -129,7 +129,7 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
     if not system:
         return False, "Not in a system."
 
-    is_station = system.phenomenon in ("none", "nebula", "ancient_gate")
+    is_station = system.phenomenon == "none"
     if not is_station:
         return False, "No trading facilities in this system."
 
@@ -215,7 +215,7 @@ def perform_bulk_sell(state: GameState, items: list[dict]) -> tuple[bool, str, i
     if not system:
         return False, "Not in a system.", 0, 0
 
-    is_station = system.phenomenon in ("none", "nebula", "ancient_gate")
+    is_station = system.phenomenon == "none"
     if not is_station:
         return False, "No trading facilities in this system.", 0, 0
 

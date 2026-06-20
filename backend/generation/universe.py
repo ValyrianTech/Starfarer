@@ -347,11 +347,10 @@ def generate_universe(seed: int, system_count: int = GALAXY_SYSTEM_COUNT) -> dic
 def _ensure_connectivity(systems: dict[str, StarSystem], rng: random.Random) -> None:
     """Ensure every star system has at least one neighbor nearby.
 
-    Uses a multi-pass approach: an initial pass detects and fixes isolated
-    systems by moving their closest neighbor closer, followed by iterative
-    verification passes that recheck all systems and apply the same fix
-    until no isolated systems remain.  A maximum iteration limit prevents
-    infinite loops.
+    Uses a multi-pass approach: each pass detects isolated systems and moves
+    them toward their closest neighbor until every system has at least one
+    neighbor within NEIGHBOR_DISTANCE_THRESHOLD. A maximum iteration limit
+    prevents infinite loops.
 
     :param systems: The dictionary of star systems keyed by system ID.
     :type systems: dict[str, StarSystem]
@@ -367,7 +366,6 @@ def _ensure_connectivity(systems: dict[str, StarSystem], rng: random.Random) -> 
         :rtype: bool
         """
         fixed = False
-        modifications = []  # List of (system, new_x, new_y) tuples
 
         for i, system in enumerate(sys_list):
             has_neighbor = False
@@ -391,24 +389,20 @@ def _ensure_connectivity(systems: dict[str, StarSystem], rng: random.Random) -> 
                 if closest_idx is not None:
                     target = sys_list[closest_idx]
                     if closest_dist < 1e-9:  # pragma: no cover
-                        # Systems are at the same coordinates; move the target slightly
-                        target.x = rng.uniform(-5, 5)
-                        target.y = rng.uniform(-5, 5)
-                        target.x = max(50, min(GALAXY_WIDTH - 50, target.x))
-                        target.y = max(50, min(GALAXY_HEIGHT - 50, target.y))
+                        # Systems are at the same coordinates; move the isolated system slightly
+                        system.x += rng.uniform(-5, 5)
+                        system.y += rng.uniform(-5, 5)
+                        system.x = max(50, min(GALAXY_WIDTH - 50, system.x))
+                        system.y = max(50, min(GALAXY_HEIGHT - 50, system.y))
                         fixed = True
                         continue
-                    new_x = system.x + (target.x - system.x) * (MAX_INITIAL_JUMP - 5) / closest_dist
-                    new_y = system.y + (target.y - system.y) * (MAX_INITIAL_JUMP - 5) / closest_dist
-                    new_x = max(50, min(GALAXY_WIDTH - 50, new_x))
-                    new_y = max(50, min(GALAXY_HEIGHT - 50, new_y))
-                    modifications.append((target, new_x, new_y))
+                    # Move the isolated system toward its neighbor
+                    ratio = (NEIGHBOR_DISTANCE_THRESHOLD - 5) / closest_dist
+                    new_x = system.x + (target.x - system.x) * ratio
+                    new_y = system.y + (target.y - system.y) * ratio
+                    system.x = max(50, min(GALAXY_WIDTH - 50, new_x))
+                    system.y = max(50, min(GALAXY_HEIGHT - 50, new_y))
                     fixed = True
-
-        # Apply all modifications after iteration
-        for target, new_x, new_y in modifications:
-            target.x = new_x
-            target.y = new_y
 
         return fixed
 
