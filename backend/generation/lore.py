@@ -89,8 +89,6 @@ def distribute_lore_fragments(
                 rng, systems, system_fragment_count, max_per_system, used_bodies
             )
         except ValueError as e:
-            if "No eligible bodies in system" in str(e):
-                continue
             logging.warning("Unexpected ValueError in lore distribution: %s", e)
             continue
 
@@ -141,7 +139,7 @@ def _pick_lore_location(
     :type used_bodies: set[tuple[str, str]] | None
     :returns: A tuple of ``(system_id, body_id)``.
     :rtype: tuple[str, str]
-    :raises ValueError: If no eligible system or body is available.
+    :raises ValueError: If no eligible system is available.
     """
     if used_bodies is None:
         used_bodies = set()
@@ -152,10 +150,13 @@ def _pick_lore_location(
         if counts.get(sys_id, 0) >= max_per_system:
             continue
         score = 0
+        has_available_body = False
         for body in system.bodies:
             if body.poi_count > 0:
                 score += BIOME_WEIGHTS.get(body.biome, 1)
-        if score > 0:
+                if (sys_id, body.id) not in used_bodies:
+                    has_available_body = True
+        if score > 0 and has_available_body:
             eligible_systems.append(sys_id)
             weights.append(score)
 
@@ -170,9 +171,6 @@ def _pick_lore_location(
         b for b in bodies
         if (chosen_sys_id, b.id) not in used_bodies
     ]
-    if not eligible_bodies:
-        raise ValueError(f"No eligible bodies in system {chosen_sys_id}")
-
     body_weights = [BIOME_WEIGHTS.get(b.biome, 1) for b in eligible_bodies]
     chosen_body = rng.choices(eligible_bodies, weights=body_weights, k=1)[0]
 
