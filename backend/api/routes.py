@@ -12,8 +12,8 @@ from fastapi import APIRouter, HTTPException
 
 from backend.models.game_state import GameState
 from backend.api.schemas import (
-    NewGameRequest, ResolveEventRequest, TradeRequest, UpgradeRequest,
-    HealthResponse,
+    BulkSellRequest, NewGameRequest, ResolveEventRequest, TradeRequest,
+    UpgradeRequest, HealthResponse,
 )
 from backend.game.manager import (
     GAME_STORE, new_game, get_galaxy, get_system_detail, game_save, game_load as game_load_func,
@@ -23,7 +23,7 @@ from backend.game.engine import (
     can_jump, perform_jump, perform_scan, get_nearby_systems,
     land_on_body, explore_surface,
 )
-from backend.game.trading import get_upgrade_info, purchase_upgrade, perform_trade
+from backend.game.trading import get_upgrade_info, purchase_upgrade, perform_trade, perform_bulk_sell
 from backend.database import get_leaderboard
 
 START_TIME = time.time()
@@ -403,6 +403,44 @@ def api_trade(game_id: str, req: TradeRequest) -> dict:
         "result": msg,
         "ship": state.ship.to_dict(),
     }
+
+
+@router.post("/game/{game_id}/trade/bulk-sell")
+def api_bulk_sell(game_id: str, req: BulkSellRequest) -> dict:
+    """Sell multiple discoveries at once in a single transaction.
+
+    Accepts a list of items with quantities. Items that don't exist
+    in the ship's discoveries are reported as errors, but available
+    items are still sold (partial failure mode).
+
+    :param game_id: The unique identifier of the game.
+    :type game_id: str
+    :param req: The bulk sell request with a list of items.
+    :type req: BulkSellRequest
+    :returns: A dictionary with the full game state (same format as
+        ``GET /api/game/{game_id}``).
+    :rtype: dict
+    :raises HTTPException: 404 if the game is not found; 400 if the
+        sell is not possible.
+    """
+    state = _get_state(game_id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Game not found")
+
+    if not req.items:
+        raise HTTPException(status_code=400, detail="Items list must not be empty.")
+
+    items_dicts = [{"item": i.item, "quantity": i.quantity} for i in req.items]
+    ok, msg, sold_count, total_price = perform_bulk_sell(state, items_dicts)
+
+    if not ok:
+        raise HTTPException(status_code=400, detail=msg)
+
+    game_save(state)
+    response = _full_state_response(state)
+    response["sold_count"] = sold_count
+    response["total_price"] = total_price
+    return response
 
 
 @router.post("/game/{game_id}/upgrade")

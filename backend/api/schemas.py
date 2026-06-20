@@ -50,6 +50,19 @@ class TradeRequest(BaseModel):
     quantity: int = 1
 
 
+class BulkSellItem(BaseModel):
+    """A single item in a bulk sell request."""
+
+    item: str
+    quantity: int = 1
+
+
+class BulkSellRequest(BaseModel):
+    """Request body for selling multiple discoveries at once."""
+
+    items: list[BulkSellItem]
+
+
 class UpgradeRequest(BaseModel):
     """Request body for purchasing a ship upgrade."""
 
