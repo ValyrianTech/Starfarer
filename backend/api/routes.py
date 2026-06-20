@@ -417,6 +417,7 @@ def api_lore(game_id: str) -> dict:
 
     return {
         "arcs": arcs,
+        "arc_order": list(ARC_DISPLAY_NAMES.keys()),
         "progress": {
             "collected": lore_collected,
             "total": lore_total,
