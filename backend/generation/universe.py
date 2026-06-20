@@ -389,9 +389,10 @@ def _ensure_connectivity(systems: dict[str, StarSystem], rng: random.Random) -> 
                 if closest_idx is not None:
                     target = sys_list[closest_idx]
                     if closest_dist < 1e-9:  # pragma: no cover
-                        # Systems are at the same coordinates; move the isolated system slightly
-                        system.x += rng.uniform(-5, 5)
-                        system.y += rng.uniform(-5, 5)
+                        # Systems are at the same coordinates; nudge in a random direction
+                        angle = rng.uniform(0, 2 * math.pi)
+                        system.x += math.cos(angle) * 10
+                        system.y += math.sin(angle) * 10
                         system.x = max(50, min(GALAXY_WIDTH - 50, system.x))
                         system.y = max(50, min(GALAXY_HEIGHT - 50, system.y))
                         fixed = True

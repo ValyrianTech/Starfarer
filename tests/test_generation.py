@@ -152,31 +152,27 @@ class TestUniverseGeneration:
         assert distance_between(b, c) <= NEIGHBOR_DISTANCE_THRESHOLD
 
     def test_ensure_connectivity_same_coordinates(self) -> None:
-        """_ensure_connectivity handles when a moved system lands on another's coords.
+        """_ensure_connectivity handles when an isolated system's closest neighbor is at distance 0.
 
-        After the first pass moves a system, it could end up at the exact same
-        coordinates as another system. The closest_dist would be 0.0 which would
-        cause a ZeroDivisionError without the fix.
+        This triggers the closest_dist < 1e-9 branch by placing two systems at the exact same
+        coordinates, where both are isolated from all other systems.
         """
         rng = random.Random(42)
-        # A is isolated, B is its closest neighbor, C is far from B
-        # After B moves toward A, B lands on C's coordinates
+        # A and B are at the same coordinates (500, 500)
+        # C is far away at (1000, 1000), so A and B are isolated from C
+        # A's closest neighbor is B at distance 0, and vice versa
         a = StarSystem(id="a", name="A", x=500, y=500, star_type="G",
                        star_color="#fff", phenomenon="none", phenomenon_desc="")
-        # B is 65 units from A (isolated), and 0 units from C (same coords)
-        b = StarSystem(id="b", name="B", x=565, y=500, star_type="K",
+        b = StarSystem(id="b", name="B", x=500, y=500, star_type="K",
                        star_color="#ffa", phenomenon="none", phenomenon_desc="")
-        c = StarSystem(id="c", name="C", x=565, y=500, star_type="M",
+        c = StarSystem(id="c", name="C", x=1000, y=1000, star_type="M",
                        star_color="#f00", phenomenon="none", phenomenon_desc="")
-        # D is far from everyone to make C isolated
-        d = StarSystem(id="d", name="D", x=100, y=100, star_type="G",
-                       star_color="#fff", phenomenon="none", phenomenon_desc="")
-        systems = {"a": a, "b": b, "c": c, "d": d}
+        systems = {"a": a, "b": b, "c": c}
 
         # This should not raise ZeroDivisionError
         _ensure_connectivity(systems, rng)
 
-        # After the fix, all systems should have a neighbor
+        # After the fix, all systems should have a neighbor within threshold
         for system in systems.values():
             has_neighbor = False
             for other in systems.values():
