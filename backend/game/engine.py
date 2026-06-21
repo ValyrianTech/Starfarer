@@ -7,7 +7,7 @@ landing, surface exploration, and nearby system discovery.
 
 import random
 import logging
-from typing import Any, Optional
+from typing import Any, Callable, List, NamedTuple, Optional
 
 from backend.config import (
     JUMP_FUEL_COST_PER_LY, SCAN_FUEL_COST, EXPLORE_FUEL_COST,
@@ -331,6 +331,144 @@ CRAFT_CONVERSIONS = {
 }
 
 
+class _SubEntry(NamedTuple):
+    """Entry in a distress sub-outcome table."""
+    weight: float
+    strategy: Callable[..., dict]
+
+
+class _BucketEntry(NamedTuple):
+    """Entry in the distress bucket table."""
+    threshold: float
+    precondition: Callable[[GameState], bool]
+    strategy: Optional[Callable[..., dict]]
+    sub_table: Optional[List[_SubEntry]]
+
+
+def _distress_pilots_guild(state: GameState, rng: Any, turns: int) -> dict:
+    """Pilots Guild rescue outcome: deliver 20 fuel for 100 credits."""
+    ship = state.ship
+    system = state.get_current_system()
+    ship.credits = max(0, ship.credits - 100)
+    ship.fuel = min(ship.max_fuel, ship.fuel + 20)
+    state.modify_faction_reputation("free_pilots", 5)
+    state.add_log("emergency", f"Pilots Guild answered your distress call in {system.name}. They delivered 20 fuel for 100 credits.")
+    return {
+        "result": f"Pilots Guild rescue! 20 fuel delivered for 100 credits. Arrived in {turns} turns.",
+        "outcome": "pilots_guild",
+        "effects": {"fuel": 20, "credits": -100},
+    }
+
+
+def _distress_passerby_help(state: GameState, rng: Any, turns: int) -> dict:
+    """Friendly passerby shares fuel."""
+    ship = state.ship
+    fuel_given = rng.randint(10, 25)
+    ship.fuel = min(ship.max_fuel, ship.fuel + fuel_given)
+    state.add_log("emergency", f"A friendly passerby answered your distress call and shared {fuel_given} fuel.")
+    return {
+        "result": f"Friendly passerby shared {fuel_given} fuel! Arrived in {turns} turns.",
+        "outcome": "passerby_help",
+        "effects": {"fuel": fuel_given},
+    }
+
+
+def _distress_piracy(state: GameState, rng: Any, turns: int) -> dict:
+    """Pirates steal credits."""
+    ship = state.ship
+    credits_stolen = min(ship.credits, rng.randint(20, 80))
+    ship.credits = max(0, ship.credits - credits_stolen)
+    state.add_log("emergency", f"Pirates responded to your distress call and stole {credits_stolen} credits!")
+    return {
+        "result": f"Pirates answered your call and stole {credits_stolen} credits!",
+        "outcome": "piracy",
+        "effects": {"credits": -credits_stolen},
+    }
+
+
+def _distress_passerby_ignore(state: GameState, rng: Any, turns: int) -> dict:
+    """Ship passes by without responding."""
+    state.add_log("emergency", f"A ship passed nearby but did not respond to your distress call.")
+    return {
+        "result": "A ship passed nearby but did not respond.",
+        "outcome": "passerby_ignore",
+        "effects": {},
+    }
+
+
+def _distress_signal_friendly(state: GameState, rng: Any, turns: int) -> dict:
+    """Friendly emergency responder delivers fuel."""
+    ship = state.ship
+    fuel_given = rng.randint(5, 15)
+    ship.fuel = min(ship.max_fuel, ship.fuel + fuel_given)
+    state.add_log("emergency", f"An emergency signal brought a friendly responder who delivered {fuel_given} fuel.")
+    return {
+        "result": f"Friendly emergency responder delivered {fuel_given} fuel! Arrived in {turns} turns.",
+        "outcome": "signal_friendly",
+        "effects": {"fuel": fuel_given},
+    }
+
+
+def _distress_signal_hostile(state: GameState, rng: Any, turns: int) -> dict:
+    """Hostile ship attacks, causing hull damage."""
+    ship = state.ship
+    hull_damage = rng.randint(5, 15)
+    ship.hull = max(0, ship.hull - hull_damage)
+    state.add_log("emergency", f"A hostile ship intercepted your emergency signal and attacked, causing {hull_damage} hull damage.")
+    return {
+        "result": f"Hostile ship intercepted your signal! Took {hull_damage} hull damage.",
+        "outcome": "signal_hostile",
+        "effects": {"hull": -hull_damage},
+    }
+
+
+def _has_station_precondition(state: GameState) -> bool:
+    """Precondition: the current system has a trading station."""
+    system = state.get_current_system()
+    return system is not None and system.has_trading_station
+
+
+def _always_true_precondition(state: GameState) -> bool:
+    """Precondition that is always satisfied."""
+    return True
+
+
+#: Sub-outcome table for passerby branch.
+_PASSERBY_TABLE: List[_SubEntry] = [
+    _SubEntry(weight=0.5, strategy=_distress_passerby_help),
+    _SubEntry(weight=0.3, strategy=_distress_piracy),
+    _SubEntry(weight=0.2, strategy=_distress_passerby_ignore),
+]
+
+#: Sub-outcome table for signal branch.
+_SIGNAL_TABLE: List[_SubEntry] = [
+    _SubEntry(weight=0.5, strategy=_distress_signal_friendly),
+    _SubEntry(weight=0.5, strategy=_distress_signal_hostile),
+]
+
+#: Top-level distress outcome bucket table.
+_DISTRESS_TABLE: List[_BucketEntry] = [
+    _BucketEntry(
+        threshold=0.3,
+        precondition=_has_station_precondition,
+        strategy=_distress_pilots_guild,
+        sub_table=None,
+    ),
+    _BucketEntry(
+        threshold=0.7,
+        precondition=_always_true_precondition,
+        strategy=None,
+        sub_table=_PASSERBY_TABLE,
+    ),
+    _BucketEntry(
+        threshold=1.0,
+        precondition=_always_true_precondition,
+        strategy=None,
+        sub_table=_SIGNAL_TABLE,
+    ),
+]
+
+
 def activate_distress_beacon(state: GameState) -> dict:
     """Activate the distress beacon to call for help when in trouble.
 
@@ -378,65 +516,24 @@ def activate_distress_beacon(state: GameState) -> dict:
 
     turns = rng.randint(1, 3)
     rescue_roll = rng.random()
-    has_station = system.has_trading_station
 
-    if has_station and rescue_roll < 0.3:
-        ship.credits = max(0, ship.credits - 100)
-        ship.fuel = min(ship.max_fuel, ship.fuel + 20)
-        state.modify_faction_reputation("free_pilots", 5)
-        state.add_log("emergency", f"Pilots Guild answered your distress call in {system.name}. They delivered 20 fuel for 100 credits.")
-        return {
-            "result": f"Pilots Guild rescue! 20 fuel delivered for 100 credits. Arrived in {turns} turns.",
-            "outcome": "pilots_guild",
-            "effects": {"fuel": 20, "credits": -100},
-        }
-    elif rescue_roll < 0.7:
-        passerby_roll = rng.random()
-        if passerby_roll < 0.5:
-            fuel_given = rng.randint(10, 25)
-            ship.fuel = min(ship.max_fuel, ship.fuel + fuel_given)
-            state.add_log("emergency", f"A friendly passerby answered your distress call and shared {fuel_given} fuel.")
-            return {
-                "result": f"Friendly passerby shared {fuel_given} fuel! Arrived in {turns} turns.",
-                "outcome": "passerby_help",
-                "effects": {"fuel": fuel_given},
-            }
-        elif passerby_roll < 0.8:
-            credits_stolen = min(ship.credits, rng.randint(20, 80))
-            ship.credits = max(0, ship.credits - credits_stolen)
-            state.add_log("emergency", f"Pirates responded to your distress call and stole {credits_stolen} credits!")
-            return {
-                "result": f"Pirates answered your call and stole {credits_stolen} credits!",
-                "outcome": "piracy",
-                "effects": {"credits": -credits_stolen},
-            }
-        else:
-            state.add_log("emergency", f"A ship passed nearby but did not respond to your distress call.")
-            return {
-                "result": "A ship passed nearby but did not respond.",
-                "outcome": "passerby_ignore",
-                "effects": {},
-            }
-    else:
-        signal_roll = rng.random()
-        if signal_roll < 0.5:
-            fuel_given = rng.randint(5, 15)
-            ship.fuel = min(ship.max_fuel, ship.fuel + fuel_given)
-            state.add_log("emergency", f"An emergency signal brought a friendly responder who delivered {fuel_given} fuel.")
-            return {
-                "result": f"Friendly emergency responder delivered {fuel_given} fuel! Arrived in {turns} turns.",
-                "outcome": "signal_friendly",
-                "effects": {"fuel": fuel_given},
-            }
-        else:
-            hull_damage = rng.randint(5, 15)
-            ship.hull = max(0, ship.hull - hull_damage)
-            state.add_log("emergency", f"A hostile ship intercepted your emergency signal and attacked, causing {hull_damage} hull damage.")
-            return {
-                "result": f"Hostile ship intercepted your signal! Took {hull_damage} hull damage.",
-                "outcome": "signal_hostile",
-                "effects": {"hull": -hull_damage},
-            }
+    for bucket in _DISTRESS_TABLE:
+        if not bucket.precondition(state):
+            continue
+        if rescue_roll >= bucket.threshold:
+            continue
+        if bucket.strategy is not None:
+            return bucket.strategy(state, rng, turns)
+        if bucket.sub_table is not None:
+            sub_roll = rng.random()
+            cumulative = 0.0
+            for entry in bucket.sub_table:
+                cumulative += entry.weight
+                if sub_roll < cumulative:
+                    return entry.strategy(state, rng, turns)
+        break
+
+    return {"error": "No distress outcome matched."}
 
 
 def perform_salvage(state: GameState) -> dict:
