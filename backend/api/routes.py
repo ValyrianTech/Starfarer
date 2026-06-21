@@ -488,8 +488,10 @@ def api_bulk_sell(game_id: str, req: BulkSellRequest) -> dict:
 
     game_save(state)
     response = _full_state_response(state)
-    response["sold_count"] = sold_count
-    response["total_price"] = total_price
+    response["trade_result"] = {
+        "sold_count": sold_count,
+        "total_price": total_price,
+    }
     return response
 
 
