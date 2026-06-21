@@ -252,6 +252,8 @@ def explore_surface(state: GameState) -> list[Discovery]:
             discoveries.append(disc)
             state.discoveries.append(disc)
 
+        body.poi_count = max(0, body.poi_count - len(discoveries))
+
     ship.fuel -= EXPLORE_FUEL_COST
 
     state.add_log("exploration", f"Explored {body.name}. Found {len(discoveries)} points of interest.")

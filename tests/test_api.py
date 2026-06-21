@@ -106,6 +106,32 @@ class TestAPIGameFlow:
         assert resp.status_code == 200
         assert "loaded" in resp.json()["result"].lower() or "Loaded" in resp.json()["result"]
 
+    def test_scan_pois_explore_returns_discoveries_and_consumes_pois(self) -> None:
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "scan-explore-pois"})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+
+        resp = client.post(f"/api/game/{game_id}/scan")
+        assert resp.status_code == 200
+        system = resp.json()["system"]
+        body = next(b for b in system["bodies"] if b["poi_count"] > 0)
+        poi_before = body["poi_count"]
+
+        resp = client.post(f"/api/game/{game_id}/land/{body['id']}")
+        assert resp.status_code == 200
+
+        resp = client.post(f"/api/game/{game_id}/explore")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["discoveries"]) > 0
+
+        resp = client.get(f"/api/game/{game_id}/system/{system['id']}")
+        assert resp.status_code == 200
+        updated_body = next(
+            b for b in resp.json()["system"]["bodies"] if b["id"] == body["id"]
+        )
+        assert updated_body["poi_count"] == poi_before - len(data["discoveries"])
+
 
 class TestAPIEdgeCases:
     def test_nonexistent_game(self) -> None:
