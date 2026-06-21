@@ -15,10 +15,10 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 import os
 
 from backend.api.routes import router
-from backend.database import init_db
+from backend.database import init_db, run_migrations
+from backend.config import DATA_DIR, DB_PATH
 
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend")
-DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 
 
 @asynccontextmanager
@@ -35,8 +35,9 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
     :rtype: AsyncGenerator[None, None]
     """
     init_db()
-    os.makedirs(DATA_DIR, exist_ok=True)
-    os.makedirs(os.path.join(DATA_DIR, "save"), exist_ok=True)
+    run_migrations()
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    (DATA_DIR / "save").mkdir(parents=True, exist_ok=True)
     yield
 
 

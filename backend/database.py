@@ -11,8 +11,7 @@ import json
 import os
 from datetime import datetime, timezone
 
-DB_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
-DB_PATH = os.path.join(DB_DIR, "starfarer.db")
+from backend.config import DB_PATH, DATA_DIR
 
 
 def get_db() -> sqlite3.Connection:
@@ -24,8 +23,8 @@ def get_db() -> sqlite3.Connection:
     :returns: An open SQLite connection with row factory set.
     :rtype: sqlite3.Connection
     """
-    os.makedirs(DB_DIR, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(DB_PATH))
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
@@ -208,3 +207,23 @@ def get_leaderboard(limit: int = 10) -> list[dict]:
             "credits": state.get("ship", {}).get("credits", 0),
         })
     return results
+
+
+MIGRATIONS = [
+    (1, "CREATE TABLE IF NOT EXISTS schema_version (version INTEGER)"),
+]
+
+
+def run_migrations() -> None:
+    """Run any pending migrations on the persistent database."""
+    conn = get_db()
+    try:
+        conn.execute("CREATE TABLE IF NOT EXISTS schema_version (version INTEGER)")
+        current = conn.execute("SELECT COALESCE(MAX(version), 0) FROM schema_version").fetchone()[0]
+        for version, sql in MIGRATIONS:
+            if version > current:
+                conn.execute(sql)
+                conn.execute("INSERT INTO schema_version (version) VALUES (?)", (version,))
+        conn.commit()
+    finally:
+        conn.close()
