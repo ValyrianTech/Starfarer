@@ -149,9 +149,11 @@ class TestNavigation:
         planet = next((b for b in system.bodies if b.body_type == "planet"), None)
         if planet:
             land_on_body(state, planet.id)
+            poi_before = planet.poi_count
             discoveries = explore_surface(state)
             assert len(discoveries) > 0
             assert len(state.discoveries) > 0
+            assert planet.poi_count < poi_before
 
     def test_jump_chain(self) -> None:
         state = new_game(seed=42)
