@@ -6,6 +6,16 @@ stats, galaxy dimensions, fuel costs, upgrade systems, star types, biome
 definitions, and system phenomena.
 """
 
+import os
+from pathlib import Path
+
+_DEFAULT_DATA_DIR = Path.home() / ".starfarer" / "data"
+DATA_DIR = Path(os.environ.get("STARFARER_DATA_DIR", str(_DEFAULT_DATA_DIR)))
+
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+DB_PATH = DATA_DIR / "starfarer.db"
+
 GAME_NAME = "Starfarer: Echoes of the Void"
 GAME_VERSION = "0.1.0"
 

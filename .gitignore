@@ -2,6 +2,7 @@
 __pycache__/
 *.pyc
 *.db
+data/
 data/starfarer.db
 data/save/
 *.egg-info/
