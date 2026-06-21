@@ -415,7 +415,6 @@ class TestTradingFactionIntegration:
             Discovery(id="bvt1", category="artifact", name="Ancient Relic",
                        description="Old relic", value=200, system_id=system.id),
         ]
-        credits_before = state.ship.credits
 
         ok, msg, sold_count, total_price = perform_bulk_sell(
             state, [{"item": "artifact", "quantity": 1}]
