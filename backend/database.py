@@ -33,6 +33,16 @@ def get_db() -> sqlite3.Connection:
 
 @contextmanager
 def get_db_ctx():
+    """Context manager that provides a database connection.
+
+    Yields an open :class:`sqlite3.Connection` that is automatically closed
+    when the context exits, even if an exception occurs.
+
+    :yields: An open SQLite database connection.
+    :rtype: sqlite3.Connection
+    :raises sqlite3.Error: If a database error occurs while opening or
+        closing the connection.
+    """
     conn = get_db()
     try:
         yield conn
