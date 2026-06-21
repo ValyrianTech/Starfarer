@@ -201,6 +201,12 @@ async function handleAction(action, target) {
         break;
       }
 
+      case 'show-lore': {
+        await loadLore(GAME_ID);
+        showScreen('lore');
+        break;
+      }
+
       case 'save-game': {
         await API.save(GAME_ID);
         break;

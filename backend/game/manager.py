@@ -42,7 +42,7 @@ def new_game(seed: int | None = None, ship_name: str | None = None) -> GameState
     name = ship_name if ship_name else DEFAULT_SHIP_NAME
     game_id = str(uuid.uuid4())
 
-    systems = generate_universe(s)
+    systems, lore_fragments = generate_universe(s)
     first_sys_id = list(systems.keys())[0]
 
     ship = Ship(
@@ -52,7 +52,7 @@ def new_game(seed: int | None = None, ship_name: str | None = None) -> GameState
         current_system_id=first_sys_id,
     )
 
-    state = GameState(id=game_id, seed=s, ship=ship, systems=systems)
+    state = GameState(id=game_id, seed=s, ship=ship, systems=systems, lore_fragments=lore_fragments)
     first_sys = state.get_current_system()
     if first_sys:
         first_sys.visited = True
@@ -239,6 +239,7 @@ def _state_from_dict(d: dict) -> GameState:
     events = [Event.from_dict(e) for e in d.get("events", [])]
     discoveries = [Discovery.from_dict(disc) for disc in d.get("discoveries", [])]
     lore = [LoreFragment.from_dict(lf) for lf in d.get("lore_fragments", [])]
+    _fixup_old_lore_fragment_numbers(lore)
 
     return GameState(
         id=d["id"],
@@ -252,6 +253,25 @@ def _state_from_dict(d: dict) -> GameState:
         systems_visited=d.get("systems_visited", 0),
         game_started=d.get("game_started", ""),
     )
+
+
+def _fixup_old_lore_fragment_numbers(lore_fragments: list) -> None:
+    """Fix up lore fragments that have ``fragment_number == -1`` by extracting
+    the number from the fragment ID.  Fragment IDs follow the pattern
+    ``lore_<arc>_<number>``, so the number is the last ``_``-delimited part.
+
+    Old saves serialized before the ``fragment_number`` field was added will
+    load with ``fragment_number=-1``.  This migration corrects those in place.
+
+    :param lore_fragments: The list of :class:`LoreFragment` instances to fix.
+    :type lore_fragments: list
+    """
+    for frag in lore_fragments:
+        if frag.fragment_number == -1:
+            try:
+                frag.fragment_number = int(frag.id.rsplit("_", 1)[-1])
+            except (ValueError, IndexError):
+                pass
 
 
 GAME_STORE: dict[str, GameState] = {}

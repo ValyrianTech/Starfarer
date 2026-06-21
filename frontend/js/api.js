@@ -40,4 +40,5 @@ const API = {
   save: (gameId) => apiCall('POST', `/game/${gameId}/save`),
   load: (gameId) => apiCall('POST', `/game/${gameId}/load`),
   leaderboard: () => apiCall('GET', '/leaderboard'),
+  lore: (gameId) => apiCall('GET', `/game/${gameId}/lore`),
 };

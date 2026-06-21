@@ -114,6 +114,15 @@ class GameState:
         self.ship.crew = max(0, min(self.ship.max_crew, self.ship.crew + effects["crew"]))
         return effects
 
+    @property
+    def lore_fragments_collected(self) -> int:
+        """Count of lore fragments that have been discovered.
+
+        :returns: The number of discovered lore fragments.
+        :rtype: int
+        """
+        return sum(1 for lf in self.lore_fragments if lf.discovered)
+
     def state_summary(self) -> dict:
         """Generate a compact summary of the current game state.
 
@@ -133,4 +142,6 @@ class GameState:
             "systems_visited": self.systems_visited,
             "log_count": len(self.log_entries),
             "game_started": self.game_started,
+            "lore_fragments_collected": self.lore_fragments_collected,
+            "lore_fragments_total": len(self.lore_fragments),
         }

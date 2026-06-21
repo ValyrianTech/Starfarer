@@ -6,7 +6,7 @@ landing, surface exploration, and nearby system discovery.
 """
 
 import random
-import uuid
+import logging
 from typing import Any, Optional
 
 from backend.config import (
@@ -19,6 +19,9 @@ from backend.models.system import StarSystem, Body
 from backend.models.discovery import Discovery
 from backend.utils import deterministic_hash
 from backend.generation.universe import distance_between
+from backend.generation.lore import get_fragment_for_body
+
+logger = logging.getLogger(__name__)
 
 
 def can_jump(ship: Ship, target: StarSystem, current: Optional[StarSystem]) -> tuple[bool, float, str]:
@@ -194,6 +197,8 @@ def explore_surface(state: GameState) -> list[Discovery]:
     Deducts explore fuel cost and generates a random number of
     discoveries based on the body's points of interest count.
     Discoveries are appended to the game state and returned.
+    If a lore fragment is attached to the current body, it is
+    linked to one of the generated discoveries.
 
     :param state: The current game state.
     :type state: GameState
@@ -215,20 +220,37 @@ def explore_surface(state: GameState) -> list[Discovery]:
     if not body:
         return []
 
+    if body.poi_count == 0:
+        return []
+
     discoveries = []
     item_rng = random.Random(state.seed + len(state.discoveries) + deterministic_hash(body.id))
 
     num_finds = min(body.poi_count, item_rng.randint(1, 3))
-    if num_finds == 0:
-        return []
+
+    if num_finds > 0:
+        lore_frag = get_fragment_for_body(system.id, body.id, state.lore_fragments)
+        lore_linked = False
+
+        for i in range(num_finds):
+            cat = item_rng.choice(["mineral", "artifact", "lifeform", "signal", "ruin"])
+            disc = _generate_discovery(item_rng, cat, body, system)
+
+            if lore_frag and not lore_frag.discovered and not lore_linked:
+                # First discovery of this lore fragment — link it to this discovery
+                disc.lore_fragment_id = lore_frag.id
+                lore_frag.discovered = True
+                lore_linked = True
+                state.add_log("lore", f"Discovered lore fragment: {lore_frag.title} ({lore_frag.id}).")
+            elif lore_frag and lore_frag.discovered and not lore_linked:
+                # Lore fragment already discovered in a previous explore action (genuinely stale)
+                logger.warning(f"Lore fragment {lore_frag.id} ({lore_frag.title}) already discovered but found on body {body.id}.")
+                lore_linked = True
+
+            discoveries.append(disc)
+            state.discoveries.append(disc)
 
     ship.fuel -= EXPLORE_FUEL_COST
-
-    for i in range(num_finds):
-        cat = item_rng.choice(["mineral", "artifact", "lifeform", "signal", "ruin"])
-        disc = _generate_discovery(item_rng, cat, body, system)
-        discoveries.append(disc)
-        state.discoveries.append(disc)
 
     state.add_log("exploration", f"Explored {body.name}. Found {len(discoveries)} points of interest.")
     return discoveries
@@ -289,7 +311,7 @@ def _generate_discovery(rng: random.Random, category: str, body: Body, system: S
             "Strange symbols cover every surface.",
         ],
     }
-    d_id = str(uuid.uuid4())[:12]
+    d_id = f"{rng.getrandbits(48):012x}"
     name = rng.choice(names[category])
     desc = rng.choice(descs[category])
     value = rng.randint(10, 200)

@@ -15,25 +15,9 @@ from backend.config import (
     STAR_SPECTRAL_TYPES, STAR_COLORS, SYSTEM_PHENOMENA, PHENOMENON_WEIGHTS,
     PLANET_NAMES, MOON_NAMES, BIOME_TYPES, MIN_ORBITALS, MAX_ORBITALS,
 )
+from backend.utils import seeded_random
+from backend.generation.lore import distribute_lore_fragments
 from backend.models.system import StarSystem, Body
-
-
-def seeded_random(seed: int, *extra: str) -> random.Random:
-    """Create a deterministic random number generator from a seed.
-
-    Combines the base seed with any number of extra string arguments
-    to produce a reproducible RNG instance.
-
-    :param seed: The base universe seed.
-    :type seed: int
-    :param extra: Additional strings to mix into the seed for
-        independent RNG streams.
-    :type extra: str
-    :returns: A seeded :class:`random.Random` instance.
-    :rtype: random.Random
-    """
-    rng = random.Random(str(seed) + "".join(str(e) for e in extra))
-    return rng
 
 
 def _pick_weighted(rng: random.Random, items: list[str], weights: list[int]) -> str:
@@ -306,6 +290,7 @@ def generate_system(rng: random.Random, idx: int, galaxy_rng: random.Random) -> 
         id=sys_id, name=name, x=x, y=y,
         star_type=star_type, star_color=star_color,
         phenomenon=phenomenon, phenomenon_desc=phenomenon_desc,
+        has_trading_station=(phenomenon == "none"),
         bodies=bodies,
     )
 
@@ -314,12 +299,13 @@ MAX_INITIAL_JUMP = 40
 NEIGHBOR_DISTANCE_THRESHOLD = 60
 
 
-def generate_universe(seed: int, system_count: int = GALAXY_SYSTEM_COUNT) -> dict[str, StarSystem]:
-    """Generate the complete galaxy of star systems.
+def generate_universe(seed: int, system_count: int = GALAXY_SYSTEM_COUNT) -> tuple[dict[str, StarSystem], list]:
+    """Generate the complete galaxy of star systems with lore fragments.
 
     Creates the specified number of star systems using deterministic,
     seed-based RNGs for layout and details. Ensures every system has
-    at least one neighbor within a reasonable distance.
+    at least one neighbor within a reasonable distance. Also distributes
+    lore fragments across the galaxy.
 
     :param seed: The universe generation seed for deterministic
         reproducibility.
@@ -327,9 +313,11 @@ def generate_universe(seed: int, system_count: int = GALAXY_SYSTEM_COUNT) -> dic
     :param system_count: The number of star systems to generate
         (defaults to ``GALAXY_SYSTEM_COUNT``).
     :type system_count: int
-    :returns: A dictionary mapping system IDs to :class:`StarSystem`
-        instances.
-    :rtype: dict[str, StarSystem]
+    :returns: A tuple of ``(systems, lore_fragments)`` where
+        ``systems`` is a dict mapping system IDs to :class:`StarSystem`
+        instances and ``lore_fragments`` is a list of placed
+        :class:`LoreFragment` objects.
+    :rtype: tuple[dict[str, StarSystem], list]
     """
     galaxy_rng = seeded_random(seed, "galaxy_layout")
     system_rng = seeded_random(seed, "system_detail")
@@ -341,7 +329,13 @@ def generate_universe(seed: int, system_count: int = GALAXY_SYSTEM_COUNT) -> dic
 
     _ensure_connectivity(systems, galaxy_rng)
 
-    return systems
+    placement = distribute_lore_fragments(seed, systems)
+
+    lore_fragments = []
+    for sys_id, frags in placement.items():
+        lore_fragments.extend(frags)
+
+    return systems, lore_fragments
 
 
 def _ensure_connectivity(systems: dict[str, StarSystem], rng: random.Random) -> None:
@@ -421,10 +415,6 @@ def _ensure_connectivity(systems: dict[str, StarSystem], rng: random.Random) -> 
                 if other.id != system.id
             )
             if not has_neighbor:
-                logging.warning(
-                    f"System {system.id} ({system.name}) remains isolated after "
-                    f"{max_iters} iterations"
-                )
                 # Fallback: move directly to within threshold distance of closest neighbor
                 closest_id = None
                 closest_dist = float("inf")
@@ -447,6 +437,10 @@ def _ensure_connectivity(systems: dict[str, StarSystem], rng: random.Random) -> 
                         system.y = target.y + (dy / dist) * target_dist
                         system.x = max(50, min(GALAXY_WIDTH - 50, system.x))
                         system.y = max(50, min(GALAXY_HEIGHT - 50, system.y))
+                    logging.warning(
+                        f"System {system.id} ({system.name}) was isolated after "
+                        f"{max_iters} iterations; fallback repositioning applied."
+                    )
 
 
 def distance_between(sys1: StarSystem, sys2: StarSystem) -> float:

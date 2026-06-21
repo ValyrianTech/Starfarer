@@ -593,7 +593,7 @@ class TestAPIAdvancedFlow:
         game_id = resp.json()["game_id"]
         state = GAME_STORE[game_id]
         current_sys = state.get_current_system()
-        current_sys.phenomenon = "none"
+        current_sys.has_trading_station = True
         state.discoveries.append(
             Discovery(id="trade-name-match-disc-1", category="mineral", name="artifact",
                       description="Test", value=200, system_id=current_sys.id)
@@ -620,7 +620,7 @@ class TestAPIAdvancedFlow:
         game_id = resp.json()["game_id"]
         state = GAME_STORE[game_id]
         current_sys = state.get_current_system()
-        current_sys.phenomenon = "none"
+        current_sys.has_trading_station = True
         state.discoveries.append(
             Discovery(id="trade-name-prio-disc-1", category="artifact", name="Ancient Relic",
                       description="Old relic", value=200, system_id=current_sys.id)
@@ -852,7 +852,7 @@ class TestAPIBulkSell:
         gid = resp.json()["game_id"]
         state = GAME_STORE[gid]
         current_sys = state.get_current_system()
-        current_sys.phenomenon = "none"
+        current_sys.has_trading_station = True
         from backend.models.discovery import Discovery
         state.discoveries.append(
             Discovery(id=f"{game_id}-disc-1", category="artifact", name="Ancient Relic",
@@ -892,6 +892,9 @@ class TestAPIBulkSell:
         assert "systems_visited" in data
         assert "systems_total" in data
         assert "game_started" in data
+        assert "trade_result" in data
+        assert data["trade_result"]["sold_count"] > 0
+        assert data["trade_result"]["total_price"] > 0
         assert len(data["discoveries"]) < 3
 
     def test_bulk_sell_multiple_of_same_category(self) -> None:
@@ -915,6 +918,9 @@ class TestAPIBulkSell:
         assert "systems_visited" in data
         assert "systems_total" in data
         assert "game_started" in data
+        assert "trade_result" in data
+        assert data["trade_result"]["sold_count"] > 0
+        assert data["trade_result"]["total_price"] > 0
 
     def test_bulk_sell_partial_failure(self) -> None:
         """Partial failure when some items don't exist."""
@@ -938,6 +944,9 @@ class TestAPIBulkSell:
         assert "systems_visited" in data
         assert "systems_total" in data
         assert "game_started" in data
+        assert "trade_result" in data
+        assert data["trade_result"]["sold_count"] > 0
+        assert data["trade_result"]["total_price"] > 0
         assert len(data["discoveries"]) < 3
 
     def test_bulk_sell_all_nonexistent(self) -> None:
@@ -1000,7 +1009,7 @@ class TestAPIBulkSell:
         game_id = self._create_game_with_discoveries("bulk-sell-no-trade")
         state = GAME_STORE[game_id]
         current_sys = state.get_current_system()
-        current_sys.phenomenon = "black_hole"
+        current_sys.has_trading_station = False
         GAME_STORE[game_id] = state
         game_save(state)
         resp = client.post(f"/api/game/{game_id}/trade/bulk-sell", json={
@@ -1016,7 +1025,7 @@ class TestAPIBulkSell:
         game_id = resp.json()["game_id"]
         state = GAME_STORE[game_id]
         current_sys = state.get_current_system()
-        current_sys.phenomenon = "none"
+        current_sys.has_trading_station = True
         state.discoveries.append(
             Discovery(id="bulk-name-match-disc-1", category="mineral", name="artifact",
                       description="Test", value=200, system_id=current_sys.id)
@@ -1039,6 +1048,9 @@ class TestAPIBulkSell:
         assert "systems_visited" in data
         assert "systems_total" in data
         assert "game_started" in data
+        assert "trade_result" in data
+        assert data["trade_result"]["sold_count"] > 0
+        assert data["trade_result"]["total_price"] > 0
 
     def test_bulk_sell_by_name_priority_over_category(self) -> None:
         """Name match takes priority over category match in bulk sell."""
@@ -1048,7 +1060,7 @@ class TestAPIBulkSell:
         game_id = resp.json()["game_id"]
         state = GAME_STORE[game_id]
         current_sys = state.get_current_system()
-        current_sys.phenomenon = "none"
+        current_sys.has_trading_station = True
         state.discoveries.append(
             Discovery(id="bulk-name-prio-disc-1", category="artifact", name="Ancient Relic",
                       description="Old relic", value=200, system_id=current_sys.id)
@@ -1075,6 +1087,9 @@ class TestAPIBulkSell:
         assert "systems_visited" in data
         assert "systems_total" in data
         assert "game_started" in data
+        assert "trade_result" in data
+        assert data["trade_result"]["sold_count"] > 0
+        assert data["trade_result"]["total_price"] > 0
 
 
 class TestPerformBulkSellDirect:
@@ -1084,7 +1099,7 @@ class TestPerformBulkSellDirect:
         """Create a game state with a trading station and some discoveries."""
         state = new_game(seed=42, ship_name="TestShip")
         current_sys = state.get_current_system()
-        current_sys.phenomenon = "none"
+        current_sys.has_trading_station = True
         from backend.models.discovery import Discovery
         state.discoveries.append(
             Discovery(id="direct-test-disc-1", category="artifact", name="Ancient Relic",
@@ -1197,6 +1212,170 @@ class TestRoutesGetState:
         GAME_STORE.pop("totally-nonexistent-id", None)
         result = _get_state("totally-nonexistent-id")
         assert result is None
+
+
+class TestAPILore:
+    """Tests for the lore fragment API endpoints."""
+
+    def test_lore_endpoint_returns_structured_data(self) -> None:
+        """GET /api/game/{id}/lore should return arcs and progress."""
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+
+        resp = client.get(f"/api/game/{game_id}/lore")
+        assert resp.status_code == 200
+        data = resp.json()
+
+        assert "arcs" in data
+        assert "progress" in data
+        assert data["progress"]["total"] == 20
+        assert data["progress"]["collected"] == 0
+
+        expected_arcs = {"architects", "void_signal", "fracture", "wanderer"}
+        assert set(data["arcs"].keys()) == expected_arcs
+
+    def test_lore_endpoint_arc_has_fragments(self) -> None:
+        """Each arc should have 5 fragments with fragment_number."""
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+
+        resp = client.get(f"/api/game/{game_id}/lore")
+        assert resp.status_code == 200
+        data = resp.json()
+
+        for arc_id, arc_data in data["arcs"].items():
+            assert arc_data["total"] == 5
+            assert arc_data["collected"] == 0
+            assert len(arc_data["fragments"]) == 5
+            assert arc_data["display_name"]
+            for frag in arc_data["fragments"]:
+                assert "fragment_number" in frag
+                assert isinstance(frag["fragment_number"], int)
+                assert frag["fragment_number"] >= 1
+                assert frag["fragment_number"] <= 5
+
+    def test_lore_endpoint_nonexistent_game(self) -> None:
+        """Lore endpoint should 404 for nonexistent game."""
+        resp = client.get("/api/game/nonexistent/lore")
+        assert resp.status_code == 404
+
+    def test_lore_progress_updates_on_discovery(self) -> None:
+        """After discovering a lore fragment, progress should reflect it."""
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+
+        full_state = client.get(f"/api/game/{game_id}").json()
+
+        ship = full_state["ship"]
+        cur_sys_id = ship["current_system_id"]
+
+        sys_detail = client.get(f"/api/game/{game_id}/system/{cur_sys_id}").json()
+        system = sys_detail["system"]
+        bodies = system.get("bodies", [])
+
+        if bodies:
+            client.post(f"/api/game/{game_id}/land/{bodies[0]['id']}")
+            client.post(f"/api/game/{game_id}/explore")
+
+        resp = client.get(f"/api/game/{game_id}/lore")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "progress" in data
+
+    def test_full_state_includes_lore_stats(self) -> None:
+        """GET /api/game/{id} should include lore_fragments_collected and _total."""
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+
+        resp = client.get(f"/api/game/{game_id}")
+        assert resp.status_code == 200
+        data = resp.json()
+
+        assert "lore_fragments_collected" in data
+        assert "lore_fragments_total" in data
+        assert data["lore_fragments_total"] == 20
+        assert data["lore_fragments_collected"] == 0
+
+    def test_discoveries_endpoint_includes_lore_fragment_id(self) -> None:
+        """When a discovery has a lore fragment, it should show in discoveries."""
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+
+        ship = client.get(f"/api/game/{game_id}").json()["ship"]
+        cur_sys_id = ship["current_system_id"]
+
+        sys_detail = client.get(f"/api/game/{game_id}/system/{cur_sys_id}").json()
+        system = sys_detail["system"]
+        bodies = system.get("bodies", [])
+
+        if bodies:
+            client.post(f"/api/game/{game_id}/land/{bodies[0]['id']}")
+            client.post(f"/api/game/{game_id}/explore")
+
+        resp = client.get(f"/api/game/{game_id}/discoveries")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "discoveries" in data
+        for disc in data["discoveries"]:
+            assert "lore_fragment_id" in disc
+
+    def test_lore_endpoint_collected_after_discovery(self) -> None:
+        """After discovering a lore fragment, lore endpoint shows collected > 0."""
+        from backend.generation.lore import get_lore_fragments_for_system
+
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+
+        target_sys_id = None
+        target_body_id = None
+        for sys_id in state.systems:
+            frags = get_lore_fragments_for_system(sys_id, state.lore_fragments)
+            if frags:
+                target_sys_id = sys_id
+                target_body_id = frags[0].discovery_id.split("::")[1]
+                break
+
+        if not target_sys_id:
+            return
+
+        state.ship.current_system_id = target_sys_id
+        state.ship.fuel = 1000
+
+        client.post(f"/api/game/{game_id}/land/{target_body_id}")
+        client.post(f"/api/game/{game_id}/explore")
+
+        resp = client.get(f"/api/game/{game_id}/lore")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["progress"]["collected"] > 0
+        arcs_with_collected = [a for a in data["arcs"].values() if a["collected"] > 0]
+        assert len(arcs_with_collected) > 0
+
+    def test_lore_endpoint_collected_after_discovery_no_lore(self) -> None:
+        """Cover guard clause when no lore fragments found (line 1320)."""
+        import backend.generation.lore as lore_mod
+
+        original = lore_mod.get_lore_fragments_for_system
+        lore_mod.get_lore_fragments_for_system = lambda sys_id, lore_frags: []
+        try:
+            self.test_lore_endpoint_collected_after_discovery()
+        finally:
+            lore_mod.get_lore_fragments_for_system = original
+
+    def test_lore_endpoint_returns_arc_order(self) -> None:
+        """GET /api/game/{id}/lore should return arc_order matching ARC_DISPLAY_NAMES keys."""
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+
+        resp = client.get(f"/api/game/{game_id}/lore")
+        assert resp.status_code == 200
+        data = resp.json()
+
+        assert "arc_order" in data
+        assert isinstance(data["arc_order"], list)
+        assert len(data["arc_order"]) == 4
+        assert data["arc_order"] == ["architects", "void_signal", "fracture", "wanderer"]
 
 
 class TestAPIMainIndex:

@@ -79,6 +79,7 @@ class LoreFragment:
     text: str
     discovered: bool = False
     discovery_id: Optional[str] = None
+    fragment_number: int = -1
 
     def to_dict(self) -> dict:
         """Serialize the lore fragment to a dictionary.
@@ -93,6 +94,7 @@ class LoreFragment:
             "text": self.text,
             "discovered": self.discovered,
             "discovery_id": self.discovery_id,
+            "fragment_number": self.fragment_number,
         }
 
     @classmethod
@@ -111,4 +113,5 @@ class LoreFragment:
             text=d["text"],
             discovered=d.get("discovered", False),
             discovery_id=d.get("discovery_id"),
+            fragment_number=d.get("fragment_number", -1),
         )
