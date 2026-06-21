@@ -90,7 +90,7 @@ def distribute_lore_fragments(
             chosen_sys_id, chosen_body_id = _pick_lore_location(
                 rng, systems, system_fragment_count, max_per_system, used_bodies
             )
-        except ValueError as e:
+        except ValueError:
             logger.warning("No eligible location for fragment %s, skipping", frag.id)
             continue
 
