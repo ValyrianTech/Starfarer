@@ -692,4 +692,4 @@ def emergency_craft(state: GameState, discovery_id: str, output: str) -> dict:
             "effects": {"credits": rate},
         }
     # Fallback — should never be reached with current CRAFT_CONVERSIONS
-    return {"error": f"Unknown output type: {output}"}
+    raise ValueError(f"Unhandled output type: {output} — CRAFT_CONVERSIONS is out of sync with the branch logic")
