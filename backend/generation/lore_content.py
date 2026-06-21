@@ -10,12 +10,20 @@ from typing import TypedDict
 
 
 class FragmentData(TypedDict):
+    """TypedDict representing a single lore fragment.
+
+    :param arc: Story arc identifier.
+    :param fragment_number: Sequential number within the arc.
+    :param title: Fragment title.
+    :param text: Fragment narrative text.
+    """
     arc: str
     fragment_number: int
     title: str
     text: str
 
 
+#: List of 20 lore fragment data dicts across 4 story arcs.
 FRAGMENT_DATA: list[FragmentData] = [
     # === Arc 1: The Architects ===
     {
@@ -146,6 +154,7 @@ FRAGMENT_DATA: list[FragmentData] = [
     },
 ]
 
+#: Mapping from arc IDs to human-readable display names.
 ARC_DISPLAY_NAMES = {
     "architects": "The Architects",
     "void_signal": "The Void Signal",
@@ -153,4 +162,5 @@ ARC_DISPLAY_NAMES = {
     "wanderer": "The Wanderer",
 }
 
+#: List of all arc ID strings.
 ARC_IDS = list(ARC_DISPLAY_NAMES.keys())
