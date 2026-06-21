@@ -107,9 +107,9 @@ def distribute_lore_fragments(
     placed = sum(len(f) for f in placement.values())
     total = len(fragments)
     if placed == total:
-        logging.info("All %d lore fragments placed successfully", placed)
+        logger.info("All %d lore fragments placed successfully", placed)
     else:
-        logging.info("Only %d/%d lore fragments could be placed", placed, total)
+        logger.info("Only %d/%d lore fragments could be placed", placed, total)
     return placement
 
 
