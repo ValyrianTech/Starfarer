@@ -10,6 +10,7 @@ import sqlite3
 import json
 from contextlib import contextmanager
 from datetime import datetime, timezone
+from typing import Generator
 
 from backend.config import DB_PATH, DATA_DIR
 
@@ -32,7 +33,7 @@ def get_db() -> sqlite3.Connection:
 
 
 @contextmanager
-def get_db_ctx():
+def get_db_ctx() -> Generator[sqlite3.Connection, None, None]:
     """Context manager that provides a database connection.
 
     Yields an open :class:`sqlite3.Connection` that is automatically closed
