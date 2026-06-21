@@ -1594,7 +1594,16 @@ class TestLoreExploration:
         """Exploring a body without lore shouldn't affect fragment state."""
         state = new_game(seed=42)
         system = state.get_current_system()
-        body = next((b for b in system.bodies if b.body_type == "planet"), None)
+        # Find a body that does NOT have a lore fragment
+        body = None
+        for b in system.bodies:
+            has_lore = any(
+                lf.discovery_id == f"{system.id}::{b.id}"
+                for lf in state.lore_fragments
+            )
+            if not has_lore:
+                body = b
+                break
         if not body:
             return
 
@@ -1698,20 +1707,11 @@ class TestLoreExploration:
         assert len(warning_messages) == 0, f"Expected no spurious warnings, got: {warning_messages}"
 
     def test_explore_body_without_lore_no_planet(self) -> None:
-        """Cover guard clause in test_explore_body_without_lore when no planet exists."""
-        from backend.models.system import Body as B
-
+        """Cover guard clause in test_explore_body_without_lore when no lore-free body exists."""
         state = new_game(seed=42)
         sys_id = state.ship.current_system_id
         sys_obj = state.systems[sys_id]
-        sys_obj.bodies = [b for b in sys_obj.bodies if b.body_type == "asteroid_belt"]
-        if not sys_obj.bodies:
-            belt = B(
-                id=f"{sys_id}_b99", name="Test Belt", body_type="asteroid_belt",
-                biome="barren", size=3, distance_from_star=0.5,
-                description="A test asteroid belt.", poi_count=1,
-            )
-            sys_obj.bodies = [belt]
+        sys_obj.bodies = []
 
         func = self.test_explore_body_without_lore.__func__
         original_new_game = func.__globals__["new_game"]
