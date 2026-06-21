@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 from backend.generation.lore_content import FRAGMENT_DATA
 from backend.models.discovery import LoreFragment
-from backend.models.system import StarSystem
+from backend.models.system import Body, StarSystem
 from backend.utils import seeded_random
 
 # Biome weights for fragment distribution: higher biome types are
@@ -145,34 +145,34 @@ def _pick_lore_location(
     """
     if used_bodies is None:
         used_bodies = set()
+
+    # Pre-compute eligible bodies for each system, keyed by system ID
+    system_eligible_bodies: dict[str, list[Body]] = {}
     eligible_systems: list[str] = []
     weights: list[int] = []
 
     for sys_id, system in systems.items():
         if counts.get(sys_id, 0) >= max_per_system:
             continue
+        # Compute eligible bodies and score in a single pass
         score = 0
-        has_available_body = False
+        eligible: list[Body] = []
         for body in system.bodies:
             if body.poi_count > 0:
                 score += BIOME_WEIGHTS.get(body.biome, 1)
                 if (sys_id, body.id) not in used_bodies:
-                    has_available_body = True
-        if score > 0 and has_available_body:
-            eligible_systems.append(sys_id)
-            weights.append(score)
+                    eligible.append(body)
+        if not eligible:
+            continue
+        system_eligible_bodies[sys_id] = eligible
+        eligible_systems.append(sys_id)
+        weights.append(score)
 
     if not eligible_systems:
         raise ValueError("No eligible systems available for lore placement")
 
     chosen_sys_id = rng.choices(eligible_systems, weights=weights, k=1)[0]
-    system = systems[chosen_sys_id]
-
-    bodies = [b for b in system.bodies if b.poi_count > 0]
-    eligible_bodies = [
-        b for b in bodies
-        if (chosen_sys_id, b.id) not in used_bodies
-    ]
+    eligible_bodies = system_eligible_bodies[chosen_sys_id]
     body_weights = [BIOME_WEIGHTS.get(b.biome, 1) for b in eligible_bodies]
     chosen_body = rng.choices(eligible_bodies, weights=body_weights, k=1)[0]
 
