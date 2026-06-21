@@ -42,6 +42,7 @@ class GameState:
     faction_relations: dict[str, FactionRelation] = field(default_factory=dict)
     systems_visited: int = 0
     game_started: str = ""
+    last_event_title: Optional[str] = None
 
     def __post_init__(self) -> None:
         """Initialize the ``game_started`` timestamp if not already set.

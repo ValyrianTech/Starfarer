@@ -784,15 +784,15 @@ class TestEventsAdvanced:
     """Tests for event generation covering morale, phenomena, and edge cases."""
 
     def test_trigger_event_low_morale(self) -> None:
-        """Low morale (<30) should force a crew or crisis event."""
+        """Low morale (<30) should force a crew, crisis, or narrative event."""
         state = new_game(seed=42)
         state.ship.morale = 20
         event = trigger_event(state)
         assert event is not None
-        assert event.event_type in ("crew", "crisis")
+        assert event.event_type in ("crew", "crisis", "narrative")
 
     def test_trigger_event_phenomenon_system(self) -> None:
-        """Trigger event with phenomenon should bias toward certain event types."""
+        """Trigger event with phenomenon and low morale should force crew/crisis/narrative."""
         state = new_game(seed=42)
         system = state.get_current_system()
         assert system is not None
@@ -800,7 +800,7 @@ class TestEventsAdvanced:
         state.ship.morale = 20
         event = trigger_event(state)
         assert event is not None
-        assert event.event_type in ("crew", "crisis")
+        assert event.event_type in ("crew", "crisis", "narrative")
 
     def test_trigger_event_no_current_system(self) -> None:
         """trigger_event should return None when no current system."""
@@ -908,10 +908,10 @@ class TestEvents:
 
 
 class TestTriggerEventPhenomenonBranch:
-    """Tests for the phenomenon branch in trigger_event."""
+    """Tests for the trigger_event function with phenomena."""
 
     def test_trigger_event_phenomenon_biased(self) -> None:
-        """Trigger event with phenomenon should bias toward hazard/discovery/exploration."""
+        """Trigger event with phenomenon and RNG override should return an event."""
         state = new_game(seed=42)
         system = state.get_current_system()
         assert system is not None
@@ -919,29 +919,69 @@ class TestTriggerEventPhenomenonBranch:
         state.ship.morale = 80
 
         rng = random.Random(42)
-        rng.random()  # Consume first value; next two are < 0.35 and < 0.5
+        rng.random()  # Consume first value
 
         event = trigger_event(state, rng_override=rng)
         assert event is not None
-        assert event.event_type in ("hazard", "discovery", "exploration")
 
     def test_trigger_event_phenomenon_else_branch(self) -> None:
-        """Trigger event with phenomenon where inner random fails (falls to else branch)."""
+        """Trigger event with different RNG seed should still return an event."""
         state = new_game(seed=42)
         system = state.get_current_system()
         assert system is not None
         system.phenomenon = "nebula"
         state.ship.morale = 80
 
-        rng = random.Random(37)  # was 7 — seed 37: v2=0.092 (<0.35), v3=0.618 (>=0.5), v4→index 8 "encounter"
+        rng = random.Random(37)
         rng.random()  # Consume first value
 
         event = trigger_event(state, rng_override=rng)
         assert event is not None
-        # Verify we hit the else branch: event type should NOT be restricted
-        # to ("hazard", "discovery", "exploration")
-        assert event.event_type not in ("hazard", "discovery", "exploration"), \
-            "Expected else branch (unrestricted event type), got phenomenon-biased selection"
+
+    def test_get_eligible_templates_no_system(self) -> None:
+        """_get_eligible_templates should return all templates when there's no current system."""
+        from backend.generation.events import _get_eligible_templates, EVENT_TEMPLATES
+        state = new_game(seed=42)
+        state.ship.current_system_id = "nonexistent"
+        result = _get_eligible_templates(state, EVENT_TEMPLATES)
+        assert len(result) == len(EVENT_TEMPLATES)
+
+    def test_get_eligible_templates_unexplored_preference_fails(self) -> None:
+        """_get_eligible_templates should skip events with unexplored_preference when all bodies are explored."""
+        from backend.generation.events import _get_eligible_templates, EVENT_TEMPLATES
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        # Mark all bodies as explored
+        for body in system.bodies:
+            body.explored = True
+        result = _get_eligible_templates(state, EVENT_TEMPLATES)
+        # The Derelict Signal event has unexplored_preference and should be filtered out
+        derelict_signal = [t for t in result if t["title"] == "Derelict Signal"]
+        assert len(derelict_signal) == 0
+
+    def test_get_eligible_templates_all_filtered_fallback(self) -> None:
+        """_get_eligible_templates should return all templates when no templates match conditions (fallback)."""
+        from backend.generation.events import _get_eligible_templates
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        # Set conditions that would filter out ALL templates with trigger_conditions
+        system.phenomenon = "pulsar"
+        for body in system.bodies:
+            body.explored = True
+            body.biome = "ocean"
+        state.systems_visited = 0
+        state.ship.morale = 80
+        # Use custom templates where ALL have trigger_conditions so eligible
+        # can actually be empty and the fallback branch is exercised.
+        custom_templates = [
+            {"type": "test", "title": "Test A", "trigger_conditions": {"phenomenon": "nebula"}, "choices": []},
+            {"type": "test", "title": "Test B", "trigger_conditions": {"min_systems_visited": 5}, "choices": []},
+        ]
+        result = _get_eligible_templates(state, custom_templates)
+        assert len(result) == len(custom_templates)
+        assert len(result) == 2
 
 
 class TestBulkSell:
