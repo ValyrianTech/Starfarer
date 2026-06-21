@@ -232,19 +232,22 @@ def explore_surface(state: GameState) -> list[Discovery]:
 
     if num_finds > 0:
         lore_frag = get_fragment_for_body(system.id, body.id, state.lore_fragments)
+        lore_linked = False
 
         for i in range(num_finds):
             cat = item_rng.choice(["mineral", "artifact", "lifeform", "signal", "ruin"])
             disc = _generate_discovery(item_rng, cat, body, system)
 
-            if lore_frag and not lore_frag.discovered:
+            if lore_frag and not lore_frag.discovered and not lore_linked:
                 # First discovery of this lore fragment — link it to this discovery
                 disc.lore_fragment_id = lore_frag.id
                 lore_frag.discovered = True
+                lore_linked = True
                 state.add_log("lore", f"Discovered lore fragment: {lore_frag.title} ({lore_frag.id}).")
-            elif lore_frag and lore_frag.discovered:
-                # Lore fragment already discovered (in this action or a previous one)
+            elif lore_frag and lore_frag.discovered and not lore_linked:
+                # Lore fragment already discovered in a previous explore action (genuinely stale)
                 logger.warning(f"Lore fragment {lore_frag.id} ({lore_frag.title}) already discovered but found on body {body.id}.")
+                lore_linked = True
 
             discoveries.append(disc)
             state.discoveries.append(disc)
