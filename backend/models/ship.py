@@ -34,6 +34,9 @@ class Ship:
     current_system_id: str = ""
     current_body_id: Optional[str] = None
     morale_decay_reduction: int = 0
+    stranded_turns: int = 0
+    distress_cooldown: bool = False
+    salvage_attempts: dict = field(default_factory=dict)
     upgrades: dict = field(default_factory=lambda: {
         "hyperdrive": 0,
         "scanner": 0,
@@ -66,6 +69,9 @@ class Ship:
             "current_system_id": self.current_system_id,
             "current_body_id": self.current_body_id,
             "morale_decay_reduction": self.morale_decay_reduction,
+            "stranded_turns": self.stranded_turns,
+            "distress_cooldown": self.distress_cooldown,
+            "salvage_attempts": self.salvage_attempts,
             "upgrades": self.upgrades,
         }
 
@@ -95,6 +101,9 @@ class Ship:
             current_system_id=d.get("current_system_id", ""),
             current_body_id=d.get("current_body_id"),
             morale_decay_reduction=d.get("morale_decay_reduction", 0),
+            stranded_turns=d.get("stranded_turns", 0),
+            distress_cooldown=d.get("distress_cooldown", False),
+            salvage_attempts=d.get("salvage_attempts", {}),
             upgrades=d.get("upgrades", {
                 "hyperdrive": 0, "scanner": 0, "cargo_hold": 0,
                 "hull_plating": 0, "fuel_tanks": 0, "life_support": 0,

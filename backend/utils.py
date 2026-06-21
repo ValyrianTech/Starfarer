@@ -6,7 +6,12 @@ import random
 
 def deterministic_hash(*args: object) -> int:
     """Produce a deterministic integer from the given arguments."""
-    seed_str = "|".join(f"{len(s)}:{s}" for s in (str(a) for a in args))
+    parts = []
+    for a in args:
+        s = str(a)
+        escaped = s.replace("\\", "\\\\").replace("|", "\\p")
+        parts.append(f"{len(s)}:{escaped}")
+    seed_str = "|".join(parts)
     return int(hashlib.sha256(seed_str.encode()).hexdigest(), 16)
 
 

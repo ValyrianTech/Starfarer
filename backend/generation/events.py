@@ -12,7 +12,7 @@ from typing import Optional
 from backend.models.game_state import GameState
 from backend.models.event import Event, Choice
 from backend.config import MORALE_LOW_THRESHOLD
-from backend.utils import deterministic_hash
+from backend.utils import deterministic_hash, seeded_random
 
 
 EVENT_TEMPLATES = [
@@ -146,7 +146,7 @@ def trigger_event(state: GameState, rng_override: Optional[random.Random] = None
         template = crew_events[deterministic_hash(system.id, str(len(state.log_entries))) % len(crew_events)]
         return _create_event(template, system.id)
 
-    rng = rng_override or random.Random(state.seed + deterministic_hash(system.id, len(state.events), len(state.log_entries)))
+    rng = rng_override or seeded_random(state.seed, "event_trigger", system.id, str(len(state.events)), str(len(state.log_entries)))
 
     if rng.random() < 0.35:
         if system.phenomenon != "none" and rng.random() < 0.5:
@@ -224,6 +224,14 @@ def resolve_event(state: GameState, event_id: str, choice_idx: int) -> tuple[boo
     choice = event.choices[choice_idx]
     effects = state.apply_choice_outcome(choice.outcome)
     state.add_log("event", f"Event '{event.title}' resolved: {choice.text}. {choice.outcome}")
+
+    event_rng = seeded_random(state.seed, "event_reputation", event.id, str(choice_idx))
+    if event.event_type == "exploration":
+        state.modify_faction_reputation("stellar_cartographers", event_rng.randint(2, 8))
+    elif event.event_type == "trade":
+        state.modify_faction_reputation("void_traders", event_rng.randint(2, 8))
+    elif event.event_type in ("encounter", "crisis"):
+        state.modify_faction_reputation("free_pilots", event_rng.randint(1, 6))
 
     extra_output = {
         "title": event.title,

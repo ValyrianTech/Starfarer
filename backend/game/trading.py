@@ -137,6 +137,12 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
     rng = random.Random(det_seed)
     price_mod = rng.uniform(0.7, 1.5)
 
+    void_reputation = state.get_faction_reputation("void_traders")
+    if void_reputation != 0:
+        faction_mod = 1.0 + (void_reputation / 500.0)
+        faction_mod = max(0.8, min(1.2, faction_mod))
+        price_mod *= faction_mod
+
     if action == "sell":
         error = _validate_quantity(quantity)
         if error:
@@ -228,6 +234,13 @@ def perform_bulk_sell(state: GameState, items: list[dict]) -> tuple[bool, str, i
     det_seed = deterministic_hash(state.seed, system.id, len(state.log_entries))
     rng = random.Random(det_seed)
     price_mod = rng.uniform(0.7, 1.5)
+
+    void_reputation = state.get_faction_reputation("void_traders")
+    if void_reputation != 0:
+        faction_mod = 1.0 + (void_reputation / 500.0)
+        faction_mod = max(0.8, min(1.2, faction_mod))
+        price_mod *= faction_mod
+
     discoveries_snapshot = list(state.discoveries)
 
     sold_ids: set[str] = set()

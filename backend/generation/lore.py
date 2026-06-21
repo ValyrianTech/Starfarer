@@ -9,13 +9,12 @@ and querying fragments by system or body.
 import random
 from typing import Optional
 import logging
-
-logger = logging.getLogger(__name__)
-
 from backend.generation.lore_content import FRAGMENT_DATA
 from backend.models.discovery import LoreFragment
 from backend.models.system import Body, StarSystem
 from backend.utils import seeded_random
+
+logger = logging.getLogger(__name__)
 
 # Biome weights for fragment distribution: higher biome types are
 # more likely to host lore fragments, rewarding thorough exploration.
@@ -90,7 +89,7 @@ def distribute_lore_fragments(
             chosen_sys_id, chosen_body_id = _pick_lore_location(
                 rng, systems, system_fragment_count, max_per_system, used_bodies
             )
-        except ValueError as e:
+        except ValueError:
             logger.warning("No eligible location for fragment %s, skipping", frag.id)
             continue
 

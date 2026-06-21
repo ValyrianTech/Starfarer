@@ -16,6 +16,7 @@ from backend.models.ship import Ship
 from backend.models.system import StarSystem
 from backend.models.event import Event
 from backend.models.discovery import Discovery, LoreFragment
+from backend.models.faction import FactionRelation
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,7 @@ class GameState:
     discoveries: list[Discovery] = field(default_factory=list)
     lore_fragments: list[LoreFragment] = field(default_factory=list)
     log_entries: list[dict] = field(default_factory=list)
+    faction_relations: dict[str, FactionRelation] = field(default_factory=dict)
     systems_visited: int = 0
     game_started: str = ""
 
@@ -144,4 +146,82 @@ class GameState:
             "game_started": self.game_started,
             "lore_fragments_collected": self.lore_fragments_collected,
             "lore_fragments_total": len(self.lore_fragments),
+            "faction_relations": self.get_known_factions(),
         }
+
+    def get_faction_reputation(self, faction_id: str) -> int:
+        """Get the reputation value with a given faction.
+
+        :param faction_id: The unique identifier of the faction.
+        :type faction_id: str
+        :returns: The reputation value, or 0 if the faction is not tracked.
+        :rtype: int
+        """
+        if faction_id in self.faction_relations:
+            return self.faction_relations[faction_id].reputation
+        return 0
+
+    def modify_faction_reputation(self, faction_id: str, delta: int) -> None:
+        """Modify reputation with a faction by a given delta.
+
+        Creates a new :class:`FactionRelation` if the faction is not yet
+        tracked. Reputation has no hard cap but is clamped to -1000..1000.
+
+        :param faction_id: The unique identifier of the faction.
+        :type faction_id: str
+        :param delta: The amount to adjust reputation by (positive or negative).
+        :type delta: int
+        """
+        if faction_id not in self.faction_relations:
+            self.faction_relations[faction_id] = FactionRelation(
+                faction_id=faction_id, reputation=0, known=False
+            )
+        self.faction_relations[faction_id].reputation = max(
+            -1000, min(1000, self.faction_relations[faction_id].reputation + delta)
+        )
+
+    def get_known_factions(self) -> list[dict]:
+        """Get a list of all known faction relations.
+
+        :returns: A list of dictionaries with faction relation data.
+        :rtype: list[dict]
+        """
+        from backend.models.faction import get_faction
+        result = []
+        for faction_id, relation in self.faction_relations.items():
+            faction = get_faction(faction_id)
+            result.append({
+                "faction_id": faction_id,
+                "name": faction.name if faction else faction_id,
+                "description": faction.description if faction else "",
+                "alignment": faction.alignment if faction else "",
+                "home_system_id": faction.home_system_id if faction else None,
+                "reputation": relation.reputation,
+                "known": relation.known,
+            })
+        return result
+
+    def update_stranded_state(self) -> int:
+        """Update stranded state based on current fuel level.
+
+        If the ship has no fuel, increments ``stranded_turns`` and applies
+        a cumulative morale penalty of -5 per stranded turn. If the ship
+        has fuel, resets the stranded state (``stranded_turns`` to 0,
+        ``distress_cooldown`` to False).
+
+        :returns: The updated stranded_turns count.
+        :rtype: int
+        """
+        if self.ship.fuel == 0:
+            self.ship.stranded_turns += 1
+            self.ship.morale = max(0, min(100, self.ship.morale - 5))
+            return self.ship.stranded_turns
+        else:
+            self.ship.stranded_turns = 0
+            self.ship.distress_cooldown = False
+            return 0
+
+    def reset_stranded_state(self) -> None:
+        """Reset stranded turns and distress cooldown to their defaults."""
+        self.ship.stranded_turns = 0
+        self.ship.distress_cooldown = False

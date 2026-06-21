@@ -89,3 +89,10 @@ class ErrorResponse(BaseModel):
 
     error: str
     detail: Optional[str] = None
+
+
+class CraftRequest(BaseModel):
+    """Request body for emergency crafting a discovery into resources."""
+
+    discovery_id: str
+    output: str

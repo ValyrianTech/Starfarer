@@ -7,11 +7,15 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from backend.game.engine import (
     can_jump, perform_jump, perform_scan, get_nearby_systems,
     land_on_body, explore_surface,
+    activate_distress_beacon, perform_salvage, emergency_craft,
 )
 from backend.game.trading import get_upgrade_info, purchase_upgrade, perform_trade, perform_bulk_sell
 from backend.game.manager import new_game, get_galaxy, get_system_detail, game_save, load_or_create, get_game_state
 from backend.generation.events import trigger_event, resolve_event, EVENT_TEMPLATES
 from backend.config import SCAN_FUEL_COST
+from backend.models.game_state import GameState
+from backend.models.discovery import Discovery
+from backend.utils import seeded_random
 
 
 class TestGameManager:
@@ -1720,3 +1724,501 @@ class TestLoreExploration:
             self.test_explore_body_without_lore()
         finally:
             func.__globals__["new_game"] = original_new_game
+
+
+class TestDistressBeacon:
+    """Tests for activate_distress_beacon."""
+
+    def _make_stranded_state(self, seed: int = 42) -> GameState:
+        state = new_game(seed=seed)
+        state.ship.fuel = 0
+        state.ship.hull = 100
+        state.ship.credits = 200
+        return state
+
+    def test_activate_distress_beacon_no_system(self) -> None:
+        state = new_game(seed=42)
+        state.ship.current_system_id = "nonexistent"
+        result = activate_distress_beacon(state)
+        assert "error" in result
+        assert "No current system" in result["error"]
+
+    def test_activate_distress_beacon_not_stranded(self) -> None:
+        state = new_game(seed=42)
+        state.ship.fuel = 50
+        state.ship.hull = 100
+        result = activate_distress_beacon(state)
+        assert "error" in result
+        assert "stranded" in result["error"].lower() or "Distress beacon can only" in result["error"]
+
+    def test_activate_distress_beacon_cooldown(self) -> None:
+        state = new_game(seed=42)
+        state.ship.fuel = 0
+        state.ship.hull = 100
+        state.ship.distress_cooldown = True
+        result = activate_distress_beacon(state)
+        assert "error" in result
+        assert "cooldown" in result["error"].lower()
+
+    def test_activate_distress_beacon_no_credits(self) -> None:
+        state = new_game(seed=42)
+        state.ship.fuel = 0
+        state.ship.hull = 100
+        state.ship.credits = 30
+        result = activate_distress_beacon(state)
+        assert "error" in result
+        assert "credits" in result["error"].lower()
+
+    def test_activate_distress_beacon_no_response(self) -> None:
+        from unittest.mock import MagicMock, patch
+        state = self._make_stranded_state()
+        mock_rng = MagicMock()
+        mock_rng.random.side_effect = [0.61]
+        mock_rng.randint.side_effect = [3]
+        with patch("backend.game.engine.seeded_random", return_value=mock_rng):
+            result = activate_distress_beacon(state)
+        assert result["outcome"] == "no_response"
+        assert "No response" in result["result"]
+        assert state.ship.credits == 150
+        assert state.ship.distress_cooldown is True
+
+    def test_activate_distress_beacon_pilots_guild(self) -> None:
+        from unittest.mock import MagicMock, patch
+        state = self._make_stranded_state()
+        system = state.get_current_system()
+        assert system is not None
+        system.has_trading_station = True
+        state.ship.credits = 300
+        mock_rng = MagicMock()
+        mock_rng.random.side_effect = [0.2, 0.1]
+        mock_rng.randint.side_effect = [1]
+        with patch("backend.game.engine.seeded_random", return_value=mock_rng):
+            result = activate_distress_beacon(state)
+        assert result["outcome"] == "pilots_guild"
+        assert "Pilots Guild" in result["result"]
+        assert "error" not in result
+
+    def test_activate_distress_beacon_passerby_help(self) -> None:
+        from unittest.mock import MagicMock, patch
+        state = self._make_stranded_state()
+        mock_rng = MagicMock()
+        mock_rng.random.side_effect = [0.2, 0.5, 0.3]
+        mock_rng.randint.side_effect = [2, 15]
+        with patch("backend.game.engine.seeded_random", return_value=mock_rng):
+            result = activate_distress_beacon(state)
+        assert result["outcome"] == "passerby_help"
+        assert "Friendly passerby" in result["result"]
+
+    def test_activate_distress_beacon_passerby_piracy(self) -> None:
+        from unittest.mock import MagicMock, patch
+        state = self._make_stranded_state()
+        state.ship.credits = 300
+        mock_rng = MagicMock()
+        mock_rng.random.side_effect = [0.2, 0.5, 0.6]
+        mock_rng.randint.side_effect = [2, 50]
+        with patch("backend.game.engine.seeded_random", return_value=mock_rng):
+            result = activate_distress_beacon(state)
+        assert result["outcome"] == "piracy"
+        assert "Pirates" in result["result"]
+
+    def test_activate_distress_beacon_passerby_ignore(self) -> None:
+        from unittest.mock import MagicMock, patch
+        state = self._make_stranded_state()
+        mock_rng = MagicMock()
+        mock_rng.random.side_effect = [0.2, 0.5, 0.85]
+        mock_rng.randint.side_effect = [2]
+        with patch("backend.game.engine.seeded_random", return_value=mock_rng):
+            result = activate_distress_beacon(state)
+        assert result["outcome"] == "passerby_ignore"
+        assert "did not respond" in result["result"]
+
+    def test_activate_distress_beacon_signal_friendly(self) -> None:
+        from unittest.mock import MagicMock, patch
+        state = self._make_stranded_state()
+        mock_rng = MagicMock()
+        mock_rng.random.side_effect = [0.2, 0.75, 0.3]
+        mock_rng.randint.side_effect = [1, 10]
+        with patch("backend.game.engine.seeded_random", return_value=mock_rng):
+            result = activate_distress_beacon(state)
+        assert result["outcome"] == "signal_friendly"
+        assert "Friendly emergency responder" in result["result"]
+
+    def test_activate_distress_beacon_signal_hostile(self) -> None:
+        from unittest.mock import MagicMock, patch
+        state = self._make_stranded_state()
+        mock_rng = MagicMock()
+        mock_rng.random.side_effect = [0.2, 0.75, 0.6]
+        mock_rng.randint.side_effect = [1, 10]
+        with patch("backend.game.engine.seeded_random", return_value=mock_rng):
+            result = activate_distress_beacon(state)
+        assert result["outcome"] == "signal_hostile"
+        assert "Hostile ship" in result["result"]
+
+    def test_activate_distress_beacon_deterministic(self) -> None:
+        s1 = self._make_stranded_state(seed=42)
+        s2 = self._make_stranded_state(seed=42)
+        r1 = activate_distress_beacon(s1)
+        r2 = activate_distress_beacon(s2)
+        assert r1["outcome"] == r2["outcome"]
+        assert r1["result"] == r2["result"]
+
+    def test_activate_distress_beacon_precondition_fail_continue(self) -> None:
+        from unittest.mock import MagicMock, patch
+        state = self._make_stranded_state()
+        system = state.get_current_system()
+        assert system is not None
+        system.has_trading_station = False
+        mock_rng = MagicMock()
+        mock_rng.random.side_effect = [0.2, 0.1, 0.3]
+        mock_rng.randint.side_effect = [2, 15]
+        with patch("backend.game.engine.seeded_random", return_value=mock_rng):
+            result = activate_distress_beacon(state)
+        assert result["outcome"] == "passerby_help"
+        assert "Friendly passerby" in result["result"]
+
+    def test_activate_distress_beacon_fallback_error(self) -> None:
+        from unittest.mock import MagicMock, patch
+        from backend.game.engine import _BucketEntry, _always_true_precondition
+        state = self._make_stranded_state()
+        mock_rng = MagicMock()
+        mock_rng.random.side_effect = [0.2, 0.5]
+        mock_rng.randint.side_effect = [2]
+        custom_table = [
+            _BucketEntry(
+                threshold=1.0,
+                precondition=_always_true_precondition,
+                strategy=None,
+                sub_table=None,
+            ),
+        ]
+        with patch("backend.game.engine._DISTRESS_TABLE", custom_table):
+            with patch("backend.game.engine.seeded_random", return_value=mock_rng):
+                result = activate_distress_beacon(state)
+        assert "error" in result
+        assert result["error"] == "No distress outcome matched."
+
+
+class TestSalvage:
+    """Tests for perform_salvage."""
+
+    def _make_salvage_state(self, seed: int = 42) -> GameState:
+        state = new_game(seed=seed)
+        state.ship.fuel = 0
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), system.bodies[0])
+        land_on_body(state, planet.id)
+        return state
+
+    def test_perform_salvage_not_stranded(self) -> None:
+        state = new_game(seed=42)
+        state.ship.fuel = 50
+        result = perform_salvage(state)
+        assert "error" in result
+        assert "stranded" in result["error"].lower() or "no fuel" in result["error"].lower()
+
+    def test_perform_salvage_not_landed(self) -> None:
+        state = new_game(seed=42)
+        state.ship.fuel = 0
+        state.ship.current_body_id = None
+        result = perform_salvage(state)
+        assert "error" in result
+        assert "landed" in result["error"].lower()
+
+    def test_perform_salvage_max_attempts(self) -> None:
+        state = self._make_salvage_state()
+        body_id = state.ship.current_body_id
+        state.ship.salvage_attempts[body_id] = 3
+        result = perform_salvage(state)
+        assert "error" in result
+        assert "max" in result["error"].lower() or "fully" in result["error"].lower()
+
+    def test_perform_salvage_fuel_cache(self) -> None:
+        from unittest.mock import MagicMock, patch
+        state = self._make_salvage_state()
+        mock_rng = MagicMock()
+        mock_rng.random.side_effect = [0.2]
+        mock_rng.randint.side_effect = [5]
+        with patch("backend.game.engine.seeded_random", return_value=mock_rng):
+            result = perform_salvage(state)
+        assert result["find"] == "fuel_cache"
+        assert "fuel cache" in result["result"]
+        assert "error" not in result
+
+    def test_perform_salvage_repair_materials(self) -> None:
+        from unittest.mock import MagicMock, patch
+        state = self._make_salvage_state()
+        mock_rng = MagicMock()
+        mock_rng.random.side_effect = [0.55]
+        mock_rng.randint.side_effect = [10]
+        with patch("backend.game.engine.seeded_random", return_value=mock_rng):
+            result = perform_salvage(state)
+        assert result["find"] == "repair_materials"
+        assert "repair materials" in result["result"]
+        assert "error" not in result
+
+    def test_perform_salvage_spare_parts(self) -> None:
+        from unittest.mock import MagicMock, patch
+        state = self._make_salvage_state()
+        mock_rng = MagicMock()
+        mock_rng.random.side_effect = [0.8]
+        mock_rng.randint.side_effect = [30]
+        mock_rng.getrandbits.return_value = 0xABC123
+        with patch("backend.game.engine.seeded_random", return_value=mock_rng):
+            result = perform_salvage(state)
+        assert result["find"] == "spare_parts"
+        assert "spare parts" in result["result"]
+        assert "error" not in result
+
+    def test_perform_salvage_nothing(self) -> None:
+        from unittest.mock import MagicMock, patch
+        state = self._make_salvage_state()
+        mock_rng = MagicMock()
+        mock_rng.random.side_effect = [0.95]
+        with patch("backend.game.engine.seeded_random", return_value=mock_rng):
+            result = perform_salvage(state)
+        assert result["find"] == "nothing"
+        assert "Nothing useful" in result["result"]
+        assert "error" not in result
+
+    def test_perform_salvage_morale_cost(self) -> None:
+        from unittest.mock import MagicMock, patch
+        state = self._make_salvage_state()
+        initial_morale = state.ship.morale
+        mock_rng = MagicMock()
+        mock_rng.random.side_effect = [0.95, 0.95, 0.95]
+        with patch("backend.game.engine.seeded_random", return_value=mock_rng):
+            result1 = perform_salvage(state)
+            morale_after_1 = state.ship.morale
+            result2 = perform_salvage(state)
+            morale_after_2 = state.ship.morale
+            result3 = perform_salvage(state)
+            morale_after_3 = state.ship.morale
+        assert morale_after_1 < initial_morale
+        assert morale_after_2 < morale_after_1
+        assert morale_after_3 < morale_after_2
+        assert result1["find"] == "nothing"
+        assert result2["find"] == "nothing"
+        assert result3["find"] == "nothing"
+
+    def test_perform_salvage_deterministic(self) -> None:
+        s1 = self._make_salvage_state(seed=42)
+        s2 = self._make_salvage_state(seed=42)
+        r1 = perform_salvage(s1)
+        r2 = perform_salvage(s2)
+        assert r1["find"] == r2["find"]
+        assert r1["result"] == r2["result"]
+
+    def test_perform_salvage_limited_attempts(self) -> None:
+        from unittest.mock import MagicMock, patch
+        state = self._make_salvage_state()
+        body_id = state.ship.current_body_id
+        mock_rng = MagicMock()
+        mock_rng.random.side_effect = [0.95, 0.95, 0.95, 0.95]
+        with patch("backend.game.engine.seeded_random", return_value=mock_rng):
+            for i in range(3):
+                result = perform_salvage(state)
+                assert "error" not in result
+            result = perform_salvage(state)
+            assert "error" in result
+            assert "max" in result["error"].lower() or "fully" in result["error"].lower()
+        assert state.ship.salvage_attempts[body_id] == 3
+
+
+class TestEmergencyCraft:
+    """Tests for emergency_craft."""
+
+    def test_emergency_craft_not_found(self) -> None:
+        state = new_game(seed=42)
+        result = emergency_craft(state, "nonexistent_disc_id", "fuel")
+        assert "error" in result
+        assert "not found" in result["error"]
+
+    def test_emergency_craft_unknown_category(self) -> None:
+        state = new_game(seed=42)
+        disc = Discovery(
+            id="craft_unknown_cat", category="unknown_type", name="Mystery Item",
+            description="Unknown", value=50, system_id="sys1", body_id="body1",
+        )
+        state.discoveries.append(disc)
+        result = emergency_craft(state, "craft_unknown_cat", "fuel")
+        assert "error" in result
+        assert "cannot be crafted" in result["error"]
+
+    def test_emergency_craft_wrong_output(self) -> None:
+        state = new_game(seed=42)
+        disc = Discovery(
+            id="craft_artifact_disc", category="artifact", name="Ancient Artifact",
+            description="Ancient", value=50, system_id="sys1", body_id="body1",
+        )
+        state.discoveries.append(disc)
+        result = emergency_craft(state, "craft_artifact_disc", "repair")
+        assert "error" in result
+        assert "can only be crafted" in result["error"]
+
+    def test_emergency_craft_artifact_to_fuel(self) -> None:
+        state = new_game(seed=42)
+        state.ship.fuel = 10
+        disc = Discovery(
+            id="craft_artifact_disc2", category="artifact", name="Ancient Artifact",
+            description="Ancient", value=50, system_id="sys1", body_id="body1",
+        )
+        state.discoveries.append(disc)
+        result = emergency_craft(state, "craft_artifact_disc2", "fuel")
+        assert "error" not in result
+        assert result["crafted"] == "fuel"
+        assert result["effects"]["fuel"] == 5
+        assert state.ship.fuel == 15
+        assert disc not in state.discoveries
+
+    def test_emergency_craft_mineral_to_repair(self) -> None:
+        state = new_game(seed=42)
+        state.ship.hull = 50
+        disc = Discovery(
+            id="craft_mineral_disc", category="mineral", name="Rare Mineral",
+            description="Mineral", value=50, system_id="sys1", body_id="body1",
+        )
+        state.discoveries.append(disc)
+        result = emergency_craft(state, "craft_mineral_disc", "repair")
+        assert "error" not in result
+        assert result["crafted"] == "repair"
+        assert result["effects"]["hull"] == 10
+        assert state.ship.hull == 60
+        assert disc not in state.discoveries
+
+    def test_emergency_craft_lifeform_to_morale(self) -> None:
+        state = new_game(seed=42)
+        state.ship.morale = 50
+        disc = Discovery(
+            id="craft_lifeform_disc", category="lifeform", name="Alien Creature",
+            description="Lifeform", value=50, system_id="sys1", body_id="body1",
+        )
+        state.discoveries.append(disc)
+        result = emergency_craft(state, "craft_lifeform_disc", "morale")
+        assert "error" not in result
+        assert result["crafted"] == "morale"
+        assert result["effects"]["morale"] == 15
+        assert state.ship.morale == 65
+        assert disc not in state.discoveries
+
+    def test_emergency_craft_signal_to_credits(self) -> None:
+        state = new_game(seed=42)
+        state.ship.credits = 100
+        disc = Discovery(
+            id="craft_signal_disc", category="signal", name="Encrypted Signal",
+            description="Signal", value=50, system_id="sys1", body_id="body1",
+        )
+        state.discoveries.append(disc)
+        result = emergency_craft(state, "craft_signal_disc", "credits")
+        assert "error" not in result
+        assert result["crafted"] == "credits"
+        assert result["effects"]["credits"] == 50
+        assert state.ship.credits == 150
+        assert disc not in state.discoveries
+
+    def test_emergency_craft_removes_discovery(self) -> None:
+        state = new_game(seed=42)
+        disc = Discovery(
+            id="craft_remove_disc", category="artifact", name="Test Artifact",
+            description="Test", value=100, system_id="sys1", body_id="body1",
+        )
+        state.discoveries.append(disc)
+        assert len(state.discoveries) == 1
+        result = emergency_craft(state, "craft_remove_disc", "fuel")
+        assert "error" not in result
+        assert len(state.discoveries) == 0
+
+    def test_emergency_craft_unknown_output_fallback(self) -> None:
+        from unittest.mock import patch
+        state = new_game(seed=42)
+        disc = Discovery(
+            id="craft_fallback_disc", category="artifact", name="Test Artifact",
+            description="Test", value=100, system_id="sys1", body_id="body1",
+        )
+        state.discoveries.append(disc)
+        with patch.dict("backend.game.engine.CRAFT_CONVERSIONS", {"artifact": ("unknown_output_type", 5)}):
+            with pytest.raises(ValueError, match="Unhandled output type: unknown_output_type"):
+                emergency_craft(state, "craft_fallback_disc", "unknown_output_type")
+
+
+class TestStrandedState:
+    """Tests for GameState stranded state tracking."""
+
+    def test_update_stranded_state_fuel_zero(self) -> None:
+        state = new_game(seed=42)
+        state.ship.fuel = 0
+        assert state.ship.stranded_turns == 0
+        result = state.update_stranded_state()
+        assert result == 1
+        assert state.ship.stranded_turns == 1
+
+    def test_update_stranded_state_morale_penalty(self) -> None:
+        state = new_game(seed=42)
+        state.ship.fuel = 0
+        initial_morale = state.ship.morale
+        state.update_stranded_state()
+        assert state.ship.morale == max(0, initial_morale - 5)
+
+    def test_update_stranded_state_resets_when_fuel(self) -> None:
+        state = new_game(seed=42)
+        state.ship.fuel = 0
+        state.ship.stranded_turns = 5
+        state.ship.distress_cooldown = True
+        state.ship.fuel = 10
+        result = state.update_stranded_state()
+        assert result == 0
+        assert state.ship.stranded_turns == 0
+        assert state.ship.distress_cooldown is False
+
+    def test_reset_stranded_state(self) -> None:
+        state = new_game(seed=42)
+        state.ship.stranded_turns = 10
+        state.ship.distress_cooldown = True
+        state.reset_stranded_state()
+        assert state.ship.stranded_turns == 0
+        assert state.ship.distress_cooldown is False
+
+
+class TestTriggerEventDeterminism:
+    """Tests for the determinism of trigger_event's default RNG (without rng_override)."""
+
+    def test_trigger_event_deterministic_both_none(self) -> None:
+        """Two identical game states should both return None from trigger_event."""
+        state1 = new_game(seed=42)
+        state2 = new_game(seed=42)
+
+        state1.ship.morale = 80
+        state2.ship.morale = 80
+
+        system1 = state1.get_current_system()
+        system2 = state2.get_current_system()
+        assert system1 is not None
+        assert system2 is not None
+        system1.phenomenon = "none"
+        system2.phenomenon = "none"
+
+        event1 = trigger_event(state1)
+        event2 = trigger_event(state2)
+
+        assert event1 is None
+        assert event2 is None
+
+    def test_trigger_event_deterministic_both_event(self) -> None:
+        """Two identical game states should both return the same event from trigger_event."""
+        state1 = new_game(seed=42)
+        state2 = new_game(seed=42)
+
+        state1.ship.morale = 20
+        state2.ship.morale = 20
+
+        system1 = state1.get_current_system()
+        system2 = state2.get_current_system()
+        assert system1 is not None
+        assert system2 is not None
+
+        event1 = trigger_event(state1)
+        event2 = trigger_event(state2)
+
+        assert event1 is not None
+        assert event2 is not None
+        assert event1.event_type == event2.event_type
