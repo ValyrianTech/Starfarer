@@ -297,6 +297,8 @@ def trigger_event(state: GameState, rng_override: Optional[random.Random] = None
         eligible_no_cooldown = [t for t in eligible if t["title"] != state.last_event_title]
         if eligible_no_cooldown:
             eligible = eligible_no_cooldown
+        if not eligible:
+            return None
         template = eligible[deterministic_hash(system.id, str(len(state.log_entries))) % len(eligible)]
         state.last_event_title = template["title"]
         return _create_event(template, system.id)
@@ -308,6 +310,8 @@ def trigger_event(state: GameState, rng_override: Optional[random.Random] = None
         eligible_no_cooldown = [t for t in eligible if t["title"] != state.last_event_title]
         if eligible_no_cooldown:
             eligible = eligible_no_cooldown
+        if not eligible:
+            return None
 
         rarity_weights = {"common": 5, "uncommon": 2, "rare": 1}
         weights = [rarity_weights.get(t.get("rarity", "common"), 1) for t in eligible]

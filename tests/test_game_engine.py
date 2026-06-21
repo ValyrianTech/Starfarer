@@ -2326,3 +2326,139 @@ class TestTriggerEventDeterminism:
         assert event1 is not None
         assert event2 is not None
         assert event1.event_type == event2.event_type
+
+
+class TestTriggerEventEmptyEligible:
+    """Tests for the empty eligible guard in trigger_event."""
+
+    def test_low_morale_empty_eligible_returns_none(self) -> None:
+        """When morale is low and no crew/crisis/narrative templates are eligible, trigger_event should return None."""
+        from backend.generation.events import trigger_event, EVENT_TEMPLATES
+        from backend.models.game_state import GameState
+        from backend.models.ship import Ship
+        from backend.models.system import StarSystem, Body
+        from backend.config import MORALE_LOW_THRESHOLD
+
+        # Create a state with low morale
+        ship = Ship(morale=MORALE_LOW_THRESHOLD - 1)
+        state = GameState(id="test-empty-eligible-low", seed=42, ship=ship)
+
+        # Add a system
+        body = Body(id="b1", name="Planet", body_type="planet", biome="ocean",
+                    size=3, distance_from_star=0.5, poi_count=1)
+        system = StarSystem(id="sys1", name="TestSys", x=0.0, y=0.0,
+                            star_type="G", star_color="#fff",
+                            phenomenon="none", phenomenon_desc="",
+                            bodies=[body])
+        state.systems = {"sys1": system}
+        state.ship.current_system_id = "sys1"
+
+        # Mock _get_eligible_templates to return an empty list
+        # This simulates the scenario where all templates with trigger_conditions
+        # fail to match, and there are no unconditional templates either
+        import unittest.mock as mock
+        with mock.patch("backend.generation.events._get_eligible_templates", return_value=[]):
+            result = trigger_event(state)
+
+        assert result is None, "Expected None when eligible list is empty in low-morale path"
+
+    def test_normal_path_empty_eligible_returns_none(self) -> None:
+        """When morale is normal and no templates are eligible, trigger_event should return None."""
+        from backend.generation.events import trigger_event, EVENT_TEMPLATES
+        from backend.models.game_state import GameState
+        from backend.models.ship import Ship
+        from backend.models.system import StarSystem, Body
+        from backend.config import MORALE_LOW_THRESHOLD
+
+        # Create a state with normal morale
+        ship = Ship(morale=MORALE_LOW_THRESHOLD + 10)
+        state = GameState(id="test-empty-eligible-normal", seed=42, ship=ship)
+
+        # Add a system
+        body = Body(id="b1", name="Planet", body_type="planet", biome="ocean",
+                    size=3, distance_from_star=0.5, poi_count=1)
+        system = StarSystem(id="sys1", name="TestSys", x=0.0, y=0.0,
+                            star_type="G", star_color="#fff",
+                            phenomenon="none", phenomenon_desc="",
+                            bodies=[body])
+        state.systems = {"sys1": system}
+        state.ship.current_system_id = "sys1"
+
+        # Mock _get_eligible_templates to return an empty list
+        import unittest.mock as mock
+        import random
+        rng = random.Random(1)
+        with mock.patch("backend.generation.events._get_eligible_templates", return_value=[]):
+            result = trigger_event(state, rng_override=rng)
+
+        assert result is None, "Expected None when eligible list is empty in normal path"
+
+    def test_low_morale_empty_eligible_after_cooldown_filter(self) -> None:
+        """When low-morale eligible list becomes empty after type+cooldown filtering, trigger_event should return None."""
+        from backend.generation.events import trigger_event, EVENT_TEMPLATES
+        from backend.models.game_state import GameState
+        from backend.models.ship import Ship
+        from backend.models.system import StarSystem, Body
+        from backend.config import MORALE_LOW_THRESHOLD
+
+        # Create a state with low morale
+        ship = Ship(morale=MORALE_LOW_THRESHOLD - 1)
+        state = GameState(id="test-empty-cooldown-low", seed=42, ship=ship)
+
+        # Add a system
+        body = Body(id="b1", name="Planet", body_type="planet", biome="ocean",
+                    size=3, distance_from_star=0.5, poi_count=1)
+        system = StarSystem(id="sys1", name="TestSys", x=0.0, y=0.0,
+                            star_type="G", star_color="#fff",
+                            phenomenon="none", phenomenon_desc="",
+                            bodies=[body])
+        state.systems = {"sys1": system}
+        state.ship.current_system_id = "sys1"
+
+        # Set last_event_title to match all eligible templates so cooldown filters them all out
+        state.last_event_title = "Rare Discovery"
+
+        # Mock _get_eligible_templates to return only exploration-type templates
+        # (not crew/crisis/narrative), so the type filter at line 296 empties
+        # eligible. The cooldown check then has nothing left either.
+        import unittest.mock as mock
+        with mock.patch("backend.generation.events._get_eligible_templates", return_value=[
+            {"type": "exploration", "title": "Rare Discovery", "flavor": "...", "rarity": "common", "choices": []}
+        ]):
+            result = trigger_event(state)
+
+        assert result is None, "Expected None when type and cooldown filter empties eligible list in low-morale path"
+
+    def test_normal_path_empty_eligible_after_cooldown_filter(self) -> None:
+        """When normal path eligible list is empty after cooldown check, trigger_event should return None."""
+        from backend.generation.events import trigger_event, EVENT_TEMPLATES
+        from backend.models.game_state import GameState
+        from backend.models.ship import Ship
+        from backend.models.system import StarSystem, Body
+        from backend.config import MORALE_LOW_THRESHOLD
+
+        # Create a state with normal morale
+        ship = Ship(morale=MORALE_LOW_THRESHOLD + 10)
+        state = GameState(id="test-empty-cooldown-normal", seed=42, ship=ship)
+
+        # Add a system
+        body = Body(id="b1", name="Planet", body_type="planet", biome="ocean",
+                    size=3, distance_from_star=0.5, poi_count=1)
+        system = StarSystem(id="sys1", name="TestSys", x=0.0, y=0.0,
+                            star_type="G", star_color="#fff",
+                            phenomenon="none", phenomenon_desc="",
+                            bodies=[body])
+        state.systems = {"sys1": system}
+        state.ship.current_system_id = "sys1"
+
+        # Set last_event_title (irrelevant since eligible is empty anyway)
+        state.last_event_title = "Ancient Signal"
+
+        # Mock _get_eligible_templates to return an empty list
+        import unittest.mock as mock
+        import random
+        rng = random.Random(1)
+        with mock.patch("backend.generation.events._get_eligible_templates", return_value=[]):
+            result = trigger_event(state, rng_override=rng)
+
+        assert result is None, "Expected None when eligible list is empty after cooldown check in normal path"
