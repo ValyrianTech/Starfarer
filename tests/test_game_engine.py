@@ -961,7 +961,7 @@ class TestTriggerEventPhenomenonBranch:
         assert len(derelict_signal) == 0
 
     def test_get_eligible_templates_all_filtered_fallback(self) -> None:
-        """_get_eligible_templates should return all templates when no templates match conditions (fallback)."""
+        """_get_eligible_templates should return only templates with no trigger_conditions when all are filtered out (fallback)."""
         from backend.generation.events import _get_eligible_templates
         state = new_game(seed=42)
         system = state.get_current_system()
@@ -975,13 +975,14 @@ class TestTriggerEventPhenomenonBranch:
         state.ship.morale = 80
         # Use custom templates where ALL have trigger_conditions so eligible
         # can actually be empty and the fallback branch is exercised.
+        # Since all templates have conditions that don't match, and none are
+        # unconditionally eligible, the result should be empty.
         custom_templates = [
             {"type": "test", "title": "Test A", "trigger_conditions": {"phenomenon": "nebula"}, "choices": []},
             {"type": "test", "title": "Test B", "trigger_conditions": {"min_systems_visited": 5}, "choices": []},
         ]
         result = _get_eligible_templates(state, custom_templates)
-        assert len(result) == len(custom_templates)
-        assert len(result) == 2
+        assert len(result) == 0
 
 
 class TestBulkSell:

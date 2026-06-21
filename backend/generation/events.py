@@ -225,7 +225,8 @@ def _get_eligible_templates(state: GameState, templates: list[dict]) -> list[dic
     :param templates: The full list of event templates.
     :type templates: list[dict]
     :returns: A filtered list of eligible templates. If no templates
-        match, the original unfiltered list is returned as a fallback.
+        match any conditions, only templates with no trigger_conditions
+        are returned as a fallback.
     :rtype: list[dict]
     """
     system = state.get_current_system()
@@ -264,7 +265,7 @@ def _get_eligible_templates(state: GameState, templates: list[dict]) -> list[dic
         eligible.append(t)
 
     if not eligible:
-        return templates
+        return [t for t in templates if not t.get("trigger_conditions")]
     return eligible
 
 
