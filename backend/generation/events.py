@@ -146,7 +146,7 @@ def trigger_event(state: GameState, rng_override: Optional[random.Random] = None
         template = crew_events[deterministic_hash(system.id, str(len(state.log_entries))) % len(crew_events)]
         return _create_event(template, system.id)
 
-    rng = rng_override or random.Random(state.seed + deterministic_hash(system.id, len(state.events), len(state.log_entries)))
+    rng = rng_override or seeded_random(state.seed, "event_trigger", system.id, str(len(state.events)), str(len(state.log_entries)))
 
     if rng.random() < 0.35:
         if system.phenomenon != "none" and rng.random() < 0.5:

@@ -2143,3 +2143,48 @@ class TestStrandedTurns:
         state.reset_stranded_state()
         assert state.ship.stranded_turns == 0
         assert state.ship.distress_cooldown is False
+
+
+class TestTriggerEventDeterminism:
+    """Tests for the determinism of trigger_event's default RNG (without rng_override)."""
+
+    def test_trigger_event_deterministic_both_none(self) -> None:
+        """Two identical game states should both return None from trigger_event."""
+        state1 = new_game(seed=42)
+        state2 = new_game(seed=42)
+
+        state1.ship.morale = 80
+        state2.ship.morale = 80
+
+        system1 = state1.get_current_system()
+        system2 = state2.get_current_system()
+        assert system1 is not None
+        assert system2 is not None
+        system1.phenomenon = "none"
+        system2.phenomenon = "none"
+
+        event1 = trigger_event(state1)
+        event2 = trigger_event(state2)
+
+        assert event1 is None
+        assert event2 is None
+
+    def test_trigger_event_deterministic_both_event(self) -> None:
+        """Two identical game states should both return the same event from trigger_event."""
+        state1 = new_game(seed=42)
+        state2 = new_game(seed=42)
+
+        state1.ship.morale = 20
+        state2.ship.morale = 20
+
+        system1 = state1.get_current_system()
+        system2 = state2.get_current_system()
+        assert system1 is not None
+        assert system2 is not None
+
+        event1 = trigger_event(state1)
+        event2 = trigger_event(state2)
+
+        assert event1 is not None
+        assert event2 is not None
+        assert event1.event_type == event2.event_type
