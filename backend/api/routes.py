@@ -27,6 +27,7 @@ from backend.game.engine import (
 from backend.game.trading import get_upgrade_info, purchase_upgrade, perform_trade, perform_bulk_sell
 from backend.database import get_leaderboard
 from backend.generation.lore_content import ARC_DISPLAY_NAMES
+from backend.models.faction import get_faction, FACTION_DEFINITIONS
 
 START_TIME = time.time()
 
@@ -648,6 +649,128 @@ def api_salvage_craft(game_id: str, req: CraftRequest) -> dict:
     }
 
 
+@router.get("/game/{game_id}/factions")
+def api_factions(game_id: str) -> dict:
+    """Retrieve all faction definitions and the player's reputation with each.
+
+    :param game_id: The unique identifier of the game.
+    :type game_id: str
+    :returns: A dictionary with ``factions`` list of faction info dicts.
+    :rtype: dict
+    :raises HTTPException: 404 if the game is not found.
+    """
+    state = _get_state(game_id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Game not found")
+    return {"factions": state.get_known_factions()}
+
+
+@router.get("/game/{game_id}/faction/{faction_id}")
+def api_faction_detail(game_id: str, faction_id: str) -> dict:
+    """Retrieve detailed information about a specific faction.
+
+    :param game_id: The unique identifier of the game.
+    :type game_id: str
+    :param faction_id: The unique identifier of the faction.
+    :type faction_id: str
+    :returns: A dictionary with faction definition and reputation.
+    :rtype: dict
+    :raises HTTPException: 404 if the game or faction is not found.
+    """
+    state = _get_state(game_id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Game not found")
+    faction = get_faction(faction_id)
+    if not faction:
+        raise HTTPException(status_code=404, detail="Faction not found")
+    relation = state.faction_relations.get(faction_id)
+    return {
+        "faction": {
+            "id": faction.id,
+            "name": faction.name,
+            "description": faction.description,
+            "alignment": faction.alignment,
+            "home_system_id": faction.home_system_id,
+        },
+        "reputation": relation.reputation if relation else 0,
+        "known": relation.known if relation else False,
+    }
+
+
+@router.post("/game/{game_id}/faction/{faction_id}/mission")
+def api_faction_mission(game_id: str, faction_id: str) -> dict:
+    """Run a faction mission to earn reputation with that faction.
+
+    Missions cost credits and fuel but grant reputation. Success chance
+    depends on current reputation — higher reputation yields better odds.
+
+    :param game_id: The unique identifier of the game.
+    :type game_id: str
+    :param faction_id: The unique identifier of the faction.
+    :type faction_id: str
+    :returns: A dictionary with ``result`` message, ``effect``, ``reputation``,
+        and ``ship`` status.
+    :rtype: dict
+    :raises HTTPException: 404 if the game or faction is not found; 400 if
+        the mission cannot be attempted.
+    """
+    state = _get_state(game_id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Game not found")
+    faction = get_faction(faction_id)
+    if not faction:
+        raise HTTPException(status_code=404, detail="Faction not found")
+
+    import random
+    from backend.utils import deterministic_hash
+
+    ship = state.ship
+
+    if ship.fuel < 10:
+        raise HTTPException(status_code=400, detail="Not enough fuel. Mission requires 10 fuel.")
+    if ship.credits < 50:
+        raise HTTPException(status_code=400, detail="Not enough credits. Mission requires 50 credits.")
+
+    ship.fuel -= 10
+    ship.credits -= 50
+
+    det_seed = deterministic_hash(state.seed, faction_id, len(state.log_entries))
+    rng = random.Random(det_seed)
+
+    current_rep = state.get_faction_reputation(faction_id)
+    success_chance = 0.4 + (current_rep / 500.0)
+    success_chance = max(0.1, min(0.9, success_chance))
+
+    if rng.random() < success_chance:
+        rep_gain = rng.randint(10, 30)
+        state.modify_faction_reputation(faction_id, rep_gain)
+        relation = state.faction_relations[faction_id]
+        relation.known = True
+        credits_gain = rng.randint(50, 150)
+        ship.credits += credits_gain
+        state.add_log("faction", f"Completed a mission for {faction.name}. Gained {rep_gain} reputation and {credits_gain} credits.")
+        game_save(state)
+        return {
+            "result": f"Mission for {faction.name} successful! Reputation +{rep_gain}, Credits +{credits_gain}.",
+            "effect": "success",
+            "reputation": relation.reputation,
+            "ship": ship.to_dict(),
+        }
+    else:
+        rep_loss = rng.randint(5, 15)
+        state.modify_faction_reputation(faction_id, -rep_loss)
+        relation = state.faction_relations[faction_id]
+        relation.known = True
+        state.add_log("faction", f"Failed a mission for {faction.name}. Lost {rep_loss} reputation.")
+        game_save(state)
+        return {
+            "result": f"Mission for {faction.name} failed. Reputation -{rep_loss}.",
+            "effect": "failure",
+            "reputation": relation.reputation,
+            "ship": ship.to_dict(),
+        }
+
+
 @router.post("/game/{game_id}/save")
 def api_save(game_id: str) -> dict:
     """Save the current game state to the database.
@@ -729,4 +852,5 @@ def _full_state_response(state: GameState) -> dict:
         "game_started": state.game_started,
         "lore_fragments_collected": state.lore_fragments_collected,
         "lore_fragments_total": len(state.lore_fragments),
+        "factions": state.get_known_factions(),
     }

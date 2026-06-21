@@ -383,6 +383,7 @@ def activate_distress_beacon(state: GameState) -> dict:
     if has_station and rescue_roll < 0.3:
         ship.credits = max(0, ship.credits - 100)
         ship.fuel = min(ship.max_fuel, ship.fuel + 20)
+        state.modify_faction_reputation("free_pilots", 5)
         state.add_log("emergency", f"Pilots Guild answered your distress call in {system.name}. They delivered 20 fuel for 100 credits.")
         return {
             "result": f"Pilots Guild rescue! 20 fuel delivered for 100 credits. Arrived in {turns} turns.",

@@ -225,6 +225,13 @@ def resolve_event(state: GameState, event_id: str, choice_idx: int) -> tuple[boo
     effects = state.apply_choice_outcome(choice.outcome)
     state.add_log("event", f"Event '{event.title}' resolved: {choice.text}. {choice.outcome}")
 
+    if event.event_type == "exploration":
+        state.modify_faction_reputation("stellar_cartographers", random.randint(2, 8))
+    elif event.event_type == "trade":
+        state.modify_faction_reputation("void_traders", random.randint(2, 8))
+    elif event.event_type in ("encounter", "crisis"):
+        state.modify_faction_reputation("free_pilots", random.randint(1, 6))
+
     extra_output = {
         "title": event.title,
         "chosen_text": choice.text,
