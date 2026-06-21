@@ -513,13 +513,13 @@ class TestDiscoveryModel:
         assert restored.fragment_number == 3
 
     def test_lore_fragment_number_default(self) -> None:
-        """LoreFragment fragment_number should default to 0."""
+        """LoreFragment fragment_number should default to -1."""
         lore = LoreFragment(id="l_test", arc="test", title="Test", text="Test text")
-        assert lore.fragment_number == 0
+        assert lore.fragment_number == -1
         d = lore.to_dict()
-        assert d["fragment_number"] == 0
+        assert d["fragment_number"] == -1
         restored = LoreFragment.from_dict(d)
-        assert restored.fragment_number == 0
+        assert restored.fragment_number == -1
 
     def test_lore_fragment_sortable_by_number(self) -> None:
         """fragment_number should provide a robust sort key (simulating frontend)."""
@@ -1282,9 +1282,9 @@ class TestLoreFragmentNumberFixup:
     """Tests for the _fixup_old_lore_fragment_numbers migration helper."""
 
     def test_fixup_extracts_number_from_id(self) -> None:
-        """LoreFragment with id='lore_Architects_3' and fragment_number=0 gets fixed to 3."""
+        """LoreFragment with id='lore_Architects_3' and fragment_number=-1 gets fixed to 3."""
         frags = [
-            LoreFragment(id="lore_Architects_3", arc="architects", title="T3", text="...", fragment_number=0),
+            LoreFragment(id="lore_Architects_3", arc="architects", title="T3", text="...", fragment_number=-1),
         ]
         _fixup_old_lore_fragment_numbers(frags)
         assert frags[0].fragment_number == 3
@@ -1298,26 +1298,26 @@ class TestLoreFragmentNumberFixup:
         assert frags[0].fragment_number == 5
 
     def test_fixup_graceful_bad_id(self) -> None:
-        """LoreFragment with id='weird_id' and fragment_number=0 stays 0 (fallback)."""
+        """LoreFragment with id='weird_id' and fragment_number=-1 stays -1 (fallback)."""
         frags = [
-            LoreFragment(id="weird_id", arc="test", title="Weird", text="...", fragment_number=0),
+            LoreFragment(id="weird_id", arc="test", title="Weird", text="...", fragment_number=-1),
         ]
         _fixup_old_lore_fragment_numbers(frags)
-        assert frags[0].fragment_number == 0
+        assert frags[0].fragment_number == -1
 
     def test_fixup_handles_multiple_fragments(self) -> None:
         """Fixup handles a mix of fragments correctly."""
         frags = [
-            LoreFragment(id="lore_architects_1", arc="architects", title="T1", text="...", fragment_number=0),
-            LoreFragment(id="lore_void_signal_2", arc="void_signal", title="T2", text="...", fragment_number=0),
+            LoreFragment(id="lore_architects_1", arc="architects", title="T1", text="...", fragment_number=-1),
+            LoreFragment(id="lore_void_signal_2", arc="void_signal", title="T2", text="...", fragment_number=-1),
             LoreFragment(id="lore_fracture_3", arc="fracture", title="T3", text="...", fragment_number=3),
-            LoreFragment(id="bad_id", arc="test", title="Bad", text="...", fragment_number=0),
+            LoreFragment(id="bad_id", arc="test", title="Bad", text="...", fragment_number=-1),
         ]
         _fixup_old_lore_fragment_numbers(frags)
         assert frags[0].fragment_number == 1
         assert frags[1].fragment_number == 2
         assert frags[2].fragment_number == 3  # already correct, unchanged
-        assert frags[3].fragment_number == 0  # bad ID, unchanged
+        assert frags[3].fragment_number == -1  # bad ID, unchanged
 
     def test_state_from_dict_applies_fixup(self) -> None:
         """Loading a dict with old-style lore fragments (no fragment_number) gets correct numbers."""
