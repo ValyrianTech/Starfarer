@@ -17,7 +17,7 @@ from backend.models.game_state import GameState
 from backend.models.ship import Ship
 from backend.models.system import StarSystem, Body
 from backend.models.discovery import Discovery
-from backend.utils import deterministic_hash
+from backend.utils import deterministic_hash, seeded_random
 from backend.generation.universe import distance_between
 from backend.generation.lore import get_fragment_for_body
 
@@ -91,6 +91,8 @@ def perform_jump(state: GameState, target_system: StarSystem, fuel_cost: int | f
 
     if target_system.phenomenon != "none":
         state.add_log("discovery", f"Detected phenomenon: {target_system.phenomenon_desc}")
+
+    state.increment_stranded_turns()
 
     return f"Jumped to {target_system.name}."
 
@@ -319,3 +321,277 @@ def _generate_discovery(rng: random.Random, category: str, body: Body, system: S
         id=d_id, category=category, name=name, description=desc,
         value=value, system_id=system.id, body_id=body.id,
     )
+
+
+CRAFT_CONVERSIONS = {
+    "artifact": ("fuel", 5),
+    "mineral": ("repair", 10),
+    "lifeform": ("morale", 15),
+    "signal": ("credits", 50),
+}
+
+
+def activate_distress_beacon(state: GameState) -> dict:
+    """Activate the distress beacon to call for help when in trouble.
+
+    Can only be used when fuel is at 0 or hull is critically low
+    (below 20% of max), and when the distress cooldown is not active.
+    Costs 50 credits. Has a 60% chance of attracting a rescue within
+    1-3 turns.
+
+    :param state: The current game state.
+    :type state: GameState
+    :returns: A dictionary with ``error`` on failure, or ``result``,
+        ``outcome``, and ``effects`` on success.
+    :rtype: dict
+    """
+    ship = state.ship
+    system = state.get_current_system()
+
+    if not system:
+        return {"error": "No current system."}
+
+    hull_threshold = int(ship.max_hull * 0.2)
+    if ship.fuel > 0 and ship.hull >= hull_threshold:
+        return {"error": "Distress beacon can only be activated when fuel is empty or hull is critically low (below 20%)."}
+
+    if ship.distress_cooldown:
+        return {"error": "Distress beacon is on cooldown. Wait for it to recharge."}
+
+    if ship.credits < 50:
+        return {"error": "Not enough credits. Distress beacon costs 50 credits."}
+
+    ship.credits -= 50
+    ship.distress_cooldown = True
+
+    rng = seeded_random(state.seed, "distress", system.id)
+
+    rescued = rng.random() < 0.6
+    if not rescued:
+        turns = rng.randint(2, 4)
+        state.add_log("emergency", f"Distress beacon activated in {system.name}. No response yet — try again in {turns} turns.")
+        return {
+            "result": f"Distress beacon activated. No response yet — try again in {turns} turns.",
+            "outcome": "no_response",
+            "effects": {},
+        }
+
+    turns = rng.randint(1, 3)
+    rescue_roll = rng.random()
+    has_station = system.has_trading_station
+
+    if has_station and rescue_roll < 0.3:
+        ship.credits = max(0, ship.credits - 100)
+        ship.fuel = min(ship.max_fuel, ship.fuel + 20)
+        state.add_log("emergency", f"Pilots Guild answered your distress call in {system.name}. They delivered 20 fuel for 100 credits.")
+        return {
+            "result": f"Pilots Guild rescue! 20 fuel delivered for 100 credits. Arrived in {turns} turns.",
+            "outcome": "pilots_guild",
+            "effects": {"fuel": 20, "credits": -100},
+        }
+    elif rescue_roll < 0.7:
+        passerby_roll = rng.random()
+        if passerby_roll < 0.5:
+            fuel_given = rng.randint(10, 25)
+            ship.fuel = min(ship.max_fuel, ship.fuel + fuel_given)
+            state.add_log("emergency", f"A friendly passerby answered your distress call and shared {fuel_given} fuel.")
+            return {
+                "result": f"Friendly passerby shared {fuel_given} fuel! Arrived in {turns} turns.",
+                "outcome": "passerby_help",
+                "effects": {"fuel": fuel_given},
+            }
+        elif passerby_roll < 0.8:
+            credits_stolen = min(ship.credits, rng.randint(20, 80))
+            ship.credits = max(0, ship.credits - credits_stolen)
+            state.add_log("emergency", f"Pirates responded to your distress call and stole {credits_stolen} credits!")
+            return {
+                "result": f"Pirates answered your call and stole {credits_stolen} credits!",
+                "outcome": "piracy",
+                "effects": {"credits": -credits_stolen},
+            }
+        else:
+            state.add_log("emergency", f"A ship passed nearby but did not respond to your distress call.")
+            return {
+                "result": "A ship passed nearby but did not respond.",
+                "outcome": "passerby_ignore",
+                "effects": {},
+            }
+    else:
+        signal_roll = rng.random()
+        if signal_roll < 0.5:
+            fuel_given = rng.randint(5, 15)
+            ship.fuel = min(ship.max_fuel, ship.fuel + fuel_given)
+            state.add_log("emergency", f"An emergency signal brought a friendly responder who delivered {fuel_given} fuel.")
+            return {
+                "result": f"Friendly emergency responder delivered {fuel_given} fuel! Arrived in {turns} turns.",
+                "outcome": "signal_friendly",
+                "effects": {"fuel": fuel_given},
+            }
+        else:
+            hull_damage = rng.randint(5, 15)
+            ship.hull = max(0, ship.hull - hull_damage)
+            state.add_log("emergency", f"A hostile ship intercepted your emergency signal and attacked, causing {hull_damage} hull damage.")
+            return {
+                "result": f"Hostile ship intercepted your signal! Took {hull_damage} hull damage.",
+                "outcome": "signal_hostile",
+                "effects": {"hull": -hull_damage},
+            }
+
+
+def perform_salvage(state: GameState) -> dict:
+    """Salvage the surrounding area for resources when stranded.
+
+    Only available when fuel is 0 and the ship is landed on a body.
+    Each body can be salvaged up to 3 times. Morale cost increases
+    with each attempt.
+
+    :param state: The current game state.
+    :type state: GameState
+    :returns: A dictionary with ``error`` on failure, or ``result``,
+        ``find``, and ``effects`` on success.
+    :rtype: dict
+    """
+    ship = state.ship
+
+    if ship.fuel > 0:
+        return {"error": "Salvage is only possible when stranded with no fuel."}
+
+    if not ship.current_body_id:
+        return {"error": "Must be landed on a body to salvage."}
+
+    body_id = ship.current_body_id
+    current_attempts = ship.salvage_attempts.get(body_id, 0)
+
+    if current_attempts >= 3:
+        return {"error": "This area has been fully salvaged (max 3 attempts)."}
+
+    morale_cost = 1 + 2 * current_attempts
+    ship.morale = max(0, ship.morale - morale_cost)
+    ship.salvage_attempts[body_id] = current_attempts + 1
+
+    system = state.get_current_system()
+    body = None
+    if system:
+        for b in system.bodies:
+            if b.id == body_id:
+                body = b
+                break
+
+    rng = seeded_random(state.seed, "salvage", body_id, str(current_attempts))
+    roll = rng.random()
+
+    if roll < 0.4:
+        fuel_found = rng.randint(2, 8)
+        ship.fuel = min(ship.max_fuel, ship.fuel + fuel_found)
+        state.add_log("emergency", f"Salvaged a fuel cache on {body.name if body else body_id}: +{fuel_found} fuel.")
+        return {
+            "result": f"Found a fuel cache! +{fuel_found} fuel.",
+            "find": "fuel_cache",
+            "effects": {"fuel": fuel_found},
+        }
+    elif roll < 0.7:
+        repair_amount = rng.randint(5, 15)
+        ship.hull = min(ship.max_hull, ship.hull + repair_amount)
+        state.add_log("emergency", f"Salvaged repair materials on {body.name if body else body_id}: +{repair_amount} hull repaired.")
+        return {
+            "result": f"Found repair materials! +{repair_amount} hull.",
+            "find": "repair_materials",
+            "effects": {"hull": repair_amount},
+        }
+    elif roll < 0.9:
+        spare_value = rng.randint(10, 50)
+        d_id = f"{rng.getrandbits(48):012x}"
+        disc = Discovery(
+            id=d_id, category="artifact", name="Salvaged Spare Parts",
+            description="Recovered spare parts from a wreckage in the area.",
+            value=spare_value, system_id=system.id if system else "",
+            body_id=body_id,
+        )
+        state.discoveries.append(disc)
+        state.add_log("emergency", f"Salvaged spare parts on {body.name if body else body_id} (value: {spare_value} credits).")
+        return {
+            "result": f"Found salvageable spare parts! Value: {spare_value} credits.",
+            "find": "spare_parts",
+            "effects": {"cargo": 1},
+        }
+    else:
+        state.add_log("emergency", f"Salvage attempt on {body.name if body else body_id} turned up nothing useful.")
+        return {
+            "result": "Nothing useful found.",
+            "find": "nothing",
+            "effects": {},
+        }
+
+
+def emergency_craft(state: GameState, discovery_id: str, output: str) -> dict:
+    """Convert a discovery into emergency resources via crafting.
+
+    Each discovery category can be converted to a specific resource type
+    at a set conversion rate.
+
+    :param state: The current game state.
+    :type state: GameState
+    :param discovery_id: The unique ID of the discovery to convert.
+    :type discovery_id: str
+    :param output: The desired output type (fuel, repair, morale, credits).
+    :type output: str
+    :returns: A dictionary with ``error`` on failure, or ``result``,
+        ``crafted``, and ``effects`` on success.
+    :rtype: dict
+    """
+    matching_disc = None
+    for disc in state.discoveries:
+        if disc.id == discovery_id:
+            matching_disc = disc
+            break
+
+    if not matching_disc:
+        return {"error": f"Discovery {discovery_id} not found."}
+
+    category = matching_disc.category
+
+    if category not in CRAFT_CONVERSIONS:
+        return {"error": f"Discovery type '{category}' cannot be crafted."}
+
+    expected_output, rate = CRAFT_CONVERSIONS[category]
+
+    if output != expected_output:
+        return {"error": f"Discovery type '{category}' can only be crafted into '{expected_output}', not '{output}'."}
+
+    state.discoveries.remove(matching_disc)
+
+    ship = state.ship
+    if output == "fuel":
+        ship.fuel = min(ship.max_fuel, ship.fuel + rate)
+        state.add_log("emergency", f"Emergency crafted {matching_disc.name} into +{rate} fuel.")
+        return {
+            "result": f"Crafted {matching_disc.name} into +{rate} fuel.",
+            "crafted": "fuel",
+            "effects": {"fuel": rate},
+        }
+    elif output == "repair":
+        ship.hull = min(ship.max_hull, ship.hull + rate)
+        state.add_log("emergency", f"Emergency crafted {matching_disc.name} into +{rate} hull repair.")
+        return {
+            "result": f"Crafted {matching_disc.name} into +{rate} hull repair.",
+            "crafted": "repair",
+            "effects": {"hull": rate},
+        }
+    elif output == "morale":
+        ship.morale = min(100, ship.morale + rate)
+        state.add_log("emergency", f"Emergency crafted {matching_disc.name} into +{rate} morale.")
+        return {
+            "result": f"Crafted {matching_disc.name} into +{rate} morale boost.",
+            "crafted": "morale",
+            "effects": {"morale": rate},
+        }
+    elif output == "credits":
+        ship.credits += rate
+        state.add_log("emergency", f"Emergency crafted {matching_disc.name} and sold for +{rate} credits.")
+        return {
+            "result": f"Crafted {matching_disc.name} and sold for +{rate} credits.",
+            "crafted": "credits",
+            "effects": {"credits": rate},
+        }
+
+    return {"error": f"Unknown output type: {output}"}

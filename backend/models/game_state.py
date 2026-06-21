@@ -145,3 +145,27 @@ class GameState:
             "lore_fragments_collected": self.lore_fragments_collected,
             "lore_fragments_total": len(self.lore_fragments),
         }
+
+    def increment_stranded_turns(self) -> int:
+        """Increment stranded counter when out of fuel, applying morale penalty.
+
+        If the ship has no fuel, increments ``stranded_turns`` and applies a
+        cumulative morale penalty of -5 per stranded turn. If the ship has
+        fuel, resets the stranded state.
+
+        :returns: The updated stranded_turns count.
+        :rtype: int
+        """
+        if self.ship.fuel == 0:
+            self.ship.stranded_turns += 1
+            self.ship.morale = max(0, min(100, self.ship.morale - 5))
+            return self.ship.stranded_turns
+        else:
+            self.ship.stranded_turns = 0
+            self.ship.distress_cooldown = False
+            return 0
+
+    def reset_stranded_state(self) -> None:
+        """Reset stranded turns and distress cooldown to their defaults."""
+        self.ship.stranded_turns = 0
+        self.ship.distress_cooldown = False
