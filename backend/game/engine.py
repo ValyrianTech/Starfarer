@@ -228,8 +228,6 @@ def explore_surface(state: GameState) -> list[Discovery]:
 
     num_finds = min(body.poi_count, item_rng.randint(1, 3))
 
-    ship.fuel -= EXPLORE_FUEL_COST
-
     if num_finds > 0:
         lore_frag = get_fragment_for_body(system.id, body.id, state.lore_fragments)
         lore_linked = False
@@ -251,6 +249,8 @@ def explore_surface(state: GameState) -> list[Discovery]:
 
             discoveries.append(disc)
             state.discoveries.append(disc)
+
+    ship.fuel -= EXPLORE_FUEL_COST
 
     state.add_log("exploration", f"Explored {body.name}. Found {len(discoveries)} points of interest.")
     return discoveries
