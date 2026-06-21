@@ -10,6 +10,8 @@ import random
 from typing import Optional
 import logging
 
+logger = logging.getLogger(__name__)
+
 from backend.generation.lore_content import FRAGMENT_DATA
 from backend.models.discovery import LoreFragment
 from backend.models.system import StarSystem
@@ -89,7 +91,7 @@ def distribute_lore_fragments(
                 rng, systems, system_fragment_count, max_per_system, used_bodies
             )
         except ValueError as e:
-            logging.warning("Unexpected ValueError in lore distribution: %s", e)
+            logger.warning("No eligible location for fragment %s, skipping", frag.id)
             continue
 
         frag.discovery_id = f"{chosen_sys_id}::{chosen_body_id}"

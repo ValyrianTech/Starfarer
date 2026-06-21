@@ -1274,5 +1274,5 @@ class TestLoreDistribution:
 
         # Should have logged a warning about the unexpected ValueError
         warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
-        assert any("Unexpected ValueError" in msg for msg in warning_messages), \
-            f"Expected warning about unexpected ValueError, got: {warning_messages}"
+        assert any("No eligible location for fragment" in msg for msg in warning_messages), \
+            f"Expected warning about no eligible location, got: {warning_messages}"
