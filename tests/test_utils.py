@@ -14,6 +14,11 @@ class TestDeterministicHash:
     def test_separator_collision_fixed(self) -> None:
         assert deterministic_hash("a", "b") != deterministic_hash("a|b")
 
+    def test_specific_collision_case(self) -> None:
+        h1 = deterministic_hash("5:hello", "world")
+        h2 = deterministic_hash("hello", "world")
+        assert h1 != h2
+
     def test_mixed_types(self) -> None:
         assert deterministic_hash(42, "answer") == deterministic_hash(42, "answer")
         assert isinstance(deterministic_hash(1, "two", 3.0), int)
