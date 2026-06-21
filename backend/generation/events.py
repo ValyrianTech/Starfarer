@@ -292,7 +292,8 @@ def trigger_event(state: GameState, rng_override: Optional[random.Random] = None
         return None
 
     if state.ship.morale < MORALE_LOW_THRESHOLD:
-        eligible = [t for t in EVENT_TEMPLATES if t["type"] in ("crew", "crisis", "narrative")]
+        eligible = _get_eligible_templates(state, EVENT_TEMPLATES)
+        eligible = [t for t in eligible if t["type"] in ("crew", "crisis", "narrative")]
         eligible_no_cooldown = [t for t in eligible if t["title"] != state.last_event_title]
         if eligible_no_cooldown:
             eligible = eligible_no_cooldown
