@@ -12,7 +12,7 @@ from typing import Optional
 from backend.models.game_state import GameState
 from backend.models.event import Event, Choice
 from backend.config import MORALE_LOW_THRESHOLD
-from backend.utils import deterministic_hash
+from backend.utils import deterministic_hash, seeded_random
 
 
 EVENT_TEMPLATES = [
@@ -225,12 +225,13 @@ def resolve_event(state: GameState, event_id: str, choice_idx: int) -> tuple[boo
     effects = state.apply_choice_outcome(choice.outcome)
     state.add_log("event", f"Event '{event.title}' resolved: {choice.text}. {choice.outcome}")
 
+    event_rng = seeded_random(state.seed, "event_reputation", event.id, str(choice_idx))
     if event.event_type == "exploration":
-        state.modify_faction_reputation("stellar_cartographers", random.randint(2, 8))
+        state.modify_faction_reputation("stellar_cartographers", event_rng.randint(2, 8))
     elif event.event_type == "trade":
-        state.modify_faction_reputation("void_traders", random.randint(2, 8))
+        state.modify_faction_reputation("void_traders", event_rng.randint(2, 8))
     elif event.event_type in ("encounter", "crisis"):
-        state.modify_faction_reputation("free_pilots", random.randint(1, 6))
+        state.modify_faction_reputation("free_pilots", event_rng.randint(1, 6))
 
     extra_output = {
         "title": event.title,
