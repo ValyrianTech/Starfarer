@@ -6,7 +6,17 @@ defined as plain data to be loaded into :class:`LoreFragment` objects
 at runtime.
 """
 
-FRAGMENT_DATA = [
+from typing import TypedDict
+
+
+class FragmentData(TypedDict):
+    arc: str
+    fragment_number: int
+    title: str
+    text: str
+
+
+FRAGMENT_DATA: list[FragmentData] = [
     # === Arc 1: The Architects ===
     {
         "arc": "architects",
