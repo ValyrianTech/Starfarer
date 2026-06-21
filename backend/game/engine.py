@@ -691,3 +691,5 @@ def emergency_craft(state: GameState, discovery_id: str, output: str) -> dict:
             "crafted": "credits",
             "effects": {"credits": rate},
         }
+    # Fallback — should never be reached with current CRAFT_CONVERSIONS
+    return {"error": f"Unknown output type: {output}"}
