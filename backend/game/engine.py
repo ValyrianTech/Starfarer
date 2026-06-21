@@ -92,7 +92,7 @@ def perform_jump(state: GameState, target_system: StarSystem, fuel_cost: int | f
     if target_system.phenomenon != "none":
         state.add_log("discovery", f"Detected phenomenon: {target_system.phenomenon_desc}")
 
-    state.increment_stranded_turns()
+    state.update_stranded_state()
 
     return f"Jumped to {target_system.name}."
 

@@ -2141,31 +2141,31 @@ class TestEmergencyCraft:
         assert result is None
 
 
-class TestStrandedTurns:
-    """Tests for GameState stranded turn tracking."""
+class TestStrandedState:
+    """Tests for GameState stranded state tracking."""
 
-    def test_increment_stranded_turns_fuel_zero(self) -> None:
+    def test_update_stranded_state_fuel_zero(self) -> None:
         state = new_game(seed=42)
         state.ship.fuel = 0
         assert state.ship.stranded_turns == 0
-        result = state.increment_stranded_turns()
+        result = state.update_stranded_state()
         assert result == 1
         assert state.ship.stranded_turns == 1
 
-    def test_increment_stranded_turns_morale_penalty(self) -> None:
+    def test_update_stranded_state_morale_penalty(self) -> None:
         state = new_game(seed=42)
         state.ship.fuel = 0
         initial_morale = state.ship.morale
-        state.increment_stranded_turns()
+        state.update_stranded_state()
         assert state.ship.morale == max(0, initial_morale - 5)
 
-    def test_increment_stranded_turns_resets_when_fuel(self) -> None:
+    def test_update_stranded_state_resets_when_fuel(self) -> None:
         state = new_game(seed=42)
         state.ship.fuel = 0
         state.ship.stranded_turns = 5
         state.ship.distress_cooldown = True
         state.ship.fuel = 10
-        result = state.increment_stranded_turns()
+        result = state.update_stranded_state()
         assert result == 0
         assert state.ship.stranded_turns == 0
         assert state.ship.distress_cooldown is False

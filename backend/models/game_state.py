@@ -201,12 +201,13 @@ class GameState:
             })
         return result
 
-    def increment_stranded_turns(self) -> int:
-        """Increment stranded counter when out of fuel, applying morale penalty.
+    def update_stranded_state(self) -> int:
+        """Update stranded state based on current fuel level.
 
-        If the ship has no fuel, increments ``stranded_turns`` and applies a
-        cumulative morale penalty of -5 per stranded turn. If the ship has
-        fuel, resets the stranded state.
+        If the ship has no fuel, increments ``stranded_turns`` and applies
+        a cumulative morale penalty of -5 per stranded turn. If the ship
+        has fuel, resets the stranded state (``stranded_turns`` to 0,
+        ``distress_cooldown`` to False).
 
         :returns: The updated stranded_turns count.
         :rtype: int
