@@ -594,5 +594,3 @@ def emergency_craft(state: GameState, discovery_id: str, output: str) -> dict:
             "crafted": "credits",
             "effects": {"credits": rate},
         }
-
-    return {"error": f"Unknown output type: {output}"}

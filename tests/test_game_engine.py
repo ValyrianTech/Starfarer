@@ -2103,8 +2103,7 @@ class TestEmergencyCraft:
         state.discoveries.append(disc)
         with patch.dict("backend.game.engine.CRAFT_CONVERSIONS", {"artifact": ("unknown_output_type", 5)}):
             result = emergency_craft(state, "craft_fallback_disc", "unknown_output_type")
-        assert "error" in result
-        assert "Unknown output type" in result["error"]
+        assert result is None
 
 
 class TestStrandedTurns:
