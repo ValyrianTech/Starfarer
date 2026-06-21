@@ -256,18 +256,18 @@ def _state_from_dict(d: dict) -> GameState:
 
 
 def _fixup_old_lore_fragment_numbers(lore_fragments: list) -> None:
-    """Fix up lore fragments that have ``fragment_number == 0`` by extracting
+    """Fix up lore fragments that have ``fragment_number == -1`` by extracting
     the number from the fragment ID.  Fragment IDs follow the pattern
     ``lore_<arc>_<number>``, so the number is the last ``_``-delimited part.
 
     Old saves serialized before the ``fragment_number`` field was added will
-    load with ``fragment_number=0``.  This migration corrects those in place.
+    load with ``fragment_number=-1``.  This migration corrects those in place.
 
     :param lore_fragments: The list of :class:`LoreFragment` instances to fix.
     :type lore_fragments: list
     """
     for frag in lore_fragments:
-        if frag.fragment_number == 0:
+        if frag.fragment_number == -1:
             try:
                 frag.fragment_number = int(frag.id.rsplit("_", 1)[-1])
             except (ValueError, IndexError):
