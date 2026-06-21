@@ -1862,6 +1862,41 @@ class TestDistressBeacon:
         assert r1["outcome"] == r2["outcome"]
         assert r1["result"] == r2["result"]
 
+    def test_activate_distress_beacon_precondition_fail_continue(self) -> None:
+        from unittest.mock import MagicMock, patch
+        state = self._make_stranded_state()
+        system = state.get_current_system()
+        assert system is not None
+        system.has_trading_station = False
+        mock_rng = MagicMock()
+        mock_rng.random.side_effect = [0.2, 0.1, 0.3]
+        mock_rng.randint.side_effect = [2, 15]
+        with patch("backend.game.engine.seeded_random", return_value=mock_rng):
+            result = activate_distress_beacon(state)
+        assert result["outcome"] == "passerby_help"
+        assert "Friendly passerby" in result["result"]
+
+    def test_activate_distress_beacon_fallback_error(self) -> None:
+        from unittest.mock import MagicMock, patch
+        from backend.game.engine import _BucketEntry, _always_true_precondition
+        state = self._make_stranded_state()
+        mock_rng = MagicMock()
+        mock_rng.random.side_effect = [0.2, 0.5]
+        mock_rng.randint.side_effect = [2]
+        custom_table = [
+            _BucketEntry(
+                threshold=1.0,
+                precondition=_always_true_precondition,
+                strategy=None,
+                sub_table=None,
+            ),
+        ]
+        with patch("backend.game.engine._DISTRESS_TABLE", custom_table):
+            with patch("backend.game.engine.seeded_random", return_value=mock_rng):
+                result = activate_distress_beacon(state)
+        assert "error" in result
+        assert result["error"] == "No distress outcome matched."
+
 
 class TestSalvage:
     """Tests for perform_salvage."""
