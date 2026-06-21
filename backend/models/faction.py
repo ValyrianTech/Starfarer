@@ -6,7 +6,7 @@ representing factions in the Starfarer universe and the player's
 relationship with each.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass

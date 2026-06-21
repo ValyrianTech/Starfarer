@@ -27,7 +27,7 @@ from backend.game.engine import (
 from backend.game.trading import get_upgrade_info, purchase_upgrade, perform_trade, perform_bulk_sell
 from backend.database import get_leaderboard
 from backend.generation.lore_content import ARC_DISPLAY_NAMES
-from backend.models.faction import get_faction, FACTION_DEFINITIONS
+from backend.models.faction import get_faction
 
 START_TIME = time.time()
 

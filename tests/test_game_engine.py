@@ -15,7 +15,6 @@ from backend.generation.events import trigger_event, resolve_event, EVENT_TEMPLA
 from backend.config import SCAN_FUEL_COST
 from backend.models.game_state import GameState
 from backend.models.discovery import Discovery
-from backend.utils import seeded_random
 
 
 class TestGameManager:

@@ -8,7 +8,6 @@ leaderboard data.
 
 import sqlite3
 import json
-import os
 from contextlib import contextmanager
 from datetime import datetime, timezone
 

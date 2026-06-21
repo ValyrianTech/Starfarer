@@ -388,7 +388,7 @@ def _distress_piracy(state: GameState, rng: Any, turns: int) -> dict:
 
 def _distress_passerby_ignore(state: GameState, rng: Any, turns: int) -> dict:
     """Ship passes by without responding."""
-    state.add_log("emergency", f"A ship passed nearby but did not respond to your distress call.")
+    state.add_log("emergency", "A ship passed nearby but did not respond to your distress call.")
     return {
         "result": "A ship passed nearby but did not respond.",
         "outcome": "passerby_ignore",

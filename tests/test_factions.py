@@ -3,14 +3,12 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 import pytest
-import random
 from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
 
 from backend.main import app
 from backend.database import init_db
 from backend.game.manager import GAME_STORE, new_game, game_save, game_load, _state_to_dict, _state_from_dict
-from backend.models.game_state import GameState
 from backend.models.faction import (
     Faction, FactionRelation, FACTION_DEFINITIONS, get_faction,
 )
@@ -482,7 +480,6 @@ class TestEventFactionIntegration:
 
 class TestDistressBeaconFactionIntegration:
     def test_pilots_guild_gives_free_pilots_rep(self) -> None:
-        from unittest.mock import MagicMock
         state = new_game(seed=42)
         state.ship.fuel = 0
         state.ship.hull = 100
