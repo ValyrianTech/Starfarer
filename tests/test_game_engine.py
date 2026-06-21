@@ -15,7 +15,6 @@ from backend.generation.events import trigger_event, resolve_event, EVENT_TEMPLA
 from backend.config import SCAN_FUEL_COST
 from backend.models.game_state import GameState
 from backend.models.discovery import Discovery
-from backend.utils import seeded_random
 
 
 class TestGameManager:
@@ -150,9 +149,11 @@ class TestNavigation:
         planet = next((b for b in system.bodies if b.body_type == "planet"), None)
         if planet:
             land_on_body(state, planet.id)
+            poi_before = planet.poi_count
             discoveries = explore_surface(state)
             assert len(discoveries) > 0
             assert len(state.discoveries) > 0
+            assert planet.poi_count < poi_before
 
     def test_jump_chain(self) -> None:
         state = new_game(seed=42)
@@ -1896,6 +1897,14 @@ class TestDistressBeacon:
                 result = activate_distress_beacon(state)
         assert "error" in result
         assert result["error"] == "No distress outcome matched."
+
+    def test_distress_pilots_guild_no_system(self) -> None:
+        """_distress_pilots_guild should raise ValueError when system is None."""
+        from backend.game.engine import _distress_pilots_guild
+        state = new_game(seed=42)
+        state.ship.current_system_id = "nonexistent"
+        with pytest.raises(ValueError, match="Cannot execute Pilots Guild rescue: no current system."):
+            _distress_pilots_guild(state, None, 1)
 
 
 class TestSalvage:

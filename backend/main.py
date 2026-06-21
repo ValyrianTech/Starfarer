@@ -16,7 +16,7 @@ import os
 
 from backend.api.routes import router
 from backend.database import init_db, run_migrations
-from backend.config import DATA_DIR, DB_PATH
+from backend.config import DATA_DIR
 
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend")
 

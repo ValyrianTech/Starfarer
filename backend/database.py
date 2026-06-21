@@ -8,9 +8,9 @@ leaderboard data.
 
 import sqlite3
 import json
-import os
 from contextlib import contextmanager
 from datetime import datetime, timezone
+from typing import Generator
 
 from backend.config import DB_PATH, DATA_DIR
 
@@ -33,7 +33,17 @@ def get_db() -> sqlite3.Connection:
 
 
 @contextmanager
-def get_db_ctx():
+def get_db_ctx() -> Generator[sqlite3.Connection, None, None]:
+    """Context manager that provides a database connection.
+
+    Yields an open :class:`sqlite3.Connection` that is automatically closed
+    when the context exits, even if an exception occurs.
+
+    :yields: An open SQLite database connection.
+    :rtype: sqlite3.Connection
+    :raises sqlite3.Error: If a database error occurs while opening or
+        closing the connection.
+    """
     conn = get_db()
     try:
         yield conn

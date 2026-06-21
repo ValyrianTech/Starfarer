@@ -255,6 +255,7 @@ def explore_surface(state: GameState) -> list[Discovery]:
     ship.fuel -= EXPLORE_FUEL_COST
 
     state.add_log("exploration", f"Explored {body.name}. Found {len(discoveries)} points of interest.")
+    body.poi_count = max(0, body.poi_count - num_finds)
     return discoveries
 
 
@@ -349,6 +350,8 @@ def _distress_pilots_guild(state: GameState, rng: Any, turns: int) -> dict:
     """Pilots Guild rescue outcome: deliver 20 fuel for 100 credits."""
     ship = state.ship
     system = state.get_current_system()
+    if system is None:
+        raise ValueError("Cannot execute Pilots Guild rescue: no current system.")
     ship.credits = max(0, ship.credits - 100)
     ship.fuel = min(ship.max_fuel, ship.fuel + 20)
     state.modify_faction_reputation("free_pilots", 5)
@@ -388,7 +391,7 @@ def _distress_piracy(state: GameState, rng: Any, turns: int) -> dict:
 
 def _distress_passerby_ignore(state: GameState, rng: Any, turns: int) -> dict:
     """Ship passes by without responding."""
-    state.add_log("emergency", f"A ship passed nearby but did not respond to your distress call.")
+    state.add_log("emergency", "A ship passed nearby but did not respond to your distress call.")
     return {
         "result": "A ship passed nearby but did not respond.",
         "outcome": "passerby_ignore",
