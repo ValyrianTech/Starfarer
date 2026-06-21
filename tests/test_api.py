@@ -892,6 +892,9 @@ class TestAPIBulkSell:
         assert "systems_visited" in data
         assert "systems_total" in data
         assert "game_started" in data
+        assert "trade_result" in data
+        assert data["trade_result"]["sold_count"] > 0
+        assert data["trade_result"]["total_price"] > 0
         assert len(data["discoveries"]) < 3
 
     def test_bulk_sell_multiple_of_same_category(self) -> None:
@@ -915,6 +918,9 @@ class TestAPIBulkSell:
         assert "systems_visited" in data
         assert "systems_total" in data
         assert "game_started" in data
+        assert "trade_result" in data
+        assert data["trade_result"]["sold_count"] > 0
+        assert data["trade_result"]["total_price"] > 0
 
     def test_bulk_sell_partial_failure(self) -> None:
         """Partial failure when some items don't exist."""
@@ -938,6 +944,9 @@ class TestAPIBulkSell:
         assert "systems_visited" in data
         assert "systems_total" in data
         assert "game_started" in data
+        assert "trade_result" in data
+        assert data["trade_result"]["sold_count"] > 0
+        assert data["trade_result"]["total_price"] > 0
         assert len(data["discoveries"]) < 3
 
     def test_bulk_sell_all_nonexistent(self) -> None:
@@ -1039,6 +1048,9 @@ class TestAPIBulkSell:
         assert "systems_visited" in data
         assert "systems_total" in data
         assert "game_started" in data
+        assert "trade_result" in data
+        assert data["trade_result"]["sold_count"] > 0
+        assert data["trade_result"]["total_price"] > 0
 
     def test_bulk_sell_by_name_priority_over_category(self) -> None:
         """Name match takes priority over category match in bulk sell."""
@@ -1075,6 +1087,9 @@ class TestAPIBulkSell:
         assert "systems_visited" in data
         assert "systems_total" in data
         assert "game_started" in data
+        assert "trade_result" in data
+        assert data["trade_result"]["sold_count"] > 0
+        assert data["trade_result"]["total_price"] > 0
 
 
 class TestPerformBulkSellDirect:
