@@ -10,6 +10,7 @@ import uuid
 from typing import Optional
 
 from backend.models.game_state import GameState
+from backend.models.system import StarSystem
 from backend.models.event import Event, Choice
 from backend.config import MORALE_LOW_THRESHOLD
 from backend.utils import deterministic_hash, seeded_random
@@ -18,6 +19,7 @@ from backend.utils import deterministic_hash, seeded_random
 EVENT_TEMPLATES = [
     {
         "type": "exploration",
+        "rarity": "common",
         "title": "Ancient Signal",
         "flavor": "Your comms array picks up a faint, repeating signal from the planet below. It follows no known protocol but has a deliberate pattern \u2014 clearly artificial.",
         "choices": [
@@ -28,6 +30,7 @@ EVENT_TEMPLATES = [
     },
     {
         "type": "hazard",
+        "rarity": "common",
         "title": "Solar Flare",
         "flavor": "Alarms blare as the system star unleashes a massive coronal ejection directly toward your ship. Radiation levels spike.",
         "choices": [
@@ -38,6 +41,7 @@ EVENT_TEMPLATES = [
     },
     {
         "type": "encounter",
+        "rarity": "common",
         "title": "Derelict Vessel",
         "flavor": "A dead ship drifts in the void, its hull scarred and dark. It belongs to no known design in your database.",
         "choices": [
@@ -48,6 +52,7 @@ EVENT_TEMPLATES = [
     },
     {
         "type": "crew",
+        "rarity": "common",
         "title": "Crew Dispute",
         "flavor": "A heated argument breaks out between two crew members over resource allocation. Morale is suffering.",
         "choices": [
@@ -58,6 +63,7 @@ EVENT_TEMPLATES = [
     },
     {
         "type": "trade",
+        "rarity": "common",
         "title": "Passing Merchant",
         "flavor": "A trader vessel hails you, offering rare goods at what they claim are 'fair prices'. Their ship is well-armed.",
         "choices": [
@@ -68,6 +74,7 @@ EVENT_TEMPLATES = [
     },
     {
         "type": "discovery",
+        "rarity": "common",
         "title": "Uncharted Ruins",
         "flavor": "Scanner detects a massive structure on the surface \u2014 clearly artificial, clearly ancient. No record of it exists.",
         "choices": [
@@ -78,6 +85,7 @@ EVENT_TEMPLATES = [
     },
     {
         "type": "crisis",
+        "rarity": "common",
         "title": "Life Support Failure",
         "flavor": "A critical failure in the life support system threatens the entire crew. Oxygen levels are dropping fast.",
         "choices": [
@@ -88,6 +96,7 @@ EVENT_TEMPLATES = [
     },
     {
         "type": "exploration",
+        "rarity": "common",
         "title": "Wormhole Anomaly",
         "flavor": "Instruments go haywire as a swirling vortex of spacetime tears open nearby. It appears stable, briefly.",
         "choices": [
@@ -98,6 +107,7 @@ EVENT_TEMPLATES = [
     },
     {
         "type": "encounter",
+        "rarity": "common",
         "title": "Mysterious Beacon",
         "flavor": "An automated beacon transmits a looping message: coordinates to an uncharted system, plus a warning in an unknown language.",
         "choices": [
@@ -108,6 +118,7 @@ EVENT_TEMPLATES = [
     },
     {
         "type": "hazard",
+        "rarity": "common",
         "title": "Asteroid Swarm",
         "flavor": "Navigation alerts scream as a dense cluster of asteroids bears down on your position. Collision imminent.",
         "choices": [
@@ -116,17 +127,155 @@ EVENT_TEMPLATES = [
             {"text": "Full reverse thrust", "outcome": "fuel:-20; Backed away safely, but used a lot of fuel."},
         ],
     },
+    {
+        "type": "hazard",
+        "rarity": "uncommon",
+        "title": "Nebula Storm",
+        "flavor": "The nebula around you begins to churn violently. Electromagnetic discharges ripple through the clouds, and your shields flicker under the onslaught.",
+        "choices": [
+            {"text": "Ride it out", "outcome": "hull:-10; fuel:-5; morale:-5; Weathered the storm with minor damage."},
+            {"text": "Full power to shields", "outcome": "fuel:-15; hull:0; Shields held. Fuel reserves took the hit."},
+            {"text": "Attempt to navigate through", "outcome": "fuel:-10; hull:-5; credits:50; Navigated the storm and salvaged valuable data."},
+        ],
+        "trigger_conditions": {"phenomenon": "nebula"},
+    },
+    {
+        "type": "exploration",
+        "rarity": "uncommon",
+        "title": "Abandoned Outpost",
+        "flavor": "Scanners reveal the remains of an old outpost on the surface below. Its design is unfamiliar and its purpose unclear.",
+        "choices": [
+            {"text": "Search for salvage", "outcome": "credits:100; Found valuable components and data logs in the ruins."},
+            {"text": "Study the architecture", "outcome": "morale:10; The crew is fascinated by the alien design."},
+            {"text": "Mark for later investigation", "outcome": "Coordinates logged for future reference."},
+        ],
+        "trigger_conditions": {"biomes": ["barren", "crystal", "tundra"]},
+    },
+    {
+        "type": "crew",
+        "rarity": "common",
+        "title": "Crew Discovery",
+        "flavor": "One of your crew members bursts onto the bridge, holding something unusual they found in the cargo bay. It wasn't in the inventory last time you checked.",
+        "choices": [
+            {"text": "Examine the find", "outcome": "credits:75; It's a rare mineral sample with market value."},
+            {"text": "Have the crew catalog it", "outcome": "morale:5; The crew appreciates being entrusted with the find."},
+            {"text": "Sell it at the next station", "outcome": "credits:50; A quick but less profitable sale."},
+        ],
+    },
+    {
+        "type": "trade",
+        "rarity": "uncommon",
+        "title": "Trade Route Opportunity",
+        "flavor": "A passing convoy broadcasts an open invitation: a newly established trade route needs suppliers. The pay is excellent, but the route adds a detour.",
+        "choices": [
+            {"text": "Take the trade route", "outcome": "credits:200; fuel:-10; Delivered the goods and earned a handsome profit."},
+            {"text": "Decline", "outcome": "The convoy moves on. Perhaps another time."},
+            {"text": "Negotiate a better cut", "outcome": "credits:300; fuel:-10; Sharp negotiating paid off with premium rates."},
+        ],
+        "trigger_conditions": {"min_systems_visited": 3},
+    },
+    {
+        "type": "narrative",
+        "rarity": "rare",
+        "title": "Signal from Home",
+        "flavor": "A faint, nostalgic signal reaches your comms array. It's a recorded message from your home world, sent long ago and only now arriving in this region of space.",
+        "choices": [
+            {"text": "Listen to the full message", "outcome": "morale:20; The crew gathers in silence, reminded of what they're journeying for."},
+            {"text": "Save it for later", "outcome": "morale:10; The message is archived. A comfort to know it's there."},
+            {"text": "Analyze the signal source", "outcome": "morale:5; credits:50; Traced the signal path and found a relay station with valuable data."},
+        ],
+        "trigger_conditions": {"max_morale": 29},
+    },
+    {
+        "type": "hazard",
+        "rarity": "rare",
+        "title": "Gravity Anomaly",
+        "flavor": "Instruments go wild as a sudden gravity well opens nearby. Space itself seems to bend, and your ship is caught in the distortion.",
+        "choices": [
+            {"text": "Full burn to escape", "outcome": "fuel:-20; hull:-5; Engines screamed, but you pulled free of the anomaly."},
+            {"text": "Use the slingshot", "outcome": "fuel:-10; Rode the gravity wave and saved fuel in the process."},
+            {"text": "Study the anomaly", "outcome": "fuel:-5; credits:100; Observed the anomaly from the edge and gathered breakthrough data."},
+        ],
+    },
+    {
+        "type": "encounter",
+        "rarity": "uncommon",
+        "title": "Derelict Signal",
+        "flavor": "A weak distress signal emanates from a derelict ship drifting in the void. It's been dead for years, but its data core may still hold secrets.",
+        "choices": [
+            {"text": "Board the derelict", "outcome": "credits:150; hull:-5; Salvaged the data core and valuable components."},
+            {"text": "Scan from a distance", "outcome": "credits:50; Remote scanning yielded partial logs and data."},
+            {"text": "Report the coordinates", "outcome": "morale:10; Reported the wreck to the Cartographers Union."},
+        ],
+        "trigger_conditions": {"unexplored_preference": True},
+    },
 ]
 
+
+
+def _get_eligible_templates(state: GameState, templates: list[dict]) -> list[dict]:
+    """Filter event templates based on trigger conditions in the current game state.
+
+    Checks phenomenon, biome, min_systems_visited, max_morale, and
+    unexplored_preference conditions against the current system and
+    ship state. Templates with no trigger conditions are always eligible.
+
+    :param state: The current game state.
+    :type state: GameState
+    :param templates: The full list of event templates.
+    :type templates: list[dict]
+    :returns: A filtered list of eligible templates. If no templates
+        match, the original unfiltered list is returned as a fallback.
+    :rtype: list[dict]
+    """
+    system = state.get_current_system()
+    if not system:
+        return templates
+
+    eligible = []
+    for t in templates:
+        conditions = t.get("trigger_conditions", {})
+        if not conditions:
+            eligible.append(t)
+            continue
+
+        if "phenomenon" in conditions:
+            if system.phenomenon != conditions["phenomenon"]:
+                continue
+
+        if "biomes" in conditions:
+            body_biomes = {b.biome for b in system.bodies}
+            if not any(biome in body_biomes for biome in conditions["biomes"]):
+                continue
+
+        if "min_systems_visited" in conditions:
+            if state.systems_visited < conditions["min_systems_visited"]:
+                continue
+
+        if "max_morale" in conditions:
+            if state.ship.morale > conditions["max_morale"]:
+                continue
+
+        if "unexplored_preference" in conditions:
+            has_unexplored = any(not body.explored for body in system.bodies) if system.bodies else False
+            if not has_unexplored:
+                continue
+
+        eligible.append(t)
+
+    if not eligible:
+        return templates
+    return eligible
 
 
 def trigger_event(state: GameState, rng_override: Optional[random.Random] = None) -> Event | None:
     """Possibly trigger a procedural event based on the current game state.
 
     Events have a base 35% chance of triggering after a jump, scan, or
-    exploration. If morale is low (<30), crew or crisis events are
-    forced. Systems with phenomena are more likely to trigger hazard,
-    discovery, or exploration events.
+    exploration. If morale is low (<30), crew, crisis, or narrative events
+    are forced. Templates are filtered by trigger conditions and weighted
+    by rarity (common=5, uncommon=2, rare=1). A cooldown prevents the same
+    event title from appearing twice in a row.
 
     :param state: The current game state.
     :type state: GameState
@@ -142,17 +291,26 @@ def trigger_event(state: GameState, rng_override: Optional[random.Random] = None
         return None
 
     if state.ship.morale < MORALE_LOW_THRESHOLD:
-        crew_events = [t for t in EVENT_TEMPLATES if t["type"] == "crew" or t["type"] == "crisis"]
-        template = crew_events[deterministic_hash(system.id, str(len(state.log_entries))) % len(crew_events)]
+        eligible = [t for t in EVENT_TEMPLATES if t["type"] in ("crew", "crisis", "narrative")]
+        eligible_no_cooldown = [t for t in eligible if t["title"] != state.last_event_title]
+        if eligible_no_cooldown:
+            eligible = eligible_no_cooldown
+        template = eligible[deterministic_hash(system.id, str(len(state.log_entries))) % len(eligible)]
+        state.last_event_title = template["title"]
         return _create_event(template, system.id)
 
     rng = rng_override or seeded_random(state.seed, "event_trigger", system.id, str(len(state.events)), str(len(state.log_entries)))
 
     if rng.random() < 0.35:
-        if system.phenomenon != "none" and rng.random() < 0.5:
-            template = rng.choice([t for t in EVENT_TEMPLATES if t["type"] in ("hazard", "discovery", "exploration")])
-        else:
-            template = rng.choice(EVENT_TEMPLATES)
+        eligible = _get_eligible_templates(state, EVENT_TEMPLATES)
+        eligible_no_cooldown = [t for t in eligible if t["title"] != state.last_event_title]
+        if eligible_no_cooldown:
+            eligible = eligible_no_cooldown
+
+        rarity_weights = {"common": 5, "uncommon": 2, "rare": 1}
+        weights = [rarity_weights.get(t.get("rarity", "common"), 1) for t in eligible]
+        template = rng.choices(eligible, weights=weights, k=1)[0]
+        state.last_event_title = template["title"]
         return _create_event(template, system.id)
 
     return None
