@@ -158,10 +158,9 @@ def _pick_lore_location(
         score = 0
         eligible: list[Body] = []
         for body in system.bodies:
-            if body.poi_count > 0:
+            if body.poi_count > 0 and (sys_id, body.id) not in used_bodies:
                 score += BIOME_WEIGHTS.get(body.biome, 1)
-                if (sys_id, body.id) not in used_bodies:
-                    eligible.append(body)
+                eligible.append(body)
         if not eligible:
             continue
         system_eligible_bodies[sys_id] = eligible
