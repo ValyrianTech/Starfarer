@@ -228,6 +228,7 @@ def perform_bulk_sell(state: GameState, items: list[dict]) -> tuple[bool, str, i
     det_seed = deterministic_hash(state.seed, system.id, len(state.log_entries))
     rng = random.Random(det_seed)
     price_mod = rng.uniform(0.7, 1.5)
+    discoveries_snapshot = list(state.discoveries)
 
     sold_ids: set[str] = set()
     errors: list[str] = []
@@ -246,7 +247,7 @@ def perform_bulk_sell(state: GameState, items: list[dict]) -> tuple[bool, str, i
             errors.append(f"Invalid quantity {quantity} for '{item_name}'.")
             continue
 
-        available = [d for d in state.discoveries if d.id not in sold_ids]
+        available = [d for d in discoveries_snapshot if d.id not in sold_ids]
         # Try exact name match first
         name_matches = [d for d in available if d.name == item_name]
         if name_matches:
@@ -277,7 +278,7 @@ def perform_bulk_sell(state: GameState, items: list[dict]) -> tuple[bool, str, i
             msg += " " + " ".join(errors)
         return False, msg, 0, 0
 
-    state.discoveries = [d for d in state.discoveries if d.id not in sold_ids]
+    state.discoveries = [d for d in discoveries_snapshot if d.id not in sold_ids]
 
     state.ship.credits += total_price
 
