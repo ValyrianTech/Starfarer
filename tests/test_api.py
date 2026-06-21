@@ -415,6 +415,20 @@ class TestAPIAllEndpoints404:
         resp = client.post("/api/game/nonexistent-gid/load")
         assert resp.status_code == 404
 
+    def test_distress_nonexistent(self) -> None:
+        resp = client.post("/api/game/nonexistent-gid/distress")
+        assert resp.status_code == 404
+
+    def test_salvage_nonexistent(self) -> None:
+        resp = client.post("/api/game/nonexistent-gid/salvage")
+        assert resp.status_code == 404
+
+    def test_craft_nonexistent(self) -> None:
+        resp = client.post("/api/game/nonexistent-gid/salvage/craft", json={
+            "discovery_id": "test_disc", "output": "fuel"
+        })
+        assert resp.status_code == 404
+
 
 class TestAPIAdvancedFlow:
     """Tests a complete game flow with events, trading, and upgrades via API."""
@@ -1398,3 +1412,194 @@ class TestAPIMainIndex:
         from backend.main import FRONTEND_DIR
         assets_dir = _os.path.join(FRONTEND_DIR, "assets")
         assert _os.path.isdir(assets_dir), "Assets directory should exist"
+
+
+class TestAPIDistress:
+    """Tests for POST /api/game/{game_id}/distress."""
+
+    def test_distress_nonexistent_game(self) -> None:
+        resp = client.post("/api/game/nonexistent-gid/distress")
+        assert resp.status_code == 404
+
+    def test_distress_not_stranded(self) -> None:
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "distress-not-stranded"})
+        game_id = resp.json()["game_id"]
+        resp = client.post(f"/api/game/{game_id}/distress")
+        assert resp.status_code == 400
+        assert "Distress beacon" in resp.json()["detail"]
+
+    def test_distress_success(self) -> None:
+        from unittest.mock import MagicMock, patch
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "distress-success"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        state.ship.fuel = 0
+        state.ship.hull = 100
+        state.ship.credits = 200
+        GAME_STORE[game_id] = state
+        mock_rng = MagicMock()
+        mock_rng.random.side_effect = [0.61]
+        mock_rng.randint.side_effect = [3]
+        with patch("backend.game.engine.seeded_random", return_value=mock_rng):
+            resp = client.post(f"/api/game/{game_id}/distress")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "result" in data
+        assert "outcome" in data
+        assert "effects" in data
+        assert "ship" in data
+        assert data["outcome"] == "no_response"
+
+    def test_distress_saves_state(self) -> None:
+        from unittest.mock import MagicMock, patch
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "distress-save"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        state.ship.fuel = 0
+        state.ship.hull = 100
+        state.ship.credits = 200
+        GAME_STORE[game_id] = state
+        game_save(state)
+        mock_rng = MagicMock()
+        mock_rng.random.side_effect = [0.61]
+        mock_rng.randint.side_effect = [3]
+        with patch("backend.game.engine.seeded_random", return_value=mock_rng):
+            resp = client.post(f"/api/game/{game_id}/distress")
+        assert resp.status_code == 200
+        GAME_STORE.pop(game_id, None)
+        resp = client.get(f"/api/game/{game_id}")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["ship"]["distress_cooldown"] is True
+
+
+class TestAPISalvage:
+    """Tests for POST /api/game/{game_id}/salvage."""
+
+    def test_salvage_nonexistent_game(self) -> None:
+        resp = client.post("/api/game/nonexistent-gid/salvage")
+        assert resp.status_code == 404
+
+    def test_salvage_not_stranded(self) -> None:
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "salvage-not-stranded"})
+        game_id = resp.json()["game_id"]
+        resp = client.post(f"/api/game/{game_id}/salvage")
+        assert resp.status_code == 400
+
+    def test_salvage_success(self) -> None:
+        from unittest.mock import MagicMock, patch
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "salvage-success"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        state.ship.fuel = 0
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), system.bodies[0])
+        land_on_body(state, planet.id)
+        GAME_STORE[game_id] = state
+        mock_rng = MagicMock()
+        mock_rng.random.side_effect = [0.2]
+        mock_rng.randint.side_effect = [5]
+        with patch("backend.game.engine.seeded_random", return_value=mock_rng):
+            resp = client.post(f"/api/game/{game_id}/salvage")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "result" in data
+        assert "find" in data
+        assert "effects" in data
+        assert "ship" in data
+        assert data["find"] == "fuel_cache"
+
+    def test_salvage_saves_state(self) -> None:
+        from unittest.mock import MagicMock, patch
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "salvage-save"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        state.ship.fuel = 0
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), system.bodies[0])
+        land_on_body(state, planet.id)
+        GAME_STORE[game_id] = state
+        game_save(state)
+        mock_rng = MagicMock()
+        mock_rng.random.side_effect = [0.2]
+        mock_rng.randint.side_effect = [5]
+        with patch("backend.game.engine.seeded_random", return_value=mock_rng):
+            resp = client.post(f"/api/game/{game_id}/salvage")
+        assert resp.status_code == 200
+        GAME_STORE.pop(game_id, None)
+        resp = client.get(f"/api/game/{game_id}")
+        assert resp.status_code == 200
+        data = resp.json()
+        saved_ship = data["ship"]
+        assert "salvage_attempts" in saved_ship
+
+
+class TestAPICraft:
+    """Tests for POST /api/game/{game_id}/salvage/craft."""
+
+    def test_craft_nonexistent_game(self) -> None:
+        resp = client.post("/api/game/nonexistent-gid/salvage/craft", json={
+            "discovery_id": "test_disc", "output": "fuel"
+        })
+        assert resp.status_code == 404
+
+    def test_craft_not_found(self) -> None:
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "craft-not-found"})
+        game_id = resp.json()["game_id"]
+        resp = client.post(f"/api/game/{game_id}/salvage/craft", json={
+            "discovery_id": "nonexistent_disc", "output": "fuel"
+        })
+        assert resp.status_code == 400
+        assert "not found" in resp.json()["detail"]
+
+    def test_craft_success(self) -> None:
+        from backend.models.discovery import Discovery
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "craft-success"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        disc = Discovery(
+            id="craft_api_success_disc", category="artifact", name="Ancient Artifact",
+            description="Ancient", value=50, system_id="sys1", body_id="body1",
+        )
+        state.discoveries.append(disc)
+        state.ship.fuel = 10
+        GAME_STORE[game_id] = state
+        game_save(state)
+        resp = client.post(f"/api/game/{game_id}/salvage/craft", json={
+            "discovery_id": "craft_api_success_disc", "output": "fuel"
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "result" in data
+        assert "crafted" in data
+        assert "effects" in data
+        assert "ship" in data
+        assert data["crafted"] == "fuel"
+        assert data["effects"]["fuel"] == 5
+        assert data["ship"]["fuel"] == 15
+
+    def test_craft_saves_state(self) -> None:
+        from backend.models.discovery import Discovery
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "craft-save"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        disc = Discovery(
+            id="craft_api_save_disc", category="artifact", name="Ancient Artifact",
+            description="Ancient", value=50, system_id="sys1", body_id="body1",
+        )
+        state.discoveries.append(disc)
+        state.ship.fuel = 10
+        GAME_STORE[game_id] = state
+        game_save(state)
+        resp = client.post(f"/api/game/{game_id}/salvage/craft", json={
+            "discovery_id": "craft_api_save_disc", "output": "fuel"
+        })
+        assert resp.status_code == 200
+        GAME_STORE.pop(game_id, None)
+        resp = client.get(f"/api/game/{game_id}")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["ship"]["fuel"] == 15
+        assert len(data["discoveries"]) == 0

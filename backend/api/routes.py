@@ -12,7 +12,7 @@ from fastapi import APIRouter, HTTPException
 
 from backend.models.game_state import GameState
 from backend.api.schemas import (
-    BulkSellRequest, NewGameRequest, ResolveEventRequest, TradeRequest,
+    BulkSellRequest, CraftRequest, NewGameRequest, ResolveEventRequest, TradeRequest,
     UpgradeRequest, HealthResponse,
 )
 from backend.game.manager import (
@@ -22,6 +22,7 @@ from backend.generation.events import trigger_event, resolve_event as resolve_ev
 from backend.game.engine import (
     can_jump, perform_jump, perform_scan, get_nearby_systems,
     land_on_body, explore_surface,
+    activate_distress_beacon, perform_salvage, emergency_craft,
 )
 from backend.game.trading import get_upgrade_info, purchase_upgrade, perform_trade, perform_bulk_sell
 from backend.database import get_leaderboard
@@ -561,6 +562,89 @@ def api_nearby(game_id: str) -> dict:
         "current_system_id": state.ship.current_system_id,
         "jump_range": state.ship.jump_range,
         "fuel": state.ship.fuel,
+    }
+
+
+@router.post("/game/{game_id}/distress")
+def api_distress(game_id: str) -> dict:
+    """Activate the distress beacon to call for help.
+
+    :param game_id: The unique identifier of the game.
+    :type game_id: str
+    :returns: A dictionary with ``result``, ``outcome``, ``effects``,
+        and ``ship`` status.
+    :rtype: dict
+    :raises HTTPException: 404 if the game is not found; 400 if the
+        beacon cannot be activated.
+    """
+    state = _get_state(game_id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Game not found")
+    result = activate_distress_beacon(state)
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    game_save(state)
+    return {
+        "result": result["result"],
+        "outcome": result["outcome"],
+        "effects": result["effects"],
+        "ship": state.ship.to_dict(),
+    }
+
+
+@router.post("/game/{game_id}/salvage")
+def api_salvage(game_id: str) -> dict:
+    """Perform a salvage operation on the current body.
+
+    :param game_id: The unique identifier of the game.
+    :type game_id: str
+    :returns: A dictionary with ``result``, ``find``, ``effects``,
+        and ``ship`` status.
+    :rtype: dict
+    :raises HTTPException: 404 if the game is not found; 400 if
+        salvage is not possible.
+    """
+    state = _get_state(game_id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Game not found")
+    result = perform_salvage(state)
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    game_save(state)
+    return {
+        "result": result["result"],
+        "find": result["find"],
+        "effects": result["effects"],
+        "ship": state.ship.to_dict(),
+    }
+
+
+@router.post("/game/{game_id}/salvage/craft")
+def api_salvage_craft(game_id: str, req: CraftRequest) -> dict:
+    """Emergency craft a discovery into resources.
+
+    :param game_id: The unique identifier of the game.
+    :type game_id: str
+    :param req: The craft request with discovery_id and output type.
+    :type req: CraftRequest
+    :returns: A dictionary with ``result``, ``crafted``, ``effects``,
+        and ``ship`` status.
+    :rtype: dict
+    :raises HTTPException: 404 if the game is not found; 400 if
+        crafting is not possible.
+    """
+    state = _get_state(game_id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Game not found")
+    result = emergency_craft(state, req.discovery_id, req.output)
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    game_save(state)
+    return {
+        "result": result["result"],
+        "crafted": result["crafted"],
+        "effects": result["effects"],
+        "ship": state.ship.to_dict(),
     }
 
 
