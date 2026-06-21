@@ -2233,16 +2233,18 @@ class TestTriggerEventLowMoraleTriggerConditions:
     """Tests for the low-morale path in trigger_event respecting trigger_conditions."""
 
     def test_low_morale_filters_by_biome_condition(self) -> None:
-        """When morale is low and system biomes don't match, Abandoned Outpost should not trigger."""
+        """_get_eligible_templates should skip events whose biomes condition doesn't match the system's biomes."""
         state = new_game(seed=42)
         state.ship.morale = 20
         system = state.get_current_system()
         assert system is not None
         for body in system.bodies:
             body.biome = "ocean"
-        event = trigger_event(state)
-        assert event is not None
-        assert event.title != "Abandoned Outpost"
+        custom_templates = [
+            {"type": "crew", "title": "Custom Biome Event", "trigger_conditions": {"biomes": ["barren", "crystal", "tundra"]}, "choices": []},
+        ]
+        eligible = _get_eligible_templates(state, custom_templates)
+        assert len(eligible) == 0
 
     def test_low_morale_filters_by_min_systems_visited(self) -> None:
         """When morale is low and systems_visited < 3, Trade Route Opportunity should not fire."""
@@ -2263,16 +2265,18 @@ class TestTriggerEventLowMoraleTriggerConditions:
         assert len(signal_from_home) == 1
 
     def test_low_morale_filters_by_unexplored_preference(self) -> None:
-        """When all bodies explored, Derelict Signal with unexplored_preference should not fire."""
+        """_get_eligible_templates should skip events with unexplored_preference when all bodies are explored."""
         state = new_game(seed=42)
         state.ship.morale = 20
         system = state.get_current_system()
         assert system is not None
         for body in system.bodies:
             body.explored = True
-        event = trigger_event(state)
-        assert event is not None
-        assert event.title != "Derelict Signal"
+        custom_templates = [
+            {"type": "crew", "title": "Custom Unexplored Event", "trigger_conditions": {"unexplored_preference": True}, "choices": []},
+        ]
+        eligible = _get_eligible_templates(state, custom_templates)
+        assert len(eligible) == 0
 
     def test_low_morale_regular_events_still_work(self) -> None:
         """Regular crew/crisis/narrative events without trigger_conditions should still fire."""
