@@ -10,7 +10,7 @@ from backend.models.game_state import GameState
 from backend.models.event import Event, Choice
 from backend.models.discovery import Discovery, LoreFragment
 from backend.config import GALAXY_SYSTEM_COUNT
-from backend.game.manager import new_game
+from backend.game.manager import new_game, _fixup_old_lore_fragment_numbers, _state_from_dict
 import random
 
 
@@ -1276,3 +1276,74 @@ class TestLoreDistribution:
         warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
         assert any("No eligible location for fragment" in msg for msg in warning_messages), \
             f"Expected warning about no eligible location, got: {warning_messages}"
+
+
+class TestLoreFragmentNumberFixup:
+    """Tests for the _fixup_old_lore_fragment_numbers migration helper."""
+
+    def test_fixup_extracts_number_from_id(self) -> None:
+        """LoreFragment with id='lore_Architects_3' and fragment_number=0 gets fixed to 3."""
+        frags = [
+            LoreFragment(id="lore_Architects_3", arc="architects", title="T3", text="...", fragment_number=0),
+        ]
+        _fixup_old_lore_fragment_numbers(frags)
+        assert frags[0].fragment_number == 3
+
+    def test_fixup_leaves_already_correct_alone(self) -> None:
+        """LoreFragment with id='lore_test_5' and fragment_number=5 stays at 5."""
+        frags = [
+            LoreFragment(id="lore_test_5", arc="test", title="T5", text="...", fragment_number=5),
+        ]
+        _fixup_old_lore_fragment_numbers(frags)
+        assert frags[0].fragment_number == 5
+
+    def test_fixup_graceful_bad_id(self) -> None:
+        """LoreFragment with id='weird_id' and fragment_number=0 stays 0 (fallback)."""
+        frags = [
+            LoreFragment(id="weird_id", arc="test", title="Weird", text="...", fragment_number=0),
+        ]
+        _fixup_old_lore_fragment_numbers(frags)
+        assert frags[0].fragment_number == 0
+
+    def test_fixup_handles_multiple_fragments(self) -> None:
+        """Fixup handles a mix of fragments correctly."""
+        frags = [
+            LoreFragment(id="lore_architects_1", arc="architects", title="T1", text="...", fragment_number=0),
+            LoreFragment(id="lore_void_signal_2", arc="void_signal", title="T2", text="...", fragment_number=0),
+            LoreFragment(id="lore_fracture_3", arc="fracture", title="T3", text="...", fragment_number=3),
+            LoreFragment(id="bad_id", arc="test", title="Bad", text="...", fragment_number=0),
+        ]
+        _fixup_old_lore_fragment_numbers(frags)
+        assert frags[0].fragment_number == 1
+        assert frags[1].fragment_number == 2
+        assert frags[2].fragment_number == 3  # already correct, unchanged
+        assert frags[3].fragment_number == 0  # bad ID, unchanged
+
+    def test_state_from_dict_applies_fixup(self) -> None:
+        """Loading a dict with old-style lore fragments (no fragment_number) gets correct numbers."""
+        d = {
+            "id": "test-fixup",
+            "seed": 42,
+            "ship": Ship(name="Test", current_system_id="s1").to_dict(),
+            "systems": {
+                "s1": StarSystem(
+                    id="s1", name="Sys1", x=0.0, y=0.0, star_type="G",
+                    star_color="#fff", phenomenon="none", phenomenon_desc="",
+                ).to_dict(),
+            },
+            "events": [],
+            "discoveries": [],
+            "lore_fragments": [
+                {"id": "lore_architects_1", "arc": "architects", "title": "T1", "text": "..."},
+                {"id": "lore_architects_2", "arc": "architects", "title": "T2", "text": "..."},
+                {"id": "lore_void_signal_5", "arc": "void_signal", "title": "T5", "text": "...", "fragment_number": 5},
+            ],
+            "log_entries": [],
+            "systems_visited": 1,
+            "game_started": "",
+        }
+        state = _state_from_dict(d)
+        frags_by_id = {f.id: f for f in state.lore_fragments}
+        assert frags_by_id["lore_architects_1"].fragment_number == 1
+        assert frags_by_id["lore_architects_2"].fragment_number == 2
+        assert frags_by_id["lore_void_signal_5"].fragment_number == 5
