@@ -350,7 +350,8 @@ def _distress_pilots_guild(state: GameState, rng: Any, turns: int) -> dict:
     """Pilots Guild rescue outcome: deliver 20 fuel for 100 credits."""
     ship = state.ship
     system = state.get_current_system()
-    assert system is not None
+    if system is None:
+        raise ValueError("Cannot execute Pilots Guild rescue: no current system.")
     ship.credits = max(0, ship.credits - 100)
     ship.fuel = min(ship.max_fuel, ship.fuel + 20)
     state.modify_faction_reputation("free_pilots", 5)
