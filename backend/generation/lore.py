@@ -9,13 +9,12 @@ and querying fragments by system or body.
 import random
 from typing import Optional
 import logging
-
-logger = logging.getLogger(__name__)
-
 from backend.generation.lore_content import FRAGMENT_DATA
 from backend.models.discovery import LoreFragment
 from backend.models.system import Body, StarSystem
 from backend.utils import seeded_random
+
+logger = logging.getLogger(__name__)
 
 # Biome weights for fragment distribution: higher biome types are
 # more likely to host lore fragments, rewarding thorough exploration.

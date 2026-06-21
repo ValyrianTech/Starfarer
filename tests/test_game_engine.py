@@ -12,6 +12,7 @@ from backend.game.trading import get_upgrade_info, purchase_upgrade, perform_tra
 from backend.game.manager import new_game, get_galaxy, get_system_detail, game_save, load_or_create, get_game_state
 from backend.generation.events import trigger_event, resolve_event, EVENT_TEMPLATES
 from backend.config import SCAN_FUEL_COST
+from backend.models.game_state import GameState
 
 
 class TestGameManager:
