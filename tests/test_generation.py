@@ -259,7 +259,7 @@ class TestUniverseGeneration:
             "Fallback should move isolated system to within threshold"
         # The warning should have been logged
         warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
-        assert any("remains isolated" in msg for msg in warning_messages), \
+        assert any("was isolated after 100 iterations; fallback repositioning applied." in msg for msg in warning_messages), \
             f"Expected warning about isolated system, got: {warning_messages}"
 
     def test_ensure_connectivity_exhausts_iters_multiple_isolated(self, caplog) -> None:

@@ -415,10 +415,6 @@ def _ensure_connectivity(systems: dict[str, StarSystem], rng: random.Random) -> 
                 if other.id != system.id
             )
             if not has_neighbor:
-                logging.warning(
-                    f"System {system.id} ({system.name}) remains isolated after "
-                    f"{max_iters} iterations"
-                )
                 # Fallback: move directly to within threshold distance of closest neighbor
                 closest_id = None
                 closest_dist = float("inf")
@@ -441,6 +437,10 @@ def _ensure_connectivity(systems: dict[str, StarSystem], rng: random.Random) -> 
                         system.y = target.y + (dy / dist) * target_dist
                         system.x = max(50, min(GALAXY_WIDTH - 50, system.x))
                         system.y = max(50, min(GALAXY_HEIGHT - 50, system.y))
+                    logging.warning(
+                        f"System {system.id} ({system.name}) was isolated after "
+                        f"{max_iters} iterations; fallback repositioning applied."
+                    )
 
 
 def distance_between(sys1: StarSystem, sys2: StarSystem) -> float:
