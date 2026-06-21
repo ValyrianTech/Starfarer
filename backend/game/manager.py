@@ -16,6 +16,7 @@ from backend.config import (
 )
 from backend.models.game_state import GameState
 from backend.models.ship import Ship
+from backend.models.faction import FactionRelation, FACTION_DEFINITIONS
 from backend.generation.universe import generate_universe
 from backend.game.engine import (
     get_nearby_systems,
@@ -52,7 +53,15 @@ def new_game(seed: int | None = None, ship_name: str | None = None) -> GameState
         current_system_id=first_sys_id,
     )
 
-    state = GameState(id=game_id, seed=s, ship=ship, systems=systems, lore_fragments=lore_fragments)
+    faction_relations = {
+        fid: FactionRelation(faction_id=fid, reputation=0, known=False)
+        for fid in FACTION_DEFINITIONS
+    }
+
+    state = GameState(
+        id=game_id, seed=s, ship=ship, systems=systems,
+        lore_fragments=lore_fragments, faction_relations=faction_relations,
+    )
     first_sys = state.get_current_system()
     if first_sys:
         first_sys.visited = True
@@ -211,6 +220,10 @@ def _state_to_dict(state: GameState) -> dict:
         "discoveries": [d.to_dict() for d in state.discoveries],
         "lore_fragments": [lf.to_dict() for lf in state.lore_fragments],
         "log_entries": state.log_entries,
+        "faction_relations": {
+            k: {"faction_id": v.faction_id, "reputation": v.reputation, "known": v.known}
+            for k, v in state.faction_relations.items()
+        },
         "systems_visited": state.systems_visited,
         "game_started": state.game_started,
     }
@@ -241,6 +254,14 @@ def _state_from_dict(d: dict) -> GameState:
     lore = [LoreFragment.from_dict(lf) for lf in d.get("lore_fragments", [])]
     _fixup_old_lore_fragment_numbers(lore)
 
+    faction_relations = {}
+    for fid, fr_data in d.get("faction_relations", {}).items():
+        faction_relations[fid] = FactionRelation(
+            faction_id=fr_data["faction_id"],
+            reputation=fr_data.get("reputation", 0),
+            known=fr_data.get("known", False),
+        )
+
     return GameState(
         id=d["id"],
         seed=d["seed"],
@@ -250,6 +271,7 @@ def _state_from_dict(d: dict) -> GameState:
         discoveries=discoveries,
         lore_fragments=lore,
         log_entries=d.get("log_entries", []),
+        faction_relations=faction_relations,
         systems_visited=d.get("systems_visited", 0),
         game_started=d.get("game_started", ""),
     )
