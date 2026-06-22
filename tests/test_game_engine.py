@@ -9,7 +9,7 @@ from backend.game.engine import (
     land_on_body, explore_surface,
     activate_distress_beacon, perform_salvage, emergency_craft,
 )
-from backend.game.trading import get_upgrade_info, purchase_upgrade, perform_trade, perform_bulk_sell
+from backend.game.trading import get_upgrade_info, purchase_upgrade, perform_trade, perform_bulk_sell, calculate_fuel_price
 from backend.game.manager import new_game, get_galaxy, get_system_detail, game_save, load_or_create, get_game_state
 from backend.generation.events import trigger_event, resolve_event, EVENT_TEMPLATES, _get_eligible_templates
 from backend.config import SCAN_FUEL_COST
@@ -2466,3 +2466,197 @@ class TestTriggerEventEmptyEligible:
             result = trigger_event(state, rng_override=rng)
 
         assert result is None, "Expected None when eligible list is empty after cooldown check in normal path"
+
+
+class TestFuelPricing:
+    """Tests for the calculate_fuel_price function and fuel buying with dynamic pricing."""
+
+    def _make_system(self, system_type: str) -> "StarSystem":
+        from backend.models.system import StarSystem, Body
+        body = Body(id="b1", name="TestPlanet", body_type="planet", biome="ocean",
+                    size=5, distance_from_star=0.5, poi_count=2)
+        return StarSystem(
+            id="sys_test", name="TestSystem", x=100.0, y=200.0,
+            star_type="G", star_color="#fff", phenomenon="none",
+            phenomenon_desc="", bodies=[body],
+            has_trading_station=True, system_type=system_type,
+        )
+
+    def test_civilized_system_modifier(self) -> None:
+        """Civilized systems should have -20% modifier."""
+        state = new_game(seed=42)
+        system = self._make_system("civilized")
+        price = calculate_fuel_price(state, system)
+        assert price["system_modifier"] == -0.20
+        assert price["system_modifier_label"] == "Civilized system discount"
+        assert price["final_price"] == 25.0 * (1 - 0.20)
+
+    def test_agricultural_system_modifier(self) -> None:
+        """Agricultural systems should have 0% modifier."""
+        state = new_game(seed=42)
+        system = self._make_system("agricultural")
+        price = calculate_fuel_price(state, system)
+        assert price["system_modifier"] == 0.0
+        assert price["system_modifier_label"] == "Standard pricing"
+        assert price["final_price"] == 25.0
+
+    def test_frontier_system_modifier(self) -> None:
+        """Frontier systems should have +25% modifier."""
+        state = new_game(seed=42)
+        system = self._make_system("frontier")
+        price = calculate_fuel_price(state, system)
+        assert price["system_modifier"] == 0.25
+        assert price["system_modifier_label"] == "Remote system premium"
+        assert price["final_price"] == 25.0 * 1.25
+
+    def test_nebula_system_modifier(self) -> None:
+        """Nebula systems should have +50% modifier."""
+        state = new_game(seed=42)
+        system = self._make_system("nebula")
+        price = calculate_fuel_price(state, system)
+        assert price["system_modifier"] == 0.50
+        assert price["system_modifier_label"] == "Nebula hazard premium"
+        assert price["final_price"] == 25.0 * 1.50
+
+    def test_uncharted_system_modifier(self) -> None:
+        """Uncharted systems should have +100% modifier."""
+        state = new_game(seed=42)
+        system = self._make_system("uncharted")
+        price = calculate_fuel_price(state, system)
+        assert price["system_modifier"] == 1.00
+        assert price["system_modifier_label"] == "Uncharted territory premium"
+        assert price["final_price"] == 25.0 * 2.0
+
+    def test_void_traders_allied_discount(self) -> None:
+        """Allied with Void Traders should give -15% modifier."""
+        state = new_game(seed=42)
+        system = self._make_system("agricultural")
+        state.modify_faction_reputation("void_traders", 60)
+        price = calculate_fuel_price(state, system)
+        assert price["faction_modifier"] == -0.15
+        assert "Allied" in price["faction_modifier_label"]
+
+    def test_void_traders_friendly_discount(self) -> None:
+        """Friendly with Void Traders should give -5% modifier."""
+        state = new_game(seed=42)
+        system = self._make_system("agricultural")
+        state.modify_faction_reputation("void_traders", 30)
+        price = calculate_fuel_price(state, system)
+        assert price["faction_modifier"] == -0.05
+        assert "Friendly" in price["faction_modifier_label"]
+
+    def test_void_traders_neutral(self) -> None:
+        """Neutral with Void Traders should give 0% modifier."""
+        state = new_game(seed=42)
+        system = self._make_system("agricultural")
+        state.modify_faction_reputation("void_traders", 0)
+        price = calculate_fuel_price(state, system)
+        assert price["faction_modifier"] == 0.0
+        assert "Neutral" in price["faction_modifier_label"]
+
+    def test_void_traders_unfriendly_surcharge(self) -> None:
+        """Unfriendly with Void Traders should give +15% surcharge."""
+        state = new_game(seed=42)
+        system = self._make_system("agricultural")
+        state.modify_faction_reputation("void_traders", -10)
+        price = calculate_fuel_price(state, system)
+        assert price["faction_modifier"] == 0.15
+        assert "Unfriendly" in price["faction_modifier_label"]
+
+    def test_void_traders_hostile_surcharge(self) -> None:
+        """Hostile with Void Traders should give +30% surcharge."""
+        state = new_game(seed=42)
+        system = self._make_system("agricultural")
+        state.modify_faction_reputation("void_traders", -50)
+        price = calculate_fuel_price(state, system)
+        assert price["faction_modifier"] == 0.30
+        assert "Hostile" in price["faction_modifier_label"]
+
+    def test_supply_modifier_first_visit(self) -> None:
+        """First visit to a station should have 0% supply modifier."""
+        state = new_game(seed=42)
+        system = self._make_system("agricultural")
+        price = calculate_fuel_price(state, system)
+        assert price["supply_modifier"] == 0.0
+        assert price["supply_modifier_label"] == "First-time visit"
+
+    def test_supply_modifier_repeat_visit(self) -> None:
+        """Repeat visits to a station should have -10% supply modifier."""
+        state = new_game(seed=42)
+        system = self._make_system("agricultural")
+        state.record_station_visit(system.id)
+        price = calculate_fuel_price(state, system)
+        assert price["supply_modifier"] == -0.10
+        assert price["supply_modifier_label"] == "Well-supplied by traders"
+
+    def test_breakdown_lines_format(self) -> None:
+        """Breakdown lines should contain all price components."""
+        state = new_game(seed=42)
+        system = self._make_system("frontier")
+        state.modify_faction_reputation("void_traders", 40)
+        state.record_station_visit(system.id)
+        price = calculate_fuel_price(state, system)
+        assert "breakdown_lines" in price
+        lines = price["breakdown_lines"]
+        assert len(lines) == 5
+        assert any("Base price" in l for l in lines)
+        assert any("System type" in l for l in lines)
+        assert any("Faction standing" in l for l in lines)
+        assert any("Supply/demand" in l for l in lines)
+        assert any("Final price" in l for l in lines)
+
+    def test_fuel_buying_uses_dynamic_pricing(self) -> None:
+        """Buying fuel should use calculate_fuel_price and include breakdown."""
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        system.has_trading_station = True
+        state.ship.fuel = 0
+        state.ship.credits = 5000
+        ok, msg = perform_trade(state, "buy", "fuel", 10)
+        assert ok is True
+        assert "Purchased" in msg
+        assert "Base price:" in msg
+        assert "Final price:" in msg
+
+    def test_fuel_buying_records_station_visit(self) -> None:
+        """Buying fuel should record a station visit."""
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        system.has_trading_station = True
+        state.ship.fuel = 0
+        state.ship.credits = 5000
+        assert system.id not in state.station_visits
+        ok, _ = perform_trade(state, "buy", "fuel", 5)
+        assert ok is True
+        assert state.station_visits.get(system.id, 0) == 1
+
+    def test_fuel_price_compound_modifiers(self) -> None:
+        """All three modifiers should compound correctly."""
+        state = new_game(seed=42)
+        system = self._make_system("uncharted")
+        state.modify_faction_reputation("void_traders", 60)
+        state.record_station_visit(system.id)
+        price = calculate_fuel_price(state, system)
+        expected = 25.0 * (1 + 1.00 + (-0.15) + (-0.10))
+        assert price["final_price"] == expected
+
+    def test_record_station_visit_method(self) -> None:
+        """record_station_visit should increment visit counts."""
+        state = new_game(seed=42)
+        assert state.station_visits == {}
+        state.record_station_visit("sys_0001")
+        assert state.station_visits["sys_0001"] == 1
+        state.record_station_visit("sys_0001")
+        assert state.station_visits["sys_0001"] == 2
+        state.record_station_visit("sys_0002")
+        assert state.station_visits["sys_0002"] == 1
+
+    def test_unknown_system_type_fallback(self) -> None:
+        """Unknown system_type should fall back to standard pricing."""
+        state = new_game(seed=42)
+        system = self._make_system("some_unknown_type")
+        price = calculate_fuel_price(state, system)
+        assert price["system_modifier"] == 0.0
+        assert price["system_modifier_label"] == "Standard pricing"

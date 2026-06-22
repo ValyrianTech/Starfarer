@@ -89,6 +89,7 @@ class StarSystem:
     bodies: list[Body] = field(default_factory=list)
     visited: bool = False
     scanned: bool = False
+    system_type: str = "civilized"
 
     def to_dict(self) -> dict:
         """Serialize the star system to a dictionary.
@@ -109,6 +110,7 @@ class StarSystem:
             "bodies": [b.to_dict() for b in self.bodies],
             "visited": self.visited,
             "scanned": self.scanned,
+            "system_type": self.system_type,
         }
 
     @classmethod
@@ -133,4 +135,5 @@ class StarSystem:
             bodies=[Body.from_dict(b) for b in d.get("bodies", [])],
             visited=d.get("visited", False),
             scanned=d.get("scanned", False),
+            system_type=d.get("system_type", "civilized"),
         )
