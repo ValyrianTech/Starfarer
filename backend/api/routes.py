@@ -866,6 +866,23 @@ def _full_state_response(state: GameState) -> dict:
     :rtype: dict
     """
     current_system = state.get_current_system()
+
+    def _rep_label(rep: int) -> str:
+        if rep >= 50:
+            return "Allied"
+        elif rep >= 20:
+            return "Friendly"
+        else:
+            return "Neutral"
+
+    reputation_summary = {}
+    for faction_id in ("stellar_cartographers", "void_traders", "free_pilots"):
+        rep = state.get_faction_reputation(faction_id)
+        reputation_summary[faction_id] = {
+            "reputation": rep,
+            "label": _rep_label(rep),
+        }
+
     return {
         "game_id": state.id,
         "seed": state.seed,
@@ -881,4 +898,5 @@ def _full_state_response(state: GameState) -> dict:
         "lore_fragments_collected": state.lore_fragments_collected,
         "lore_fragments_total": len(state.lore_fragments),
         "factions": state.get_known_factions(),
+        "reputation_summary": reputation_summary,
     }

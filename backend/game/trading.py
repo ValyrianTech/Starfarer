@@ -137,11 +137,14 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
     rng = random.Random(det_seed)
     price_mod = rng.uniform(0.7, 1.5)
 
-    void_reputation = state.get_faction_reputation("void_traders")
-    if void_reputation != 0:
-        faction_mod = 1.0 + (void_reputation / 500.0)
-        faction_mod = max(0.8, min(1.2, faction_mod))
-        price_mod *= faction_mod
+    stellar_rep = state.get_faction_reputation("stellar_cartographers")
+    stellar_sell_mod = 1.0 + min(max(stellar_rep, 0), 50) / 200.0
+
+    void_rep = state.get_faction_reputation("void_traders")
+    void_buy_discount = 1.0 - min(max(void_rep, 0), 50) / 200.0
+
+    free_pilots_rep = state.get_faction_reputation("free_pilots")
+    free_pilots_morale_bonus = min(max(free_pilots_rep, 0), 50) // 10
 
     if action == "sell":
         error = _validate_quantity(quantity)
@@ -165,11 +168,13 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
             return False, f"Only {len(matching)} item(s) found matching '{item}', requested {quantity}."
         to_sell = matching[:quantity]
         for disc in to_sell:
-            sell_price = int(disc.value * price_mod)
+            sell_price = int(disc.value * price_mod * stellar_sell_mod)
             total_price += sell_price
             sold_items.append(disc.name)
             state.discoveries.remove(disc)
         state.ship.credits += total_price
+        if free_pilots_morale_bonus > 0:
+            state.ship.morale = min(100, state.ship.morale + free_pilots_morale_bonus)
         state.add_log("trade", f"Sold {len(sold_items)} item(s) for {total_price} credits.")
         return True, f"Sold {len(sold_items)} item(s) for {total_price} credits."
 
@@ -183,11 +188,13 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
             amount = min(quantity, state.ship.max_fuel - state.ship.fuel)
             if amount <= 0:
                 return False, "Fuel tank is already full."
-            cost = int(amount * FUEL_BASE_PRICE * price_mod)
+            cost = int(amount * FUEL_BASE_PRICE * price_mod * void_buy_discount)
             if state.ship.credits < cost:
                 return False, f"Not enough credits. Need {cost}."
             state.ship.credits -= cost
             state.ship.fuel += amount
+            if free_pilots_morale_bonus > 0:
+                state.ship.morale = min(100, state.ship.morale + free_pilots_morale_bonus)
             state.add_log("trade", f"Purchased {amount} fuel for {cost} credits.")
             return True, f"Purchased {amount} fuel for {cost} credits."
 
@@ -198,11 +205,13 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
             repair_amount = min(quantity * 20, state.ship.max_hull - state.ship.hull)
             if repair_amount <= 0:
                 return False, "Hull is already at maximum."
-            cost = int(repair_amount * 2)
+            cost = int(repair_amount * 2 * void_buy_discount)
             if state.ship.credits < cost:
                 return False, f"Not enough credits. Need {cost}."
             state.ship.credits -= cost
             state.ship.hull += repair_amount
+            if free_pilots_morale_bonus > 0:
+                state.ship.morale = min(100, state.ship.morale + free_pilots_morale_bonus)
             state.add_log("trade", f"Repaired hull by {repair_amount} for {cost} credits.")
             return True, f"Repaired hull by {repair_amount} for {cost} credits."
 
@@ -235,11 +244,8 @@ def perform_bulk_sell(state: GameState, items: list[dict]) -> tuple[bool, str, i
     rng = random.Random(det_seed)
     price_mod = rng.uniform(0.7, 1.5)
 
-    void_reputation = state.get_faction_reputation("void_traders")
-    if void_reputation != 0:
-        faction_mod = 1.0 + (void_reputation / 500.0)
-        faction_mod = max(0.8, min(1.2, faction_mod))
-        price_mod *= faction_mod
+    stellar_rep = state.get_faction_reputation("stellar_cartographers")
+    stellar_sell_mod = 1.0 + min(max(stellar_rep, 0), 50) / 200.0
 
     discoveries_snapshot = list(state.discoveries)
 
@@ -280,7 +286,7 @@ def perform_bulk_sell(state: GameState, items: list[dict]) -> tuple[bool, str, i
             to_sell = matching[:quantity]
 
         for disc in to_sell:
-            sell_price = int(disc.value * price_mod)
+            sell_price = int(disc.value * price_mod * stellar_sell_mod)
             total_price += sell_price
             sold_count += 1
             sold_ids.add(disc.id)
