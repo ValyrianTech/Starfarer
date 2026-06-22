@@ -130,6 +130,9 @@ def calculate_fuel_price(state: GameState, system: StarSystem) -> dict:
         supply_modifier_label, final_price, and breakdown_lines.
     :rtype: dict
     """
+    from backend.models.system import validate_system_type
+    validate_system_type(system.system_type)
+
     base_price = FUEL_BASE_PRICE
 
     system_modifiers = {

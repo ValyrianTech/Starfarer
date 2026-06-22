@@ -8,6 +8,28 @@ within the procedurally generated galaxy.
 
 from dataclasses import dataclass, field
 
+VALID_SYSTEM_TYPES = frozenset({
+    "civilized",
+    "agricultural",
+    "frontier",
+    "nebula",
+    "uncharted",
+})
+
+
+def validate_system_type(system_type: str) -> None:
+    """Validate that a system_type is one of the recognized values.
+
+    :param system_type: The system type string to validate.
+    :type system_type: str
+    :raises ValueError: If the system_type is not in VALID_SYSTEM_TYPES.
+    """
+    if system_type not in VALID_SYSTEM_TYPES:
+        raise ValueError(
+            f"Unknown system_type: '{system_type}'. "
+            f"Valid types: {', '.join(sorted(VALID_SYSTEM_TYPES))}"
+        )
+
 
 @dataclass
 class Body:
