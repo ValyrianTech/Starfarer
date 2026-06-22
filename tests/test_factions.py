@@ -324,13 +324,13 @@ class TestFactionAPI:
 
 
 class TestTradingFactionIntegration:
-    def test_void_traders_positive_reputation_discount(self) -> None:
+    def test_stellar_cartographers_positive_reputation_bonus(self) -> None:
         from backend.models.discovery import Discovery
         state = new_game(seed=42)
         system = state.get_current_system()
         assert system is not None
         system.has_trading_station = True
-        state.modify_faction_reputation("void_traders", 100)
+        state.modify_faction_reputation("stellar_cartographers", 50)
 
         disc = Discovery(
             id="vt_test_disc", category="artifact", name="Test Artifact",
@@ -341,19 +341,19 @@ class TestTradingFactionIntegration:
 
         ok, msg = perform_trade(state, "sell", "artifact", 1)
         assert ok is True
-        price_mod = 1.0 + (100 / 500.0)
+        price_mod = 1.0 + min(max(50, 0), 50) / 200.0
         expected_min = int(100 * 0.7 * price_mod)
         expected_max = int(100 * 1.5 * price_mod)
         actual_credits = state.ship.credits - credits_before
         assert expected_min <= actual_credits <= expected_max
 
-    def test_void_traders_negative_reputation_penalty(self) -> None:
+    def test_stellar_cartographers_negative_reputation_no_bonus(self) -> None:
         from backend.models.discovery import Discovery
         state = new_game(seed=42)
         system = state.get_current_system()
         assert system is not None
         system.has_trading_station = True
-        state.modify_faction_reputation("void_traders", -100)
+        state.modify_faction_reputation("stellar_cartographers", -100)
 
         disc = Discovery(
             id="vt_neg_disc", category="artifact", name="Test Artifact",
@@ -364,19 +364,18 @@ class TestTradingFactionIntegration:
 
         ok, msg = perform_trade(state, "sell", "artifact", 1)
         assert ok is True
-        price_mod = 1.0 + (-100 / 500.0)
-        expected_min = int(100 * 0.7 * price_mod)
-        expected_max = int(100 * 1.5 * price_mod)
+        expected_min = int(100 * 0.7)
+        expected_max = int(100 * 1.5)
         actual_credits = state.ship.credits - credits_before
         assert expected_min <= actual_credits <= expected_max
 
-    def test_void_traders_faction_mod_clamped(self) -> None:
+    def test_stellar_cartographers_faction_mod_clamped(self) -> None:
         from backend.models.discovery import Discovery
         state = new_game(seed=42)
         system = state.get_current_system()
         assert system is not None
         system.has_trading_station = True
-        state.modify_faction_reputation("void_traders", 500)
+        state.modify_faction_reputation("stellar_cartographers", 60)
 
         disc = Discovery(
             id="vt_clamp_disc", category="artifact", name="Test Artifact",
@@ -388,8 +387,8 @@ class TestTradingFactionIntegration:
         ok, msg = perform_trade(state, "sell", "artifact", 1)
         assert ok is True
         actual_credits = state.ship.credits - credits_before
-        # faction_mod should be clamped to 1.2, so max is 100 * 1.5 * 1.2 = 180
-        assert actual_credits <= int(100 * 1.5 * 1.2)
+        # faction_mod should be clamped to 1.25, so max is 100 * 1.5 * 1.25 = 187 (rounded down)
+        assert actual_credits <= int(100 * 1.5 * 1.25)
 
     def test_void_traders_discount_on_buy_fuel(self) -> None:
         state = new_game(seed=42)
@@ -416,13 +415,13 @@ class TestTradingFactionIntegration:
 
         assert discounted_cost < base_cost
 
-    def test_void_traders_bulk_sell_faction_mod(self) -> None:
+    def test_stellar_cartographers_bulk_sell_faction_mod(self) -> None:
         from backend.models.discovery import Discovery
         state = new_game(seed=42)
         system = state.get_current_system()
         assert system is not None
         system.has_trading_station = True
-        state.modify_faction_reputation("void_traders", -100)
+        state.modify_faction_reputation("stellar_cartographers", -100)
 
         state.discoveries = [
             Discovery(id="bvt1", category="artifact", name="Ancient Relic",
@@ -434,9 +433,8 @@ class TestTradingFactionIntegration:
         )
         assert ok is True
         actual_credits = total_price
-        price_mod = 1.0 + (-100 / 500.0)
-        expected_min = int(200 * 0.7 * price_mod)
-        expected_max = int(200 * 1.5 * price_mod)
+        expected_min = int(200 * 0.7)
+        expected_max = int(200 * 1.5)
         assert expected_min <= actual_credits <= expected_max
 
 
