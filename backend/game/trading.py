@@ -155,6 +155,9 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
     void_rep = state.get_faction_reputation("void_traders")
     void_buy_discount = 1.0 - min(max(void_rep, 0), 50) / 200.0
 
+    trade_completed = False
+    result_message = ""
+
     if action == "sell":
         error = _validate_quantity(quantity)
         if error:
@@ -182,13 +185,13 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
             sold_items.append(disc.name)
             state.discoveries.remove(disc)
         state.ship.credits += total_price
-        _apply_free_pilots_morale_bonus(state)
-        state.add_log("trade", f"Sold {len(sold_items)} item(s) for {total_price} credits.")
-        return True, f"Sold {len(sold_items)} item(s) for {total_price} credits."
+        result_message = f"Sold {len(sold_items)} item(s) for {total_price} credits."
+        state.add_log("trade", result_message)
+        trade_completed = True
 
-    FUEL_BASE_PRICE = 30
+    elif action == "buy":
+        FUEL_BASE_PRICE = 30
 
-    if action == "buy":
         if item == "fuel":
             error = _validate_quantity(quantity)
             if error:
@@ -201,11 +204,11 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
                 return False, f"Not enough credits. Need {cost}."
             state.ship.credits -= cost
             state.ship.fuel += amount
-            _apply_free_pilots_morale_bonus(state)
-            state.add_log("trade", f"Purchased {amount} fuel for {cost} credits.")
-            return True, f"Purchased {amount} fuel for {cost} credits."
+            result_message = f"Purchased {amount} fuel for {cost} credits."
+            state.add_log("trade", result_message)
+            trade_completed = True
 
-        if item == "repair":
+        elif item == "repair":
             error = _validate_quantity(quantity)
             if error:
                 return False, error
@@ -217,9 +220,15 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
                 return False, f"Not enough credits. Need {cost}."
             state.ship.credits -= cost
             state.ship.hull += repair_amount
-            _apply_free_pilots_morale_bonus(state)
-            state.add_log("trade", f"Repaired hull by {repair_amount} for {cost} credits.")
-            return True, f"Repaired hull by {repair_amount} for {cost} credits."
+            result_message = f"Repaired hull by {repair_amount} for {cost} credits."
+            state.add_log("trade", result_message)
+            trade_completed = True
+
+    if trade_completed:
+        # Free Pilots Guild morale bonus applied once per successful trade
+        # action, not per sub-action branch, to keep the call site singular.
+        _apply_free_pilots_morale_bonus(state)
+        return True, result_message
 
     return False, f"Cannot trade {item}."
 
