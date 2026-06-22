@@ -10,7 +10,6 @@ import uuid
 from typing import Optional
 
 from backend.models.game_state import GameState
-from backend.models.system import StarSystem
 from backend.models.event import Event, Choice
 from backend.config import MORALE_LOW_THRESHOLD
 from backend.utils import deterministic_hash, seeded_random
