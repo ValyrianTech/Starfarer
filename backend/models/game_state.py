@@ -21,6 +21,27 @@ from backend.models.faction import FactionRelation
 logger = logging.getLogger(__name__)
 
 
+def _rep_label(rep: int) -> str:
+    """Map a reputation value to a 5-tier relationship label.
+
+    :param rep: The reputation value with a faction.
+    :type rep: int
+    :returns: A label string: ``"Allied"``, ``"Friendly"``,
+        ``"Neutral"``, ``"Unfriendly"``, or ``"Hostile"``.
+    :rtype: str
+    """
+    if rep >= 50:
+        return "Allied"
+    elif rep >= 20:
+        return "Friendly"
+    elif rep >= 0:
+        return "Neutral"
+    elif rep >= -20:
+        return "Unfriendly"
+    else:
+        return "Hostile"
+
+
 @dataclass
 class GameState:
     """Holds the complete state of a single game session.
@@ -136,6 +157,13 @@ class GameState:
         :rtype: dict
         """
         system = self.get_current_system()
+        reputation_summary = {}
+        for faction_id in ("stellar_cartographers", "void_traders", "free_pilots"):
+            rep = self.get_faction_reputation(faction_id)
+            reputation_summary[faction_id] = {
+                "reputation": rep,
+                "label": _rep_label(rep),
+            }
         return {
             "game_id": self.id,
             "seed": self.seed,
@@ -149,6 +177,7 @@ class GameState:
             "lore_fragments_collected": self.lore_fragments_collected,
             "lore_fragments_total": len(self.lore_fragments),
             "faction_relations": self.get_known_factions(),
+            "reputation_summary": reputation_summary,
         }
 
     def get_faction_reputation(self, faction_id: str) -> int:
