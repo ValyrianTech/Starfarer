@@ -1692,14 +1692,15 @@ class TestAPICargo:
         assert non_sellable_items[0]["id"] == "non-sellable-disc-1"
 
     def test_cargo_capacity_in_ship_dict(self) -> None:
-        """Ship.to_dict should include cargo_capacity."""
+        """cargo_capacity should be at top level, not in ship dict."""
         resp = client.post("/api/game/new", json={"seed": 42})
         game_id = resp.json()["game_id"]
         resp = client.get(f"/api/game/{game_id}")
         assert resp.status_code == 200
         data = resp.json()
-        assert "cargo_capacity" in data["ship"]
-        assert data["ship"]["cargo_capacity"] == 50
+        assert "cargo_capacity" not in data["ship"]
+        assert "cargo_capacity" in data
+        assert data["cargo_capacity"] == 50
 
     def test_cargo_items_in_state_summary(self) -> None:
         """state_summary should include cargo_items."""
