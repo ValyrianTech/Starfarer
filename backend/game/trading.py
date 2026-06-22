@@ -92,6 +92,18 @@ def purchase_upgrade(state: GameState, upgrade_id: str) -> tuple[bool, str]:
     return True, f"Upgraded {upgrade_id} to level {current_level + 1}."
 
 
+def _apply_free_pilots_morale_bonus(state: GameState) -> None:
+    """Apply a morale bonus based on Free Pilots Guild reputation when trading.
+
+    :param state: The current game state.
+    :type state: GameState
+    """
+    rep = state.get_faction_reputation("free_pilots")
+    bonus = min(max(rep, 0), 50) // 10
+    if bonus > 0:
+        state.ship.morale = min(100, state.ship.morale + bonus)
+
+
 def _validate_quantity(quantity: int) -> str | None:
     """Validate that quantity is a positive integer.
 
@@ -143,9 +155,6 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
     void_rep = state.get_faction_reputation("void_traders")
     void_buy_discount = 1.0 - min(max(void_rep, 0), 50) / 200.0
 
-    free_pilots_rep = state.get_faction_reputation("free_pilots")
-    free_pilots_morale_bonus = min(max(free_pilots_rep, 0), 50) // 10
-
     if action == "sell":
         error = _validate_quantity(quantity)
         if error:
@@ -173,8 +182,7 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
             sold_items.append(disc.name)
             state.discoveries.remove(disc)
         state.ship.credits += total_price
-        if free_pilots_morale_bonus > 0:
-            state.ship.morale = min(100, state.ship.morale + free_pilots_morale_bonus)
+        _apply_free_pilots_morale_bonus(state)
         state.add_log("trade", f"Sold {len(sold_items)} item(s) for {total_price} credits.")
         return True, f"Sold {len(sold_items)} item(s) for {total_price} credits."
 
@@ -193,8 +201,7 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
                 return False, f"Not enough credits. Need {cost}."
             state.ship.credits -= cost
             state.ship.fuel += amount
-            if free_pilots_morale_bonus > 0:
-                state.ship.morale = min(100, state.ship.morale + free_pilots_morale_bonus)
+            _apply_free_pilots_morale_bonus(state)
             state.add_log("trade", f"Purchased {amount} fuel for {cost} credits.")
             return True, f"Purchased {amount} fuel for {cost} credits."
 
@@ -210,8 +217,7 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
                 return False, f"Not enough credits. Need {cost}."
             state.ship.credits -= cost
             state.ship.hull += repair_amount
-            if free_pilots_morale_bonus > 0:
-                state.ship.morale = min(100, state.ship.morale + free_pilots_morale_bonus)
+            _apply_free_pilots_morale_bonus(state)
             state.add_log("trade", f"Repaired hull by {repair_amount} for {cost} credits.")
             return True, f"Repaired hull by {repair_amount} for {cost} credits."
 
@@ -300,6 +306,7 @@ def perform_bulk_sell(state: GameState, items: list[dict]) -> tuple[bool, str, i
     state.discoveries = [d for d in discoveries_snapshot if d.id not in sold_ids]
 
     state.ship.credits += total_price
+    _apply_free_pilots_morale_bonus(state)
 
     log_msg = f"Bulk sold {sold_count} item(s) for {total_price} credits."
     if errors:
