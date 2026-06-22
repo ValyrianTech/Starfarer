@@ -208,7 +208,7 @@ class GameState:
         """Modify reputation with a faction by a given delta.
 
         Creates a new :class:`FactionRelation` if the faction is not yet
-        tracked. Reputation is clamped to -1000..100.
+        tracked. Reputation is clamped to -1000 to 100.
 
         :param faction_id: The unique identifier of the faction.
         :type faction_id: str
