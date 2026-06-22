@@ -140,6 +140,7 @@ def calculate_fuel_price(state: GameState, system: StarSystem) -> dict:
         "agricultural": (0.0, "Standard pricing"),
         "frontier": (0.25, "Remote system premium"),
         "nebula": (0.50, "Nebula hazard premium"),
+        "ancient": (0.75, "Ancient gate premium"),
         "uncharted": (1.00, "Uncharted territory premium"),
     }
     system_modifier, system_modifier_label = system_modifiers.get(
