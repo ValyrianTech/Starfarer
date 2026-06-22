@@ -10,7 +10,7 @@ import time
 
 from fastapi import APIRouter, HTTPException
 
-from backend.models.game_state import GameState
+from backend.models.game_state import GameState, _rep_label
 from backend.api.schemas import (
     BulkSellRequest, CraftRequest, NewGameRequest, ResolveEventRequest, TradeRequest,
     UpgradeRequest, HealthResponse,
@@ -866,18 +866,6 @@ def _full_state_response(state: GameState) -> dict:
     :rtype: dict
     """
     current_system = state.get_current_system()
-
-    def _rep_label(rep: int) -> str:
-        if rep >= 50:
-            return "Allied"
-        elif rep >= 20:
-            return "Friendly"
-        elif rep >= 0:
-            return "Neutral"
-        elif rep >= -20:
-            return "Unfriendly"
-        else:
-            return "Hostile"
 
     reputation_summary = {}
     for faction_id in ("stellar_cartographers", "void_traders", "free_pilots"):
