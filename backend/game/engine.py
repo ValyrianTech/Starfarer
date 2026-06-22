@@ -97,12 +97,14 @@ def perform_jump(state: GameState, target_system: StarSystem, fuel_cost: int | f
     state.jumps_since_rep_decay += 1
     if state.jumps_since_rep_decay >= 10:
         state.jumps_since_rep_decay = 0
-        for faction_id in list(state.faction_relations.keys()):
-            rep = state.faction_relations[faction_id].reputation
-            if rep > 0:
-                state.modify_faction_reputation(faction_id, -1)
-            elif rep < 0:
-                state.modify_faction_reputation(faction_id, 1)
+        # Short-circuit: skip decay if no faction has non-zero reputation
+        if any(rel.reputation != 0 for rel in state.faction_relations.values()):
+            for faction_id in list(state.faction_relations.keys()):
+                rep = state.faction_relations[faction_id].reputation
+                if rep > 0:
+                    state.modify_faction_reputation(faction_id, -1)
+                elif rep < 0:
+                    state.modify_faction_reputation(faction_id, 1)
 
     return f"Jumped to {target_system.name}."
 
