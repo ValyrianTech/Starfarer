@@ -2653,13 +2653,36 @@ class TestFuelPricing:
         state.record_station_visit("sys_0002")
         assert state.station_visits["sys_0002"] == 1
 
-    def test_unknown_system_type_fallback(self) -> None:
-        """Unknown system_type should fall back to standard pricing."""
+    def test_unknown_system_type_raises_error(self) -> None:
+        """Unknown system_type should raise a ValueError."""
         state = new_game(seed=42)
         system = self._make_system("some_unknown_type")
-        price = calculate_fuel_price(state, system)
-        assert price["system_modifier"] == 0.0
-        assert price["system_modifier_label"] == "Standard pricing"
+        with pytest.raises(ValueError, match="Unknown system_type"):
+            calculate_fuel_price(state, system)
+
+    def test_all_valid_system_types(self) -> None:
+        """All valid system types should work without error."""
+        state = new_game(seed=42)
+        for sys_type in ["civilized", "agricultural", "frontier", "nebula", "uncharted"]:
+            system = self._make_system(sys_type)
+            price = calculate_fuel_price(state, system)
+            assert price is not None
+
+    def test_validate_system_type_valid(self) -> None:
+        """validate_system_type should not raise for valid types."""
+        from backend.models.system import validate_system_type
+        for sys_type in ["civilized", "agricultural", "frontier", "nebula", "uncharted"]:
+            validate_system_type(sys_type)  # Should not raise
+
+    def test_validate_system_type_invalid(self) -> None:
+        """validate_system_type should raise ValueError for invalid types."""
+        from backend.models.system import validate_system_type
+        with pytest.raises(ValueError, match="Unknown system_type"):
+            validate_system_type("civlized")
+        with pytest.raises(ValueError, match="Unknown system_type"):
+            validate_system_type("")
+        with pytest.raises(ValueError, match="Unknown system_type"):
+            validate_system_type("CIVILIZED")  # Case sensitive
 
     def test_fuel_price_clamping_applied(self) -> None:
         """When unclamped price is below minimum, clamping should raise it."""
