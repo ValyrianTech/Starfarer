@@ -143,9 +143,7 @@ def calculate_fuel_price(state: GameState, system: StarSystem) -> dict:
         "ancient": (0.75, "Ancient gate premium"),
         "uncharted": (1.00, "Uncharted territory premium"),
     }
-    system_modifier, system_modifier_label = system_modifiers.get(
-        system.system_type, (0.0, "Standard pricing")
-    )
+    system_modifier, system_modifier_label = system_modifiers[system.system_type]
 
     void_rep = state.get_faction_reputation("void_traders")
     void_label = rep_label(void_rep)
