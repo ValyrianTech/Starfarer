@@ -115,8 +115,8 @@ def api_get_game(game_id: str) -> dict:
     :param game_id: The unique identifier of the game.
     :type game_id: str
     :returns: A dictionary with game_id, seed, ship, current system,
-        discoveries, cargo_items, cargo_capacity, pending events,
-        log entries, and stats.
+        discoveries, cargo_capacity, pending events, log entries,
+        and stats.
     :rtype: dict
     :raises HTTPException: 404 if the game is not found.
     """
@@ -866,14 +866,12 @@ def _full_state_response(state: GameState) -> dict:
     :rtype: dict
     """
     current_system = state.get_current_system()
-    cargo_items = [d.to_cargo_dict() for d in state.discoveries]
     return {
         "game_id": state.id,
         "seed": state.seed,
         "ship": state.ship.to_dict(),
         "current_system": current_system.to_dict() if current_system else None,
         "discoveries": [d.to_dict() for d in state.discoveries],
-        "cargo_items": cargo_items,
         "cargo_capacity": state.ship.max_cargo,
         "events_pending": [e.to_dict() for e in state.events if not e.resolved],
         "log_entries": list(reversed(state.log_entries))[:20],
