@@ -233,9 +233,6 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
     stellar_rep = state.get_faction_reputation("stellar_cartographers")
     stellar_sell_mod = 1.0 + min(max(stellar_rep, 0), 50) / 200.0
 
-    void_rep = state.get_faction_reputation("void_traders")
-    void_buy_discount = 1.0 - min(max(void_rep, 0), 50) / 200.0
-
     trade_completed = False
     result_message = ""
 
@@ -296,6 +293,8 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
             repair_amount = min(quantity * 20, state.ship.max_hull - state.ship.hull)
             if repair_amount <= 0:
                 return False, "Hull is already at maximum."
+            void_rep = state.get_faction_reputation("void_traders")
+            void_buy_discount = 1.0 - min(max(void_rep, 0), 50) / 200.0
             cost = int(repair_amount * 2 * void_buy_discount)
             if state.ship.credits < cost:
                 return False, f"Not enough credits. Need {cost}."
