@@ -42,6 +42,7 @@ class Discovery:
             "value": self.value,
             "system_id": self.system_id,
             "body_id": self.body_id,
+            "sellable": self.lore_fragment_id is None,
         }
 
     def to_cargo_dict(self) -> dict:
