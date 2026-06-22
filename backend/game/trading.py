@@ -284,7 +284,6 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
                 return False, f"Not enough credits. Need {cost}."
             state.ship.credits -= cost
             state.ship.fuel += amount
-            state.record_station_visit(system.id)
             breakdown_str = "\n".join(price_info["breakdown_lines"])
             result_message = f"Purchased {amount} fuel for {cost} credits.\n{breakdown_str}"
             state.add_log("trade", result_message)
@@ -307,6 +306,7 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
             trade_completed = True
 
     if trade_completed:
+        state.record_station_visit(system.id)
         # Free Pilots Guild morale bonus applied once per successful trade
         # action, not per sub-action branch, to keep the call site singular.
         _apply_free_pilots_morale_bonus(state)
