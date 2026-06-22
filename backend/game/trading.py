@@ -167,14 +167,20 @@ def calculate_fuel_price(state: GameState, system: StarSystem) -> dict:
         supply_modifier_label = "First-time visit"
 
     final_price = base_price * (1 + system_modifier + faction_modifier + supply_modifier)
+    unclamped = final_price
+    final_price = max(final_price, base_price * 0.1, 1)
+    clamped = final_price != unclamped
 
     breakdown_lines = [
         f"Base price: {base_price} credits/unit",
         f"System type ({system.system_type}): {system_modifier_label} ({system_modifier:+.0%})",
         f"Faction standing: {faction_modifier_label} ({faction_modifier:+.0%})",
         f"Supply/demand: {supply_modifier_label} ({supply_modifier:+.0%})",
-        f"Final price: {final_price:.1f} credits/unit",
     ]
+    if clamped:
+        breakdown_lines.append(f"Final price: {final_price:.1f} credits/unit (clamped to minimum)")
+    else:
+        breakdown_lines.append(f"Final price: {final_price:.1f} credits/unit")
 
     return {
         "base_price": base_price,
