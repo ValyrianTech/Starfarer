@@ -390,18 +390,30 @@ class TestTradingFactionIntegration:
         # faction_mod should be clamped to 1.2, so max is 100 * 1.5 * 1.2 = 180
         assert actual_credits <= int(100 * 1.5 * 1.2)
 
-    def test_void_traders_no_effect_on_buy_fuel(self) -> None:
+    def test_void_traders_discount_on_buy_fuel(self) -> None:
         state = new_game(seed=42)
         system = state.get_current_system()
         assert system is not None
         system.has_trading_station = True
-        state.ship.fuel = 50
-        state.modify_faction_reputation("void_traders", 100)
-        credits_before = state.ship.credits
+        state.ship.fuel = 0
+        state.ship.credits = 5000
 
+        # Buy fuel with 0 rep (baseline)
+        state.modify_faction_reputation("void_traders", 0)
+        credits_before = state.ship.credits
         ok, msg = perform_trade(state, "buy", "fuel", 10)
         assert ok is True
-        assert state.ship.fuel > 50 or state.ship.credits < credits_before
+        base_cost = credits_before - state.ship.credits
+
+        # Reset and buy fuel with 50 rep (discounted)
+        state.ship.fuel = 0
+        state.ship.credits = 5000
+        state.modify_faction_reputation("void_traders", 50)
+        ok, msg = perform_trade(state, "buy", "fuel", 10)
+        assert ok is True
+        discounted_cost = 5000 - state.ship.credits
+
+        assert discounted_cost < base_cost
 
     def test_void_traders_bulk_sell_faction_mod(self) -> None:
         from backend.models.discovery import Discovery
