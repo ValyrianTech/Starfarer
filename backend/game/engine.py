@@ -94,6 +94,16 @@ def perform_jump(state: GameState, target_system: StarSystem, fuel_cost: int | f
 
     state.update_stranded_state()
 
+    state.jumps_since_rep_decay += 1
+    if state.jumps_since_rep_decay >= 10:
+        state.jumps_since_rep_decay = 0
+        for faction_id in list(state.faction_relations.keys()):
+            rep = state.faction_relations[faction_id].reputation
+            if rep > 0:
+                state.modify_faction_reputation(faction_id, -1)
+            elif rep < 0:
+                state.modify_faction_reputation(faction_id, 1)
+
     return f"Jumped to {target_system.name}."
 
 

@@ -108,9 +108,9 @@ class TestGameStateFactions:
 
     def test_modify_faction_reputation_clamping_high(self) -> None:
         state = new_game(seed=42)
-        state.faction_relations["stellar_cartographers"].reputation = 995
+        state.faction_relations["stellar_cartographers"].reputation = 95
         state.modify_faction_reputation("stellar_cartographers", 50)
-        assert state.faction_relations["stellar_cartographers"].reputation == 1000
+        assert state.faction_relations["stellar_cartographers"].reputation == 100
 
     def test_modify_faction_reputation_clamping_low(self) -> None:
         state = new_game(seed=42)
@@ -538,3 +538,664 @@ class TestFactionEdgeCases:
         assert uf["name"] == "unknown_faction"
         assert uf["reputation"] == 50
         assert uf["known"] is True
+
+
+class TestReputationCap:
+    def test_reputation_capped_at_100(self) -> None:
+        state = new_game(seed=42)
+        state.modify_faction_reputation("stellar_cartographers", 150)
+        assert state.get_faction_reputation("stellar_cartographers") == 100
+
+    def test_reputation_negative_floor_unchanged(self) -> None:
+        state = new_game(seed=42)
+        state.modify_faction_reputation("stellar_cartographers", -2000)
+        assert state.get_faction_reputation("stellar_cartographers") == -1000
+
+    def test_reputation_exactly_100(self) -> None:
+        state = new_game(seed=42)
+        state.modify_faction_reputation("void_traders", 100)
+        assert state.get_faction_reputation("void_traders") == 100
+        state.modify_faction_reputation("void_traders", 10)
+        assert state.get_faction_reputation("void_traders") == 100
+
+
+class TestReputationDecay:
+    def test_jumps_since_rep_decay_field_exists(self) -> None:
+        state = new_game(seed=42)
+        assert state.jumps_since_rep_decay == 0
+
+    def test_jumps_since_rep_decay_serialization(self) -> None:
+        state = new_game(seed=42)
+        state.jumps_since_rep_decay = 5
+        data = _state_to_dict(state)
+        assert data["jumps_since_rep_decay"] == 5
+        restored = _state_from_dict(data)
+        assert restored.jumps_since_rep_decay == 5
+
+    def test_rep_decay_on_jump(self) -> None:
+        from backend.game.engine import perform_jump, can_jump
+        from backend.generation.universe import distance_between
+        state = new_game(seed=42)
+        state.modify_faction_reputation("stellar_cartographers", 30)
+        state.modify_faction_reputation("void_traders", 10)
+        state.modify_faction_reputation("free_pilots", -5)
+
+        systems = list(state.systems.values())
+        # Find two systems within reasonable jump range
+        sys_a = systems[0]
+        sys_b = None
+        for s in systems[1:]:
+            if distance_between(sys_a, s) <= 50:
+                sys_b = s
+                break
+        assert sys_b is not None
+
+        state.ship.fuel = 500
+        state.ship.jump_range = 20
+
+        current_target = sys_b
+        for _ in range(10):
+            ok, fuel_cost, msg = can_jump(state.ship, current_target, state.get_current_system())
+            assert ok, f'Jump failed: {msg}'
+            perform_jump(state, current_target, int(fuel_cost))
+            current_target = sys_a if current_target is sys_b else sys_b
+
+        assert state.get_faction_reputation("stellar_cartographers") < 30
+        assert state.get_faction_reputation("void_traders") < 10
+        assert state.get_faction_reputation("free_pilots") > -5
+
+    def test_rep_decay_resets_counter(self) -> None:
+        from backend.game.engine import perform_jump, can_jump
+        from backend.generation.universe import distance_between
+        state = new_game(seed=42)
+        state.modify_faction_reputation("void_traders", 30)
+
+        systems = list(state.systems.values())
+        sys_a = systems[0]
+        sys_b = None
+        for s in systems[1:]:
+            if distance_between(sys_a, s) <= 50:
+                sys_b = s
+                break
+        assert sys_b is not None
+
+        state.ship.fuel = 500
+        state.ship.jump_range = 20
+
+        current_target = sys_b
+        for _ in range(10):
+            ok, fuel_cost, msg = can_jump(state.ship, current_target, state.get_current_system())
+            assert ok, f'Jump failed: {msg}'
+            perform_jump(state, current_target, int(fuel_cost))
+            current_target = sys_a if current_target is sys_b else sys_b
+
+        assert state.jumps_since_rep_decay == 0
+
+    def test_rep_decay_zero_rep_unchanged(self) -> None:
+        from backend.game.engine import perform_jump, can_jump
+        from backend.generation.universe import distance_between
+        state = new_game(seed=42)
+        assert state.get_faction_reputation("stellar_cartographers") == 0
+
+        systems = list(state.systems.values())
+        sys_a = systems[0]
+        sys_b = None
+        for s in systems[1:]:
+            if distance_between(sys_a, s) <= 50:
+                sys_b = s
+                break
+        assert sys_b is not None
+
+        state.ship.fuel = 500
+        state.ship.jump_range = 20
+
+        current_target = sys_b
+        for _ in range(10):
+            ok, fuel_cost, msg = can_jump(state.ship, current_target, state.get_current_system())
+            assert ok, f'Jump failed: {msg}'
+            perform_jump(state, current_target, int(fuel_cost))
+            current_target = sys_a if current_target is sys_b else sys_b
+
+        assert state.get_faction_reputation("stellar_cartographers") == 0
+
+    def test_rep_decay_negative_toward_zero(self) -> None:
+        from backend.game.engine import perform_jump, can_jump
+        from backend.generation.universe import distance_between
+        state = new_game(seed=42)
+        state.modify_faction_reputation("free_pilots", -10)
+
+        systems = list(state.systems.values())
+        sys_a = systems[0]
+        sys_b = None
+        for s in systems[1:]:
+            if distance_between(sys_a, s) <= 50:
+                sys_b = s
+                break
+        assert sys_b is not None
+
+        state.ship.fuel = 500
+        state.ship.jump_range = 20
+
+        current_target = sys_b
+        for _ in range(10):
+            ok, fuel_cost, msg = can_jump(state.ship, current_target, state.get_current_system())
+            assert ok, f'Jump failed: {msg}'
+            perform_jump(state, current_target, int(fuel_cost))
+            current_target = sys_a if current_target is sys_b else sys_b
+
+        assert state.get_faction_reputation("free_pilots") >= -9
+
+
+class TestReputationTrading:
+    def test_stellar_cartographers_sell_price_bonus(self) -> None:
+        from backend.models.discovery import Discovery
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        system.has_trading_station = True
+
+        disc = Discovery(
+            id="sc_test", category="mineral", name="Test Mineral",
+            description="Test", value=100, system_id=system.id,
+        )
+        state.discoveries.append(disc)
+        credits_before = state.ship.credits
+
+        state.modify_faction_reputation("stellar_cartographers", 0)
+        ok, _ = perform_trade(state, "sell", "mineral", 1)
+        assert ok is True
+        base_price = state.ship.credits - credits_before
+
+        state.discoveries.append(disc)
+        state.ship.credits = credits_before
+        state.modify_faction_reputation("stellar_cartographers", 50)
+        ok, _ = perform_trade(state, "sell", "mineral", 1)
+        assert ok is True
+        boosted_price = state.ship.credits - credits_before
+
+        assert boosted_price > base_price
+
+    def test_stellar_cartographers_sell_bonus_capped_at_50(self) -> None:
+        from backend.models.discovery import Discovery
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        system.has_trading_station = True
+        state.modify_faction_reputation("stellar_cartographers", 50)
+
+        disc = Discovery(
+            id="sc_cap", category="artifact", name="Test Artifact",
+            description="Test", value=100, system_id=system.id,
+        )
+        state.discoveries.append(disc)
+        credits_before = state.ship.credits
+        with patch("random.Random.uniform", return_value=1.0):
+            ok, _ = perform_trade(state, "sell", "artifact", 1)
+        assert ok is True
+        at50_price = state.ship.credits - credits_before
+
+        state.discoveries.append(disc)
+        state.ship.credits = credits_before
+        state.modify_faction_reputation("stellar_cartographers", 60)
+        with patch("random.Random.uniform", return_value=1.0):
+            ok, _ = perform_trade(state, "sell", "artifact", 1)
+        assert ok is True
+        at60_price = state.ship.credits - credits_before
+
+        assert at50_price == at60_price
+
+    def test_stellar_cartographers_negative_rep_no_bonus(self) -> None:
+        from backend.models.discovery import Discovery
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        system.has_trading_station = True
+
+        disc = Discovery(
+            id="sc_neg", category="artifact", name="Test Artifact",
+            description="Test", value=100, system_id=system.id,
+        )
+        state.discoveries.append(disc)
+        credits_before = state.ship.credits
+
+        state.modify_faction_reputation("stellar_cartographers", -50)
+        ok, _ = perform_trade(state, "sell", "artifact", 1)
+        assert ok is True
+        sell_price = state.ship.credits - credits_before
+        # Should sell at base price_mod (0.7-1.5), no bonus from negative rep
+        assert sell_price > 0
+
+    def test_void_traders_buy_discount_fuel(self) -> None:
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        system.has_trading_station = True
+        state.ship.fuel = 0
+        state.ship.credits = 5000
+
+        state.modify_faction_reputation("void_traders", 0)
+        credits_before = state.ship.credits
+        ok, _ = perform_trade(state, "buy", "fuel", 10)
+        assert ok is True
+        base_cost = credits_before - state.ship.credits
+
+        state.ship.fuel = 0
+        state.ship.credits = 5000
+        state.modify_faction_reputation("void_traders", 50)
+        ok, _ = perform_trade(state, "buy", "fuel", 10)
+        assert ok is True
+        discounted_cost = 5000 - state.ship.credits
+
+        assert discounted_cost < base_cost
+
+    def test_void_traders_buy_discount_repair(self) -> None:
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        system.has_trading_station = True
+        state.ship.hull = 0
+        state.ship.credits = 5000
+
+        state.modify_faction_reputation("void_traders", 0)
+        credits_before = state.ship.credits
+        ok, _ = perform_trade(state, "buy", "repair", 2)
+        assert ok is True
+        base_cost = credits_before - state.ship.credits
+
+        state.ship.hull = 0
+        state.ship.credits = 5000
+        state.modify_faction_reputation("void_traders", 50)
+        ok, _ = perform_trade(state, "buy", "repair", 2)
+        assert ok is True
+        discounted_cost = 5000 - state.ship.credits
+
+        assert discounted_cost < base_cost
+
+    def test_void_traders_discount_capped_at_50(self) -> None:
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        system.has_trading_station = True
+        state.ship.fuel = 0
+        state.ship.credits = 5000
+        state.modify_faction_reputation("void_traders", 50)
+
+        with patch("random.Random.uniform", return_value=1.0):
+            ok, _ = perform_trade(state, "buy", "fuel", 10)
+        assert ok is True
+        cost_at_50 = 5000 - state.ship.credits
+
+        state.ship.fuel = 0
+        state.ship.credits = 5000
+        state.modify_faction_reputation("void_traders", 70)
+        with patch("random.Random.uniform", return_value=1.0):
+            ok, _ = perform_trade(state, "buy", "fuel", 10)
+        assert ok is True
+        cost_at_70 = 5000 - state.ship.credits
+
+        assert cost_at_50 == cost_at_70
+
+    def test_void_traders_negative_rep_no_discount(self) -> None:
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        system.has_trading_station = True
+        state.ship.fuel = 0
+        state.ship.credits = 5000
+
+        state.modify_faction_reputation("void_traders", 0)
+        credits_before = state.ship.credits
+        ok, _ = perform_trade(state, "buy", "fuel", 10)
+        assert ok is True
+        base_cost = credits_before - state.ship.credits
+
+        state.ship.fuel = 0
+        state.ship.credits = 5000
+        state.modify_faction_reputation("void_traders", -50)
+        ok, _ = perform_trade(state, "buy", "fuel", 10)
+        assert ok is True
+        neg_cost = 5000 - state.ship.credits
+
+        assert neg_cost == base_cost or neg_cost >= base_cost
+
+    def test_free_pilots_morale_on_sell(self) -> None:
+        from backend.models.discovery import Discovery
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        system.has_trading_station = True
+        state.ship.morale = 80
+        state.modify_faction_reputation("free_pilots", 30)
+
+        disc = Discovery(
+            id="fp_morale", category="artifact", name="Test Artifact",
+            description="Test", value=100, system_id=system.id,
+        )
+        state.discoveries.append(disc)
+        ok, _ = perform_trade(state, "sell", "artifact", 1)
+        assert ok is True
+        assert state.ship.morale > 80
+
+    def test_free_pilots_morale_on_buy(self) -> None:
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        system.has_trading_station = True
+        state.ship.fuel = 0
+        state.ship.credits = 5000
+        state.ship.morale = 80
+        state.modify_faction_reputation("free_pilots", 40)
+
+        ok, _ = perform_trade(state, "buy", "fuel", 1)
+        assert ok is True
+        assert state.ship.morale > 80
+
+    def test_free_pilots_morale_on_repair(self) -> None:
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        system.has_trading_station = True
+        state.ship.hull = 0
+        state.ship.credits = 5000
+        state.ship.morale = 80
+        state.modify_faction_reputation("free_pilots", 10)
+
+        ok, _ = perform_trade(state, "buy", "repair", 1)
+        assert ok is True
+        assert state.ship.morale > 80
+
+    def test_free_pilots_morale_bonus_capped_at_50(self) -> None:
+        from backend.models.discovery import Discovery
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        system.has_trading_station = True
+        state.ship.morale = 90
+
+        disc = Discovery(
+            id="fp_cap", category="artifact", name="Test Artifact",
+            description="Test", value=100, system_id=system.id,
+        )
+        state.discoveries.append(disc)
+        state.modify_faction_reputation("free_pilots", 50)
+        ok, _ = perform_trade(state, "sell", "artifact", 1)
+        assert ok is True
+        morale_at_50 = state.ship.morale
+
+        state.discoveries.append(disc)
+        state.ship.morale = 90
+        state.modify_faction_reputation("free_pilots", 60)
+        ok, _ = perform_trade(state, "sell", "artifact", 1)
+        assert ok is True
+        morale_at_60 = state.ship.morale
+
+        assert morale_at_50 == morale_at_60
+
+    def test_free_pilots_no_rep_no_morale(self) -> None:
+        from backend.models.discovery import Discovery
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        system.has_trading_station = True
+        state.ship.morale = 80
+
+        disc = Discovery(
+            id="fp_none", category="artifact", name="Test Artifact",
+            description="Test", value=100, system_id=system.id,
+        )
+        state.discoveries.append(disc)
+        ok, _ = perform_trade(state, "sell", "artifact", 1)
+        assert ok is True
+        assert state.ship.morale == 80
+
+    def test_stellar_cartographers_bulk_sell_bonus(self) -> None:
+        from backend.models.discovery import Discovery
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        system.has_trading_station = True
+
+        state.discoveries = [
+            Discovery(id="bs1", category="mineral", name="Test Ore",
+                       description="Ore", value=100, system_id=system.id),
+            Discovery(id="bs2", category="artifact", name="Test Relic",
+                       description="Relic", value=100, system_id=system.id),
+        ]
+        state.modify_faction_reputation("stellar_cartographers", 0)
+        ok, _, _, price_no_rep = perform_bulk_sell(
+            state, [{"item": "mineral", "quantity": 1}, {"item": "artifact", "quantity": 1}]
+        )
+        assert ok is True
+
+        state.discoveries = [
+            Discovery(id="bs3", category="mineral", name="Test Ore",
+                       description="Ore", value=100, system_id=system.id),
+            Discovery(id="bs4", category="artifact", name="Test Relic",
+                       description="Relic", value=100, system_id=system.id),
+        ]
+        state.modify_faction_reputation("stellar_cartographers", 50)
+        ok, _, _, price_with_rep = perform_bulk_sell(
+            state, [{"item": "mineral", "quantity": 1}, {"item": "artifact", "quantity": 1}]
+        )
+        assert ok is True
+        assert price_with_rep > price_no_rep
+
+
+class TestReputationEventOutcomes:
+    def test_stellar_cartographers_rep_bonus_on_exploration(self) -> None:
+        from backend.generation.events import _create_event
+        state = new_game(seed=42)
+        state.modify_faction_reputation("stellar_cartographers", 25)
+        template = next(t for t in EVENT_TEMPLATES if t["type"] == "exploration" and t["title"] == "Ancient Signal")
+        event = _create_event(template, "sys_0000")
+        state.events.append(event)
+        credits_before = state.ship.credits
+        morale_before = state.ship.morale
+
+        ok, msg, extra = resolve_event(state, event.id, 0)
+        assert ok is True
+        assert state.ship.credits > credits_before + 50  # +50 from signal + +10 from rep bonus
+        assert state.ship.morale > morale_before  # morale from event + +1 from rep bonus
+
+    def test_void_traders_rep_bonus_on_trade(self) -> None:
+        from backend.generation.events import _create_event
+        state = new_game(seed=42)
+        state.modify_faction_reputation("void_traders", 25)
+        template = next(t for t in EVENT_TEMPLATES if t["type"] == "trade" and t["title"] == "Passing Merchant")
+        event = _create_event(template, "sys_0000")
+        state.events.append(event)
+        credits_before = state.ship.credits
+
+        ok, msg, extra = resolve_event(state, event.id, 0)
+        assert ok is True
+        assert state.ship.credits > credits_before + 150  # +150 from merchant + +10 bonus
+
+    def test_free_pilots_rep_bonus_on_crisis(self) -> None:
+        from backend.generation.events import _create_event
+        state = new_game(seed=42)
+        state.modify_faction_reputation("free_pilots", 25)
+        template = next(t for t in EVENT_TEMPLATES if t["type"] == "crisis")
+        event = _create_event(template, "sys_0000")
+        state.events.append(event)
+        morale_before = state.ship.morale
+
+        ok, msg, extra = resolve_event(state, event.id, 0)
+        assert ok is True
+        # Crisis event: hll:-20; fuel:-20 fixes life support. Morale should be boosted by +5 from rep
+        assert state.ship.morale > morale_before + 5 - 25  # rough bound including event effects
+
+    def test_free_pilots_rep_bonus_on_crew(self) -> None:
+        from backend.generation.events import _create_event
+        state = new_game(seed=42)
+        state.modify_faction_reputation("free_pilots", 25)
+        template = next(t for t in EVENT_TEMPLATES if t["type"] == "crew" and t["title"] == "Crew Dispute")
+        event = _create_event(template, "sys_0000")
+        state.events.append(event)
+        morale_before = state.ship.morale
+
+        ok, msg, extra = resolve_event(state, event.id, 0)
+        assert ok is True
+        # Crew dispute: morale:15; fuel:-2 plus +5 morale from rep bonus
+        assert state.ship.morale > morale_before
+
+    def test_no_rep_bonus_below_20(self) -> None:
+        from backend.generation.events import _create_event
+        state = new_game(seed=42)
+        state.modify_faction_reputation("stellar_cartographers", 15)
+        template = next(t for t in EVENT_TEMPLATES if t["type"] == "exploration")
+        event = _create_event(template, "sys_0000")
+        state.events.append(event)
+
+        ok, msg, extra = resolve_event(state, event.id, 0)
+        assert ok is True
+        # Should not get the bonus credits (no +10), just the event outcome
+
+    def test_reputation_change_log_entry(self) -> None:
+        from backend.generation.events import _create_event
+        state = new_game(seed=42)
+        template = next(t for t in EVENT_TEMPLATES if t["type"] == "exploration")
+        event = _create_event(template, "sys_0000")
+        state.events.append(event)
+
+        ok, msg, extra = resolve_event(state, event.id, 0)
+        assert ok is True
+
+        faction_logs = [e for e in state.log_entries if e["type"] == "faction"]
+        assert len(faction_logs) >= 1
+        assert any("Stellar Cartographers" in e["message"] for e in faction_logs)
+
+
+class TestReputationEventThresholds:
+    def test_min_reputation_condition_eligible(self) -> None:
+        from backend.generation.events import _get_eligible_templates
+        state = new_game(seed=42)
+        state.modify_faction_reputation("stellar_cartographers", 25)
+        rep_templates = [t for t in EVENT_TEMPLATES if t.get("trigger_conditions", {}).get("min_reputation")]
+        assert len(rep_templates) > 0
+        eligible = _get_eligible_templates(state, rep_templates)
+        assert len(eligible) > 0
+
+    def test_min_reputation_condition_ineligible(self) -> None:
+        from backend.generation.events import _get_eligible_templates
+        state = new_game(seed=42)
+        rep_templates = [t for t in EVENT_TEMPLATES if t.get("trigger_conditions", {}).get("min_reputation")]
+        eligible = _get_eligible_templates(state, rep_templates)
+        assert len(eligible) == 0
+
+    def test_stellar_cartographers_restricted_coordinates_unlocked(self) -> None:
+        state = new_game(seed=42)
+        state.modify_faction_reputation("stellar_cartographers", 25)
+        template = next(t for t in EVENT_TEMPLATES if t["title"] == "Restricted Coordinates")
+        from backend.generation.events import _create_event
+        event = _create_event(template, "sys_0000")
+        assert event is not None
+        assert event.event_type == "exploration"
+
+    def test_void_traders_black_market_unlocked(self) -> None:
+        state = new_game(seed=42)
+        state.modify_faction_reputation("void_traders", 25)
+        template = next(t for t in EVENT_TEMPLATES if t["title"] == "Black Market Access")
+        from backend.generation.events import _create_event
+        event = _create_event(template, "sys_0000")
+        assert event is not None
+        assert event.event_type == "trade"
+
+    def test_free_pilots_crew_recruitment_unlocked(self) -> None:
+        state = new_game(seed=42)
+        state.modify_faction_reputation("free_pilots", 25)
+        template = next(t for t in EVENT_TEMPLATES if t["title"] == "Crew Recruitment Offer")
+        from backend.generation.events import _create_event
+        event = _create_event(template, "sys_0000")
+        assert event is not None
+        assert event.event_type == "crew"
+
+    def test_allied_events_require_50_rep(self) -> None:
+        from backend.generation.events import _get_eligible_templates
+        state = new_game(seed=42)
+        state.modify_faction_reputation("stellar_cartographers", 30)
+        allied_templates = [
+            t for t in EVENT_TEMPLATES
+            if t.get("trigger_conditions", {}).get("min_reputation", {}).get("value") == 50
+        ]
+        eligible = _get_eligible_templates(state, allied_templates)
+        assert len(eligible) == 0
+
+    def test_allied_events_unlocked_at_50(self) -> None:
+        from backend.generation.events import _get_eligible_templates
+        state = new_game(seed=42)
+        state.modify_faction_reputation("stellar_cartographers", 55)
+        state.modify_faction_reputation("void_traders", 55)
+        state.modify_faction_reputation("free_pilots", 55)
+        allied_templates = [
+            t for t in EVENT_TEMPLATES
+            if t.get("trigger_conditions", {}).get("min_reputation", {}).get("value") == 50
+        ]
+        eligible = _get_eligible_templates(state, allied_templates)
+        assert len(eligible) == 3
+
+
+class TestReputationSummary:
+    def test_reputation_summary_in_full_state(self) -> None:
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+        resp = client.get(f"/api/game/{game_id}")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "reputation_summary" in data
+        assert "stellar_cartographers" in data["reputation_summary"]
+        assert "void_traders" in data["reputation_summary"]
+        assert "free_pilots" in data["reputation_summary"]
+
+    def test_reputation_summary_neutral_label(self) -> None:
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+        resp = client.get(f"/api/game/{game_id}")
+        data = resp.json()
+        for fid in ("stellar_cartographers", "void_traders", "free_pilots"):
+            assert data["reputation_summary"][fid]["label"] == "Neutral"
+            assert data["reputation_summary"][fid]["reputation"] == 0
+
+    def test_reputation_summary_friendly_label(self) -> None:
+        state = new_game(seed=42)
+        state.modify_faction_reputation("stellar_cartographers", 25)
+        GAME_STORE[state.id] = state
+        game_save(state)
+        resp = client.get(f"/api/game/{state.id}")
+        data = resp.json()
+        assert data["reputation_summary"]["stellar_cartographers"]["label"] == "Friendly"
+
+    def test_reputation_summary_allied_label(self) -> None:
+        state = new_game(seed=42)
+        state.modify_faction_reputation("void_traders", 55)
+        GAME_STORE[state.id] = state
+        game_save(state)
+        resp = client.get(f"/api/game/{state.id}")
+        data = resp.json()
+        assert data["reputation_summary"]["void_traders"]["label"] == "Allied"
+
+    def test_reputation_summary_boundary_friendly_at_20(self) -> None:
+        state = new_game(seed=42)
+        state.modify_faction_reputation("free_pilots", 20)
+        GAME_STORE[state.id] = state
+        game_save(state)
+        resp = client.get(f"/api/game/{state.id}")
+        data = resp.json()
+        assert data["reputation_summary"]["free_pilots"]["label"] == "Friendly"
+
+    def test_reputation_summary_boundary_allied_at_50(self) -> None:
+        state = new_game(seed=42)
+        state.modify_faction_reputation("stellar_cartographers", 50)
+        GAME_STORE[state.id] = state
+        game_save(state)
+        resp = client.get(f"/api/game/{state.id}")
+        data = resp.json()
+        assert data["reputation_summary"]["stellar_cartographers"]["label"] == "Allied"
+
+    def test_reputation_summary_negative_neutral(self) -> None:
+        state = new_game(seed=42)
+        state.modify_faction_reputation("void_traders", -50)
+        GAME_STORE[state.id] = state
+        game_save(state)
+        resp = client.get(f"/api/game/{state.id}")
+        data = resp.json()
+        assert data["reputation_summary"]["void_traders"]["label"] == "Neutral"

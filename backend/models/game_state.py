@@ -43,6 +43,7 @@ class GameState:
     systems_visited: int = 0
     game_started: str = ""
     last_event_title: Optional[str] = None
+    jumps_since_rep_decay: int = 0
 
     def __post_init__(self) -> None:
         """Initialize the ``game_started`` timestamp if not already set.
@@ -166,7 +167,7 @@ class GameState:
         """Modify reputation with a faction by a given delta.
 
         Creates a new :class:`FactionRelation` if the faction is not yet
-        tracked. Reputation has no hard cap but is clamped to -1000..1000.
+        tracked. Reputation is clamped to -1000..100.
 
         :param faction_id: The unique identifier of the faction.
         :type faction_id: str
@@ -178,7 +179,7 @@ class GameState:
                 faction_id=faction_id, reputation=0, known=False
             )
         self.faction_relations[faction_id].reputation = max(
-            -1000, min(1000, self.faction_relations[faction_id].reputation + delta)
+            -1000, min(100, self.faction_relations[faction_id].reputation + delta)
         )
 
     def get_known_factions(self) -> list[dict]:

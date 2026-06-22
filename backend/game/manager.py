@@ -227,6 +227,7 @@ def _state_to_dict(state: GameState) -> dict:
         "systems_visited": state.systems_visited,
         "game_started": state.game_started,
         "last_event_title": state.last_event_title,
+        "jumps_since_rep_decay": state.jumps_since_rep_decay,
     }
 
 
@@ -276,6 +277,7 @@ def _state_from_dict(d: dict) -> GameState:
         systems_visited=d.get("systems_visited", 0),
         game_started=d.get("game_started", ""),
         last_event_title=d.get("last_event_title"),
+        jumps_since_rep_decay=d.get("jumps_since_rep_decay", 0),
     )
 
 

@@ -208,6 +208,78 @@ EVENT_TEMPLATES: list[dict[str, Any]] = [
         ],
         "trigger_conditions": {"unexplored_preference": True},
     },
+    {
+        "type": "exploration",
+        "rarity": "uncommon",
+        "title": "Restricted Coordinates",
+        "flavor": "The Stellar Cartographers Union reaches out with a special offer based on your standing: access to restricted system coordinates, revealing rare uncharted worlds normally off-limits to independent pilots.",
+        "choices": [
+            {"text": "Accept the coordinates", "outcome": "credits:100; fuel:-5; morale:10; The coordinates lead to a system rich with resources and knowledge. The Cartographers nod with approval."},
+            {"text": "Decline and report unusual findings instead", "outcome": "credits:50; The Cartographers appreciate your caution and log your findings."},
+            {"text": "Ask for more information first", "outcome": "morale:5; They share partial data \u2014 enough to be useful, but not their best."},
+        ],
+        "trigger_conditions": {"min_reputation": {"faction_id": "stellar_cartographers", "value": 20}},
+    },
+    {
+        "type": "trade",
+        "rarity": "uncommon",
+        "title": "Black Market Access",
+        "flavor": "A Void Traders contact discreetly signals you, offering access to their black market network \u2014 rare upgrades and exotic items not available on regular stations. Your reputation with the Syndicate has finally earned you this privilege.",
+        "choices": [
+            {"text": "Browse the black market inventory", "outcome": "credits:-150; cargo:2; morale:5; Acquired rare components and data cores from off-record sources."},
+            {"text": "Negotiate for better terms", "outcome": "credits:-100; cargo:1; morale:10; Your reputation earned you a discount and a valuable contact."},
+            {"text": "Report the black market to authorities", "outcome": "credits:50; morale:-5; The Void Traders hear about it later."},
+        ],
+        "trigger_conditions": {"min_reputation": {"faction_id": "void_traders", "value": 20}},
+    },
+    {
+        "type": "crew",
+        "rarity": "uncommon",
+        "title": "Crew Recruitment Offer",
+        "flavor": "The Free Pilots Guild comms you with an offer: they have skilled crew members looking for a berth aboard a reputable ship. A pilot with combat experience, a veteran navigator, and an engineer who served on a deep-space freighter.",
+        "choices": [
+            {"text": "Recruit the veteran navigator", "outcome": "crew:1; morale:10; credits:-100; The navigator brings star charts and experience."},
+            {"text": "Recruit the combat pilot", "outcome": "crew:1; morale:15; credits:-150; A seasoned fighter joins your crew."},
+            {"text": "Thank them but decline", "outcome": "morale:5; The Guild appreciates the courtesy call."},
+        ],
+        "trigger_conditions": {"min_reputation": {"faction_id": "free_pilots", "value": 20}},
+    },
+    {
+        "type": "exploration",
+        "rarity": "rare",
+        "title": "Priority Salvage Rights",
+        "flavor": "The Stellar Cartographers Union grants you priority salvage rights to a newly discovered derelict station. Your standing with the Union means you get first pick before anyone else arrives.",
+        "choices": [
+            {"text": "Conduct a thorough salvage operation", "outcome": "credits:250; cargo:2; fuel:-5; Salvaged valuable tech and data from the derelict."},
+            {"text": "Focus on data recovery only", "outcome": "credits:150; morale:10; Recovered encrypted logs with fascinating historical data."},
+            {"text": "Tag it for Union study teams", "outcome": "credits:100; The Union appreciates your cooperation and shares the findings."},
+        ],
+        "trigger_conditions": {"min_reputation": {"faction_id": "stellar_cartographers", "value": 50}},
+    },
+    {
+        "type": "trade",
+        "rarity": "rare",
+        "title": "Fuel Cache Locations",
+        "flavor": "The Void Traders Syndicate shares a set of coordinates: hidden fuel caches scattered across the sector. As a trusted partner, you are given access to these strategic reserves.",
+        "choices": [
+            {"text": "Route to the nearest cache", "outcome": "fuel:30; morale:10; Fueled up from a hidden Syndicate cache."},
+            {"text": "Map all cache locations", "outcome": "fuel:15; credits:100; Mapped the cache network \u2014 valuable intel and some fuel."},
+            {"text": "Share the intel with your crew", "outcome": "fuel:20; morale:15; The crew is energized knowing there are fuel reserves ahead."},
+        ],
+        "trigger_conditions": {"min_reputation": {"faction_id": "void_traders", "value": 50}},
+    },
+    {
+        "type": "encounter",
+        "rarity": "rare",
+        "title": "Elite Crew Available",
+        "flavor": "The Free Pilots Guild sends word that an elite rescue squadron is available to support your missions. Your reputation as a reliable ally has earned you access to their best personnel.",
+        "choices": [
+            {"text": "Accept the elite squadron support", "outcome": "morale:20; credits:200; The rescue squadron joins your operation, doubling mission payouts."},
+            {"text": "Request training for your crew instead", "outcome": "morale:25; Your crew learns advanced rescue techniques from the elite pilots."},
+            {"text": "Coordinate a joint mission", "outcome": "credits:300; morale:10; A coordinated rescue operation with the Guild proves highly profitable."},
+        ],
+        "trigger_conditions": {"min_reputation": {"faction_id": "free_pilots", "value": 50}},
+    },
 ]
 
 
@@ -259,6 +331,13 @@ def _get_eligible_templates(state: GameState, templates: list[dict]) -> list[dic
         if "unexplored_preference" in conditions:
             has_unexplored = any(not body.explored for body in system.bodies) if system.bodies else False
             if not has_unexplored:
+                continue
+
+        if "min_reputation" in conditions:
+            rep_condition = conditions["min_reputation"]
+            faction_id = rep_condition["faction_id"]
+            required_rep = rep_condition["value"]
+            if state.get_faction_reputation(faction_id) < required_rep:
                 continue
 
         eligible.append(t)
@@ -389,12 +468,38 @@ def resolve_event(state: GameState, event_id: str, choice_idx: int) -> tuple[boo
     state.add_log("event", f"Event '{event.title}' resolved: {choice.text}. {choice.outcome}")
 
     event_rng = seeded_random(state.seed, "event_reputation", event.id, str(choice_idx))
+
+    rep_before = {}
+    rep_after = {}
+
     if event.event_type == "exploration":
+        rep_before["stellar_cartographers"] = state.get_faction_reputation("stellar_cartographers")
         state.modify_faction_reputation("stellar_cartographers", event_rng.randint(2, 8))
+        rep_after["stellar_cartographers"] = state.get_faction_reputation("stellar_cartographers")
+        stellar_rep = rep_after["stellar_cartographers"]
+        if stellar_rep >= 20:
+            state.ship.credits += 10
+            state.ship.morale = min(100, state.ship.morale + 1)
+        if rep_before["stellar_cartographers"] != rep_after["stellar_cartographers"]:
+            state.add_log("faction", f"Stellar Cartographers reputation changed from {rep_before['stellar_cartographers']} to {rep_after['stellar_cartographers']}.")
     elif event.event_type == "trade":
+        rep_before["void_traders"] = state.get_faction_reputation("void_traders")
         state.modify_faction_reputation("void_traders", event_rng.randint(2, 8))
-    elif event.event_type in ("encounter", "crisis"):
+        rep_after["void_traders"] = state.get_faction_reputation("void_traders")
+        void_rep = rep_after["void_traders"]
+        if void_rep >= 20:
+            state.ship.credits += 10
+        if rep_before["void_traders"] != rep_after["void_traders"]:
+            state.add_log("faction", f"Void Traders reputation changed from {rep_before['void_traders']} to {rep_after['void_traders']}.")
+    elif event.event_type in ("encounter", "crisis", "crew"):
+        rep_before["free_pilots"] = state.get_faction_reputation("free_pilots")
         state.modify_faction_reputation("free_pilots", event_rng.randint(1, 6))
+        rep_after["free_pilots"] = state.get_faction_reputation("free_pilots")
+        free_pilots_rep = rep_after["free_pilots"]
+        if free_pilots_rep >= 20:
+            state.ship.morale = min(100, state.ship.morale + 5)
+        if rep_before["free_pilots"] != rep_after["free_pilots"]:
+            state.add_log("faction", f"Free Pilots reputation changed from {rep_before['free_pilots']} to {rep_after['free_pilots']}.")
 
     extra_output = {
         "title": event.title,
