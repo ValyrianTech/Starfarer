@@ -872,8 +872,12 @@ def _full_state_response(state: GameState) -> dict:
             return "Allied"
         elif rep >= 20:
             return "Friendly"
-        else:
+        elif rep >= 0:
             return "Neutral"
+        elif rep >= -20:
+            return "Unfriendly"
+        else:
+            return "Hostile"
 
     reputation_summary = {}
     for faction_id in ("stellar_cartographers", "void_traders", "free_pilots"):
