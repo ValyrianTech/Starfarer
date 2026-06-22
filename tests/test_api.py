@@ -1777,3 +1777,122 @@ class TestAPICargo:
         assert sellable[0]["id"] == "tc-sellable"
         assert len(nonsellable) == 1
         assert nonsellable[0]["id"] == "tc-nonsellable"
+
+
+class TestAPIReputationLabels:
+    """Tests for the _rep_label function that maps reputation values to labels."""
+
+    def test_rep_label_allied(self) -> None:
+        """Reputation >= 50 should be 'Allied'."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "rep-label-test"})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        state.modify_faction_reputation("stellar_cartographers", 60)
+        state.modify_faction_reputation("void_traders", 50)
+        state.modify_faction_reputation("free_pilots", 100)
+        GAME_STORE[game_id] = state
+        game_save(state)
+        resp = client.get(f"/api/game/{game_id}")
+        assert resp.status_code == 200
+        data = resp.json()
+        rs = data["reputation_summary"]
+        assert rs["stellar_cartographers"]["reputation"] == 60
+        assert rs["stellar_cartographers"]["label"] == "Allied"
+        assert rs["void_traders"]["reputation"] == 50
+        assert rs["void_traders"]["label"] == "Allied"
+        assert rs["free_pilots"]["reputation"] == 100
+        assert rs["free_pilots"]["label"] == "Allied"
+        GAME_STORE.pop(game_id, None)
+
+    def test_rep_label_friendly(self) -> None:
+        """Reputation 20-49 should be 'Friendly'."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "rep-label-test2"})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        state.modify_faction_reputation("stellar_cartographers", 30)
+        state.modify_faction_reputation("void_traders", 20)
+        state.modify_faction_reputation("free_pilots", 49)
+        GAME_STORE[game_id] = state
+        game_save(state)
+        resp = client.get(f"/api/game/{game_id}")
+        assert resp.status_code == 200
+        data = resp.json()
+        rs = data["reputation_summary"]
+        assert rs["stellar_cartographers"]["reputation"] == 30
+        assert rs["stellar_cartographers"]["label"] == "Friendly"
+        assert rs["void_traders"]["reputation"] == 20
+        assert rs["void_traders"]["label"] == "Friendly"
+        assert rs["free_pilots"]["reputation"] == 49
+        assert rs["free_pilots"]["label"] == "Friendly"
+        GAME_STORE.pop(game_id, None)
+
+    def test_rep_label_neutral(self) -> None:
+        """Reputation 0-19 should be 'Neutral'."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "rep-label-test3"})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        state.modify_faction_reputation("stellar_cartographers", 10)
+        state.modify_faction_reputation("void_traders", 0)
+        state.modify_faction_reputation("free_pilots", 19)
+        GAME_STORE[game_id] = state
+        game_save(state)
+        resp = client.get(f"/api/game/{game_id}")
+        assert resp.status_code == 200
+        data = resp.json()
+        rs = data["reputation_summary"]
+        assert rs["stellar_cartographers"]["reputation"] == 10
+        assert rs["stellar_cartographers"]["label"] == "Neutral"
+        assert rs["void_traders"]["reputation"] == 0
+        assert rs["void_traders"]["label"] == "Neutral"
+        assert rs["free_pilots"]["reputation"] == 19
+        assert rs["free_pilots"]["label"] == "Neutral"
+        GAME_STORE.pop(game_id, None)
+
+    def test_rep_label_unfriendly(self) -> None:
+        """Reputation -20 to -1 should be 'Unfriendly'."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "rep-label-test4"})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        state.modify_faction_reputation("stellar_cartographers", -10)
+        state.modify_faction_reputation("void_traders", -1)
+        state.modify_faction_reputation("free_pilots", -19)
+        GAME_STORE[game_id] = state
+        game_save(state)
+        resp = client.get(f"/api/game/{game_id}")
+        assert resp.status_code == 200
+        data = resp.json()
+        rs = data["reputation_summary"]
+        assert rs["stellar_cartographers"]["reputation"] == -10
+        assert rs["stellar_cartographers"]["label"] == "Unfriendly"
+        assert rs["void_traders"]["reputation"] == -1
+        assert rs["void_traders"]["label"] == "Unfriendly"
+        assert rs["free_pilots"]["reputation"] == -19
+        assert rs["free_pilots"]["label"] == "Unfriendly"
+        GAME_STORE.pop(game_id, None)
+
+    def test_rep_label_hostile(self) -> None:
+        """Reputation < -20 should be 'Hostile'."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "rep-label-test5"})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        state.modify_faction_reputation("stellar_cartographers", -50)
+        state.modify_faction_reputation("void_traders", -21)
+        state.modify_faction_reputation("free_pilots", -100)
+        GAME_STORE[game_id] = state
+        game_save(state)
+        resp = client.get(f"/api/game/{game_id}")
+        assert resp.status_code == 200
+        data = resp.json()
+        rs = data["reputation_summary"]
+        assert rs["stellar_cartographers"]["reputation"] == -50
+        assert rs["stellar_cartographers"]["label"] == "Hostile"
+        assert rs["void_traders"]["reputation"] == -21
+        assert rs["void_traders"]["label"] == "Hostile"
+        assert rs["free_pilots"]["reputation"] == -100
+        assert rs["free_pilots"]["label"] == "Hostile"
+        GAME_STORE.pop(game_id, None)

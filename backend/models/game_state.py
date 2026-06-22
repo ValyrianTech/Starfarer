@@ -21,6 +21,30 @@ from backend.models.faction import FactionRelation
 logger = logging.getLogger(__name__)
 
 
+def rep_label(rep: int) -> str:
+    """Map a reputation value to a 5-tier relationship label.
+
+    :param rep: The reputation value with a faction.
+    :type rep: int
+    :returns: A label string: ``"Allied"``, ``"Friendly"``,
+        ``"Neutral"``, ``"Unfriendly"``, or ``"Hostile"``.
+    :rtype: str
+    """
+    if rep >= 50:
+        return "Allied"
+    elif rep >= 20:
+        return "Friendly"
+    elif rep >= 0:
+        return "Neutral"
+    elif rep >= -20:
+        return "Unfriendly"
+    else:
+        return "Hostile"
+
+
+_rep_label = rep_label
+
+
 @dataclass
 class GameState:
     """Holds the complete state of a single game session.
@@ -43,6 +67,7 @@ class GameState:
     systems_visited: int = 0
     game_started: str = ""
     last_event_title: Optional[str] = None
+    jumps_since_rep_decay: int = 0
 
     def __post_init__(self) -> None:
         """Initialize the ``game_started`` timestamp if not already set.
@@ -126,6 +151,22 @@ class GameState:
         """
         return sum(1 for lf in self.lore_fragments if lf.discovered)
 
+    def build_reputation_summary(self) -> dict:
+        """Build a reputation summary dictionary for the three core factions.
+
+        :returns: A dictionary mapping faction IDs to dicts with
+            ``reputation`` and ``label`` keys.
+        :rtype: dict
+        """
+        reputation_summary = {}
+        for faction_id in ("stellar_cartographers", "void_traders", "free_pilots"):
+            rep = self.get_faction_reputation(faction_id)
+            reputation_summary[faction_id] = {
+                "reputation": rep,
+                "label": rep_label(rep),
+            }
+        return reputation_summary
+
     def state_summary(self) -> dict:
         """Generate a compact summary of the current game state.
 
@@ -148,6 +189,7 @@ class GameState:
             "lore_fragments_collected": self.lore_fragments_collected,
             "lore_fragments_total": len(self.lore_fragments),
             "faction_relations": self.get_known_factions(),
+            "reputation_summary": self.build_reputation_summary(),
         }
 
     def get_faction_reputation(self, faction_id: str) -> int:
@@ -166,7 +208,7 @@ class GameState:
         """Modify reputation with a faction by a given delta.
 
         Creates a new :class:`FactionRelation` if the faction is not yet
-        tracked. Reputation has no hard cap but is clamped to -1000..1000.
+        tracked. Reputation is clamped to -1000 to 100.
 
         :param faction_id: The unique identifier of the faction.
         :type faction_id: str
@@ -178,7 +220,7 @@ class GameState:
                 faction_id=faction_id, reputation=0, known=False
             )
         self.faction_relations[faction_id].reputation = max(
-            -1000, min(1000, self.faction_relations[faction_id].reputation + delta)
+            -1000, min(100, self.faction_relations[faction_id].reputation + delta)
         )
 
     def get_known_factions(self) -> list[dict]:

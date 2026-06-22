@@ -866,6 +866,7 @@ def _full_state_response(state: GameState) -> dict:
     :rtype: dict
     """
     current_system = state.get_current_system()
+
     return {
         "game_id": state.id,
         "seed": state.seed,
@@ -881,4 +882,5 @@ def _full_state_response(state: GameState) -> dict:
         "lore_fragments_collected": state.lore_fragments_collected,
         "lore_fragments_total": len(state.lore_fragments),
         "factions": state.get_known_factions(),
+        "reputation_summary": state.build_reputation_summary(),
     }
