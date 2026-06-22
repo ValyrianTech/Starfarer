@@ -21,7 +21,7 @@ from backend.models.faction import FactionRelation
 logger = logging.getLogger(__name__)
 
 
-def _rep_label(rep: int) -> str:
+def rep_label(rep: int) -> str:
     """Map a reputation value to a 5-tier relationship label.
 
     :param rep: The reputation value with a faction.
@@ -40,6 +40,9 @@ def _rep_label(rep: int) -> str:
         return "Unfriendly"
     else:
         return "Hostile"
+
+
+_rep_label = rep_label
 
 
 @dataclass
@@ -148,6 +151,22 @@ class GameState:
         """
         return sum(1 for lf in self.lore_fragments if lf.discovered)
 
+    def build_reputation_summary(self) -> dict:
+        """Build a reputation summary dictionary for the three core factions.
+
+        :returns: A dictionary mapping faction IDs to dicts with
+            ``reputation`` and ``label`` keys.
+        :rtype: dict
+        """
+        reputation_summary = {}
+        for faction_id in ("stellar_cartographers", "void_traders", "free_pilots"):
+            rep = self.get_faction_reputation(faction_id)
+            reputation_summary[faction_id] = {
+                "reputation": rep,
+                "label": rep_label(rep),
+            }
+        return reputation_summary
+
     def state_summary(self) -> dict:
         """Generate a compact summary of the current game state.
 
@@ -157,13 +176,6 @@ class GameState:
         :rtype: dict
         """
         system = self.get_current_system()
-        reputation_summary = {}
-        for faction_id in ("stellar_cartographers", "void_traders", "free_pilots"):
-            rep = self.get_faction_reputation(faction_id)
-            reputation_summary[faction_id] = {
-                "reputation": rep,
-                "label": _rep_label(rep),
-            }
         return {
             "game_id": self.id,
             "seed": self.seed,
@@ -177,7 +189,7 @@ class GameState:
             "lore_fragments_collected": self.lore_fragments_collected,
             "lore_fragments_total": len(self.lore_fragments),
             "faction_relations": self.get_known_factions(),
-            "reputation_summary": reputation_summary,
+            "reputation_summary": self.build_reputation_summary(),
         }
 
     def get_faction_reputation(self, faction_id: str) -> int:

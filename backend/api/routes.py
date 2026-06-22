@@ -10,7 +10,7 @@ import time
 
 from fastapi import APIRouter, HTTPException
 
-from backend.models.game_state import GameState, _rep_label
+from backend.models.game_state import GameState
 from backend.api.schemas import (
     BulkSellRequest, CraftRequest, NewGameRequest, ResolveEventRequest, TradeRequest,
     UpgradeRequest, HealthResponse,
@@ -867,14 +867,6 @@ def _full_state_response(state: GameState) -> dict:
     """
     current_system = state.get_current_system()
 
-    reputation_summary = {}
-    for faction_id in ("stellar_cartographers", "void_traders", "free_pilots"):
-        rep = state.get_faction_reputation(faction_id)
-        reputation_summary[faction_id] = {
-            "reputation": rep,
-            "label": _rep_label(rep),
-        }
-
     return {
         "game_id": state.id,
         "seed": state.seed,
@@ -890,5 +882,5 @@ def _full_state_response(state: GameState) -> dict:
         "lore_fragments_collected": state.lore_fragments_collected,
         "lore_fragments_total": len(state.lore_fragments),
         "factions": state.get_known_factions(),
-        "reputation_summary": reputation_summary,
+        "reputation_summary": state.build_reputation_summary(),
     }
