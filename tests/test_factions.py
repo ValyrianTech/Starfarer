@@ -12,6 +12,7 @@ from backend.game.manager import GAME_STORE, new_game, game_save, game_load, _st
 from backend.models.faction import (
     Faction, FactionRelation, FACTION_DEFINITIONS, get_faction,
 )
+from backend.models.game_state import _rep_label
 from backend.game.trading import perform_trade, perform_bulk_sell
 from backend.game.engine import activate_distress_beacon
 from backend.generation.events import resolve_event, EVENT_TEMPLATES, _create_event
@@ -1211,3 +1212,44 @@ class TestReputationSummary:
         resp = client.get(f"/api/game/{state.id}")
         data = resp.json()
         assert data["reputation_summary"]["void_traders"]["label"] == "Hostile"
+
+    def test_state_summary_includes_reputation_summary(self) -> None:
+        state = new_game(seed=42)
+        summary = state.state_summary()
+        assert "reputation_summary" in summary
+        for fid in ("stellar_cartographers", "void_traders", "free_pilots"):
+            assert fid in summary["reputation_summary"]
+
+    def test_state_summary_reputation_summary_values(self) -> None:
+        state = new_game(seed=42)
+        state.modify_faction_reputation("stellar_cartographers", 50)
+        state.modify_faction_reputation("void_traders", 20)
+        state.modify_faction_reputation("free_pilots", -21)
+        summary = state.state_summary()
+        rs = summary["reputation_summary"]
+        assert rs["stellar_cartographers"]["reputation"] == 50
+        assert rs["stellar_cartographers"]["label"] == "Allied"
+        assert rs["void_traders"]["reputation"] == 20
+        assert rs["void_traders"]["label"] == "Friendly"
+        assert rs["free_pilots"]["reputation"] == -21
+        assert rs["free_pilots"]["label"] == "Hostile"
+
+    def test_rep_label_allied(self) -> None:
+        assert _rep_label(50) == "Allied"
+        assert _rep_label(100) == "Allied"
+
+    def test_rep_label_friendly(self) -> None:
+        assert _rep_label(20) == "Friendly"
+        assert _rep_label(49) == "Friendly"
+
+    def test_rep_label_neutral(self) -> None:
+        assert _rep_label(0) == "Neutral"
+        assert _rep_label(19) == "Neutral"
+
+    def test_rep_label_unfriendly(self) -> None:
+        assert _rep_label(-1) == "Unfriendly"
+        assert _rep_label(-20) == "Unfriendly"
+
+    def test_rep_label_hostile(self) -> None:
+        assert _rep_label(-21) == "Hostile"
+        assert _rep_label(-100) == "Hostile"
