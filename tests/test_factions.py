@@ -1202,6 +1202,38 @@ class TestReputationSummary:
         data = resp.json()
         assert data["reputation_summary"]["stellar_cartographers"]["label"] == "Allied"
 
+    def test_full_state_response_unfriendly_label(self) -> None:
+        """_full_state_response should show Unfriendly label for negative reputation."""
+        from backend.api.routes import _full_state_response
+        state = new_game(seed=42)
+        state.modify_faction_reputation("stellar_cartographers", -10)
+        state.modify_faction_reputation("void_traders", -1)
+        state.modify_faction_reputation("free_pilots", -19)
+        resp = _full_state_response(state)
+        rs = resp["reputation_summary"]
+        assert rs["stellar_cartographers"]["label"] == "Unfriendly"
+        assert rs["stellar_cartographers"]["reputation"] == -10
+        assert rs["void_traders"]["label"] == "Unfriendly"
+        assert rs["void_traders"]["reputation"] == -1
+        assert rs["free_pilots"]["label"] == "Unfriendly"
+        assert rs["free_pilots"]["reputation"] == -19
+
+    def test_full_state_response_hostile_label(self) -> None:
+        """_full_state_response should show Hostile label for very negative reputation."""
+        from backend.api.routes import _full_state_response
+        state = new_game(seed=42)
+        state.modify_faction_reputation("stellar_cartographers", -50)
+        state.modify_faction_reputation("void_traders", -21)
+        state.modify_faction_reputation("free_pilots", -1000)
+        resp = _full_state_response(state)
+        rs = resp["reputation_summary"]
+        assert rs["stellar_cartographers"]["label"] == "Hostile"
+        assert rs["stellar_cartographers"]["reputation"] == -50
+        assert rs["void_traders"]["label"] == "Hostile"
+        assert rs["void_traders"]["reputation"] == -21
+        assert rs["free_pilots"]["label"] == "Hostile"
+        assert rs["free_pilots"]["reputation"] == -1000
+
     def test_reputation_summary_negative_hostile(self) -> None:
         state = new_game(seed=42)
         state.modify_faction_reputation("void_traders", -50)
