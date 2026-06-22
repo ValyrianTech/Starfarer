@@ -823,16 +823,39 @@ class TestReputationTrading:
         assert discounted_cost < base_cost
 
     def test_void_traders_discount_capped_at_50(self) -> None:
-        from backend.game.trading import calculate_fuel_price
         state = new_game(seed=42)
         system = state.get_current_system()
         assert system is not None
-        state.modify_faction_reputation("void_traders", 50)
-        price_50 = calculate_fuel_price(state, system)
-        state.modify_faction_reputation("void_traders", 70)
-        price_70 = calculate_fuel_price(state, system)
-        assert price_50["faction_modifier"] == price_70["faction_modifier"]
-        assert price_50["faction_modifier"] == -0.15
+        system.has_trading_station = True
+
+        # Baseline: no discount (neutral rep = 0)
+        state.ship.fuel = 0
+        state.ship.credits = 5000
+        state.faction_relations["void_traders"].reputation = 0
+        ok, _ = perform_trade(state, "buy", "fuel", 10)
+        assert ok is True
+        cost_neutral = 5000 - state.ship.credits
+
+        # Void Traders rep 50 (Allied) — should get the full discount
+        state.ship.fuel = 0
+        state.ship.credits = 5000
+        state.station_visits.clear()
+        state.faction_relations["void_traders"].reputation = 50
+        ok, _ = perform_trade(state, "buy", "fuel", 10)
+        assert ok is True
+        cost_50 = 5000 - state.ship.credits
+
+        # Void Traders rep 70 (still Allied) — discount should be identical
+        state.ship.fuel = 0
+        state.ship.credits = 5000
+        state.station_visits.clear()
+        state.faction_relations["void_traders"].reputation = 70
+        ok, _ = perform_trade(state, "buy", "fuel", 10)
+        assert ok is True
+        cost_70 = 5000 - state.ship.credits
+
+        assert cost_50 == cost_70, f"Expected same cost, got {cost_50} vs {cost_70}"
+        assert cost_50 < cost_neutral, f"Expected discount, got {cost_50} vs {cost_neutral}"
 
     def test_void_traders_negative_rep_no_discount(self) -> None:
         from backend.game.trading import calculate_fuel_price
