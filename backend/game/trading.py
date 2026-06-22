@@ -293,8 +293,16 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
             if repair_amount <= 0:
                 return False, "Hull is already at maximum."
             void_rep = state.get_faction_reputation("void_traders")
-            void_buy_discount = 1.0 - min(max(void_rep, 0), 50) / 200.0
-            cost = int(repair_amount * 2 * void_buy_discount)
+            void_label = rep_label(void_rep)
+            if void_label == "Allied":
+                void_repair_discount = 0.85
+            elif void_label == "Friendly":
+                void_repair_discount = 0.95
+            elif void_label in ("Unfriendly", "Hostile"):
+                void_repair_discount = 1.0 + (0.15 if void_label == "Unfriendly" else 0.30)
+            else:
+                void_repair_discount = 1.0
+            cost = int(repair_amount * 2 * void_repair_discount)
             if state.ship.credits < cost:
                 return False, f"Not enough credits. Need {cost}."
             state.ship.credits -= cost
