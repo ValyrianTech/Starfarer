@@ -135,6 +135,16 @@ class GameState:
         :rtype: dict
         """
         system = self.get_current_system()
+        cargo_items = []
+        for d in self.discoveries:
+            cargo_items.append({
+                "id": d.id,
+                "name": d.name,
+                "category": d.category,
+                "value": d.value,
+                "description": d.description,
+                "sellable": d.lore_fragment_id is None,
+            })
         return {
             "game_id": self.id,
             "seed": self.seed,
@@ -142,6 +152,7 @@ class GameState:
             "current_system": system.to_dict() if system else None,
             "event_count": len([e for e in self.events if not e.resolved]),
             "discovery_count": len(self.discoveries),
+            "cargo_items": cargo_items,
             "systems_visited": self.systems_visited,
             "log_count": len(self.log_entries),
             "game_started": self.game_started,

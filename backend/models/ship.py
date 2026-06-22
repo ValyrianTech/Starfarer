@@ -65,6 +65,7 @@ class Ship:
             "max_fuel": self.max_fuel,
             "max_hull": self.max_hull,
             "max_cargo": self.max_cargo,
+            "cargo_capacity": self.max_cargo,
             "max_crew": self.max_crew,
             "current_system_id": self.current_system_id,
             "current_body_id": self.current_body_id,
