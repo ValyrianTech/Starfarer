@@ -2527,6 +2527,15 @@ class TestFuelPricing:
         assert price["system_modifier_label"] == "Uncharted territory premium"
         assert price["final_price"] == 25.0 * 2.0
 
+    def test_ancient_system_modifier(self) -> None:
+        """Ancient gate systems should have +75% modifier."""
+        state = new_game(seed=42)
+        system = self._make_system("ancient")
+        price = calculate_fuel_price(state, system)
+        assert price["system_modifier"] == 0.75
+        assert price["system_modifier_label"] == "Ancient gate premium"
+        assert price["final_price"] == 25.0 * 1.75
+
     def test_void_traders_allied_discount(self) -> None:
         """Allied with Void Traders should give -15% modifier."""
         state = new_game(seed=42)
@@ -2663,7 +2672,7 @@ class TestFuelPricing:
     def test_all_valid_system_types(self) -> None:
         """All valid system types should work without error."""
         state = new_game(seed=42)
-        for sys_type in ["civilized", "agricultural", "frontier", "nebula", "uncharted"]:
+        for sys_type in ["civilized", "agricultural", "frontier", "nebula", "uncharted", "ancient"]:
             system = self._make_system(sys_type)
             price = calculate_fuel_price(state, system)
             assert price is not None
@@ -2671,7 +2680,7 @@ class TestFuelPricing:
     def test_validate_system_type_valid(self) -> None:
         """validate_system_type should not raise for valid types."""
         from backend.models.system import validate_system_type
-        for sys_type in ["civilized", "agricultural", "frontier", "nebula", "uncharted"]:
+        for sys_type in ["civilized", "agricultural", "frontier", "nebula", "uncharted", "ancient"]:
             validate_system_type(sys_type)  # Should not raise
 
     def test_validate_system_type_invalid(self) -> None:

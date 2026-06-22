@@ -1347,3 +1347,62 @@ class TestLoreFragmentNumberFixup:
         assert frags_by_id["lore_architects_1"].fragment_number == 1
         assert frags_by_id["lore_architects_2"].fragment_number == 2
         assert frags_by_id["lore_void_signal_5"].fragment_number == 5
+
+
+class TestAncientGateSystemType:
+    """Tests for the ancient_gate phenomenon producing the 'ancient' system type."""
+
+    def test_ancient_gate_system_type(self) -> None:
+        """Systems with ancient_gate phenomenon should have system_type='ancient'."""
+        from backend.generation.universe import generate_system
+        import random
+        # Use a seed that produces ancient_gate phenomenon
+        # We need to find a seed where phenomenon == "ancient_gate"
+        found = False
+        for seed in range(1000):
+            rng = random.Random(seed)
+            galaxy_rng = random.Random(seed + 1000)
+            system = generate_system(rng, 0, galaxy_rng)
+            if system.phenomenon == "ancient_gate":
+                assert system.system_type == "ancient", \
+                    f"Expected system_type='ancient' for ancient_gate, got '{system.system_type}'"
+                found = True
+                break
+        assert found, "Could not find a seed that produces ancient_gate phenomenon in range 0-999"
+
+    def test_ancient_gate_not_uncharted(self) -> None:
+        """Systems with ancient_gate phenomenon should NOT have system_type='uncharted'."""
+        from backend.generation.universe import generate_system
+        import random
+        found = False
+        for seed in range(1000):
+            rng = random.Random(seed)
+            galaxy_rng = random.Random(seed + 1000)
+            system = generate_system(rng, 0, galaxy_rng)
+            if system.phenomenon == "ancient_gate":
+                assert system.system_type != "uncharted", \
+                    f"ancient_gate system should not be 'uncharted', got '{system.system_type}'"
+                found = True
+                break
+        assert found, "Could not find a seed that produces ancient_gate phenomenon in range 0-999"
+
+    def test_pulsar_and_black_hole_still_uncharted(self) -> None:
+        """Pulsar and black_hole phenomena should still produce system_type='uncharted'."""
+        from backend.generation.universe import generate_system
+        import random
+        found_pulsar = False
+        found_black_hole = False
+        for seed in range(1000):
+            rng = random.Random(seed)
+            galaxy_rng = random.Random(seed + 1000)
+            system = generate_system(rng, 0, galaxy_rng)
+            if system.phenomenon == "pulsar":
+                assert system.system_type == "uncharted"
+                found_pulsar = True
+            if system.phenomenon == "black_hole":
+                assert system.system_type == "uncharted"
+                found_black_hole = True
+            if found_pulsar and found_black_hole:
+                break
+        assert found_pulsar, "Could not find a seed that produces pulsar phenomenon in range 0-999"
+        assert found_black_hole, "Could not find a seed that produces black_hole phenomenon in range 0-999"

@@ -274,7 +274,7 @@ def generate_system(rng: random.Random, idx: int, galaxy_rng: random.Random) -> 
     elif phenomenon in ("pulsar", "black_hole"):
         system_type = "uncharted"
     elif phenomenon == "ancient_gate":
-        system_type = "uncharted"
+        system_type = "ancient"
 
     num_bodies = rng.randint(MIN_ORBITALS, min(MAX_ORBITALS, 3 + idx % 5))
     bodies = []

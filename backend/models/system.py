@@ -14,6 +14,7 @@ VALID_SYSTEM_TYPES = frozenset({
     "frontier",
     "nebula",
     "uncharted",
+    "ancient",
 })
 
 
