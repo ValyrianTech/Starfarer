@@ -8,10 +8,11 @@ at trading stations.
 
 import random
 
-from backend.config import UPGRADE_COSTS, UPGRADE_EFFECTS, UPGRADE_MAX_LEVELS
+from backend.config import UPGRADE_COSTS, UPGRADE_EFFECTS, UPGRADE_MAX_LEVELS, FUEL_BASE_PRICE
 from backend.utils import deterministic_hash
-from backend.models.game_state import GameState
+from backend.models.game_state import GameState, rep_label
 from backend.models.ship import Ship
+from backend.models.system import StarSystem
 
 
 def get_upgrade_info(ship: Ship) -> list[dict]:
@@ -117,6 +118,77 @@ def _validate_quantity(quantity: int) -> str | None:
     return None
 
 
+def calculate_fuel_price(state: GameState, system: StarSystem) -> dict:
+    """Calculate fuel price at a station with a full breakdown.
+
+    :param state: The current game state.
+    :type state: GameState
+    :param system: The star system where fuel is being purchased.
+    :type system: StarSystem
+    :returns: A dict with base_price, system_modifier, system_modifier_label,
+        faction_modifier, faction_modifier_label, supply_modifier,
+        supply_modifier_label, final_price, and breakdown_lines.
+    :rtype: dict
+    """
+    base_price = FUEL_BASE_PRICE
+
+    system_modifiers = {
+        "civilized": (-0.20, "Civilized system discount"),
+        "agricultural": (0.0, "Standard pricing"),
+        "frontier": (0.25, "Remote system premium"),
+        "nebula": (0.50, "Nebula hazard premium"),
+        "uncharted": (1.00, "Uncharted territory premium"),
+    }
+    system_modifier, system_modifier_label = system_modifiers.get(
+        system.system_type, (0.0, "Standard pricing")
+    )
+
+    void_rep = state.get_faction_reputation("void_traders")
+    void_label = rep_label(void_rep)
+    if void_label == "Allied":
+        faction_modifier = -0.15
+        faction_modifier_label = "Void Traders - Allied discount"
+    elif void_label == "Friendly":
+        faction_modifier = -0.05
+        faction_modifier_label = "Void Traders - Friendly discount"
+    elif void_label in ("Unfriendly", "Hostile"):
+        faction_modifier = 0.30 if void_label == "Hostile" else 0.15
+        faction_modifier_label = f"Void Traders - {void_label} surcharge"
+    else:
+        faction_modifier = 0.0
+        faction_modifier_label = "Void Traders - Neutral"
+
+    visits = state.station_visits.get(system.id, 0)
+    if visits > 0:
+        supply_modifier = -0.10
+        supply_modifier_label = "Well-supplied by traders"
+    else:
+        supply_modifier = 0.0
+        supply_modifier_label = "First-time visit"
+
+    final_price = base_price * (1 + system_modifier + faction_modifier + supply_modifier)
+
+    breakdown_lines = [
+        f"Base price: {base_price} credits/unit",
+        f"System type ({system.system_type}): {system_modifier_label} ({system_modifier:+.0%})",
+        f"Faction standing: {faction_modifier_label} ({faction_modifier:+.0%})",
+        f"Supply/demand: {supply_modifier_label} ({supply_modifier:+.0%})",
+        f"Final price: {final_price:.1f} credits/unit",
+    ]
+
+    return {
+        "base_price": base_price,
+        "system_modifier": system_modifier,
+        "system_modifier_label": system_modifier_label,
+        "faction_modifier": faction_modifier,
+        "faction_modifier_label": faction_modifier_label,
+        "supply_modifier": supply_modifier,
+        "supply_modifier_label": supply_modifier_label,
+        "final_price": final_price,
+        "breakdown_lines": breakdown_lines,
+    }
+
+
 def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -> tuple[bool, str]:
     """Perform a buy or sell trade action at the current system.
 
@@ -190,8 +262,6 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
         trade_completed = True
 
     elif action == "buy":
-        FUEL_BASE_PRICE = 30
-
         if item == "fuel":
             error = _validate_quantity(quantity)
             if error:
@@ -199,12 +269,15 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
             amount = min(quantity, state.ship.max_fuel - state.ship.fuel)
             if amount <= 0:
                 return False, "Fuel tank is already full."
-            cost = int(amount * FUEL_BASE_PRICE * price_mod * void_buy_discount)
+            price_info = calculate_fuel_price(state, system)
+            cost = int(amount * price_info["final_price"])
             if state.ship.credits < cost:
                 return False, f"Not enough credits. Need {cost}."
             state.ship.credits -= cost
             state.ship.fuel += amount
-            result_message = f"Purchased {amount} fuel for {cost} credits."
+            state.record_station_visit(system.id)
+            breakdown_str = "\n".join(price_info["breakdown_lines"])
+            result_message = f"Purchased {amount} fuel for {cost} credits.\n{breakdown_str}"
             state.add_log("trade", result_message)
             trade_completed = True
 
