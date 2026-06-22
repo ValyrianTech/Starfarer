@@ -7,16 +7,15 @@ for triggering random events and resolving player choices against them.
 
 import random
 import uuid
-from typing import Optional
+from typing import Any, Optional
 
 from backend.models.game_state import GameState
-from backend.models.system import StarSystem
 from backend.models.event import Event, Choice
 from backend.config import MORALE_LOW_THRESHOLD
 from backend.utils import deterministic_hash, seeded_random
 
 
-EVENT_TEMPLATES = [
+EVENT_TEMPLATES: list[dict[str, Any]] = [
     {
         "type": "exploration",
         "rarity": "common",

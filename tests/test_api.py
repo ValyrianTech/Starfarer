@@ -1603,3 +1603,177 @@ class TestAPICraft:
         data = resp.json()
         assert data["ship"]["fuel"] == 15
         assert len(data["discoveries"]) == 0
+
+
+class TestAPICargo:
+    """Tests for the cargo inspection endpoint and cargo_items in game state."""
+
+    def test_cargo_endpoint_returns_structure(self) -> None:
+        """GET /api/game/{id}/cargo should return cargo, cargo_capacity, and cargo_items."""
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+        resp = client.get(f"/api/game/{game_id}/cargo")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "cargo" in data
+        assert "cargo_capacity" in data
+        assert "cargo_items" in data
+        assert data["cargo"] == 0
+        assert data["cargo_capacity"] == 50
+        assert data["cargo_items"] == []
+
+    def test_cargo_endpoint_nonexistent_game(self) -> None:
+        """Cargo endpoint should 404 for nonexistent game."""
+        resp = client.get("/api/game/nonexistent/cargo")
+        assert resp.status_code == 404
+
+    def test_cargo_items_in_full_state_response(self) -> None:
+        """GET /api/game/{id} should include discoveries with sellable flag and cargo_capacity."""
+        from backend.models.discovery import Discovery
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        current_sys = state.get_current_system()
+        state.discoveries.append(
+            Discovery(id="test-disc-1", category="mineral", name="Iron Ore",
+                      description="Common ore", value=50, system_id=current_sys.id)
+        )
+        GAME_STORE[game_id] = state
+        game_save(state)
+        resp = client.get(f"/api/game/{game_id}")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "discoveries" in data
+        assert "cargo_capacity" in data
+        assert data["cargo_capacity"] == 50
+        assert isinstance(data["discoveries"], list)
+        for disc in data["discoveries"]:
+            assert "sellable" in disc
+
+    def test_cargo_items_after_exploration(self) -> None:
+        """After exploring, discoveries should have sellable field."""
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+        state = client.get(f"/api/game/{game_id}").json()
+        planets = [b for b in state["current_system"]["bodies"] if b["body_type"] == "planet"]
+        client.post(f"/api/game/{game_id}/land/{planets[0]['id']}")
+        resp = client.post(f"/api/game/{game_id}/explore")
+        assert resp.status_code == 200
+        resp = client.get(f"/api/game/{game_id}")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["discoveries"]) > 0
+        for disc in data["discoveries"]:
+            assert "id" in disc
+            assert "name" in disc
+            assert "category" in disc
+            assert "value" in disc
+            assert "description" in disc
+            assert "sellable" in disc
+
+    def test_cargo_items_sellable_flag(self) -> None:
+        """Discoveries without lore_fragment_id should be sellable (via to_dict)."""
+        from backend.models.discovery import Discovery
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "cargo-sellable"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        current_sys = state.get_current_system()
+        state.discoveries.append(
+            Discovery(id="sellable-disc-1", category="mineral", name="Gold Ore",
+                      description="Valuable ore", value=100, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="non-sellable-disc-1", category="artifact", name="Ancient Relic",
+                      description="Linked to lore", value=0, system_id=current_sys.id,
+                      lore_fragment_id="lore_001")
+        )
+        GAME_STORE[game_id] = state
+        game_save(state)
+        resp = client.get(f"/api/game/{game_id}")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["discoveries"]) == 2
+        sellable_items = [d for d in data["discoveries"] if d["sellable"]]
+        non_sellable_items = [d for d in data["discoveries"] if not d["sellable"]]
+        assert len(sellable_items) == 1
+        assert sellable_items[0]["id"] == "sellable-disc-1"
+        assert len(non_sellable_items) == 1
+        assert non_sellable_items[0]["id"] == "non-sellable-disc-1"
+
+    def test_cargo_capacity_in_ship_dict(self) -> None:
+        """cargo_capacity should be at top level, not in ship dict."""
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+        resp = client.get(f"/api/game/{game_id}")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "cargo_capacity" not in data["ship"]
+        assert "cargo_capacity" in data
+        assert data["cargo_capacity"] == 50
+
+    def test_cargo_items_in_state_summary(self) -> None:
+        """state_summary should not include cargo_items (redundant with discoveries)."""
+        from backend.game.manager import new_game
+        state = new_game(seed=42)
+        summary = state.state_summary()
+        assert "cargo_items" not in summary
+        assert "discovery_count" in summary
+
+    def test_cargo_endpoint_from_db_fallback(self) -> None:
+        """Cargo endpoint should work via DB fallback."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "cargo-db-fallback"})
+        game_id = resp.json()["game_id"]
+        GAME_STORE.pop(game_id, None)
+        resp = client.get(f"/api/game/{game_id}/cargo")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "cargo" in data
+        assert "cargo_capacity" in data
+        assert "cargo_items" in data
+
+    def test_cargo_endpoint_db_fallback_404(self) -> None:
+        """Cargo endpoint should return 404 when game_load returns None."""
+        from unittest.mock import patch
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "cargo-db-404"})
+        game_id = resp.json()["game_id"]
+        GAME_STORE.pop(game_id, None)
+        with patch("backend.api.routes.game_load_func", return_value=None):
+            resp = client.get(f"/api/game/{game_id}/cargo")
+            assert resp.status_code == 404
+
+    def test_cargo_items_use_to_cargo_dict(self) -> None:
+        """Call /api/game/{id}/cargo to exercise to_cargo_dict on discoveries."""
+        from backend.models.discovery import Discovery
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "cargo-tocargodict"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        current_sys = state.get_current_system()
+        state.discoveries.append(
+            Discovery(id="tc-sellable", category="mineral", name="Gold Ore",
+                      description="Valuable ore", value=100, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="tc-nonsellable", category="artifact", name="Ancient Relic",
+                      description="Linked to lore", value=0, system_id=current_sys.id,
+                      lore_fragment_id="lore_001")
+        )
+        GAME_STORE[game_id] = state
+        game_save(state)
+        resp = client.get(f"/api/game/{game_id}/cargo")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "cargo_items" in data
+        assert len(data["cargo_items"]) == 2
+        for item in data["cargo_items"]:
+            assert "id" in item
+            assert "name" in item
+            assert "category" in item
+            assert "value" in item
+            assert "description" in item
+            assert "sellable" in item
+        sellable = [i for i in data["cargo_items"] if i["sellable"]]
+        nonsellable = [i for i in data["cargo_items"] if not i["sellable"]]
+        assert len(sellable) == 1
+        assert sellable[0]["id"] == "tc-sellable"
+        assert len(nonsellable) == 1
+        assert nonsellable[0]["id"] == "tc-nonsellable"

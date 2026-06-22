@@ -2337,7 +2337,7 @@ class TestTriggerEventEmptyEligible:
 
     def test_low_morale_empty_eligible_returns_none(self) -> None:
         """When morale is low and no crew/crisis/narrative templates are eligible, trigger_event should return None."""
-        from backend.generation.events import trigger_event, EVENT_TEMPLATES
+        from backend.generation.events import trigger_event
         from backend.models.game_state import GameState
         from backend.models.ship import Ship
         from backend.models.system import StarSystem, Body
@@ -2368,7 +2368,7 @@ class TestTriggerEventEmptyEligible:
 
     def test_normal_path_empty_eligible_returns_none(self) -> None:
         """When morale is normal and no templates are eligible, trigger_event should return None."""
-        from backend.generation.events import trigger_event, EVENT_TEMPLATES
+        from backend.generation.events import trigger_event
         from backend.models.game_state import GameState
         from backend.models.ship import Ship
         from backend.models.system import StarSystem, Body
@@ -2399,7 +2399,7 @@ class TestTriggerEventEmptyEligible:
 
     def test_low_morale_empty_eligible_after_cooldown_filter(self) -> None:
         """When low-morale eligible list becomes empty after type+cooldown filtering, trigger_event should return None."""
-        from backend.generation.events import trigger_event, EVENT_TEMPLATES
+        from backend.generation.events import trigger_event
         from backend.models.game_state import GameState
         from backend.models.ship import Ship
         from backend.models.system import StarSystem, Body
@@ -2435,7 +2435,7 @@ class TestTriggerEventEmptyEligible:
 
     def test_normal_path_empty_eligible_after_cooldown_filter(self) -> None:
         """When normal path eligible list is empty after cooldown check, trigger_event should return None."""
-        from backend.generation.events import trigger_event, EVENT_TEMPLATES
+        from backend.generation.events import trigger_event
         from backend.models.game_state import GameState
         from backend.models.ship import Ship
         from backend.models.system import StarSystem, Body

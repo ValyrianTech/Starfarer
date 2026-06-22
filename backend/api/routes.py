@@ -115,7 +115,8 @@ def api_get_game(game_id: str) -> dict:
     :param game_id: The unique identifier of the game.
     :type game_id: str
     :returns: A dictionary with game_id, seed, ship, current system,
-        discoveries, pending events, log entries, and stats.
+        discoveries, cargo_capacity, pending events, log entries,
+        and stats.
     :rtype: dict
     :raises HTTPException: 404 if the game is not found.
     """
@@ -375,6 +376,32 @@ def api_discoveries(game_id: str) -> dict:
     return {
         "count": len(state.discoveries),
         "discoveries": [d.to_dict() for d in state.discoveries],
+    }
+
+
+@router.get("/game/{game_id}/cargo")
+def api_cargo(game_id: str) -> dict:
+    """Retrieve detailed cargo hold contents.
+
+    Returns the current cargo count, cargo capacity, and a list of
+    all discoveries held in the cargo hold with their details and
+    sellability status. Lore-linked items are not sellable.
+
+    :param game_id: The unique identifier of the game.
+    :type game_id: str
+    :returns: A dictionary with ``cargo``, ``cargo_capacity``, and
+        ``cargo_items`` list.
+    :rtype: dict
+    :raises HTTPException: 404 if the game is not found.
+    """
+    state = _get_state(game_id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Game not found")
+    cargo_items = [d.to_cargo_dict() for d in state.discoveries]
+    return {
+        "cargo": state.ship.cargo,
+        "cargo_capacity": state.ship.max_cargo,
+        "cargo_items": cargo_items,
     }
 
 
@@ -845,6 +872,7 @@ def _full_state_response(state: GameState) -> dict:
         "ship": state.ship.to_dict(),
         "current_system": current_system.to_dict() if current_system else None,
         "discoveries": [d.to_dict() for d in state.discoveries],
+        "cargo_capacity": state.ship.max_cargo,
         "events_pending": [e.to_dict() for e in state.events if not e.resolved],
         "log_entries": list(reversed(state.log_entries))[:20],
         "systems_visited": state.systems_visited,
