@@ -1203,11 +1203,11 @@ class TestReputationSummary:
         data = resp.json()
         assert data["reputation_summary"]["stellar_cartographers"]["label"] == "Allied"
 
-    def test_reputation_summary_negative_neutral(self) -> None:
+    def test_reputation_summary_negative_hostile(self) -> None:
         state = new_game(seed=42)
         state.modify_faction_reputation("void_traders", -50)
         GAME_STORE[state.id] = state
         game_save(state)
         resp = client.get(f"/api/game/{state.id}")
         data = resp.json()
-        assert data["reputation_summary"]["void_traders"]["label"] == "Neutral"
+        assert data["reputation_summary"]["void_traders"]["label"] == "Hostile"
