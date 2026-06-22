@@ -135,16 +135,7 @@ class GameState:
         :rtype: dict
         """
         system = self.get_current_system()
-        cargo_items = []
-        for d in self.discoveries:
-            cargo_items.append({
-                "id": d.id,
-                "name": d.name,
-                "category": d.category,
-                "value": d.value,
-                "description": d.description,
-                "sellable": d.lore_fragment_id is None,
-            })
+        cargo_items = [d.to_cargo_dict() for d in self.discoveries]
         return {
             "game_id": self.id,
             "seed": self.seed,

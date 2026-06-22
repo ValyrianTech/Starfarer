@@ -44,6 +44,25 @@ class Discovery:
             "body_id": self.body_id,
         }
 
+    def to_cargo_dict(self) -> dict:
+        """Serialize the discovery as a cargo item dictionary.
+
+        Returns a subset of fields relevant for cargo display,
+        including a ``sellable`` flag that is ``True`` when the
+        discovery is not linked to a lore fragment.
+
+        :returns: A dictionary with cargo item fields.
+        :rtype: dict
+        """
+        return {
+            "id": self.id,
+            "name": self.name,
+            "category": self.category,
+            "value": self.value,
+            "description": self.description,
+            "sellable": self.lore_fragment_id is None,
+        }
+
     @classmethod
     def from_dict(cls, d: dict) -> "Discovery":
         """Deserialize a discovery from a dictionary.
