@@ -396,16 +396,7 @@ def api_cargo(game_id: str) -> dict:
     state = _get_state(game_id)
     if not state:
         raise HTTPException(status_code=404, detail="Game not found")
-    cargo_items = []
-    for d in state.discoveries:
-        cargo_items.append({
-            "id": d.id,
-            "name": d.name,
-            "category": d.category,
-            "value": d.value,
-            "description": d.description,
-            "sellable": d.lore_fragment_id is None,
-        })
+    cargo_items = [d.to_cargo_dict() for d in state.discoveries]
     return {
         "cargo": state.ship.cargo,
         "cargo_capacity": state.ship.max_cargo,
@@ -874,16 +865,7 @@ def _full_state_response(state: GameState) -> dict:
     :rtype: dict
     """
     current_system = state.get_current_system()
-    cargo_items = []
-    for d in state.discoveries:
-        cargo_items.append({
-            "id": d.id,
-            "name": d.name,
-            "category": d.category,
-            "value": d.value,
-            "description": d.description,
-            "sellable": d.lore_fragment_id is None,
-        })
+    cargo_items = [d.to_cargo_dict() for d in state.discoveries]
     return {
         "game_id": state.id,
         "seed": state.seed,
