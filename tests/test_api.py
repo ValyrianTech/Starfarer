@@ -1629,8 +1629,17 @@ class TestAPICargo:
 
     def test_cargo_items_in_full_state_response(self) -> None:
         """GET /api/game/{id} should include discoveries with sellable flag and cargo_capacity."""
+        from backend.models.discovery import Discovery
         resp = client.post("/api/game/new", json={"seed": 42})
         game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        current_sys = state.get_current_system()
+        state.discoveries.append(
+            Discovery(id="test-disc-1", category="mineral", name="Iron Ore",
+                      description="Common ore", value=50, system_id=current_sys.id)
+        )
+        GAME_STORE[game_id] = state
+        game_save(state)
         resp = client.get(f"/api/game/{game_id}")
         assert resp.status_code == 200
         data = resp.json()
@@ -1647,8 +1656,6 @@ class TestAPICargo:
         game_id = resp.json()["game_id"]
         state = client.get(f"/api/game/{game_id}").json()
         planets = [b for b in state["current_system"]["bodies"] if b["body_type"] == "planet"]
-        if not planets:
-            pytest.skip("No planets in starting system")
         client.post(f"/api/game/{game_id}/land/{planets[0]['id']}")
         resp = client.post(f"/api/game/{game_id}/explore")
         assert resp.status_code == 200
