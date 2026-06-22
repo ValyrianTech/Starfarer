@@ -115,7 +115,8 @@ def api_get_game(game_id: str) -> dict:
     :param game_id: The unique identifier of the game.
     :type game_id: str
     :returns: A dictionary with game_id, seed, ship, current system,
-        discoveries, pending events, log entries, and stats.
+        discoveries, cargo_items, cargo_capacity, pending events,
+        log entries, and stats.
     :rtype: dict
     :raises HTTPException: 404 if the game is not found.
     """
