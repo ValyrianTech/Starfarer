@@ -621,6 +621,86 @@ class TestTradingAdvanced:
         if not ok:
             assert "Not enough credits" in msg
 
+    def test_buy_repair_allied_discount(self) -> None:
+        """Allied with Void Traders should give 15% discount on repairs."""
+        state = new_game(seed=42)
+        state.ship.hull = 60
+        state.ship.credits = 500
+        state.modify_faction_reputation("void_traders", 60)  # Allied
+        ok, msg = perform_trade(state, "buy", "repair", 1)
+        assert ok is True
+        assert "Repaired" in msg
+        assert state.ship.hull > 60
+
+    def test_buy_repair_friendly_discount(self) -> None:
+        """Friendly with Void Traders should give 5% discount on repairs."""
+        state = new_game(seed=42)
+        state.ship.hull = 60
+        state.ship.credits = 500
+        state.modify_faction_reputation("void_traders", 30)  # Friendly
+        ok, msg = perform_trade(state, "buy", "repair", 1)
+        assert ok is True
+        assert "Repaired" in msg
+        assert state.ship.hull > 60
+
+    def test_buy_repair_unfriendly_surcharge(self) -> None:
+        """Unfriendly with Void Traders should add 15% surcharge on repairs."""
+        state = new_game(seed=42)
+        state.ship.hull = 60
+        state.ship.credits = 500
+        state.modify_faction_reputation("void_traders", -10)  # Unfriendly
+        ok, msg = perform_trade(state, "buy", "repair", 1)
+        assert ok is True
+        assert "Repaired" in msg
+        assert state.ship.hull > 60
+
+    def test_buy_repair_hostile_surcharge(self) -> None:
+        """Hostile with Void Traders should add 30% surcharge on repairs."""
+        state = new_game(seed=42)
+        state.ship.hull = 60
+        state.ship.credits = 500
+        state.modify_faction_reputation("void_traders", -50)  # Hostile
+        ok, msg = perform_trade(state, "buy", "repair", 1)
+        assert ok is True
+        assert "Repaired" in msg
+        assert state.ship.hull > 60
+
+    def test_buy_repair_neutral_no_discount(self) -> None:
+        """Neutral with Void Traders should have no modifier on repairs."""
+        state = new_game(seed=42)
+        state.ship.hull = 60
+        state.ship.credits = 500
+        state.modify_faction_reputation("void_traders", 0)  # Neutral
+        ok, msg = perform_trade(state, "buy", "repair", 1)
+        assert ok is True
+        assert "Repaired" in msg
+        assert state.ship.hull > 60
+
+    def test_buy_repair_cost_varies_by_reputation(self) -> None:
+        """Repair cost should be different for Allied vs Hostile reputation."""
+        from backend.game.trading import perform_trade
+
+        # Allied: 15% discount
+        state_allied = new_game(seed=42)
+        state_allied.ship.hull = 60
+        state_allied.ship.credits = 10000
+        state_allied.modify_faction_reputation("void_traders", 60)
+        ok1, msg1 = perform_trade(state_allied, "buy", "repair", 1)
+        assert ok1 is True
+        allied_cost = 10000 - state_allied.ship.credits
+
+        # Hostile: 30% surcharge
+        state_hostile = new_game(seed=42)
+        state_hostile.ship.hull = 60
+        state_hostile.ship.credits = 10000
+        state_hostile.modify_faction_reputation("void_traders", -50)
+        ok2, msg2 = perform_trade(state_hostile, "buy", "repair", 1)
+        assert ok2 is True
+        hostile_cost = 10000 - state_hostile.ship.credits
+
+        # Hostile should cost more than Allied
+        assert hostile_cost > allied_cost, f"Expected hostile cost ({hostile_cost}) > allied cost ({allied_cost})"
+
     def test_trade_no_current_system(self) -> None:
         """Trade should fail when not in a system."""
         state = new_game(seed=42)
