@@ -2660,3 +2660,40 @@ class TestFuelPricing:
         price = calculate_fuel_price(state, system)
         assert price["system_modifier"] == 0.0
         assert price["system_modifier_label"] == "Standard pricing"
+
+    def test_fuel_price_clamping_applied(self) -> None:
+        """When unclamped price is below minimum, clamping should raise it."""
+        from unittest.mock import patch
+        state = new_game(seed=42)
+        system = self._make_system("civilized")
+        state.modify_faction_reputation("void_traders", 60)  # Allied = -0.15
+        state.record_station_visit(system.id)  # repeat visit = -0.10
+        # Total modifier: -0.20 + -0.15 + -0.10 = -0.45, multiplier = 0.55
+        # With base_price=1, unclamped = 0.55, clamped to max(0.1, 1) = 1.0
+        with patch("backend.game.trading.FUEL_BASE_PRICE", 1):
+            price = calculate_fuel_price(state, system)
+        assert price["final_price"] == 1.0
+        assert "clamped to minimum" in price["breakdown_lines"][-1]
+
+    def test_fuel_price_no_clamping_when_above_minimum(self) -> None:
+        """When unclamped price is above minimum, no clamping should occur."""
+        state = new_game(seed=42)
+        system = self._make_system("agricultural")
+        price = calculate_fuel_price(state, system)
+        # base_price=25, no modifiers, final=25, no clamping
+        assert price["final_price"] == 25.0
+        assert "clamped to minimum" not in price["breakdown_lines"][-1]
+
+    def test_fuel_price_clamping_floor_is_at_least_one(self) -> None:
+        """The clamped minimum should be at least 1 credit."""
+        from unittest.mock import patch
+        state = new_game(seed=42)
+        system = self._make_system("civilized")
+        state.modify_faction_reputation("void_traders", 60)  # Allied = -0.15
+        state.record_station_visit(system.id)  # repeat visit = -0.10
+        # With base_price=0.5, unclamped = 0.5 * 0.55 = 0.275
+        # clamped to max(0.5*0.1=0.05, 1) = 1.0
+        with patch("backend.game.trading.FUEL_BASE_PRICE", 0.5):
+            price = calculate_fuel_price(state, system)
+        assert price["final_price"] == 1.0
+        assert "clamped to minimum" in price["breakdown_lines"][-1]
