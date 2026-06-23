@@ -921,6 +921,22 @@ class TestEventsAdvanced:
         assert ok is False
         assert "Invalid choice" in msg
 
+    def test_resolve_narrative_event(self) -> None:
+        """Resolving a narrative event should succeed without reputation changes."""
+        state = new_game(seed=42)
+        from backend.generation.events import _create_event
+        # Find the narrative event template
+        narrative_template = [t for t in EVENT_TEMPLATES if t["type"] == "narrative"][0]
+        event = _create_event(narrative_template, state.get_current_system().id)
+        state.events.append(event)
+
+        ok, msg, extra = resolve_event(state, event.id, 0)
+        assert ok is True, f"Expected narrative event to resolve successfully, got: {msg}"
+        assert event.resolved is True
+        assert extra["title"] == narrative_template["title"]
+        assert extra["chosen_text"] == event.choices[0].text
+        assert isinstance(extra["effects"], dict)
+
 
 class TestManagerAdvanced:
     """Tests for game manager covering load_or_create and get_game_state."""
