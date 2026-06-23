@@ -421,7 +421,7 @@ Returns detailed faction info plus your reputation and whether the faction is kn
 
 #### Faction Missions
 
-Factions offer tiered missions at trading stations. Higher reputation unlocks higher tiers with better rewards. Mission success is guaranteed — you pay costs upfront and always receive rewards.
+Factions offer tiered missions at trading stations. Higher reputation unlocks higher tiers with better rewards. Mission success is guaranteed — costs (fuel and credits) are deducted only when the mission is completed, and rewards are always received.
 
 ##### Tier System
 
@@ -445,7 +445,7 @@ GET /api/game/{game_id}/missions
 ```
 Returns available standard missions, the daily mission (if available), and the dominant faction.
 
-2. **Accept a mission** (costs are deducted immediately):
+2. **Accept a mission** (costs are NOT deducted until the mission is completed):
 ```http
 POST /api/game/{game_id}/missions/{mission_id}/accept
 Content-Type: application/json
@@ -470,7 +470,7 @@ Missions cannot be accepted twice and must be accepted before completing. Comple
 POST /api/game/{game_id}/faction/{faction_id}/mission
 ```
 
-Randomly picks a mission from the available pool, deducts costs, and immediately awards rewards in a single call. Requires being at a trading station.
+Randomly picks a mission from the available pool, deducts costs, and immediately awards rewards in a single call. Requires being at a trading station (`has_trading_station` must be true).
 
 | Faction | Alignment | Bonus |
 |---|---|---|
@@ -562,7 +562,7 @@ The game persists all state to SQLite. Save frequently — especially before ris
 | GET | `/api/game/{id}/faction/{fid}` | Single faction detail |
 | POST | `/api/game/{id}/faction/{fid}/mission` | Run one-shot faction mission (tiered) |
 | GET | `/api/game/{id}/missions` | List available missions at station |
-| POST | `/api/game/{id}/missions/{mid}/accept` | Accept a mission (deducts costs) |
+| POST | `/api/game/{id}/missions/{mid}/accept` | Accept a mission (costs deducted on completion) |
 | POST | `/api/game/{id}/missions/{mid}/complete` | Complete accepted mission (claims rewards) |
 | POST | `/api/game/{id}/save` | Save game |
 | POST | `/api/game/{id}/load` | Load game |
