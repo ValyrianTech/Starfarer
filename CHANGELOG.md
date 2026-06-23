@@ -52,6 +52,11 @@
 - Cooldown fallback in `trigger_event` no longer bypasses last_event_title dedup when all eligible events share the same cooldown value
 - Duplicated cooldown fallback logic in `trigger_event` consolidated into `_apply_cooldown_fallback()`
 - Resolved inconsistent cooldown decrement timing: `resolve_event` route now ticks cooldowns after resolution instead of before
+- In-place mutation of eligible list in `_apply_cooldown_fallback` fixed by using a copy of the list before sorting
+- Off-by-one cooldown decrement order relative to event trigger fixed: cooldowns now decrement before the event trigger on jump, scan, and explore, ensuring correct timing on the first action
+- `EVENT_COOLDOWNS` dictionary entries with no corresponding template no longer cause key errors during cooldown application
+- `_apply_cooldown_fallback` no longer returns an empty list when eligible is non-empty but all events have cooldown <= 0
+- `decrement_cooldowns` now uses `list(state.event_cooldowns.keys())` for safe iteration when deleting expired cooldowns
 
 ### Removed
 - Dead code `get_available_events` (defined but never used in production)
