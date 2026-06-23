@@ -24,6 +24,7 @@ function updateGameState(data) {
   window._currentSystemId = data.current_system ? data.current_system.id : null;
   updateShipStatus(data.ship);
   updateJSONLD(data);
+  updateLoreButtonGlow();
 }
 
 function updateJSONLD(data) {
@@ -163,6 +164,12 @@ async function handleAction(action, target) {
         const data = await API.explore(GAME_ID);
         updateGameState(data);
 
+        if (data.lore_fragments_discovered && data.lore_fragments_discovered.length > 0) {
+          for (const frag of data.lore_fragments_discovered) {
+            notifyLoreFragment(frag.title);
+          }
+        }
+
         if (data.pending_event) {
           showEventModal(data.pending_event, GAME_ID);
         }
@@ -204,6 +211,12 @@ async function handleAction(action, target) {
       case 'show-lore': {
         await loadLore(GAME_ID);
         showScreen('lore');
+        break;
+      }
+
+      case 'select-lore-arc': {
+        const arcId = target?.dataset?.arcId;
+        if (arcId) selectLoreArcTab(arcId);
         break;
       }
 

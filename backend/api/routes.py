@@ -285,7 +285,8 @@ def api_explore(game_id: str) -> dict:
     :param game_id: The unique identifier of the game.
     :type game_id: str
     :returns: A dictionary with ``result`` message, ``discoveries``
-        list, ``ship`` status, and ``pending_event`` if triggered.
+        list, ``ship`` status, ``lore_fragments_discovered``, and
+        ``pending_event`` if triggered.
     :rtype: dict
     :raises HTTPException: 404 if the game is not found.
     """
@@ -293,6 +294,18 @@ def api_explore(game_id: str) -> dict:
     if not state:
         raise HTTPException(status_code=404, detail="Game not found")
     discoveries = explore_surface(state)
+
+    lore_fragments_found = []
+    for disc in discoveries:
+        if disc.lore_fragment_id:
+            for lf in state.lore_fragments:
+                if lf.id == disc.lore_fragment_id:
+                    lore_fragments_found.append({
+                        "id": lf.id,
+                        "title": lf.title,
+                        "arc": lf.arc,
+                    })
+                    break
 
     event = trigger_event(state)
     if event:
@@ -303,6 +316,7 @@ def api_explore(game_id: str) -> dict:
         "result": f"Explored. Found {len(discoveries)} points of interest.",
         "discoveries": [d.to_dict() for d in discoveries],
         "ship": state.ship.to_dict(),
+        "lore_fragments_discovered": lore_fragments_found,
         "pending_event": event.to_dict() if event and not event.resolved else None,
     }
 
@@ -436,7 +450,28 @@ def api_lore(game_id: str) -> dict:
     for lore in state.lore_fragments:
         arc = lore.arc
         if arc in arcs:
-            arcs[arc]["fragments"].append(lore.to_dict())
+            frag_dict = lore.to_dict()
+
+            if lore.discovered and lore.discovery_id:
+                parts = lore.discovery_id.split("::")
+                if len(parts) == 2:
+                    sys_id, body_id = parts
+                    system = state.systems.get(sys_id)
+                    if system:
+                        body = None
+                        for b in system.bodies:
+                            if b.id == body_id:
+                                body = b
+                                break
+                        body_name = body.name if body else body_id
+                        frag_dict["discovery_location"] = f"{system.name} - {body_name}"
+
+                for entry in state.log_entries:
+                    if entry.get("type") == "lore" and lore.title in entry.get("message", ""):
+                        frag_dict["discovery_date"] = entry.get("timestamp", "")
+                        break
+
+            arcs[arc]["fragments"].append(frag_dict)
             arcs[arc]["total"] += 1
             if lore.discovered:
                 arcs[arc]["collected"] += 1

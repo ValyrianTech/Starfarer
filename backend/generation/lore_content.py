@@ -16,11 +16,13 @@ class FragmentData(TypedDict):
     :param fragment_number: Sequential number within the arc.
     :param title: Fragment title.
     :param text: Fragment narrative text.
+    :param hint: Hint for undiscovered fragments.
     """
     arc: str
     fragment_number: int
     title: str
     text: str
+    hint: str
 
 
 #: List of 20 lore fragment data dicts across 4 story arcs.
@@ -31,30 +33,35 @@ FRAGMENT_DATA: list[FragmentData] = [
         "fragment_number": 1,
         "title": "Echoes of the Void",
         "text": "They came from the void between galaxies, their ships the size of moons. They did not conquer\u2014they cultivated. Every world they touched bore fruit, and every fruit bore life.",
+        "hint": "Buried in ancient ruins on a vibrant world.",
     },
     {
         "arc": "architects",
         "fragment_number": 2,
         "title": "Living Cities",
         "text": "Their cities were grown, not built. Organic spires reached toward the heavens, pulsing with bioluminescent light. The architecture breathed, adapted, healed.",
+        "hint": "Hidden in the biomolecular records of a living world.",
     },
     {
         "arc": "architects",
         "fragment_number": 3,
         "title": "The Seeding",
         "text": "They seeded life across a thousand worlds, each ecosystem a masterpiece of genetic artistry. From the simplest microbe to the most complex megafauna, all bore their signature.",
+        "hint": "Etched into genetic markers on a diverse biosphere.",
     },
     {
         "arc": "architects",
         "fragment_number": 4,
         "title": "The Departure",
         "text": "Something caused them to leave. The archaeological record shows a sudden, orderly exodus. They dismantled their cities, recalled their seeds, and vanished into the void from which they came.",
+        "hint": "Engraved in the departure records of a crystalline planet.",
     },
     {
         "arc": "architects",
         "fragment_number": 5,
         "title": "The Echo",
         "text": "The signal they left behind still echoes across the galaxy. A faint, repeating pattern that some say contains their final message. Decoding it would change everything.",
+        "hint": "Encoded in the resonant frequency of an ocean world.",
     },
 
     # === Arc 2: The Void Signal ===
@@ -63,30 +70,35 @@ FRAGMENT_DATA: list[FragmentData] = [
         "fragment_number": 1,
         "title": "First Contact",
         "text": "A transmission of unknown origin was first detected by deep-space observatories near the galactic core. It followed no known modulation scheme and appeared to originate from outside the galaxy entirely.",
+        "hint": "Transmitted from deep-space observatory ruins.",
     },
     {
         "arc": "void_signal",
         "fragment_number": 2,
         "title": "The Cycle",
         "text": "It repeats every 47 standard cycles with mathematical precision. The signal strength fluctuates, suggesting a rotating source\u2014perhaps a beacon on an artificial world.",
+        "hint": "Locked in the pulse cycle of a binary star system.",
     },
     {
         "arc": "void_signal",
         "fragment_number": 3,
         "title": "The Coordinates",
         "text": "The signal contains coordinates encoded within its carrier wave. Decryption revealed a path leading toward the galactic rim, through systems previously thought to be empty.",
+        "hint": "Decoded from carrier wave patterns in an asteroid field.",
     },
     {
         "arc": "void_signal",
         "fragment_number": 4,
         "title": "The Relay Network",
         "text": "Whoever built the relay network understood jump physics better than any known civilization. The relays form a chain, each one boosting the signal and pointing to the next.",
+        "hint": "Hidden in the relay architecture of a nebula world.",
     },
     {
         "arc": "void_signal",
         "fragment_number": 5,
         "title": "Beyond the Rim",
         "text": "The final destination lies beyond the galactic rim, where few have ventured and fewer have returned. Whatever awaits there has waited eons for a visitor.",
+        "hint": "Waiting beyond the galactic rim, near a pulsar.",
     },
 
     # === Arc 3: The Fracture ===
@@ -95,30 +107,35 @@ FRAGMENT_DATA: list[FragmentData] = [
         "fragment_number": 1,
         "title": "The Golden Age",
         "text": "The empire spanned three arms of the galaxy at its height. Millions of worlds, trillions of citizens, a civilization of unimaginable scale and sophistication.",
+        "hint": "Fragmented across imperial records on a jungle world.",
     },
     {
         "arc": "fracture",
         "fragment_number": 2,
         "title": "The Collapse",
         "text": "The cause of the collapse is disputed among scholars. Some say a plague, others a civil war, and a few whisper of something far worse\u2014a weapon that unraveled reality itself.",
+        "hint": "Whispered in the dust of a collapsed civilization.",
     },
     {
         "arc": "fracture",
         "fragment_number": 3,
         "title": "Survivors",
         "text": "Survivor colonies still exist on the fringes of the old empire. They have regressed technologically but preserved fragments of knowledge, passed down through generations as sacred texts.",
+        "hint": "Preserved by survivors on a desert world.",
     },
     {
         "arc": "fracture",
         "fragment_number": 4,
         "title": "Lost Technology",
         "text": "Their technology is sought by all who know of it. Gravity manipulators, matter printers, consciousness transference\u2014artifacts of a civilization that had begun to transcend physical form.",
+        "hint": "Encrypted in technological artifacts on a volcanic moon.",
     },
     {
         "arc": "fracture",
         "fragment_number": 5,
         "title": "The Ark",
         "text": "One city-ship escaped the destruction, carrying the last repository of their knowledge. Its location was erased from all records, but legends say it still drifts, waiting to be found.",
+        "hint": "Concealed in the legend of an ocean world.",
     },
 
     # === Arc 4: The Wanderer ===
@@ -127,30 +144,35 @@ FRAGMENT_DATA: list[FragmentData] = [
         "fragment_number": 1,
         "title": "Another Traveler",
         "text": "Another ship, similar to yours, was here. The engine signatures match your own vessel's design, but the readings are decades old. You are not the first to make this journey.",
+        "hint": "Etched in engine signatures on a barren world.",
     },
     {
         "arc": "wanderer",
         "fragment_number": 2,
         "title": "The Pilot's Log",
         "text": "Log entries describe a lone pilot, driven by a purpose they never fully revealed. They spoke of a 'call' they had to answer, a mystery that pulled them across the galaxy.",
+        "hint": "Scattered through a pilot's abandoned log entries.",
     },
     {
         "arc": "wanderer",
         "fragment_number": 3,
         "title": "The Search",
         "text": "They were searching for something\u2014or someone. Cargo manifests show unusual items: ancient star charts, encrypted data cylinders, and a single, unidentifiable artifact.",
+        "hint": "Encoded in ancient star charts on a gas giant's moon.",
     },
     {
         "arc": "wanderer",
         "fragment_number": 4,
         "title": "Perseverance",
         "text": "Their ship was damaged, but they pressed on. Repair patches cover the hull. Log entries become more fragmented, more urgent. They were running out of time.",
+        "hint": "Burned into repair patches on a volcanic world.",
     },
     {
         "arc": "wanderer",
         "fragment_number": 5,
         "title": "The Final Entry",
         "text": "The final log entry cuts off mid-sentence. The last recorded coordinates point to a system not on any chart. What they found there\u2014or what found them\u2014remains unknown.",
+        "hint": "Hidden in the final coordinates near a crystal planet.",
     },
 ]
 
