@@ -35,6 +35,7 @@ class Event:
     title: str
     flavor: str
     event_type: str
+    category: Optional[str] = None
     choices: list[Choice] = field(default_factory=list)
     resolved: bool = False
     chosen: Optional[int] = None
@@ -51,6 +52,7 @@ class Event:
             "title": self.title,
             "flavor": self.flavor,
             "event_type": self.event_type,
+            "category": self.category,
             "choices": [{"text": c.text, "outcome": c.outcome} for c in self.choices],
             "resolved": self.resolved,
             "chosen": self.chosen,
@@ -72,6 +74,7 @@ class Event:
             title=d["title"],
             flavor=d["flavor"],
             event_type=d["event_type"],
+            category=d.get("category"),
             choices=choices,
             resolved=d.get("resolved", False),
             chosen=d.get("chosen"),

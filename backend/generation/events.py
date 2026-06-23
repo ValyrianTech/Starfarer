@@ -84,6 +84,7 @@ EVENT_TEMPLATES: list[dict[str, Any]] = [
     },
     {
         "type": "crisis",
+        "category": "crisis",
         "rarity": "common",
         "title": "Life Support Failure",
         "flavor": "A critical failure in the life support system threatens the entire crew. Oxygen levels are dropping fast.",
@@ -436,6 +437,66 @@ EVENT_TEMPLATES: list[dict[str, Any]] = [
         ],
         "trigger_conditions": {"phenomenon": "binary_star"},
     },
+    {
+        "type": "crisis",
+        "category": "crisis",
+        "rarity": "common",
+        "title": "Hull Breach",
+        "flavor": "A micrometeorite or pressure differential has breached the hull. Alarms blare as atmosphere vents into the void.",
+        "choices": [
+            {"text": "Emergency patch", "outcome": "hull:-15; Emergency patch stabilized the breach."},
+            {"text": "Use cargo to seal breach", "outcome": "cargo:-1; Sacrificed cargo to seal the breach."},
+            {"text": "Activate emergency bulkheads", "outcome": "fuel:-10; Emergency bulkheads sealed the breach."},
+        ],
+    },
+    {
+        "type": "crisis",
+        "category": "crisis",
+        "rarity": "common",
+        "title": "Engine Fire",
+        "flavor": "An electrical fire has broken out in the engine room. Smoke fills the corridors as temperature alarms trigger across the ship.",
+        "choices": [
+            {"text": "Fire suppression system", "outcome": "fuel:-10; Fire suppression system extinguished the flames."},
+            {"text": "Manual extinguisher", "outcome": "hull:-5; Smoke inhalation caused minor damage."},
+            {"text": "Emergency vent", "outcome": "fuel:-5; Emergency vent extinguished the fire."},
+        ],
+    },
+    {
+        "type": "crisis",
+        "category": "crisis",
+        "rarity": "common",
+        "title": "Radiation Leak",
+        "flavor": "The ship's shielding has degraded, exposing the crew to dangerous levels of radiation. Radiation alarms blare across all decks.",
+        "choices": [
+            {"text": "Emergency shielding repair", "outcome": "credits:-15; Emergency shielding repaired."},
+            {"text": "Evacuate to safe zone", "outcome": "fuel:-5; Evacuated to safe zone."},
+            {"text": "Push through", "outcome": "morale:-10; credits:10; Pushed through and salvaged shielding materials."},
+        ],
+    },
+    {
+        "type": "crisis",
+        "category": "crisis",
+        "rarity": "common",
+        "title": "Food Contamination",
+        "flavor": "A storage container has spoiled, contaminating the food supply. The crew reports a foul smell from the cargo bay.",
+        "choices": [
+            {"text": "Decontaminate", "outcome": "credits:-10; Decontaminated the food supply."},
+            {"text": "Ration supplies", "outcome": "morale:-10; Rationing preserved what was left."},
+            {"text": "Jettison and buy fresh at next station", "outcome": "cargo:-1; Jettisoned contaminated supplies."},
+        ],
+    },
+    {
+        "type": "crisis",
+        "category": "crisis",
+        "rarity": "common",
+        "title": "Crew Illness",
+        "flavor": "A crew member has fallen ill from an unknown pathogen. They are feverish and unable to perform their duties.",
+        "choices": [
+            {"text": "Medical treatment", "outcome": "credits:-20; Medical treatment stabilized the crew member."},
+            {"text": "Quarantine", "outcome": "morale:-5; Quarantine contained the pathogen."},
+            {"text": "Synthesize antidote", "outcome": "fuel:-10; Synthesized antidote cured the illness."},
+        ],
+    },
 ]
 
 
@@ -458,7 +519,12 @@ EVENT_COOLDOWNS = {
     "Gravitational Lens Observation": 6,
     "Orbital Mechanics Challenge": 6,
     "Lagrange Point Discovery": 6,
-    "Life Support Failure": 8,
+    "Life Support Failure": 6,
+    "Hull Breach": 8,
+    "Engine Fire": 8,
+    "Radiation Leak": 8,
+    "Food Contamination": 8,
+    "Crew Illness": 8,
     "Crew Dispute": 8,
     "Spaghettification Near-Miss": 8,
     "Neutron Star Proximity": 8,
@@ -607,6 +673,9 @@ def trigger_event(state: GameState, rng_override: Optional[random.Random] = None
         eligible = _get_eligible_templates(state, EVENT_TEMPLATES)
         eligible = [t for t in eligible if t["type"] in ("crew", "crisis", "narrative")]
 
+        if state.crisis_cooldown > 0:
+            eligible = [t for t in eligible if t.get("category") != "crisis"]
+
         eligible = _apply_cooldown_fallback(eligible, state)
 
         eligible_no_last = [t for t in eligible if t["title"] != state.last_event_title]
@@ -617,12 +686,19 @@ def trigger_event(state: GameState, rng_override: Optional[random.Random] = None
         template = eligible[deterministic_hash(system.id, str(len(state.log_entries))) % len(eligible)]
         state.last_event_title = template["title"]
         apply_cooldown(state, template["title"])
+        if state.crisis_cooldown > 0:
+            state.crisis_cooldown -= 1
+        if template.get("category") == "crisis":
+            state.crisis_cooldown = 3
         return _create_event(template, system.id)
 
     rng = rng_override or seeded_random(state.seed, "event_trigger", system.id, str(len(state.events)), str(len(state.log_entries)))
 
     if rng.random() < 0.35:
         eligible = _get_eligible_templates(state, EVENT_TEMPLATES)
+
+        if state.crisis_cooldown > 0:
+            eligible = [t for t in eligible if t.get("category") != "crisis"]
 
         eligible = _apply_cooldown_fallback(eligible, state)
 
@@ -637,6 +713,10 @@ def trigger_event(state: GameState, rng_override: Optional[random.Random] = None
         template = rng.choices(eligible, weights=weights, k=1)[0]
         state.last_event_title = template["title"]
         apply_cooldown(state, template["title"])
+        if state.crisis_cooldown > 0:
+            state.crisis_cooldown -= 1
+        if template.get("category") == "crisis":
+            state.crisis_cooldown = 3
         return _create_event(template, system.id)
 
     return None
@@ -664,6 +744,7 @@ def _create_event(template: dict, system_id: str) -> Event:
         title=template["title"],
         flavor=template["flavor"],
         event_type=template["type"],
+        category=template.get("category"),
         choices=choices,
         system_id=system_id,
     )

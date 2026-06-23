@@ -3498,3 +3498,229 @@ class TestCooldownOrdering:
         assert loaded.event_cooldowns[event.title] == expected_cooldown
         assert expected_cooldown > 0
 
+
+class TestCrisisCooldown:
+    """Tests for the crisis_cooldown mechanism."""
+
+    def test_crisis_cooldown_decrements_on_trigger_call(self) -> None:
+        """crisis_cooldown should only decrement when an event is actually triggered."""
+        state = new_game(seed=42)
+        state.ship.morale = 80  # normal morale
+        state.crisis_cooldown = 3
+        system = state.get_current_system()
+        assert system is not None
+        system.phenomenon = "none"
+        # Call trigger_event - it should NOT decrement crisis_cooldown since no event is triggered
+        import random
+        rng = random.Random(0)
+        event = trigger_event(state, rng_override=rng)
+        assert event is None, "Expected no event to trigger"
+        assert state.crisis_cooldown == 3, f"Expected 3 (unchanged), got {state.crisis_cooldown}"
+
+    def test_crisis_cooldown_blocks_crisis_in_low_morale(self) -> None:
+        from unittest.mock import patch
+        state = new_game(seed=42)
+        state.ship.morale = 20  # low morale
+        state.crisis_cooldown = 2
+        
+        # Control the eligible templates to ensure a non-crisis event is available
+        crew_template = {"type": "crew", "title": "Crew Dispute", "flavor": "Tensions rise among the crew.", "rarity": "common", "choices": []}
+        with patch("backend.generation.events._get_eligible_templates", return_value=[crew_template]):
+            event = trigger_event(state)
+        assert event is not None
+        assert event.event_type != "crisis", f"Expected non-crisis event, got {event.event_type}: {event.title}"
+
+    def test_crisis_cooldown_blocks_crisis_in_normal_path(self) -> None:
+        """When crisis_cooldown > 0 in normal path, crisis events should be filtered out."""
+        from unittest.mock import patch
+        import random
+        state = new_game(seed=42)
+        state.ship.morale = 80  # normal morale
+        state.crisis_cooldown = 2
+        system = state.get_current_system()
+        assert system is not None
+        system.phenomenon = "none"
+        # Force the 35% chance to succeed
+        rng = random.Random(42)
+        with patch.object(rng, "random", return_value=0.2):
+            event = trigger_event(state, rng_override=rng)
+        assert event is not None
+        # The event should NOT be a crisis event since crisis_cooldown > 0
+        assert event.event_type != "crisis", f"Expected non-crisis event, got {event.event_type}: {event.title}"
+
+    def test_crisis_cooldown_set_when_crisis_fires_low_morale(self) -> None:
+        """When a crisis event fires in low-morale path, crisis_cooldown should be set to 3."""
+        from unittest.mock import patch
+        state = new_game(seed=42)
+        state.ship.morale = 20  # low morale
+        state.crisis_cooldown = 0  # no cooldown
+        crisis_template = [{"type": "crisis", "category": "crisis", "title": "Life Support Failure", "flavor": "...", "rarity": "common", "choices": []}]
+        with patch("backend.generation.events._get_eligible_templates", return_value=crisis_template):
+            event = trigger_event(state)
+        assert event is not None
+        assert event.event_type == "crisis"
+        assert state.crisis_cooldown == 3
+
+    def test_crisis_cooldown_set_when_crisis_fires_normal_path(self) -> None:
+        """When a crisis event fires in normal path, crisis_cooldown should be set to 3."""
+        from unittest.mock import patch
+        import random
+        state = new_game(seed=42)
+        state.ship.morale = 80  # normal morale
+        state.crisis_cooldown = 0  # no cooldown
+        system = state.get_current_system()
+        assert system is not None
+        system.phenomenon = "none"
+        crisis_template = [{"type": "crisis", "category": "crisis", "title": "Life Support Failure", "flavor": "...", "rarity": "common", "choices": []}]
+        rng = random.Random(1)
+        with patch.object(rng, "random", return_value=0.2):
+            with patch("backend.generation.events._get_eligible_templates", return_value=crisis_template):
+                event = trigger_event(state, rng_override=rng)
+        assert event is not None
+        assert event.event_type == "crisis"
+        assert state.crisis_cooldown == 3
+
+    def test_crisis_cooldown_does_not_go_below_zero(self) -> None:
+        """crisis_cooldown should not go below 0 (and should not decrement when no event triggers)."""
+        state = new_game(seed=42)
+        state.ship.morale = 80
+        state.crisis_cooldown = 0
+        system = state.get_current_system()
+        assert system is not None
+        system.phenomenon = "none"
+        import random
+        rng = random.Random(0)
+        event = trigger_event(state, rng_override=rng)
+        assert event is None, "Expected no event to trigger"
+        assert state.crisis_cooldown == 0, f"Expected 0 (unchanged), got {state.crisis_cooldown}"
+
+    def test_crisis_cooldown_serialization(self) -> None:
+        """crisis_cooldown should survive save/load roundtrip."""
+        from backend.database import init_db
+        from backend.game.manager import game_load
+        init_db()
+        state = new_game(seed=42)
+        state.crisis_cooldown = 3
+        game_save(state)
+        loaded = game_load(state.id)
+        assert loaded is not None
+        assert loaded.crisis_cooldown == 3, f"Expected 3, got {loaded.crisis_cooldown}"
+
+    def test_new_game_crisis_cooldown_zero(self) -> None:
+        """A new game should have crisis_cooldown = 0."""
+        state = new_game(seed=42)
+        assert state.crisis_cooldown == 0
+
+    def test_crisis_cooldown_blocks_all_crisis_in_low_morale(self) -> None:
+        """When crisis_cooldown > 0 in low-morale path, crisis events should be filtered out even if they are the only eligible type."""
+        from backend.models.game_state import GameState
+        from backend.models.ship import Ship
+        from backend.models.system import StarSystem, Body
+        from backend.config import MORALE_LOW_THRESHOLD
+        import unittest.mock as mock
+
+        ship = Ship(morale=MORALE_LOW_THRESHOLD - 1)
+        state = GameState(id="test-crisis-block-low", seed=42, ship=ship)
+        body = Body(id="b1", name="Planet", body_type="planet", biome="ocean",
+                    size=3, distance_from_star=0.5, poi_count=1)
+        system = StarSystem(id="sys1", name="TestSys", x=0.0, y=0.0,
+                            star_type="G", star_color="#fff",
+                            phenomenon="none", phenomenon_desc="",
+                            bodies=[body])
+        state.systems = {"sys1": system}
+        state.ship.current_system_id = "sys1"
+        state.crisis_cooldown = 2
+
+        # Only crisis templates are eligible
+        crisis_template = {"type": "crisis", "category": "crisis", "title": "Life Support Failure", "flavor": "...", "rarity": "common", "choices": []}
+        with mock.patch("backend.generation.events._get_eligible_templates", return_value=[crisis_template]):
+            result = trigger_event(state)
+        # Should return None because the only eligible event is a crisis and crisis_cooldown > 0
+        assert result is None, "Expected None when only crisis events are eligible but crisis_cooldown > 0"
+
+    def test_crisis_cooldown_blocks_all_crisis_in_normal_path(self) -> None:
+        """When crisis_cooldown > 0 in normal path, crisis events should be filtered out even if they are the only eligible type."""
+        from backend.models.game_state import GameState
+        from backend.models.ship import Ship
+        from backend.models.system import StarSystem, Body
+        from backend.config import MORALE_LOW_THRESHOLD
+        import unittest.mock as mock
+        import random
+
+        ship = Ship(morale=MORALE_LOW_THRESHOLD + 10)
+        state = GameState(id="test-crisis-block-normal", seed=42, ship=ship)
+        body = Body(id="b1", name="Planet", body_type="planet", biome="ocean",
+                    size=3, distance_from_star=0.5, poi_count=1)
+        system = StarSystem(id="sys1", name="TestSys", x=0.0, y=0.0,
+                            star_type="G", star_color="#fff",
+                            phenomenon="none", phenomenon_desc="",
+                            bodies=[body])
+        state.systems = {"sys1": system}
+        state.ship.current_system_id = "sys1"
+        state.crisis_cooldown = 2
+
+        # Only crisis templates are eligible
+        crisis_template = {"type": "crisis", "category": "crisis", "title": "Life Support Failure", "flavor": "...", "rarity": "common", "choices": []}
+        rng = random.Random(1)
+        with mock.patch("backend.generation.events._get_eligible_templates", return_value=[crisis_template]):
+            result = trigger_event(state, rng_override=rng)
+        # Should return None because the only eligible event is a crisis and crisis_cooldown > 0
+        assert result is None, "Expected None when only crisis events are eligible but crisis_cooldown > 0"
+
+    def test_crisis_cooldown_not_set_when_non_crisis_fires_low_morale(self) -> None:
+        """When a non-crisis event fires in low-morale path, crisis_cooldown should stay 0."""
+        from unittest.mock import patch
+        state = new_game(seed=42)
+        state.ship.morale = 20  # low morale
+        state.crisis_cooldown = 0
+        system = state.get_current_system()
+        assert system is not None
+        system.phenomenon = "none"
+        crew_template = {"type": "crew", "title": "Crew Dispute", "flavor": "Tensions rise among the crew.", "rarity": "common", "choices": []}
+        with patch("backend.generation.events._get_eligible_templates", return_value=[crew_template]):
+            event = trigger_event(state)
+        assert event is not None
+        assert event.event_type != "crisis", f"Expected non-crisis event, got {event.event_type}: {event.title}"
+        assert state.crisis_cooldown == 0, f"Expected crisis_cooldown=0, got {state.crisis_cooldown}"
+
+    def test_crisis_cooldown_not_set_when_non_crisis_fires_normal_path(self) -> None:
+        """When a non-crisis event fires in normal path, crisis_cooldown should stay 0."""
+        from unittest.mock import patch
+        import random as rand_mod
+        state = new_game(seed=42)
+        state.ship.morale = 80  # normal morale
+        state.crisis_cooldown = 0
+        system = state.get_current_system()
+        assert system is not None
+        system.phenomenon = "none"
+        crew_template = {"type": "crew", "title": "Crew Dispute", "flavor": "Tensions rise among the crew.", "rarity": "common", "choices": []}
+        rng = rand_mod.Random(1)
+        with patch("backend.generation.events._get_eligible_templates", return_value=[crew_template]):
+            event = trigger_event(state, rng_override=rng)
+        assert event is not None
+        assert event.event_type != "crisis", f"Expected non-crisis event, got {event.event_type}: {event.title}"
+        assert state.crisis_cooldown == 0, f"Expected crisis_cooldown=0, got {state.crisis_cooldown}"
+
+    def test_crisis_events_have_category_field(self) -> None:
+        """All crisis event templates should have category: crisis."""
+        from backend.generation.events import EVENT_TEMPLATES
+        crisis_templates = [t for t in EVENT_TEMPLATES if t["type"] == "crisis"]
+        assert len(crisis_templates) >= 6, f"Expected at least 6 crisis events, got {len(crisis_templates)}"
+        for t in crisis_templates:
+            assert t.get("category") == "crisis", f"Crisis event '{t['title']}' missing category='crisis'"
+
+    def test_crisis_events_can_be_resolved(self) -> None:
+        """All crisis events should resolve correctly for each choice."""
+        from backend.generation.events import _create_event, EVENT_TEMPLATES
+        crisis_templates = [t for t in EVENT_TEMPLATES if t["type"] == "crisis"]
+        for template in crisis_templates:
+            for i in range(len(template["choices"])):
+                state = new_game(seed=42)
+                event = _create_event(template, state.get_current_system().id)
+                state.events.append(event)
+                ok, msg, extra = resolve_event(state, event.id, i)
+                assert ok is True, f"Failed to resolve choice {i} of '{template['title']}': {msg}"
+                assert extra["title"] == template["title"]
+                assert extra["chosen_text"] == event.choices[i].text
+                assert isinstance(extra["effects"], dict)
+
