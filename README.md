@@ -27,6 +27,8 @@ See **[HOWTOPLAY.md](HOWTOPLAY.md)** — a complete gameplay guide covering all 
 
 All game actions are REST API calls. The browser UI is a reference client — you can play entirely via the API.
 
+Phenomenon-specific events (Ion Storm, Radiation Pulse, Lagrange Point Discovery, and more) trigger when entering nebula, pulsar, or binary star systems.
+
 ## Configuration
 
 | Variable | Purpose |
