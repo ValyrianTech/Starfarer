@@ -243,10 +243,10 @@ def explore_surface(state: GameState) -> list[Discovery]:
 
     num_finds = min(body.poi_count, item_rng.randint(1, 3))
 
-    if num_finds > 0:
-        lore_frag = get_fragment_for_body(system.id, body.id, state.lore_fragments)
-        lore_linked = False
+    lore_frag = get_fragment_for_body(system.id, body.id, state.lore_fragments)
+    lore_linked = False
 
+    if num_finds > 0:
         for i in range(num_finds):
             cat = item_rng.choice(["mineral", "artifact", "lifeform", "signal", "ruin"])
             disc = _generate_discovery(item_rng, cat, body, system)
