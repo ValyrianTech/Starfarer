@@ -1,5 +1,11 @@
 let GAME_ID = null;
 
+function notifyLoreFragment(title) {
+  console.log('Lore fragment discovered (lore viewer not loaded):', title);
+}
+
+function updateLoreButtonGlow() {}
+
 async function initApp() {
   const savedId = getSavedGameId();
   if (savedId) {
