@@ -970,6 +970,9 @@ def api_accept_mission(game_id: str, mission_id: str, req: AcceptMissionRequest)
         if completed.get("mission_id") == mission_id:
             raise HTTPException(status_code=400, detail="Mission already completed")
 
+    if mission_id in state.accepted_missions:
+        raise HTTPException(status_code=400, detail="Mission already accepted")
+
     mission_found = None
     faction_id = None
     factions_to_check = [req.faction_id] if req.faction_id else list(FACTION_DEFINITIONS.keys())

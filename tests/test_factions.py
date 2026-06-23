@@ -1160,6 +1160,61 @@ class TestFactionAPI:
         assert resp.status_code == 400
         assert "No available missions" in resp.json()["detail"]
 
+    def test_api_accept_mission_already_accepted(self) -> None:
+        resp = client.post(
+            "/api/game/new",
+            json={"seed": 42, "game_id": "accept-already"},
+        )
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        state.ship.fuel = 100
+        state.ship.credits = 500
+        current_system = state.get_current_system()
+        assert current_system is not None
+        current_system.has_trading_station = True
+        GAME_STORE[game_id] = state
+        game_save(state)
+        resp = client.get(f"/api/game/{game_id}/missions")
+        missions_data = resp.json()
+        mission_id = missions_data["missions"][0]["id"]
+        resp = client.post(
+            f"/api/game/{game_id}/missions/{mission_id}/accept",
+            json={"mission_id": mission_id},
+        )
+        assert resp.status_code == 200
+        resp = client.post(
+            f"/api/game/{game_id}/missions/{mission_id}/accept",
+            json={"mission_id": mission_id},
+        )
+        assert resp.status_code == 400
+        assert "already accepted" in resp.json()["detail"].lower()
+
+    def test_api_complete_mission_not_accepted(self) -> None:
+        resp = client.post(
+            "/api/game/new",
+            json={"seed": 42, "game_id": "complete-not-accepted"},
+        )
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        state.ship.fuel = 100
+        state.ship.credits = 500
+        current_system = state.get_current_system()
+        assert current_system is not None
+        current_system.has_trading_station = True
+        GAME_STORE[game_id] = state
+        game_save(state)
+        resp = client.get(f"/api/game/{game_id}/missions")
+        missions_data = resp.json()
+        mission_id = missions_data["missions"][0]["id"]
+        resp = client.post(
+            f"/api/game/{game_id}/missions/{mission_id}/complete",
+            json={"mission_id": mission_id},
+        )
+        assert resp.status_code == 400
+        assert "not been accepted" in resp.json()["detail"].lower()
+
 
 class TestTradingFactionIntegration:
     def test_stellar_cartographers_positive_reputation_bonus(self) -> None:
