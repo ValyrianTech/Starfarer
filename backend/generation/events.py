@@ -557,11 +557,12 @@ def _get_eligible_templates(state: GameState, templates: list[dict]) -> list[dic
 
 def _apply_cooldown_fallback(eligible: list[dict], state: GameState) -> list[dict]:
     """Apply cooldown fallback: prefer events not on cooldown; if all are on cooldown, pick the one(s) with the lowest cooldown, avoiding last_event_title if possible."""
+    # Guard: if there are no eligible templates at all, return empty early.
+    if not eligible:
+        return []
     eligible_not_on_cd = [t for t in eligible if state.event_cooldowns.get(t["title"], 0) <= 0]
     if eligible_not_on_cd:
         return eligible_not_on_cd
-    if not eligible:
-        return []
     eligible = sorted(eligible, key=lambda t: state.event_cooldowns.get(t["title"], 0))
     eligible_no_last = [t for t in eligible if t["title"] != state.last_event_title]
     if eligible_no_last:
