@@ -130,6 +130,8 @@ Costs 2 fuel. Generates discoveries (minerals, artifacts, lifeforms, signals, ru
 - `value` — credit value if sold
 - `description` — flavor text
 
+The response also includes a `lore_fragments_discovered` field listing any lore fragments found during this exploration, with their arc, title, and discovery metadata.
+
 ### 3.8 Handle Events
 
 After jumping, scanning, or exploring, you may receive a `pending_event`. Events have 2-4 choices.
@@ -345,7 +347,7 @@ The game persists all state to SQLite. Save frequently — especially before ris
 | POST | `/api/game/{id}/jump/{sid}` | Jump to system |
 | POST | `/api/game/{id}/scan` | Scan current system |
 | POST | `/api/game/{id}/land/{bid}` | Land on body |
-| POST | `/api/game/{id}/explore` | Explore surface |
+| POST | `/api/game/{id}/explore` | Explore surface (returns `lore_fragments_discovered`) |
 | POST | `/api/game/{id}/event/{eid}/resolve` | Resolve event |
 | GET | `/api/game/{id}/log` | Ship log |
 | GET | `/api/game/{id}/discoveries` | Discovery list |
@@ -368,6 +370,9 @@ When your faction reputation reaches **20 or higher**, resolving events of that 
 - **Free Pilots** (encounter, crisis, crew & hazard events): +5 morale per event
 
 These bonuses stack with the event's normal outcome rewards.
+
+### Lore Fragment Hints
+The lore viewer reveals hints for undiscovered fragments, guiding you toward their locations. The `/api/game/{id}/lore` endpoint returns both discovered fragments (with `discovery_location` and `discovery_date`) and undiscovered fragments (with `hint` text). Explore systems matching the hint descriptions to complete each story arc.
 
 ---
 

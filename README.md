@@ -51,6 +51,14 @@ All event types now have consistent faction reputation effects:
 - **Encounter, Crisis, Crew & Hazard** events grant Free Pilots reputation
 - **Narrative** events are atmospheric and do not affect reputation
 
+### Lore Fragment Viewer & Discovery Metadata
+- The lore viewer has been redesigned with tab-based navigation by story arc, progress bars, and detailed fragment cards
+- Discovered fragments now show their discovery location (system name - body name) and discovery date
+- Undiscovered fragments display hints to guide exploration
+- A notification toast appears when a new lore fragment is discovered, with a "View" button to open the lore viewer
+- The Lore button pulses with a glow animation when there are unread fragments
+- The explore API response now includes a `lore_fragments_discovered` field listing any newly found fragments
+
 ## Quick Start
 
 ```bash

@@ -147,6 +147,9 @@ Each event has:
 
 #### 3.5.2 Lore Fragments
 - Scattered across the universe, each fragment reveals a piece of a larger story
+- Each lore fragment includes a **hint** for undiscovered fragments, visible in the lore viewer to guide exploration
+- Discovered fragments include **discovery location** (system name - body name) and **discovery date** metadata
+- **Lore viewer UI** features tab-based navigation by story arc with progress bars and detailed fragment cards
 - Major lore arcs (discoverable in any order):
   1. The Architects — An ancient race that shaped the galaxy and vanished
   2. The Void Signal — A mysterious transmission from beyond known space
