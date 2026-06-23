@@ -74,12 +74,15 @@
 | Pirate/Combat | Avoid if possible | Hull damage is expensive to repair |
 | Trade Opportunity | Take it | Free credits and resources |
 | Crew Morale Event | Boost morale | Low morale triggers cascading failures |
+| Black Hole Event | Depends on situation | Time Dilation: study for credits. Hawking Radiation: harvest for fuel. Spaghettification: gravity assist for fuel. Accretion Disk: probe for credits. Gravitational Lens: study for credits+morale. |
 
 ### 3.3 Resource Priorities
 1. **Fuel** — lifeblood of exploration. Never go below 15.
 2. **Hull** — repair at stations when below 40 (20 hull per repair point, ~40 credits)
 3. **Morale** — keep above 40. Buy life support upgrade if it dips.
 4. **Credits** — spend on upgrades, not consumables (unless critical)
+
+**Reputation Note:** Faction reputation is a valuable resource. At reputation **20 or higher** with a faction, resolving events matching that faction's type triggers bonus rewards: Stellar Cartographers gives +10 credits and +1 morale per event, Void Traders gives +10 credits per event, and Free Pilots gives +5 morale per event. These bonuses stack with the event's normal outcome rewards.
 
 ### 3.4 Upgrade Priority
 1. **Hyperdrive** (+1 jump range, 500 credits) — unlocks more systems

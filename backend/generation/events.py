@@ -7,7 +7,7 @@ for triggering random events and resolving player choices against them.
 
 import random
 import uuid
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from backend.models.game_state import GameState
 from backend.models.event import Event, Choice
@@ -280,6 +280,66 @@ EVENT_TEMPLATES: list[dict[str, Any]] = [
         ],
         "trigger_conditions": {"min_reputation": {"faction_id": "free_pilots", "value": 50}},
     },
+    {
+        "type": "hazard",
+        "rarity": "uncommon",
+        "title": "Time Dilation Anomaly",
+        "flavor": "Your ship's chronometers begin drifting. Time flows differently near the black hole's gravity well. You experience what feels like hours in minutes.",
+        "choices": [
+            {"text": "Push closer to study the effect", "outcome": "credits:200; hull:-15; Gained valuable scientific data from the time dilation effect."},
+            {"text": "Maintain safe distance and observe", "outcome": "credits:100; Observed the time dilation from a safe distance."},
+            {"text": "Withdraw immediately", "outcome": "A wise decision \u2014 some phenomena are best observed from afar."},
+        ],
+        "trigger_conditions": {"phenomenon": "black_hole"},
+    },
+    {
+        "type": "discovery",
+        "rarity": "uncommon",
+        "title": "Hawking Radiation Harvest",
+        "flavor": "Sensors detect a faint glow around the black hole's event horizon \u2014 Hawking radiation. Your ship's collectors could harvest this exotic energy.",
+        "choices": [
+            {"text": "Attempt to harvest", "outcome": "fuel:20; hull:-12; Successfully harvested Hawking radiation! Gained fuel and a rare Hawking Particle."},
+            {"text": "Scan and record data", "outcome": "credits:150; Recorded valuable scientific data on Hawking radiation."},
+            {"text": "Avoid the dangerous approach", "outcome": "Some risks aren't worth taking."},
+        ],
+        "trigger_conditions": {"phenomenon": "black_hole"},
+    },
+    {
+        "type": "hazard",
+        "rarity": "rare",
+        "title": "Spaghettification Near-Miss",
+        "flavor": "A gravitational eddy catches your ship, pulling you toward the event horizon. The hull groans as tidal forces begin to stretch the frame.",
+        "choices": [
+            {"text": "Full emergency thrust", "outcome": "fuel:-12; hull:-8; Escaped the gravity well with emergency thrust, but at a cost."},
+            {"text": "Ride the gravity assist", "outcome": "hull:-18; fuel:15; Used the black hole's gravity for a slingshot maneuver! Saved fuel but took hull damage."},
+            {"text": "Deploy gravity anchor", "outcome": "cargo:-1; Escaped unscathed by sacrificing some cargo to the black hole."},
+        ],
+        "trigger_conditions": {"phenomenon": "black_hole"},
+    },
+    {
+        "type": "discovery",
+        "rarity": "uncommon",
+        "title": "Accretion Disk Prospecting",
+        "flavor": "The black hole's accretion disk glows with superheated matter. Your sensors detect dense mineral clusters within the disk \u2014 extremely valuable but dangerous to reach.",
+        "choices": [
+            {"text": "Send a probe into the disk", "outcome": "credits:250; The probe returned with incredibly valuable mineral samples!"},
+            {"text": "Skim the edge of the disk", "outcome": "credits:150; hull:-5; Carefully skimmed the edge and recovered some valuable materials."},
+            {"text": "Observe from safe distance", "outcome": "credits:50; Recorded observations of the accretion disk from a safe distance."},
+        ],
+        "trigger_conditions": {"phenomenon": "black_hole"},
+    },
+    {
+        "type": "discovery",
+        "rarity": "uncommon",
+        "title": "Gravitational Lens Observation",
+        "flavor": "The black hole's gravity is bending light from distant stars, creating a natural telescope of unprecedented power. You can see galaxies normally hidden behind nebulae.",
+        "choices": [
+            {"text": "Study the lensed images carefully", "outcome": "credits:200; morale:10; Gathered valuable astronomical data from the gravitational lens!"},
+            {"text": "Quick observation", "outcome": "credits:100; Recorded useful astronomical observations."},
+            {"text": "Ignore \u2014 too busy navigating", "outcome": "A missed opportunity, but the journey continues."},
+        ],
+        "trigger_conditions": {"phenomenon": "black_hole"},
+    },
 ]
 
 
@@ -287,9 +347,18 @@ EVENT_TEMPLATES: list[dict[str, Any]] = [
 def _get_eligible_templates(state: GameState, templates: list[dict]) -> list[dict]:
     """Filter event templates based on trigger conditions in the current game state.
 
-    Checks phenomenon, biome, min_systems_visited, max_morale, and
-    unexplored_preference conditions against the current system and
-    ship state. Templates with no trigger conditions are always eligible.
+    Checks phenomenon, biome, min_systems_visited, max_morale,
+    unexplored_preference, and min_reputation conditions against the
+    current system and ship state. Templates with no trigger conditions
+    are always eligible.
+
+    Fallback behavior: if every template that has ``trigger_conditions``
+    is filtered out, the returned list contains *only* templates with
+    **no** ``trigger_conditions``. Callers that further filter by
+    event type (such as :func:`trigger_event`'s low-morale path, which
+    keeps only ``crew``, ``crisis``, and ``narrative`` events) may end up
+    with an empty list if the fallback templates do not include those
+    types, causing the caller to return ``None``.
 
     :param state: The current game state.
     :type state: GameState
@@ -351,10 +420,17 @@ def trigger_event(state: GameState, rng_override: Optional[random.Random] = None
     """Possibly trigger a procedural event based on the current game state.
 
     Events have a base 35% chance of triggering after a jump, scan, or
-    exploration. If morale is low (<30), crew, crisis, or narrative events
-    are forced. Templates are filtered by trigger conditions and weighted
-    by rarity (common=5, uncommon=2, rare=1). A cooldown prevents the same
-    event title from appearing twice in a row.
+    exploration. If morale is low (<30), the probability roll is skipped
+    entirely and the function attempts to force a ``crew``, ``crisis``, or
+    ``narrative`` event. In this low-morale path, templates are first
+    filtered by :func:`_get_eligible_templates` and then further narrowed
+    to only those three event types. If no templates survive both filters
+    (including when the :func:`_get_eligible_templates` fallback produces
+    only templates without those types), ``None`` is returned.
+
+    In the normal path, templates are filtered by trigger conditions and
+    weighted by rarity (common=5, uncommon=2, rare=1). A cooldown prevents
+    the same event title from appearing twice in a row.
 
     :param state: The current game state.
     :type state: GameState
@@ -427,6 +503,36 @@ def _create_event(template: dict, system_id: str) -> Event:
     )
 
 
+def _bonus_credits_morale(state: GameState) -> None:
+    """Add 10 credits and 1 morale (capped at 100) as a reputation bonus."""
+    state.ship.credits += 10
+    state.ship.morale = min(100, state.ship.morale + 1)
+
+
+def _bonus_credits(state: GameState) -> None:
+    """Add 10 credits as a reputation bonus."""
+    state.ship.credits += 10
+
+
+def _bonus_morale(state: GameState) -> None:
+    """Add 5 morale (capped at 100) as a reputation bonus."""
+    state.ship.morale = min(100, state.ship.morale + 5)
+
+
+# Only event types explicitly listed in this map receive faction reputation
+# changes when resolved. Any event type not present (e.g. "narrative") is
+# silently skipped — no reputation changes, no bonus, no log entry.
+_EVENT_REP_MAP: dict[str, tuple[str, tuple[int, int], Callable]] = {
+    "exploration": ("stellar_cartographers", (2, 8), _bonus_credits_morale),
+    "discovery": ("stellar_cartographers", (2, 8), _bonus_credits_morale),
+    "trade": ("void_traders", (2, 8), _bonus_credits),
+    "encounter": ("free_pilots", (1, 6), _bonus_morale),
+    "crisis": ("free_pilots", (1, 6), _bonus_morale),
+    "crew": ("free_pilots", (1, 6), _bonus_morale),
+    "hazard": ("free_pilots", (1, 6), _bonus_morale),
+}
+
+
 def resolve_event(state: GameState, event_id: str, choice_idx: int) -> tuple[bool, str, dict]:
     """Resolve a pending event by applying the chosen outcome.
 
@@ -472,34 +578,15 @@ def resolve_event(state: GameState, event_id: str, choice_idx: int) -> tuple[boo
     rep_before = {}
     rep_after = {}
 
-    if event.event_type == "exploration":
-        rep_before["stellar_cartographers"] = state.get_faction_reputation("stellar_cartographers")
-        state.modify_faction_reputation("stellar_cartographers", event_rng.randint(2, 8))
-        rep_after["stellar_cartographers"] = state.get_faction_reputation("stellar_cartographers")
-        stellar_rep = rep_after["stellar_cartographers"]
-        if stellar_rep >= 20:
-            state.ship.credits += 10
-            state.ship.morale = min(100, state.ship.morale + 1)
-        if rep_before["stellar_cartographers"] != rep_after["stellar_cartographers"]:
-            state.add_log("faction", f"Stellar Cartographers reputation changed from {rep_before['stellar_cartographers']} to {rep_after['stellar_cartographers']}.")
-    elif event.event_type == "trade":
-        rep_before["void_traders"] = state.get_faction_reputation("void_traders")
-        state.modify_faction_reputation("void_traders", event_rng.randint(2, 8))
-        rep_after["void_traders"] = state.get_faction_reputation("void_traders")
-        void_rep = rep_after["void_traders"]
-        if void_rep >= 20:
-            state.ship.credits += 10
-        if rep_before["void_traders"] != rep_after["void_traders"]:
-            state.add_log("faction", f"Void Traders reputation changed from {rep_before['void_traders']} to {rep_after['void_traders']}.")
-    elif event.event_type in ("encounter", "crisis", "crew"):
-        rep_before["free_pilots"] = state.get_faction_reputation("free_pilots")
-        state.modify_faction_reputation("free_pilots", event_rng.randint(1, 6))
-        rep_after["free_pilots"] = state.get_faction_reputation("free_pilots")
-        free_pilots_rep = rep_after["free_pilots"]
-        if free_pilots_rep >= 20:
-            state.ship.morale = min(100, state.ship.morale + 5)
-        if rep_before["free_pilots"] != rep_after["free_pilots"]:
-            state.add_log("faction", f"Free Pilots reputation changed from {rep_before['free_pilots']} to {rep_after['free_pilots']}.")
+    if event.event_type in _EVENT_REP_MAP:
+        faction_id, (rep_min, rep_max), bonus_fn = _EVENT_REP_MAP[event.event_type]
+        rep_before[faction_id] = state.get_faction_reputation(faction_id)
+        state.modify_faction_reputation(faction_id, event_rng.randint(rep_min, rep_max))
+        rep_after[faction_id] = state.get_faction_reputation(faction_id)
+        if rep_after[faction_id] >= 20:
+            bonus_fn(state)
+        if rep_before[faction_id] != rep_after[faction_id]:
+            state.add_log("faction", f"{faction_id.replace('_', ' ').title()} reputation changed from {rep_before[faction_id]} to {rep_after[faction_id]}.")
 
     extra_output = {
         "title": event.title,

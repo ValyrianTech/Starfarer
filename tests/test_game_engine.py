@@ -15,6 +15,7 @@ from backend.generation.events import trigger_event, resolve_event, EVENT_TEMPLA
 from backend.config import SCAN_FUEL_COST
 from backend.models.game_state import GameState
 from backend.models.discovery import Discovery
+from backend.models.system import StarSystem
 
 
 class TestGameManager:
@@ -919,6 +920,22 @@ class TestEventsAdvanced:
         ok, msg, extra = resolve_event(state, event.id, -1)
         assert ok is False
         assert "Invalid choice" in msg
+
+    def test_resolve_narrative_event(self) -> None:
+        """Resolving a narrative event should succeed without reputation changes."""
+        state = new_game(seed=42)
+        from backend.generation.events import _create_event
+        # Find the narrative event template
+        narrative_template = [t for t in EVENT_TEMPLATES if t["type"] == "narrative"][0]
+        event = _create_event(narrative_template, state.get_current_system().id)
+        state.events.append(event)
+
+        ok, msg, extra = resolve_event(state, event.id, 0)
+        assert ok is True, f"Expected narrative event to resolve successfully, got: {msg}"
+        assert event.resolved is True
+        assert extra["title"] == narrative_template["title"]
+        assert extra["chosen_text"] == event.choices[0].text
+        assert isinstance(extra["effects"], dict)
 
 
 class TestManagerAdvanced:
@@ -2688,11 +2705,11 @@ class TestFuelPricing:
         assert "breakdown_lines" in price
         lines = price["breakdown_lines"]
         assert len(lines) == 5
-        assert any("Base price" in l for l in lines)
-        assert any("System type" in l for l in lines)
-        assert any("Faction standing" in l for l in lines)
-        assert any("Supply/demand" in l for l in lines)
-        assert any("Final price" in l for l in lines)
+        assert any("Base price" in line for line in lines)
+        assert any("System type" in line for line in lines)
+        assert any("Faction standing" in line for line in lines)
+        assert any("Supply/demand" in line for line in lines)
+        assert any("Final price" in line for line in lines)
 
     def test_fuel_buying_uses_dynamic_pricing(self) -> None:
         """Buying fuel should use calculate_fuel_price and include breakdown."""
@@ -2809,3 +2826,132 @@ class TestFuelPricing:
             price = calculate_fuel_price(state, system)
         assert price["final_price"] == 1.0
         assert "clamped to minimum" in price["breakdown_lines"][-1]
+
+
+class TestBlackHoleEvents:
+    """Tests for black hole system-specific events."""
+
+    def test_black_hole_events_exist(self) -> None:
+        """There should be exactly 5 black hole events in EVENT_TEMPLATES."""
+        black_hole_events = [t for t in EVENT_TEMPLATES if t.get("trigger_conditions", {}).get("phenomenon") == "black_hole"]
+        assert len(black_hole_events) == 5, f"Expected 5 black hole events, got {len(black_hole_events)}"
+
+    def test_black_hole_events_have_correct_structure(self) -> None:
+        """Each black hole event should have title, flavor, type, choices, and trigger_conditions."""
+        black_hole_events = [t for t in EVENT_TEMPLATES if t.get("trigger_conditions", {}).get("phenomenon") == "black_hole"]
+        for event in black_hole_events:
+            assert "title" in event, f"Black hole event missing title: {event}"
+            assert "flavor" in event, f"Black hole event {event['title']} missing flavor"
+            assert "type" in event, f"Black hole event {event['title']} missing type"
+            assert "choices" in event, f"Black hole event {event['title']} missing choices"
+            assert len(event["choices"]) >= 2, f"Black hole event {event['title']} has fewer than 2 choices"
+            assert event["trigger_conditions"] == {"phenomenon": "black_hole"}, \
+                f"Black hole event {event['title']} has wrong trigger_conditions"
+
+    def test_black_hole_events_have_valid_event_types(self) -> None:
+        """Black hole events should use valid event types (hazard, discovery)."""
+        black_hole_events = [t for t in EVENT_TEMPLATES if t.get("trigger_conditions", {}).get("phenomenon") == "black_hole"]
+        valid_types = {"hazard", "discovery"}
+        for event in black_hole_events:
+            assert event["type"] in valid_types, \
+                f"Black hole event {event['title']} has invalid type: {event['type']}"
+
+    def test_spaghettification_is_rare(self) -> None:
+        """The Spaghettification Near-Miss event should have rarity 'rare'."""
+        spaghettification = [t for t in EVENT_TEMPLATES if t.get("title") == "Spaghettification Near-Miss"]
+        assert len(spaghettification) == 1
+        assert spaghettification[0]["rarity"] == "rare", "Spaghettification Near-Miss should be rare"
+
+    def test_black_hole_events_only_in_black_hole_systems(self) -> None:
+        """Black hole events should only be eligible in black hole systems."""
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        
+        # Set system to black hole
+        system.phenomenon = "black_hole"
+        eligible = _get_eligible_templates(state, EVENT_TEMPLATES)
+        black_hole_eligible = [t for t in eligible if t.get("trigger_conditions", {}).get("phenomenon") == "black_hole"]
+        assert len(black_hole_eligible) == 5, \
+            f"Expected 5 black hole events eligible in black hole system, got {len(black_hole_eligible)}"
+
+    def test_black_hole_events_not_eligible_in_nebula_systems(self) -> None:
+        """Black hole events should NOT be eligible in nebula systems."""
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        
+        # Set system to nebula (not black hole)
+        system.phenomenon = "nebula"
+        eligible = _get_eligible_templates(state, EVENT_TEMPLATES)
+        black_hole_eligible = [t for t in eligible if t.get("trigger_conditions", {}).get("phenomenon") == "black_hole"]
+        assert len(black_hole_eligible) == 0, \
+            f"Expected 0 black hole events eligible in nebula system, got {len(black_hole_eligible)}"
+
+    def test_black_hole_events_not_eligible_in_normal_systems(self) -> None:
+        """Black hole events should NOT be eligible in systems with no phenomenon."""
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        
+        # Set system to no phenomenon
+        system.phenomenon = "none"
+        eligible = _get_eligible_templates(state, EVENT_TEMPLATES)
+        black_hole_eligible = [t for t in eligible if t.get("trigger_conditions", {}).get("phenomenon") == "black_hole"]
+        assert len(black_hole_eligible) == 0, \
+            f"Expected 0 black hole events eligible in normal system, got {len(black_hole_eligible)}"
+
+    def test_black_hole_event_choices_have_valid_outcomes(self) -> None:
+        """Each choice in black hole events should have outcomes that can be parsed by apply_choice_outcome."""
+        from backend.models.game_state import GameState
+        from backend.models.ship import Ship
+        
+        black_hole_events = [t for t in EVENT_TEMPLATES if t.get("trigger_conditions", {}).get("phenomenon") == "black_hole"]
+        ship = Ship()
+        state = GameState(id="test-bh-outcomes", seed=42, ship=ship)
+        
+        for event in black_hole_events:
+            for i, choice in enumerate(event["choices"]):
+                # This should not raise any exceptions
+                effects = state.apply_choice_outcome(choice["outcome"])
+                assert isinstance(effects, dict), f"Outcome for {event['title']} choice {i} should return a dict"
+                # Verify at least one stat was affected or it's a narrative-only outcome
+                assert any(v != 0 for v in effects.values()) or ";" not in choice["outcome"].strip(), \
+                    f"Choice {i} of {event['title']} has no stat effects: {choice['outcome']}"
+
+    def test_black_hole_events_can_be_triggered(self) -> None:
+        """Black hole events should be triggerable in a black hole system."""
+        from unittest.mock import patch
+        import random
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        system.phenomenon = "black_hole"
+        state.ship.morale = 80
+        
+        # Use a real Random instance with mocked random() to guarantee trigger
+        rng = random.Random(42)
+        with patch.object(rng, "random", return_value=0.2):
+            event = trigger_event(state, rng_override=rng)
+        assert event is not None, "Expected an event to trigger with mocked RNG"
+        assert event.title in [t["title"] for t in EVENT_TEMPLATES]
+
+    def test_black_hole_events_can_be_resolved(self) -> None:
+        """Black hole events should resolve correctly."""
+        from backend.generation.events import _create_event
+        
+        black_hole_templates = [t for t in EVENT_TEMPLATES if t.get("trigger_conditions", {}).get("phenomenon") == "black_hole"]
+        black_hole_template = black_hole_templates[0]
+        
+        # Each choice must be resolved on a fresh event (resolve_event marks event as resolved)
+        for i in range(len(black_hole_template["choices"])):
+            state = new_game(seed=42)
+            event = _create_event(black_hole_template, state.get_current_system().id)
+            state.events.append(event)
+            
+            ok, msg, extra = resolve_event(state, event.id, i)
+            assert ok is True, f"Failed to resolve choice {i}: {msg}"
+            assert extra["title"] == black_hole_template["title"]
+            assert extra["chosen_text"] == event.choices[i].text
+            assert isinstance(extra["effects"], dict)
+
