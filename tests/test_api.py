@@ -1468,9 +1468,18 @@ class TestAPILore:
         GAME_STORE[game_id] = state
         game_save(state)
 
-        resp = client.get(f"/api/game/{game_id}/lore")
+        with patch("backend.api.routes.logger") as mock_logger:
+            resp = client.get(f"/api/game/{game_id}/lore")
         assert resp.status_code == 200
         data = resp.json()
+
+        # Verify that a warning was logged for the orphaned reference
+        assert mock_logger.warning.called, "logger.warning should have been called for orphaned lore fragment"
+        warning_args = mock_logger.warning.call_args[0]
+        assert "Lore fragment %s references unknown system %s (body %s)" in warning_args[0]
+        assert "test-fallback-lore" in warning_args
+        assert "nonexistent_system_xyz" in warning_args
+        assert "body_123" in warning_args
 
         # Find our test fragment in the response
         architects = data["arcs"]["architects"]

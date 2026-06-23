@@ -6,6 +6,7 @@ navigation, exploration, events, trading, upgrades, saving/loading,
 and the leaderboard.
 """
 
+import logging
 import time
 
 from fastapi import APIRouter, HTTPException
@@ -28,6 +29,8 @@ from backend.game.trading import get_upgrade_info, purchase_upgrade, perform_tra
 from backend.database import get_leaderboard
 from backend.generation.lore_content import ARC_DISPLAY_NAMES
 from backend.models.faction import get_faction
+
+logger = logging.getLogger(__name__)
 
 START_TIME = time.time()
 
@@ -466,6 +469,10 @@ def api_lore(game_id: str) -> dict:
                         frag_dict["discovery_location"] = f"{system.name} - {body_name}"
                     else:
                         # Fallback: use raw IDs so the user at least sees something
+                        logger.warning(
+                            "Lore fragment %s references unknown system %s (body %s) - possible orphaned reference",
+                            lore.id, sys_id, body_id,
+                        )
                         frag_dict["discovery_location"] = f"Unknown system ({sys_id}) - Body ({body_id})"
 
             if lore.discovery_timestamp:
