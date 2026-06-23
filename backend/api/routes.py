@@ -845,27 +845,12 @@ def api_faction_mission(game_id: str, faction_id: str) -> dict:
             detail=f"Not enough credits. Mission requires {mission.credit_cost} credits."
         )
 
-    state.ship.fuel -= mission.fuel_cost
-    state.ship.credits -= mission.credit_cost
+    # Delegate to shared complete_mission() for consistent behavior
+    completion_result = complete_mission(state, mission)
 
-    state.modify_faction_reputation(faction_id, mission.reputation_reward)
+    # Ensure the faction is marked as known
     if faction_id in state.faction_relations:
         state.faction_relations[faction_id].known = True
-
-    state.ship.credits += mission.credit_reward
-
-    state.add_log(
-        "faction",
-        f"Completed a mission for {faction.name}: {mission.title}. "
-        f"Gained {mission.reputation_reward} reputation and {mission.credit_reward} credits."
-    )
-
-    state.completed_missions.append({
-        "mission_id": mission.id,
-        "faction_id": mission.faction_id,
-        "title": mission.title,
-        "tier": mission.tier,
-    })
 
     game_save(state)
 
