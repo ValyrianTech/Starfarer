@@ -480,18 +480,6 @@ EVENT_COOLDOWNS = {
 }
 
 
-def get_available_events(game_state: GameState, templates: list[dict[str, Any]], system_data: dict) -> list[dict[str, Any]]:
-    """Filter event templates based on cooldowns and trigger conditions."""
-    cooldowns = game_state.event_cooldowns
-    available = []
-    for template in templates:
-        event_id = template["title"]
-        if event_id in cooldowns and cooldowns[event_id] > 0:
-            continue
-        available.append(template)
-    return available
-
-
 def apply_cooldown(state: GameState, event_title: str) -> None:
     """Set cooldown for an event after it fires."""
     state.event_cooldowns[event_title] = EVENT_COOLDOWNS.get(event_title, 5)
