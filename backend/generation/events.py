@@ -619,7 +619,11 @@ def trigger_event(state: GameState, rng_override: Optional[random.Random] = None
             eligible = eligible_not_on_cd
         elif eligible:
             eligible.sort(key=lambda t: state.event_cooldowns.get(t["title"], 0))
-            eligible = eligible[:1]
+            eligible_no_last = [t for t in eligible if t["title"] != state.last_event_title]
+            if eligible_no_last:
+                eligible = eligible_no_last[:1]
+            else:
+                eligible = eligible[:1]
 
         eligible_no_last = [t for t in eligible if t["title"] != state.last_event_title]
         if eligible_no_last:
@@ -641,7 +645,11 @@ def trigger_event(state: GameState, rng_override: Optional[random.Random] = None
             eligible = eligible_not_on_cd
         elif eligible:
             eligible.sort(key=lambda t: state.event_cooldowns.get(t["title"], 0))
-            eligible = eligible[:1]
+            eligible_no_last = [t for t in eligible if t["title"] != state.last_event_title]
+            if eligible_no_last:
+                eligible = eligible_no_last[:1]
+            else:
+                eligible = eligible[:1]
 
         eligible_no_last = [t for t in eligible if t["title"] != state.last_event_title]
         if eligible_no_last:
