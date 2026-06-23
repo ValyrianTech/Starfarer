@@ -465,6 +465,9 @@ def api_lore(game_id: str) -> dict:
                                 break
                         body_name = body.name if body else body_id
                         frag_dict["discovery_location"] = f"{system.name} - {body_name}"
+                    else:
+                        # Fallback: use raw IDs so the user at least sees something
+                        frag_dict["discovery_location"] = f"Unknown system ({sys_id}) - Body ({body_id})"
 
                 for entry in state.log_entries:
                     if entry.get("type") == "lore" and lore.title in entry.get("message", ""):
