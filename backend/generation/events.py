@@ -334,7 +334,7 @@ EVENT_TEMPLATES: list[dict[str, Any]] = [
         "title": "Gravitational Lens Observation",
         "flavor": "The black hole's gravity is bending light from distant stars, creating a natural telescope of unprecedented power. You can see galaxies normally hidden behind nebulae.",
         "choices": [
-            {"text": "Study the lensed images carefully", "outcome": "credits:200; morale:10; Discovered a lore fragment and gathered valuable astronomical data!"},
+            {"text": "Study the lensed images carefully", "outcome": "credits:200; morale:10; Gathered valuable astronomical data from the gravitational lens!"},
             {"text": "Quick observation", "outcome": "credits:100; Recorded useful astronomical observations."},
             {"text": "Ignore \u2014 too busy navigating", "outcome": "A missed opportunity, but the journey continues."},
         ],
