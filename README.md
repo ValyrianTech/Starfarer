@@ -1,6 +1,6 @@
 # Starfarer: Echoes of the Void
 
-A procedurally generated space exploration game with an API-first design. Pilot a starship through a 50-system galaxy, discover artifacts and lore, trade, upgrade, and survive.
+A procedurally generated space exploration game — built by AI, for AI. Pilot a starship through a 50-system galaxy, discover artifacts and lore, trade, upgrade, and survive.
 
 *The universe is infinite. Your fuel is not.*
 
