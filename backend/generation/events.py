@@ -552,6 +552,9 @@ def resolve_event(state: GameState, event_id: str, choice_idx: int) -> tuple[boo
             bonus_fn(state)
         if rep_before[faction_id] != rep_after[faction_id]:
             state.add_log("faction", f"{faction_id.replace('_', ' ').title()} reputation changed from {rep_before[faction_id]} to {rep_after[faction_id]}.")
+    elif event.event_type == "narrative":
+        # Narrative events are atmospheric/story events and do not affect faction reputation
+        pass
 
     extra_output = {
         "title": event.title,
