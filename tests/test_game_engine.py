@@ -11,7 +11,7 @@ from backend.game.engine import (
 )
 from backend.game.trading import get_upgrade_info, purchase_upgrade, perform_trade, perform_bulk_sell, calculate_fuel_price
 from backend.game.manager import new_game, get_galaxy, get_system_detail, game_save, load_or_create, get_game_state
-from backend.generation.events import trigger_event, resolve_event, EVENT_TEMPLATES, _get_eligible_templates
+from backend.generation.events import trigger_event, resolve_event, EVENT_TEMPLATES, _get_eligible_templates, _apply_cooldown_fallback
 from backend.config import SCAN_FUEL_COST
 from backend.models.game_state import GameState
 from backend.models.discovery import Discovery
@@ -3268,6 +3268,20 @@ class TestEventCooldowns:
         state = new_game(seed=42)
         apply_cooldown(state, "Unknown Event XYZ")
         assert state.event_cooldowns["Unknown Event XYZ"] == 5
+
+    def test_apply_cooldown_fallback_all_cooldown_zero(self) -> None:
+        """When all events have cooldown <= 0, the function returns a non-empty list.
+        When eligible is empty, the function returns an empty list."""
+        state = new_game(seed=42)
+        # No event_cooldowns means all events have cooldown <= 0 (get defaults to 0)
+        eligible = _get_eligible_templates(state, EVENT_TEMPLATES)
+        result = _apply_cooldown_fallback(eligible, state)
+        assert len(result) > 0
+        assert result == eligible  # all events pass the cooldown check
+
+        # When eligible is empty, result should be empty
+        result_empty = _apply_cooldown_fallback([], state)
+        assert result_empty == []
 
     def test_cooldown_fallback_respects_last_event_title_low_morale(self) -> None:
         """When all events on cooldown share the same lowest cooldown value and the lowest-cooldown event IS last_event_title, a different event should be picked."""
