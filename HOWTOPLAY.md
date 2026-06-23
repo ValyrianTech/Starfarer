@@ -361,6 +361,14 @@ Full OpenAPI docs at `/docs` and `/redoc`.
 
 Events may be phenomenon-specific, triggering only in systems with matching phenomena (e.g., black hole events only appear near black holes).
 
+### Reputation Bonuses
+When your faction reputation reaches **20 or higher**, resolving events of that faction's type grants bonus rewards:
+- **Stellar Cartographers** (exploration & discovery events): +10 credits and +1 morale per event
+- **Void Traders** (trade events): +10 credits per event
+- **Free Pilots** (encounter, crisis, crew & hazard events): +5 morale per event
+
+These bonuses stack with the event's normal outcome rewards.
+
 ---
 
 ## 11. Browser Automation Tips

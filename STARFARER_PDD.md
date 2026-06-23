@@ -119,7 +119,7 @@ Each step has a corresponding API endpoint for AI play.
 
 #### 3.4.1 Event Types
 - Exploration: Landing on a planet triggers discoveries
-- Hazard: Entering certain systems causes damage or crises
+- Hazard: Entering certain systems causes damage or crises (awards Free Pilots reputation)
 - Encounter: Random chance in deep space
 - Crew: Low morale threshold triggers crew events
 - Trade: Visiting a station opens trade opportunities
