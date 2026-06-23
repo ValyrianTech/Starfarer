@@ -810,11 +810,15 @@ def api_faction_mission(game_id: str, faction_id: str) -> dict:
     if not missions:
         raise HTTPException(status_code=400, detail="No missions available from this faction")
 
+    standard_missions = [m for m in missions if m.objective_type != "daily"]
+    if not standard_missions:
+        raise HTTPException(status_code=400, detail="No missions available from this faction")
+
     rng = seeded_random(
         deterministic_hash(state.seed, faction_id, str(len(state.log_entries))),
         "faction_mission",
     )
-    mission = rng.choice(missions)
+    mission = rng.choice(standard_missions)
 
     if state.ship.fuel < mission.fuel_cost:
         raise HTTPException(
@@ -848,11 +852,6 @@ def api_faction_mission(game_id: str, faction_id: str) -> dict:
         "title": mission.title,
         "tier": mission.tier,
     })
-
-    if mission.objective_type == "daily":
-        daily_key = get_daily_mission_key(state, current_system.id)
-        date_part = daily_key.split(":", 1)[1] if ":" in daily_key else daily_key
-        state.daily_missions_used[current_system.id] = date_part
 
     game_save(state)
 
