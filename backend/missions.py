@@ -323,6 +323,8 @@ def complete_mission(state, mission: FactionMission) -> dict:
         "tier": mission.tier,
     })
 
+    state.accepted_missions.discard(mission.id)
+
     if mission.objective_type == "daily":
         daily_key = get_daily_mission_key(state, mission.objective_target)
         date_part = daily_key.split(":", 1)[1] if ":" in daily_key else daily_key
