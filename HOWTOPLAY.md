@@ -163,6 +163,67 @@ Choices have outcomes that modify stats: `fuel`, `hull`, `morale`, `credits`, `c
 | Crew Morale Event | Boost morale | Low morale triggers cascading failures |
 | Black Hole Event | Depends on situation | Time Dilation: study for credits. Hawking Radiation: harvest for fuel. Spaghettification: gravity assist for fuel. Accretion Disk: probe for credits. Gravitational Lens: study for credits+morale. |
 
+### 3.9 Distress Beacon
+
+When your ship is in danger — out of fuel or critically damaged (hull below 20% of max) — you can activate the distress beacon to call for help.
+
+```http
+POST /api/game/{game_id}/distress
+```
+
+Costs 50 credits. Has a 60% chance of attracting a responder within 1-3 turns. If no responder comes, you can try again after the cooldown expires.
+
+**Possible outcomes:**
+| Outcome | Chance | Effect |
+|---|---|---|
+| Pilots Guild rescue | ~30% (stations only) | 20 fuel for 100 credits, +5 Free Pilots reputation |
+| Friendly passerby | ~20% | +10-25 fuel, free |
+| Pirates steal credits | ~12% | Lose 20-80 credits |
+| Friendly emergency signal | ~20% | +5-15 fuel, free |
+| Hostile emergency signal | ~20% | 5-15 hull damage |
+| Passerby ignores | ~8% | Nothing happens |
+
+The distress beacon has a cooldown period after each activation. Use it only when truly stranded.
+
+### 3.10 Salvage & Emergency Crafting
+
+When stranded with no fuel and landed on a body, you can salvage the area for resources.
+
+#### Salvage
+
+```http
+POST /api/game/{game_id}/salvage
+```
+
+Only available when fuel is 0 and you're landed on a body. Each body can be salvaged up to 3 times. Morale cost increases with each attempt (1 + 2 per prior attempt on the same body).
+
+| Roll | Find | Effect |
+|---|---|---|
+| 40% | Fuel cache | +2 to 8 fuel |
+| 30% | Repair materials | +5 to 15 hull repair |
+| 20% | Salvaged spare parts | +1 cargo (artifact, value 10-50 credits) |
+| 10% | Nothing | No effect |
+
+#### Emergency Crafting
+
+Convert a discovery from your inventory into emergency resources:
+
+```http
+POST /api/game/{game_id}/salvage/craft
+Content-Type: application/json
+
+{ "discovery_id": "abc123...", "output": "fuel" }
+```
+
+| Discovery Category | Crafts Into | Rate |
+|---|---|---|
+| `artifact` | `fuel` | +5 fuel |
+| `mineral` | `repair` | +10 hull |
+| `lifeform` | `morale` | +15 morale |
+| `signal` | `credits` | +50 credits |
+
+`ruin` category discoveries cannot be crafted.
+
 ---
 
 ## 4. Resource Management
@@ -223,6 +284,28 @@ Content-Type: application/json
 ```
 
 Sells the first matching discovery from your inventory. Prices vary per system.
+
+### Bulk Sell
+
+Sell multiple discoveries at once in a single transaction:
+
+```http
+POST /api/game/{game_id}/trade/bulk-sell
+Content-Type: application/json
+
+{
+  "items": [
+    { "item": "artifact", "quantity": 3 },
+    { "item": "Void Ore", "quantity": 2 }
+  ]
+}
+```
+
+Matches items by exact name first, then falls back to category match. Each `item` field accepts either a discovery name or a category (`"mineral"`, `"artifact"`, `"lifeform"`, `"signal"`, `"ruin"`). Items sorted by value (highest first) so your most valuable discoveries sell first.
+
+**Partial failure mode:** If some items don't exist in your inventory, the available items still sell. Errors are reported alongside the success message.
+
+Returns the full game state plus a `trade_result` field with `sold_count` and `total_price`.
 
 ---
 
@@ -285,6 +368,65 @@ GET /api/game/{game_id}
 ```
 
 Complete state dump: ship, current system, pending events, discoveries, log entries.
+
+### Cargo Hold
+
+```http
+GET /api/game/{game_id}/cargo
+```
+
+Returns a detailed breakdown of your cargo hold: current item count, max capacity, and a list of every discovery with its ID, name, category, value, and sellability status. Lore-linked items are marked as not sellable.
+
+### Lore Collection
+
+```http
+GET /api/game/{game_id}/lore
+```
+
+Returns all lore fragments organized by story arc. Each arc shows:
+- `display_name` — arc name (e.g., "The Architects", "The Void Signal")
+- `fragments` — list of fragments with `discovered` status
+- `collected` / `total` — progress counts
+- `hint` — for undiscovered fragments, a clue about where to look
+
+Discovered fragments include `discovery_location` (system - body), `discovery_date`, and `discovery_timestamp`. The overall `progress` field tracks your collection completion.
+
+Lore fragments are found during exploration when you land on the right body. Hints from the lore viewer guide you toward their locations.
+
+### Faction Relations
+
+#### View All Factions
+
+```http
+GET /api/game/{game_id}/factions
+```
+
+Returns all faction definitions and your current reputation with each.
+
+#### View Single Faction
+
+```http
+GET /api/game/{game_id}/faction/{faction_id}
+```
+
+Returns detailed faction info plus your reputation and whether the faction is known.
+
+#### Run a Faction Mission
+
+```http
+POST /api/game/{game_id}/faction/{faction_id}/mission
+```
+
+Costs 10 fuel and 50 credits. Success chance scales with your current reputation with that faction (40% base, up to 90% at high reputation).
+
+| Faction | Alignment | Bonus |
+|---|---|---|
+| Stellar Cartographers Union | Explorer | +10 credits, +1 morale on exploration/discovery events at rep ≥20 |
+| Void Traders Syndicate | Corporate | Discounted fuel/repairs at high rep; +10 credits on trade events at rep ≥20 |
+| Free Pilots Guild | Explorer | +5 morale on encounter/crisis/crew/hazard events at rep ≥20 |
+
+**Success:** +10-30 reputation, +50-150 credits.  
+**Failure:** -5-15 reputation.
 
 ### Leaderboard
 
@@ -352,14 +494,23 @@ The game persists all state to SQLite. Save frequently — especially before ris
 | POST | `/api/game/{id}/jump/{sid}` | Jump to system |
 | POST | `/api/game/{id}/scan` | Scan current system |
 | POST | `/api/game/{id}/land/{bid}` | Land on body |
-| POST | `/api/game/{id}/explore` | Explore surface (returns `lore_fragments_discovered`) |
+| POST | `/api/game/{id}/explore` | Explore surface |
 | POST | `/api/game/{id}/event/{eid}/resolve` | Resolve event |
+| POST | `/api/game/{id}/distress` | Activate distress beacon |
+| POST | `/api/game/{id}/salvage` | Salvage area for resources |
+| POST | `/api/game/{id}/salvage/craft` | Craft discovery into resources |
 | GET | `/api/game/{id}/log` | Ship log |
 | GET | `/api/game/{id}/discoveries` | Discovery list |
+| GET | `/api/game/{id}/cargo` | Cargo hold details |
+| GET | `/api/game/{id}/lore` | Lore fragment collection |
 | POST | `/api/game/{id}/trade` | Buy/sell at station |
+| POST | `/api/game/{id}/trade/bulk-sell` | Sell multiple discoveries |
 | GET | `/api/game/{id}/upgrades` | Upgrade options |
 | POST | `/api/game/{id}/upgrade` | Purchase upgrade |
 | GET | `/api/game/{id}/nearby` | Nearby systems |
+| GET | `/api/game/{id}/factions` | List all factions |
+| GET | `/api/game/{id}/faction/{fid}` | Single faction detail |
+| POST | `/api/game/{id}/faction/{fid}/mission` | Run faction mission |
 | POST | `/api/game/{id}/save` | Save game |
 | POST | `/api/game/{id}/load` | Load game |
 | GET | `/api/leaderboard` | Top players |
@@ -367,8 +518,6 @@ The game persists all state to SQLite. Save frequently — especially before ris
 Full OpenAPI docs at `/docs` and `/redoc`.
 
 Events may be phenomenon-specific, triggering only in systems with matching phenomena (e.g., black hole events only appear near black holes).
-
-**Note on explore endpoint:** The `POST /api/game/{id}/explore` response includes a `lore_fragments_discovered` array. Each entry contains `fragment_id`, `arc`, `title`, `discovery_location`, and `discovery_timestamp` (ISO format). This field is present even when no fragments are found (empty array).
 
 ### Reputation Bonuses
 When your faction reputation reaches **20 or higher**, resolving events of that faction's type grants bonus rewards:
@@ -379,12 +528,12 @@ When your faction reputation reaches **20 or higher**, resolving events of that 
 These bonuses stack with the event's normal outcome rewards.
 
 ### Lore Fragment Hints
-The lore viewer reveals hints for undiscovered fragments, guiding you toward their locations. The `/api/game/{id}/lore` endpoint returns both discovered fragments (with `discovery_location`, `discovery_date`, and `discovery_timestamp`) and undiscovered fragments (with `hint` text). Explore systems matching the hint descriptions to complete each story arc.
+The `/api/game/{id}/lore` endpoint returns both discovered fragments (with `discovery_location`, `discovery_date`, and `discovery_timestamp`) and undiscovered fragments (with `hint` text). Explore systems matching the hint descriptions to complete each story arc.
 
 #### Lore Notification System
-- **Discovery Toast:** When a new lore fragment is discovered during exploration, a toast notification appears in the bottom-right corner of the screen. The toast displays the fragment's arc and title, with a "View" button that opens the lore viewer to see the new fragment.
-- **Lore Button Pulse:** The Lore navigation button (identified by `data-lore-nav="true"`) pulses with a glow animation when there are unread lore fragments. The glow clears once the lore viewer has been opened.
-- **Fallback Safety:** If `lore.js` fails to load, `notifyLoreFragment` and `updateLoreButtonGlow` degrade gracefully via safe fallback stubs in `main.js`.
+- **Discovery Toast:** When a new lore fragment is found, a toast appears with the fragment's arc and title, plus a "View" button.
+- **Lore Button Pulse:** The Lore navigation button (`data-lore-nav="true"`) pulses when there are unread lore fragments. The glow clears once the lore viewer has been opened.
+- **Fallback Safety:** If `lore.js` fails to load, notification stubs in `main.js` degrade gracefully.
 
 ---
 
