@@ -102,6 +102,7 @@ class LoreFragment:
     fragment_number: int = -1
     discovery_location: str = ""
     discovery_date: str = ""
+    discovery_timestamp: str = ""
     hint: str = ""
 
     def to_dict(self) -> dict:
@@ -120,6 +121,7 @@ class LoreFragment:
             "fragment_number": self.fragment_number,
             "discovery_location": self.discovery_location,
             "discovery_date": self.discovery_date,
+            "discovery_timestamp": self.discovery_timestamp,
             "hint": self.hint,
         }
 
@@ -142,5 +144,6 @@ class LoreFragment:
             fragment_number=d.get("fragment_number", -1),
             discovery_location=d.get("discovery_location", ""),
             discovery_date=d.get("discovery_date", ""),
+            discovery_timestamp=d.get("discovery_timestamp", ""),
             hint=d.get("hint", ""),
         )

@@ -6,7 +6,6 @@ navigation, exploration, events, trading, upgrades, saving/loading,
 and the leaderboard.
 """
 
-import re
 import time
 
 from fastapi import APIRouter, HTTPException
@@ -447,17 +446,6 @@ def api_lore(game_id: str) -> dict:
             "total": 0,
         }
 
-    # Build O(1) lookup: lore fragment ID -> discovery timestamp
-    lore_log_dates: dict[str, str] = {}
-    for entry in state.log_entries:
-        if entry.get("type") == "lore":
-            msg = entry.get("message", "")
-            # Extract fragment ID from format: "Discovered lore fragment: {title} ({id})."
-            match = re.search(r"\(([^)]+)\)\.$", msg)
-            if match:
-                frag_id = match.group(1)
-                lore_log_dates[frag_id] = entry.get("timestamp", "")
-
     for lore in state.lore_fragments:
         arc = lore.arc
         if arc in arcs:
@@ -480,8 +468,8 @@ def api_lore(game_id: str) -> dict:
                         # Fallback: use raw IDs so the user at least sees something
                         frag_dict["discovery_location"] = f"Unknown system ({sys_id}) - Body ({body_id})"
 
-            if lore.id in lore_log_dates:
-                frag_dict["discovery_date"] = lore_log_dates[lore.id]
+            if lore.discovery_timestamp:
+                frag_dict["discovery_date"] = lore.discovery_timestamp
 
             arcs[arc]["fragments"].append(frag_dict)
             arcs[arc]["total"] += 1

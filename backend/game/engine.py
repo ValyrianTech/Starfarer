@@ -7,6 +7,7 @@ landing, surface exploration, and nearby system discovery.
 
 import random
 import logging
+from datetime import datetime, timezone
 from typing import Any, Callable, List, NamedTuple, Optional
 
 from backend.config import (
@@ -254,6 +255,7 @@ def explore_surface(state: GameState) -> list[Discovery]:
                 # First discovery of this lore fragment — link it to this discovery
                 disc.lore_fragment_id = lore_frag.id
                 lore_frag.discovered = True
+                lore_frag.discovery_timestamp = datetime.now(timezone.utc).isoformat()
                 lore_linked = True
                 state.add_log("lore", f"Discovered lore fragment: {lore_frag.title} ({lore_frag.id}).")
             elif lore_frag and lore_frag.discovered and not lore_linked:
