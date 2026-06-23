@@ -161,6 +161,14 @@ Choices have outcomes that modify stats: `fuel`, `hull`, `morale`, `credits`, `c
 | Pirate/Combat | Avoid if possible | Hull damage is expensive to repair |
 | Trade Opportunity | Take it | Free credits and resources |
 | Crew Morale Event | Boost morale | Low morale triggers cascading failures |
+| Nebula Event (Ion Storm) | Power through | Minor hull damage but yields Ion Crystal discovery |
+| Nebula Event (Protostar Formation) | Collect samples | Minor hull damage but yields valuable mineral samples |
+| Nebula Event (Nebula Navigation Puzzle) | Follow the clearing current | Gains fuel by finding a shortcut |
+| Pulsar Event (Radiation Pulse) | Dive behind asteroid/moon | Avoids hull damage at fuel cost |
+| Pulsar Event (Pulsar Timing Signal) | Decode the signal pattern | Credits and potential lore fragment |
+| Pulsar Event (Neutron Star Proximity) | Safe orbital scan | No hull damage, still yields data |
+| Binary Star Event (Orbital Mechanics Challenge) | Calculate perfect trajectory | Fuel-efficient gravity assist + credits |
+| Binary Star Event (Lagrange Point Discovery) | Investigate the satellite | Most valuable outcome (credits + data) |
 | Black Hole Event | Depends on situation | Time Dilation: study for credits. Hawking Radiation: harvest for fuel. Spaghettification: gravity assist for fuel. Accretion Disk: probe for credits. Gravitational Lens: study for credits+morale. |
 
 ### 3.9 Distress Beacon
@@ -466,7 +474,7 @@ Top players ranked by discoveries and systems visited.
 
 ### 8.5 Optimal Discovery Strategy
 - Target planets with high `poi_count` and `body_type: "planet"` (more discoveries per explore)
-- Systems with phenomena (`nebula`, `ancient_gate`) may trigger unique events
+- Systems with phenomena (`nebula`, `pulsar`, `binary_star`, `ancient_gate`) may trigger unique events
 - Jungle and ocean biomes tend to yield more lifeform discoveries (higher value)
 - Crystal and volcanic biomes yield rarer minerals
 

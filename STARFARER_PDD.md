@@ -126,6 +126,7 @@ Each step has a corresponding API endpoint for AI play.
 - Discovery: Scanner detects anomalies
 - Crisis: Cumulative conditions create emergencies
 - Narrative: Atmospheric story events (no reputation changes)
+- Phenomenon-Specific: Events triggered by system phenomena such as black holes, nebula, pulsar, and binary star systems
 
 Discovery and Hazard events now properly award faction reputation (Stellar Cartographers for discovery, Free Pilots for hazard). The `_distress_pilots_guild` function returns an error dict instead of raising ValueError when the current system is None, allowing the distress beacon flow to handle missing system state gracefully.
 
