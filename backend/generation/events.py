@@ -477,7 +477,7 @@ def apply_cooldown(state: GameState, event_title: str) -> None:
 
 def decrement_cooldowns(state: GameState) -> None:
     """Decrement all active cooldowns by 1."""
-    for event_id in list(state.event_cooldowns.keys()):
+    for event_id in list(state.event_cooldowns):
         state.event_cooldowns[event_id] -= 1
         if state.event_cooldowns[event_id] <= 0:
             del state.event_cooldowns[event_id]
