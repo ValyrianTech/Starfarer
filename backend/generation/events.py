@@ -572,7 +572,7 @@ def _apply_cooldown_fallback(eligible: list[dict], state: GameState) -> list[dic
         return eligible_not_on_cd
     if not eligible:
         return []
-    eligible.sort(key=lambda t: state.event_cooldowns.get(t["title"], 0))
+    eligible = sorted(eligible, key=lambda t: state.event_cooldowns.get(t["title"], 0))
     eligible_no_last = [t for t in eligible if t["title"] != state.last_event_title]
     if eligible_no_last:
         return eligible_no_last[:1]
