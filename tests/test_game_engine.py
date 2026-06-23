@@ -15,6 +15,7 @@ from backend.generation.events import trigger_event, resolve_event, EVENT_TEMPLA
 from backend.config import SCAN_FUEL_COST
 from backend.models.game_state import GameState
 from backend.models.discovery import Discovery
+from backend.models.system import StarSystem
 
 
 class TestGameManager:
@@ -2688,11 +2689,11 @@ class TestFuelPricing:
         assert "breakdown_lines" in price
         lines = price["breakdown_lines"]
         assert len(lines) == 5
-        assert any("Base price" in l for l in lines)
-        assert any("System type" in l for l in lines)
-        assert any("Faction standing" in l for l in lines)
-        assert any("Supply/demand" in l for l in lines)
-        assert any("Final price" in l for l in lines)
+        assert any("Base price" in line for line in lines)
+        assert any("System type" in line for line in lines)
+        assert any("Faction standing" in line for line in lines)
+        assert any("Supply/demand" in line for line in lines)
+        assert any("Final price" in line for line in lines)
 
     def test_fuel_buying_uses_dynamic_pricing(self) -> None:
         """Buying fuel should use calculate_fuel_price and include breakdown."""
