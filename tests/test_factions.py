@@ -1078,6 +1078,88 @@ class TestFactionAPI:
         assert data["mission"]["fuel_cost"] > 0
         assert data["mission"]["credit_cost"] > 0
 
+    def test_faction_mission_skips_completed_mission(self) -> None:
+        resp = client.post(
+            "/api/game/new",
+            json={"seed": 42, "game_id": "mission-skip-completed"},
+        )
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        state.ship.fuel = 100
+        state.ship.credits = 500
+        current_system = state.get_current_system()
+        assert current_system is not None
+        current_system.has_trading_station = True
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        resp = client.get(f"/api/game/{game_id}/missions")
+        missions_data = resp.json()
+        standard_missions = missions_data["missions"]
+        assert len(standard_missions) >= 2
+
+        completed_mission_id = standard_missions[0]["id"]
+        faction_id = missions_data["faction_id"]
+        state.completed_missions.append({
+            "mission_id": completed_mission_id,
+            "faction_id": faction_id,
+            "title": "test",
+            "tier": 1,
+        })
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        mock_rng = MagicMock()
+        mock_rng.choice.side_effect = lambda lst: lst[0]
+
+        with patch("backend.utils.seeded_random", return_value=mock_rng):
+            resp = client.post(
+                f"/api/game/{game_id}/faction/{faction_id}/mission"
+            )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["effect"] == "success"
+        assert data["mission"]["id"] != completed_mission_id
+
+    def test_faction_mission_all_completed_returns_400(self) -> None:
+        resp = client.post(
+            "/api/game/new",
+            json={"seed": 42, "game_id": "mission-all-completed"},
+        )
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        state.ship.fuel = 100
+        state.ship.credits = 500
+        current_system = state.get_current_system()
+        assert current_system is not None
+        current_system.has_trading_station = True
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        resp = client.get(f"/api/game/{game_id}/missions")
+        missions_data = resp.json()
+        faction_id = missions_data["faction_id"]
+
+        for mission in missions_data["missions"]:
+            state.completed_missions.append({
+                "mission_id": mission["id"],
+                "faction_id": faction_id,
+                "title": "test",
+                "tier": 1,
+            })
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        resp = client.post(
+            f"/api/game/{game_id}/faction/{faction_id}/mission"
+        )
+
+        assert resp.status_code == 400
+        assert "No available missions" in resp.json()["detail"]
+
 
 class TestTradingFactionIntegration:
     def test_stellar_cartographers_positive_reputation_bonus(self) -> None:
