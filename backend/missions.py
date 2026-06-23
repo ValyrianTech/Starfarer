@@ -292,8 +292,9 @@ def generate_missions(state, system, faction_id: str) -> list[FactionMission]:
 def complete_mission(state, mission: FactionMission) -> dict:
     """Apply mission rewards to the game state and record completion.
 
-    Credits and reputation are applied immediately. The mission is
-    added to ``completed_missions``. Daily missions update the
+    Fuel and credit costs are deducted at completion time. Credits
+    and reputation rewards are applied. The mission is added to
+    ``completed_missions``. Daily missions update the
     ``daily_missions_used`` tracker.
 
     :param state: The current game state.
@@ -304,6 +305,9 @@ def complete_mission(state, mission: FactionMission) -> dict:
         reputation rewards.
     :rtype: dict
     """
+    state.ship.fuel -= mission.fuel_cost
+    state.ship.credits -= mission.credit_cost
+
     state.ship.credits += mission.credit_reward
     state.modify_faction_reputation(mission.faction_id, mission.reputation_reward)
 

@@ -424,13 +424,15 @@ class TestFactionAPI:
             reputation_reward=10,
         )
         credits_before = state.ship.credits
+        fuel_before = state.ship.fuel
         rep_before = state.get_faction_reputation("stellar_cartographers")
         result = complete_mission(state, mission)
         assert result["mission_id"] == "test_mission_001"
         assert result["faction_id"] == "stellar_cartographers"
         assert result["credit_reward"] == 50
         assert result["reputation_reward"] == 10
-        assert state.ship.credits == credits_before + 50
+        assert state.ship.fuel == fuel_before - 3
+        assert state.ship.credits == credits_before - 10 + 50
         assert state.get_faction_reputation("stellar_cartographers") == rep_before + 10
         assert len(state.completed_missions) == 1
         assert state.completed_missions[0]["mission_id"] == "test_mission_001"
@@ -553,6 +555,10 @@ class TestFactionAPI:
         data = resp.json()
         assert data["mission"]["id"] == mission_id
         assert "ship" in data
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        assert state.ship.fuel == 100
+        assert state.ship.credits == 500
 
     def test_api_accept_mission_already_completed(self) -> None:
         resp = client.post(
@@ -648,9 +654,13 @@ class TestFactionAPI:
         resp = client.get(f"/api/game/{game_id}/missions")
         missions_data = resp.json()
         mission_id = missions_data["missions"][0]["id"]
+        mission_fuel_cost = missions_data["missions"][0]["fuel_cost"]
+        mission_credit_cost = missions_data["missions"][0]["credit_cost"]
+        mission_credit_reward = missions_data["missions"][0]["credit_reward"]
         rep_before = state.get_faction_reputation(
             missions_data["faction_id"]
         )
+        fuel_before = state.ship.fuel
         credits_before = state.ship.credits
         resp = client.post(
             f"/api/game/{game_id}/missions/{mission_id}/accept",
@@ -668,6 +678,8 @@ class TestFactionAPI:
         assert "ship" in data
         state = GAME_STORE.get(game_id)
         assert state is not None
+        assert state.ship.fuel == fuel_before - mission_fuel_cost
+        assert state.ship.credits == credits_before - mission_credit_cost + mission_credit_reward
         assert state.ship.credits > credits_before
         assert state.get_faction_reputation(
             missions_data["faction_id"]
