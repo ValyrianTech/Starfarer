@@ -340,6 +340,102 @@ EVENT_TEMPLATES: list[dict[str, Any]] = [
         ],
         "trigger_conditions": {"phenomenon": "black_hole"},
     },
+    {
+        "type": "hazard",
+        "rarity": "uncommon",
+        "title": "Ion Storm",
+        "flavor": "Your ship flies into a dense pocket of ionized gas. Electrical discharges crawl across the hull as systems flicker.",
+        "choices": [
+            {"text": "Power through", "outcome": "hull:-12; Gained an Ion Crystal discovery!"},
+            {"text": "Shield systems and wait", "outcome": "fuel:-5; hull:-5; Waited out the storm."},
+            {"text": "Navigate around", "outcome": "fuel:-9; Took a detour around the ion storm."},
+        ],
+        "trigger_conditions": {"phenomenon": "nebula"},
+    },
+    {
+        "type": "discovery",
+        "rarity": "uncommon",
+        "title": "Protostar Formation",
+        "flavor": "Deep within the nebula, a protostar is forming — a baby star. The heat and pressure create a zone of rare elements.",
+        "choices": [
+            {"text": "Collect samples from the accretion zone", "outcome": "hull:-8; Gathered valuable mineral samples from the protostar!"},
+            {"text": "Observe and record data", "outcome": "Recorded valuable scientific data on protostar formation."},
+            {"text": "Avoid — too dangerous", "outcome": "A wise decision."},
+        ],
+        "trigger_conditions": {"phenomenon": "nebula"},
+    },
+    {
+        "type": "encounter",
+        "rarity": "uncommon",
+        "title": "Nebula Navigation Puzzle",
+        "flavor": "The nebula's dense gas clouds are disrupting your navigation sensors. You're flying partially blind.",
+        "choices": [
+            {"text": "Follow the clearing current", "outcome": "fuel:4; Found a shortcut through the nebula!"},
+            {"text": "Push through systematically", "outcome": "fuel:-4; Found a minor discovery in the nebula."},
+            {"text": "Wait for sensors to recalibrate", "outcome": "fuel:-2; Waited for the sensors to recalibrate."},
+        ],
+        "trigger_conditions": {"phenomenon": "nebula"},
+    },
+    {
+        "type": "hazard",
+        "rarity": "uncommon",
+        "title": "Radiation Pulse",
+        "flavor": "The pulsar's beam sweeps across your position. Radiation alarms blare as your ship is bathed in intense energy.",
+        "choices": [
+            {"text": "Dive behind a nearby asteroid/moon", "outcome": "fuel:-5; Emergency maneuver avoided the radiation pulse."},
+            {"text": "Shield up and brace", "outcome": "hull:-12; Gained a Pulsar Radiation Sample discovery!"},
+            {"text": "Try to ride the beam", "outcome": "fuel:12; hull:-18; Absorbed energy from the pulsar beam!"},
+        ],
+        "trigger_conditions": {"phenomenon": "pulsar"},
+    },
+    {
+        "type": "discovery",
+        "rarity": "uncommon",
+        "title": "Pulsar Timing Signal",
+        "flavor": "The pulsar emits a regular timing signal — so precise it could be a navigation beacon. Someone — or something — may have calibrated this.",
+        "choices": [
+            {"text": "Decode the signal pattern", "outcome": "credits:100; Discovered a lore fragment from the pulsar signal!"},
+            {"text": "Record the timing for later study", "outcome": "Recorded the pulsar timing data for later analysis."},
+            {"text": "Ignore — just another dead star", "outcome": "The journey continues."},
+        ],
+        "trigger_conditions": {"phenomenon": "pulsar"},
+    },
+    {
+        "type": "hazard",
+        "rarity": "rare",
+        "title": "Neutron Star Proximity",
+        "flavor": "The pulsar's neutron star is incredibly dense. Getting close could yield incredible scientific data, but the gravity and radiation are extreme.",
+        "choices": [
+            {"text": "Close approach for data", "outcome": "hull:-18; Gained a valuable Neutronium Sample discovery!"},
+            {"text": "Safe orbital scan", "outcome": "Conducted a safe orbital scan of the neutron star."},
+            {"text": "Keep distance", "outcome": "Some phenomena are best observed from afar."},
+        ],
+        "trigger_conditions": {"phenomenon": "pulsar"},
+    },
+    {
+        "type": "encounter",
+        "rarity": "uncommon",
+        "title": "Orbital Mechanics Challenge",
+        "flavor": "You need to navigate between two orbiting stars. The gravitational fields are complex and constantly shifting.",
+        "choices": [
+            {"text": "Calculate the perfect trajectory", "outcome": "fuel:-4; credits:100; Successfully used a gravity assist between the binary stars!"},
+            {"text": "Take the safe long route", "outcome": "fuel:-9; Took the long way around the binary system."},
+            {"text": "Hire a local pilot (if at station)", "outcome": "credits:-100; Hired a local pilot for safe passage."},
+        ],
+        "trigger_conditions": {"phenomenon": "binary_star"},
+    },
+    {
+        "type": "discovery",
+        "rarity": "uncommon",
+        "title": "Lagrange Point Discovery",
+        "flavor": "At the Lagrange point between the two stars, debris has accumulated — a graveyard of asteroids and... is that an ancient satellite?",
+        "choices": [
+            {"text": "Search the debris field", "outcome": "Found valuable minerals and artifacts in the debris field!"},
+            {"text": "Investigate the satellite", "outcome": "credits:150; Discovered an ancient satellite with valuable data!"},
+            {"text": "Scan from distance and leave", "outcome": "Scanned the Lagrange point from a safe distance."},
+        ],
+        "trigger_conditions": {"phenomenon": "binary_star"},
+    },
 ]
 
 

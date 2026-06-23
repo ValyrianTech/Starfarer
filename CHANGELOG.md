@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- 9 new phenomenon-specific events: 4 nebula events (Ion Storm, Protostar Formation, Nebula Navigation Puzzle), 3 pulsar events (Radiation Pulse, Pulsar Timing Signal, Neutron Star Proximity), and 2 binary star events (Orbital Mechanics Challenge, Lagrange Point Discovery)
 - 5 new black hole system-specific events: Time Dilation Anomaly, Hawking Radiation Harvest, Spaghettification Near-Miss, Accretion Disk Prospecting, and Gravitational Lens Observation
 - Reputation handling for `discovery` and `hazard` event types in `resolve_event()`
 - Explicit handling for `narrative` event type (no reputation changes)
