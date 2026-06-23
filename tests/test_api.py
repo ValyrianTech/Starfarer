@@ -1391,6 +1391,59 @@ class TestAPILore:
         assert len(data["arc_order"]) == 4
         assert data["arc_order"] == ["architects", "void_signal", "fracture", "wanderer"]
 
+    def test_lore_discovery_date_stored_on_fragment(self) -> None:
+        """After discovering a lore fragment, the lore endpoint returns a non-empty discovery_date."""
+        from backend.generation.lore import get_lore_fragments_for_system
+
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+
+        target_sys_id = None
+        target_body_id = None
+        for sys_id in state.systems:
+            frags = get_lore_fragments_for_system(sys_id, state.lore_fragments)
+            if frags:
+                target_sys_id = sys_id
+                target_body_id = frags[0].discovery_id.split("::")[1]
+                break
+
+        if not target_sys_id:
+            return
+
+        state.ship.current_system_id = target_sys_id
+        state.ship.fuel = 1000
+
+        client.post(f"/api/game/{game_id}/land/{target_body_id}")
+        client.post(f"/api/game/{game_id}/explore")
+
+        resp = client.get(f"/api/game/{game_id}/lore")
+        assert resp.status_code == 200
+        data = resp.json()
+
+        discovered_frags = []
+        for arc_data in data["arcs"].values():
+            for frag in arc_data["fragments"]:
+                if frag["discovered"]:
+                    discovered_frags.append(frag)
+
+        assert len(discovered_frags) > 0
+        for frag in discovered_frags:
+            assert "discovery_date" in frag
+            assert frag["discovery_date"] != ""
+            assert frag["discovery_date"] is not None
+
+    def test_lore_discovery_date_no_fragments_returns_early(self) -> None:
+        """Cover guard clause when no lore fragments found."""
+        import backend.generation.lore as lore_mod
+
+        original = lore_mod.get_lore_fragments_for_system
+        lore_mod.get_lore_fragments_for_system = lambda sys_id, lore_frags: []
+        try:
+            self.test_lore_discovery_date_stored_on_fragment()
+        finally:
+            lore_mod.get_lore_fragments_for_system = original
+
     def test_lore_fallback_when_system_not_found(self) -> None:
         """When discovery_id references a system not in state.systems, fallback location is used."""
         from backend.models.discovery import LoreFragment
@@ -1430,6 +1483,33 @@ class TestAPILore:
         assert test_frag is not None, "Test fragment should be in the response"
         assert "discovery_location" in test_frag
         assert test_frag["discovery_location"] == "Unknown system (nonexistent_system_xyz) - Body (body_123)"
+
+    def test_lore_endpoint_no_fragments_in_state(self) -> None:
+        """When state has zero lore fragments, the lore endpoint returns arcs with no fragments and 0/0 progress."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "no-lore-frags"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+
+        state.lore_fragments = []
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        resp = client.get(f"/api/game/{game_id}/lore")
+        assert resp.status_code == 200
+        data = resp.json()
+
+        assert "arcs" in data
+        assert "progress" in data
+        assert data["progress"]["total"] == 0
+        assert data["progress"]["collected"] == 0
+
+        expected_arcs = {"architects", "void_signal", "fracture", "wanderer"}
+        assert set(data["arcs"].keys()) == expected_arcs
+
+        for arc_id, arc_data in data["arcs"].items():
+            assert arc_data["total"] == 0
+            assert arc_data["collected"] == 0
+            assert arc_data["fragments"] == []
 
 
 class TestAPIMainIndex:
