@@ -130,6 +130,10 @@ Each step has a corresponding API endpoint for AI play.
 
 Discovery and Hazard events now properly award faction reputation (Stellar Cartographers for discovery, Free Pilots for hazard). The `_distress_pilots_guild` function returns an error dict instead of raising ValueError when the current system is None, allowing the distress beacon flow to handle missing system state gracefully.
 
+#### 3.4.1a Event Cooldowns
+
+To prevent event repetition and encourage variety, each event template has a configurable cooldown value (3, 5, 6, 8, or 10 turns) defined in the `EVENT_COOLDOWNS` dictionary. When an event fires, `apply_cooldown()` records the cooldown in `GameState.event_cooldowns: dict[str, int]`. Before triggering a new event (on jump, scan, or explore), `decrement_cooldowns(state)` reduces all active cooldowns by 1 and removes expired ones. If all otherwise-eligible events are on cooldown, `_apply_cooldown_fallback()` selects the event with the lowest remaining cooldown, avoiding the last-fired event (`last_event_title`) when possible. Cooldowns persist across save/load via the manager serialization layer.
+
 #### 3.4.2 Event Structure
 Each event has:
 - Trigger condition (location, player state, probability)

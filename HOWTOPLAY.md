@@ -527,6 +527,10 @@ Full OpenAPI docs at `/docs` and `/redoc`.
 
 Events may be phenomenon-specific, triggering only in systems with matching phenomena (e.g., black hole events only appear near black holes).
 
+#### Event Cooldowns
+
+Events now have per-event cooldowns to prevent the same event from firing repeatedly in a single session. Cooldown values range from 3 to 10 turns depending on event rarity and type. After an event fires, it goes on cooldown and will not trigger again until the cooldown expires. Cooldowns decrement by 1 each time you jump, scan, or explore. If all eligible events are on cooldown, the system uses a fallback: the event with the lowest remaining cooldown may fire, with preference given to events other than the one that last fired (`last_event_title` deduplication). This ensures event variety while still allowing events to occur when the pool is constrained.
+
 ### Reputation Bonuses
 When your faction reputation reaches **20 or higher**, resolving events of that faction's type grants bonus rewards:
 - **Stellar Cartographers** (exploration & discovery events): +10 credits and +1 morale per event
