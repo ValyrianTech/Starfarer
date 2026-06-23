@@ -3503,18 +3503,19 @@ class TestCrisisCooldown:
     """Tests for the crisis_cooldown mechanism."""
 
     def test_crisis_cooldown_decrements_on_trigger_call(self) -> None:
-        """crisis_cooldown should decrement by 1 each time trigger_event is called."""
+        """crisis_cooldown should only decrement when an event is actually triggered."""
         state = new_game(seed=42)
         state.ship.morale = 80  # normal morale
         state.crisis_cooldown = 3
         system = state.get_current_system()
         assert system is not None
         system.phenomenon = "none"
-        # Call trigger_event - it should decrement crisis_cooldown
+        # Call trigger_event - it should NOT decrement crisis_cooldown since no event is triggered
         import random
-        rng = random.Random(1)
-        trigger_event(state, rng_override=rng)
-        assert state.crisis_cooldown == 2, f"Expected 2, got {state.crisis_cooldown}"
+        rng = random.Random(0)
+        event = trigger_event(state, rng_override=rng)
+        assert event is None, "Expected no event to trigger"
+        assert state.crisis_cooldown == 3, f"Expected 3 (unchanged), got {state.crisis_cooldown}"
 
     def test_crisis_cooldown_blocks_crisis_in_low_morale(self) -> None:
         """When crisis_cooldown > 0 in low-morale path, crisis events should be filtered out."""
@@ -3577,7 +3578,7 @@ class TestCrisisCooldown:
         assert state.crisis_cooldown == 3
 
     def test_crisis_cooldown_does_not_go_below_zero(self) -> None:
-        """crisis_cooldown should not go below 0."""
+        """crisis_cooldown should not go below 0 (and should not decrement when no event triggers)."""
         state = new_game(seed=42)
         state.ship.morale = 80
         state.crisis_cooldown = 0
@@ -3585,9 +3586,10 @@ class TestCrisisCooldown:
         assert system is not None
         system.phenomenon = "none"
         import random
-        rng = random.Random(1)
-        trigger_event(state, rng_override=rng)
-        assert state.crisis_cooldown >= 0, f"Expected >=0, got {state.crisis_cooldown}"
+        rng = random.Random(0)
+        event = trigger_event(state, rng_override=rng)
+        assert event is None, "Expected no event to trigger"
+        assert state.crisis_cooldown == 0, f"Expected 0 (unchanged), got {state.crisis_cooldown}"
 
     def test_crisis_cooldown_serialization(self) -> None:
         """crisis_cooldown should survive save/load roundtrip."""

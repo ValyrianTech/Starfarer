@@ -669,9 +669,6 @@ def trigger_event(state: GameState, rng_override: Optional[random.Random] = None
     if not system:
         return None
 
-    if state.crisis_cooldown > 0:
-        state.crisis_cooldown -= 1
-
     if state.ship.morale < MORALE_LOW_THRESHOLD:
         eligible = _get_eligible_templates(state, EVENT_TEMPLATES)
         eligible = [t for t in eligible if t["type"] in ("crew", "crisis", "narrative")]
@@ -689,6 +686,8 @@ def trigger_event(state: GameState, rng_override: Optional[random.Random] = None
         template = eligible[deterministic_hash(system.id, str(len(state.log_entries))) % len(eligible)]
         state.last_event_title = template["title"]
         apply_cooldown(state, template["title"])
+        if state.crisis_cooldown > 0:
+            state.crisis_cooldown -= 1
         if template.get("category") == "crisis":
             state.crisis_cooldown = 3
         return _create_event(template, system.id)
@@ -714,6 +713,8 @@ def trigger_event(state: GameState, rng_override: Optional[random.Random] = None
         template = rng.choices(eligible, weights=weights, k=1)[0]
         state.last_event_title = template["title"]
         apply_cooldown(state, template["title"])
+        if state.crisis_cooldown > 0:
+            state.crisis_cooldown -= 1
         if template.get("category") == "crisis":
             state.crisis_cooldown = 3
         return _create_event(template, system.id)
