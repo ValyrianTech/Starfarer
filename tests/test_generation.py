@@ -491,6 +491,82 @@ class TestEventModel:
         assert len(restored.choices) == 2
         assert restored.choices[0].text == "Do A"
 
+    def test_event_category_default_none(self) -> None:
+        """Event category should default to None when not provided."""
+        event = Event(id="evt_1", title="Test", flavor="...", event_type="exploration")
+        assert event.category is None
+
+    def test_event_category_explicit(self) -> None:
+        """Event category should be set when provided."""
+        event = Event(id="evt_1", title="Test", flavor="...", event_type="crisis", category="crisis")
+        assert event.category == "crisis"
+
+    def test_event_to_dict_includes_category(self) -> None:
+        """to_dict should include the category field."""
+        event = Event(id="evt_1", title="Test", flavor="...", event_type="crisis", category="crisis")
+        d = event.to_dict()
+        assert d["category"] == "crisis"
+
+    def test_event_to_dict_category_none(self) -> None:
+        """to_dict should include category=None when not set."""
+        event = Event(id="evt_1", title="Test", flavor="...", event_type="exploration")
+        d = event.to_dict()
+        assert "category" in d
+        assert d["category"] is None
+
+    def test_event_from_dict_restores_category(self) -> None:
+        """from_dict should restore the category field."""
+        d = {
+            "id": "evt_1",
+            "title": "Test",
+            "flavor": "...",
+            "event_type": "crisis",
+            "category": "crisis",
+            "choices": [],
+            "resolved": False,
+            "chosen": None,
+            "system_id": "",
+        }
+        event = Event.from_dict(d)
+        assert event.category == "crisis"
+
+    def test_event_from_dict_category_missing(self) -> None:
+        """from_dict should default category to None when key is missing."""
+        d = {
+            "id": "evt_1",
+            "title": "Test",
+            "flavor": "...",
+            "event_type": "exploration",
+            "choices": [],
+        }
+        event = Event.from_dict(d)
+        assert event.category is None
+
+    def test_create_event_with_category(self) -> None:
+        """_create_event should propagate category from template to Event."""
+        from backend.generation.events import _create_event
+        template = {
+            "type": "crisis",
+            "category": "crisis",
+            "title": "Test Crisis",
+            "flavor": "A crisis occurs.",
+            "choices": [{"text": "Fix it", "outcome": "hull:-10"}],
+        }
+        event = _create_event(template, "sys_1")
+        assert event.category == "crisis"
+
+    def test_create_event_without_category(self) -> None:
+        """_create_event should set category=None when template has no category key."""
+        from backend.generation.events import _create_event
+        template = {
+            "type": "exploration",
+            "title": "Test Exploration",
+            "flavor": "You find something.",
+            "choices": [{"text": "Investigate", "outcome": "credits:50"}],
+        }
+        event = _create_event(template, "sys_1")
+        assert event.category is None
+
 
 class TestDiscoveryModel:
     def test_discovery_to_dict_and_back(self) -> None:
