@@ -1709,7 +1709,7 @@ class TestLoreExploration:
         assert len(lore_discs2) == 0
 
     def test_explore_already_discovered_lore_warning(self, caplog: pytest.LogCaptureFixture) -> None:
-        """Exploring a body with an already-discovered lore fragment should log a warning."""
+        """Exploring a body with an already-discovered lore fragment should log a debug log."""
         import logging
         state = new_game(seed=42)
         state.ship.fuel = 1000
@@ -1724,14 +1724,14 @@ class TestLoreExploration:
         state.ship.current_system_id = sys_id
         state.ship.current_body_id = body_id
 
-        with caplog.at_level(logging.WARNING):
+        with caplog.at_level(logging.DEBUG):
             explore_surface(state)
 
         # Check that the warning was logged
         assert any(
             frag.id in record.message and frag.title in record.message
             for record in caplog.records
-        ), f"Expected warning about lore fragment {frag.id} ({frag.title}) but got: {[r.message for r in caplog.records]}"
+        ), f"Expected debug log about lore fragment {frag.id} ({frag.title}) but got: {[r.message for r in caplog.records]}"
 
     def test_explore_body_without_lore(self) -> None:
         """Exploring a body without lore shouldn't affect fragment state."""

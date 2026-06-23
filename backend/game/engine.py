@@ -257,8 +257,8 @@ def explore_surface(state: GameState) -> list[Discovery]:
                 lore_linked = True
                 state.add_log("lore", f"Discovered lore fragment: {lore_frag.title} ({lore_frag.id}).")
             elif lore_frag and lore_frag.discovered and not lore_linked:
-                # Lore fragment already discovered in a previous explore action (genuinely stale)
-                logger.warning(f"Lore fragment {lore_frag.id} ({lore_frag.title}) already discovered but found on body {body.id}.")
+                # Lore fragment already discovered in a previous explore action — expected behavior
+                logger.debug(f"Lore fragment {lore_frag.id} ({lore_frag.title}) already discovered but found on body {body.id}.")
                 lore_linked = True
 
             discoveries.append(disc)
