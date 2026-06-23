@@ -17,3 +17,6 @@
 - Discovery and hazard events now properly award faction reputation
 - Contradictory outcome in Accretion Disk Prospecting event resolved
 - Gravitational Lens Observation outcome no longer incorrectly claims lore fragment discovery
+- `_get_eligible_templates` fallback behavior documented: when all templates with trigger conditions are filtered out, only templates with no trigger conditions are returned
+- `trigger_event` low-morale path behavior documented: probability roll is skipped entirely when morale < 30
+- Fragile RNG seed dependency in `test_black_hole_events_can_be_triggered` fixed by using mocked `random()`
