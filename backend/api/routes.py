@@ -973,8 +973,12 @@ def api_accept_mission(game_id: str, mission_id: str, req: AcceptMissionRequest)
     if mission_id in state.accepted_missions:
         raise HTTPException(status_code=400, detail="Mission already accepted")
 
+    if req.faction_id:
+        factions_to_check = [req.faction_id]
+    else:
+        factions_to_check = list(FACTION_DEFINITIONS.keys())
+
     mission_found = None
-    factions_to_check = [req.faction_id] if req.faction_id else list(FACTION_DEFINITIONS.keys())
     for fid in factions_to_check:
         missions = generate_missions(state, current_system, fid)
         for m in missions:
@@ -998,7 +1002,7 @@ def api_accept_mission(game_id: str, mission_id: str, req: AcceptMissionRequest)
             detail=f"Not enough credits. Mission requires {mission_found.credit_cost} credits."
         )
 
-    state.accepted_missions.add(mission_id)
+    state.accepted_missions[mission_id] = mission_found.faction_id
 
     state.add_log(
         "faction",
@@ -1053,8 +1057,12 @@ def api_complete_mission(game_id: str, mission_id: str, req: CompleteMissionRequ
     if mission_id not in state.accepted_missions:
         raise HTTPException(status_code=400, detail="Mission has not been accepted")
 
+    if req.faction_id:
+        factions_to_check = [req.faction_id]
+    else:
+        factions_to_check = [state.accepted_missions[mission_id]]
+
     mission_found = None
-    factions_to_check = [req.faction_id] if req.faction_id else list(FACTION_DEFINITIONS.keys())
     for fid in factions_to_check:
         missions = generate_missions(state, current_system, fid)
         for m in missions:

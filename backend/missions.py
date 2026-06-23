@@ -327,7 +327,7 @@ def complete_mission(state, mission: FactionMission) -> dict:
         "tier": mission.tier,
     })
 
-    state.accepted_missions.discard(mission.id)
+    state.accepted_missions.pop(mission.id, None)
 
     if mission.objective_type == "daily":
         daily_key = get_daily_mission_key(state, mission.objective_target)

@@ -1227,6 +1227,76 @@ class TestFactionAPI:
         assert resp.status_code == 400
         assert "not been accepted" in resp.json()["detail"].lower()
 
+    def test_api_accept_mission_with_faction_id(self) -> None:
+        """Accept a mission by providing faction_id explicitly."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "accept-with-fid"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        state.ship.fuel = 100
+        state.ship.credits = 500
+        current_system = state.get_current_system()
+        assert current_system is not None
+        current_system.has_trading_station = True
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        resp = client.get(f"/api/game/{game_id}/missions")
+        assert resp.status_code == 200
+        missions_data = resp.json()
+        assert len(missions_data["missions"]) > 0
+        mission_id = missions_data["missions"][0]["id"]
+        faction_id = missions_data["faction_id"]
+
+        resp = client.post(
+            f"/api/game/{game_id}/missions/{mission_id}/accept",
+            json={"mission_id": mission_id, "faction_id": faction_id},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["mission"]["id"] == mission_id
+        assert "ship" in data
+        # Verify the accepted_missions dict stored the faction_id
+        assert state.accepted_missions[mission_id] == faction_id
+
+    def test_api_complete_mission_with_faction_id(self) -> None:
+        """Complete a mission by providing faction_id explicitly."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "complete-with-fid"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        state.ship.fuel = 100
+        state.ship.credits = 500
+        current_system = state.get_current_system()
+        assert current_system is not None
+        current_system.has_trading_station = True
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        resp = client.get(f"/api/game/{game_id}/missions")
+        assert resp.status_code == 200
+        missions_data = resp.json()
+        mission_id = missions_data["missions"][0]["id"]
+        faction_id = missions_data["faction_id"]
+
+        # Accept the mission first
+        resp = client.post(
+            f"/api/game/{game_id}/missions/{mission_id}/accept",
+            json={"mission_id": mission_id},
+        )
+        assert resp.status_code == 200
+
+        # Complete with faction_id
+        resp = client.post(
+            f"/api/game/{game_id}/missions/{mission_id}/complete",
+            json={"mission_id": mission_id, "faction_id": faction_id},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["mission"]["id"] == mission_id
+        assert "rewards" in data
+        assert "ship" in data
+
 
 class TestTradingFactionIntegration:
     def test_stellar_cartographers_positive_reputation_bonus(self) -> None:
