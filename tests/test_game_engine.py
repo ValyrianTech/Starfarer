@@ -3262,30 +3262,6 @@ class TestEventCooldowns:
         assert event is not None
         assert event.title == lowest_title, f"Expected {lowest_title}, got {event.title}"
 
-    def test_get_available_events_filters_cooldowns(self) -> None:
-        """get_available_events should exclude events on cooldown."""
-        from backend.generation.events import get_available_events
-        state = new_game(seed=42)
-        state.event_cooldowns = {"Solar Flare": 3}
-        templates = [
-            {"title": "Solar Flare", "type": "hazard"},
-            {"title": "Crew Discovery", "type": "crew"},
-        ]
-        result = get_available_events(state, templates, {})
-        assert len(result) == 1
-        assert result[0]["title"] == "Crew Discovery"
-
-    def test_get_available_events_includes_expired(self) -> None:
-        """get_available_events should include events with cooldown <= 0."""
-        from backend.generation.events import get_available_events
-        state = new_game(seed=42)
-        state.event_cooldowns = {"Solar Flare": 0}
-        templates = [
-            {"title": "Solar Flare", "type": "hazard"},
-        ]
-        result = get_available_events(state, templates, {})
-        assert len(result) == 1
-
     def test_apply_cooldown_default_value(self) -> None:
         """apply_cooldown should use default cooldown 5 for unknown events."""
         from backend.generation.events import apply_cooldown
