@@ -653,6 +653,11 @@ class TestFactionAPI:
         )
         credits_before = state.ship.credits
         resp = client.post(
+            f"/api/game/{game_id}/missions/{mission_id}/accept",
+            json={"mission_id": mission_id},
+        )
+        assert resp.status_code == 200
+        resp = client.post(
             f"/api/game/{game_id}/missions/{mission_id}/complete",
             json={"mission_id": mission_id},
         )
@@ -714,6 +719,55 @@ class TestFactionAPI:
         resp = client.post(
             f"/api/game/{game_id}/missions/nonexistent_mission/complete",
             json={"mission_id": "nonexistent_mission"},
+        )
+        assert resp.status_code == 400
+        assert "not been accepted" in resp.json()["detail"].lower()
+
+    def test_api_complete_mission_accepted_but_not_in_system(self) -> None:
+        """Complete endpoint should reject a mission that was accepted but is not
+        available in the current system (e.g. after jumping to another system)."""
+        resp = client.post(
+            "/api/game/new",
+            json={"seed": 42, "game_id": "complete-accepted-wrong-sys"},
+        )
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        state.ship.fuel = 100
+        state.ship.credits = 500
+        current_system = state.get_current_system()
+        assert current_system is not None
+        current_system.has_trading_station = True
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        # Get a mission and accept it
+        resp = client.get(f"/api/game/{game_id}/missions")
+        missions_data = resp.json()
+        mission_id = missions_data["missions"][0]["id"]
+        resp = client.post(
+            f"/api/game/{game_id}/missions/{mission_id}/accept",
+            json={"mission_id": mission_id},
+        )
+        assert resp.status_code == 200
+
+        # Now simulate jumping to a different system (set current_system_id to a different system)
+        # Pick a different system from the state
+        other_system_id = None
+        for sys_id in state.systems:
+            if sys_id != state.ship.current_system_id:
+                other_system_id = sys_id
+                break
+        assert other_system_id is not None, "Need at least 2 systems"
+        state.ship.current_system_id = other_system_id
+        state.systems[other_system_id].has_trading_station = True
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        # Try to complete the mission in the wrong system
+        resp = client.post(
+            f"/api/game/{game_id}/missions/{mission_id}/complete",
+            json={"mission_id": mission_id},
         )
         assert resp.status_code == 400
         assert "not found" in resp.json()["detail"].lower()

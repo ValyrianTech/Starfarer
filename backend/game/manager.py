@@ -233,6 +233,7 @@ def _state_to_dict(state: GameState) -> dict:
         "crisis_cooldown": state.crisis_cooldown,
         "completed_missions": state.completed_missions,
         "daily_missions_used": state.daily_missions_used,
+        "accepted_missions": list(state.accepted_missions),
     }
 
 
@@ -288,6 +289,7 @@ def _state_from_dict(d: dict) -> GameState:
         crisis_cooldown=d.get("crisis_cooldown", 0),
         completed_missions=d.get("completed_missions", []),
         daily_missions_used=d.get("daily_missions_used", {}),
+        accepted_missions=set(d.get("accepted_missions", [])),
     )
 
 
