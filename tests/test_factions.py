@@ -1013,10 +1013,70 @@ class TestFactionAPI:
                 f"/api/game/{game_id}/faction/stellar_cartographers/mission"
             )
 
+        assert resp.status_code == 400
+        assert "No missions available" in resp.json()["detail"]
+        assert current_system.id not in state.daily_missions_used
+
+    def test_faction_mission_standard_only(self) -> None:
+        from backend.missions import FactionMission
+
+        resp = client.post(
+            "/api/game/new",
+            json={"seed": 42, "game_id": "mission-standard-only"},
+        )
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        state.ship.fuel = 100
+        state.ship.credits = 500
+        current_system = state.get_current_system()
+        assert current_system is not None
+        current_system.has_trading_station = True
+
+        standard_mission = FactionMission(
+            id="mission_standard_001",
+            faction_id="stellar_cartographers",
+            tier=2,
+            title="Standard Mission",
+            description="A standard non-daily mission.",
+            objective_type="courier",
+            objective_target="Station Alpha",
+            fuel_cost=5,
+            credit_cost=20,
+            credit_reward=100,
+            reputation_reward=10,
+        )
+        daily_mission = FactionMission(
+            id="mission_daily_001",
+            faction_id="stellar_cartographers",
+            tier=1,
+            title="Daily Mission",
+            description="A free daily mission.",
+            objective_type="daily",
+            objective_target=current_system.id,
+            fuel_cost=0,
+            credit_cost=0,
+            credit_reward=30,
+            reputation_reward=5,
+        )
+
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        with patch(
+            "backend.api.routes.generate_missions",
+            return_value=[standard_mission, daily_mission],
+        ):
+            resp = client.post(
+                f"/api/game/{game_id}/faction/stellar_cartographers/mission"
+            )
+
         assert resp.status_code == 200
         data = resp.json()
         assert data["effect"] == "success"
-        assert current_system.id in state.daily_missions_used
+        assert data["mission"]["id"] == "mission_standard_001"
+        assert data["mission"]["fuel_cost"] > 0
+        assert data["mission"]["credit_cost"] > 0
 
 
 class TestTradingFactionIntegration:
