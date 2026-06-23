@@ -447,6 +447,17 @@ def api_lore(game_id: str) -> dict:
             "total": 0,
         }
 
+    # Build O(1) lookup: lore fragment ID -> discovery timestamp
+    lore_log_dates: dict[str, str] = {}
+    for entry in state.log_entries:
+        if entry.get("type") == "lore":
+            msg = entry.get("message", "")
+            # Extract fragment ID from log message format: "Discovered lore fragment: {title} ({id})."
+            for lf in state.lore_fragments:
+                if lf.id in msg:
+                    lore_log_dates[lf.id] = entry.get("timestamp", "")
+                    break
+
     for lore in state.lore_fragments:
         arc = lore.arc
         if arc in arcs:
@@ -469,10 +480,8 @@ def api_lore(game_id: str) -> dict:
                         # Fallback: use raw IDs so the user at least sees something
                         frag_dict["discovery_location"] = f"Unknown system ({sys_id}) - Body ({body_id})"
 
-                for entry in state.log_entries:
-                    if entry.get("type") == "lore" and lore.title in entry.get("message", ""):
-                        frag_dict["discovery_date"] = entry.get("timestamp", "")
-                        break
+            if lore.id in lore_log_dates:
+                frag_dict["discovery_date"] = lore_log_dates[lore.id]
 
             arcs[arc]["fragments"].append(frag_dict)
             arcs[arc]["total"] += 1
