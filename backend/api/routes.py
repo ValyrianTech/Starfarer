@@ -349,7 +349,6 @@ def api_resolve_event(game_id: str, event_id: str, req: ResolveEventRequest) -> 
     ok, msg, extra = resolve_event_func(state, event_id, req.choice_index)
     if not ok:
         raise HTTPException(status_code=400, detail=msg)
-    decrement_cooldowns(state)
     game_save(state)
     return {
         "result": msg,
