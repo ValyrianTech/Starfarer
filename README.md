@@ -53,11 +53,18 @@ All event types now have consistent faction reputation effects:
 
 ### Lore Fragment Viewer & Discovery Metadata
 - The lore viewer has been redesigned with tab-based navigation by story arc, progress bars, and detailed fragment cards
-- Discovered fragments now show their discovery location (system name - body name) and discovery date
+- Discovered fragments now show their discovery location (system name - body name) and discovery date, stored as a `discovery_timestamp` in ISO format datetime
 - Undiscovered fragments display hints to guide exploration
 - A notification toast appears when a new lore fragment is discovered, with a "View" button to open the lore viewer
-- The Lore button pulses with a glow animation when there are unread fragments
+- The Lore button pulses with a glow animation when there are unread fragments (uses `data-lore-nav="true"` attribute selector)
 - The explore API response now includes a `lore_fragments_discovered` field listing any newly found fragments
+- Lore fragment lookup in api_explore and api_lore changed from O(n²) to O(1) using hash maps
+- Re-exploring an already-discovered lore fragment now logs at DEBUG level instead of WARNING
+- Lore fragment discovery date extraction uses regex instead of fragile substring matching
+- Lore fragment ID matching in log messages uses regex extraction instead of fragile substring matching
+- The lore viewer container now has `data-component="lore-viewer"` instead of unused `data-game-id`
+- `notifyLoreFragment` and `updateLoreButtonGlow` have safe fallback stubs in main.js when lore.js is not loaded
+- The `_distress_pilots_guild` function now returns an error dict instead of raising ValueError when system is None
 
 ## Quick Start
 

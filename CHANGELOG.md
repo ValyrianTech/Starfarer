@@ -34,3 +34,10 @@
 - Lore viewer container now has proper `data-component="lore-viewer"` attribute instead of unused `data-game-id`
 - `notifyLoreFragment` and `updateLoreButtonGlow` now have safe fallback stubs in main.js when lore.js is not loaded
 - Lore fragment ID matching in log messages now uses regex extraction instead of fragile substring matching
+- `_unreadLoreCount` is now reset to 0 when lore view is rendered (not when the user views it)
+- Frontend lore viewer now uses `escapeHtml()` instead of `innerHTML` for rendering text content (security fix)
+- `_distress_pilots_guild` now returns an error dict instead of raising ValueError when no current system
+- Lore fragment discovery location fallback now uses informative "Unknown system" format with IDs
+- `explore_surface` now correctly handles the `lore_linked` flag when `num_finds` is 0
+- Lore fragment discovery date extraction now uses regex instead of fragile substring matching on log messages
+- Lore fragment discovery now stores `discovery_timestamp` as ISO format datetime

@@ -130,7 +130,12 @@ Costs 2 fuel. Generates discoveries (minerals, artifacts, lifeforms, signals, ru
 - `value` — credit value if sold
 - `description` — flavor text
 
-The response also includes a `lore_fragments_discovered` field listing any lore fragments found during this exploration, with their arc, title, and discovery metadata.
+The response also includes a `lore_fragments_discovered` field listing any lore fragments found during this exploration. Each entry includes:
+- `fragment_id` — unique fragment identifier
+- `arc` — story arc name (The Architects, The Void Signal, The Fracture, The Wanderer)
+- `title` — fragment title
+- `discovery_location` — where it was found (system name - body name)
+- `discovery_timestamp` — ISO format datetime of discovery
 
 ### 3.8 Handle Events
 
@@ -363,6 +368,8 @@ Full OpenAPI docs at `/docs` and `/redoc`.
 
 Events may be phenomenon-specific, triggering only in systems with matching phenomena (e.g., black hole events only appear near black holes).
 
+**Note on explore endpoint:** The `POST /api/game/{id}/explore` response includes a `lore_fragments_discovered` array. Each entry contains `fragment_id`, `arc`, `title`, `discovery_location`, and `discovery_timestamp` (ISO format). This field is present even when no fragments are found (empty array).
+
 ### Reputation Bonuses
 When your faction reputation reaches **20 or higher**, resolving events of that faction's type grants bonus rewards:
 - **Stellar Cartographers** (exploration & discovery events): +10 credits and +1 morale per event
@@ -372,7 +379,12 @@ When your faction reputation reaches **20 or higher**, resolving events of that 
 These bonuses stack with the event's normal outcome rewards.
 
 ### Lore Fragment Hints
-The lore viewer reveals hints for undiscovered fragments, guiding you toward their locations. The `/api/game/{id}/lore` endpoint returns both discovered fragments (with `discovery_location` and `discovery_date`) and undiscovered fragments (with `hint` text). Explore systems matching the hint descriptions to complete each story arc.
+The lore viewer reveals hints for undiscovered fragments, guiding you toward their locations. The `/api/game/{id}/lore` endpoint returns both discovered fragments (with `discovery_location`, `discovery_date`, and `discovery_timestamp`) and undiscovered fragments (with `hint` text). Explore systems matching the hint descriptions to complete each story arc.
+
+#### Lore Notification System
+- **Discovery Toast:** When a new lore fragment is discovered during exploration, a toast notification appears in the bottom-right corner of the screen. The toast displays the fragment's arc and title, with a "View" button that opens the lore viewer to see the new fragment.
+- **Lore Button Pulse:** The Lore navigation button (identified by `data-lore-nav="true"`) pulses with a glow animation when there are unread lore fragments. The glow clears once the lore viewer has been opened.
+- **Fallback Safety:** If `lore.js` fails to load, `notifyLoreFragment` and `updateLoreButtonGlow` degrade gracefully via safe fallback stubs in `main.js`.
 
 ---
 
