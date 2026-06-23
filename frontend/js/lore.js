@@ -1,5 +1,12 @@
 let _unreadLoreCount = 0;
 
+function escapeHtml(str) {
+  if (typeof str !== 'string') return str;
+  const div = document.createElement('div');
+  div.appendChild(document.createTextNode(str));
+  return div.innerHTML;
+}
+
 function renderLoreView(arcsData, progress, arcOrder) {
   const container = $('#lore-content');
   if (!container) return;
@@ -21,7 +28,7 @@ function renderLoreView(arcsData, progress, arcOrder) {
   for (const arcId of order) {
     const arc = arcsData[arcId];
     if (!arc) continue;
-    html += `<button class="lore-arc-tab" data-arc-id="${arcId}" data-fragments-collected="${arc.collected}" data-fragments-total="${arc.total}" data-action="select-lore-arc">${arc.display_name} <span class="tab-count">${arc.collected}/${arc.total}</span></button>`;
+    html += `<button class="lore-arc-tab" data-arc-id="${arcId}" data-fragments-collected="${arc.collected}" data-fragments-total="${arc.total}" data-action="select-lore-arc">${escapeHtml(arc.display_name)} <span class="tab-count">${arc.collected}/${arc.total}</span></button>`;
   }
   html += '</nav>';
 
@@ -52,19 +59,19 @@ function renderLoreView(arcsData, progress, arcOrder) {
       html += `
         <article class="lore-fragment-card ${discovered ? 'discovered' : 'locked'}" data-fragment-id="${frag.id}" data-arc="${arcId}" data-collected="${discovered}">
           <div class="fragment-card-header">
-            <span class="fragment-card-number">${arc.display_name} #${frag.fragment_number}/${arc.total}</span>
+            <span class="fragment-card-number">${escapeHtml(arc.display_name)} #${frag.fragment_number}/${arc.total}</span>
             <span class="fragment-card-status">${discovered ? 'DISCOVERED' : 'LOCKED'}</span>
           </div>
-          <h3 class="fragment-card-title">${discovered ? frag.title : '???'}</h3>
+          <h3 class="fragment-card-title">${discovered ? escapeHtml(frag.title) : '???'}</h3>
           ${discovered ? `
-            <div class="fragment-card-text">${frag.text}</div>
+            <div class="fragment-card-text">${escapeHtml(frag.text)}</div>
             <div class="fragment-card-meta">
-              ${frag.discovery_location ? `<span class="fragment-location" title="Discovery location">${frag.discovery_location}</span>` : ''}
-              ${frag.discovery_date ? `<span class="fragment-date" title="Discovery date">${formatDiscoveryDate(frag.discovery_date)}</span>` : ''}
+              ${frag.discovery_location ? `<span class="fragment-location" title="Discovery location">${escapeHtml(frag.discovery_location)}</span>` : ''}
+              ${frag.discovery_date ? `<span class="fragment-date" title="Discovery date">${escapeHtml(formatDiscoveryDate(frag.discovery_date))}</span>` : ''}
             </div>
           ` : `
             <div class="fragment-card-text locked-text">
-              ${frag.hint ? `<p class="fragment-hint">Hint: ${frag.hint}</p>` : '<p class="fragment-hint">This fragment has not yet been discovered. Keep exploring.</p>'}
+              ${frag.hint ? `<p class="fragment-hint">Hint: ${escapeHtml(frag.hint)}</p>` : '<p class="fragment-hint">This fragment has not yet been discovered. Keep exploring.</p>'}
             </div>
           `}
         </article>
@@ -121,7 +128,7 @@ function showLoreNotification(title) {
   },
     h('div', { className: 'lore-notification-content' },
       h('span', { className: 'lore-notification-icon' }, '\uD83D\uDCDC'),
-      h('span', {}, `Lore Fragment Discovered: ${title}`),
+      h('span', {}, `Lore Fragment Discovered: ${escapeHtml(title)}`),
       h('button', {
         className: 'lore-notification-action ui-button',
         data: { action: 'show-lore' }
