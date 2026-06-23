@@ -216,6 +216,8 @@ async function handleAction(action, target) {
 
       case 'show-lore': {
         await loadLore(GAME_ID);
+        _unreadLoreCount = 0;
+        updateLoreButtonGlow();
         showScreen('lore');
         break;
       }

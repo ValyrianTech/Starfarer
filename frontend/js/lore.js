@@ -89,8 +89,6 @@ function renderLoreView(arcsData, progress, arcOrder) {
     selectLoreArcTab(order[0]);
   }
 
-  _unreadLoreCount = 0;
-  updateLoreButtonGlow();
 }
 
 function selectLoreArcTab(arcId) {
