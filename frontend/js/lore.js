@@ -137,7 +137,7 @@ function showLoreNotification(title) {
 }
 
 function updateLoreButtonGlow() {
-  const loreBtn = document.querySelector('[data-action="show-lore"]');
+  const loreBtn = document.querySelector('[data-action="show-lore"][data-lore-nav]');
   if (!loreBtn) return;
   if (_unreadLoreCount > 0) {
     loreBtn.classList.add('lore-pulse');
