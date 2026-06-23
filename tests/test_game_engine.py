@@ -3365,3 +3365,122 @@ class TestEventCooldowns:
         assert event is not None
         assert event.title == "Solar Flare"
 
+
+class TestCooldownOrdering:
+    """Tests verifying that cooldowns are decremented BEFORE new events are triggered during action pipelines."""
+
+    def test_cooldown_decrement_before_trigger(self) -> None:
+        """Simulate: cooldown at 1, decrement removes it, trigger sets new cooldown."""
+        from backend.generation.events import decrement_cooldowns, EVENT_COOLDOWNS
+        state = new_game(seed=42)
+        state.ship.morale = 20  # low morale forces event
+        state.event_cooldowns["Ancient Signal"] = 1
+
+        decrement_cooldowns(state)
+        assert "Ancient Signal" not in state.event_cooldowns
+
+        event = trigger_event(state)
+        assert event is not None
+        assert event.title in state.event_cooldowns
+        expected_cooldown = EVENT_COOLDOWNS.get(event.title, 5)
+        assert state.event_cooldowns[event.title] == expected_cooldown
+        assert expected_cooldown > 0
+
+    def test_cooldown_ordering_jump_action(self) -> None:
+        """Jump pipeline: perform_jump -> decrement -> trigger; old cooldown expires, new one set at full value."""
+        from backend.generation.events import decrement_cooldowns, EVENT_COOLDOWNS
+        state = new_game(seed=42)
+        state.ship.morale = 20
+        state.ship.fuel = 500
+        state.ship.jump_range = 999
+        state.event_cooldowns["Ancient Signal"] = 1
+
+        nearby = get_nearby_systems(state)
+        reachable = [n for n in nearby if n["reachable"]]
+        assert len(reachable) > 0, "Need a reachable system for jump test"
+        target = state.systems[reachable[0]["id"]]
+        cur = state.get_current_system()
+        ok, cost, _ = can_jump(state.ship, target, cur)
+        assert ok, "Jump should be possible"
+
+        perform_jump(state, target, cost)
+        decrement_cooldowns(state)
+        assert "Ancient Signal" not in state.event_cooldowns
+
+        event = trigger_event(state)
+        assert event is not None
+        assert event.title in state.event_cooldowns
+        expected_cooldown = EVENT_COOLDOWNS.get(event.title, 5)
+        assert state.event_cooldowns[event.title] == expected_cooldown
+        assert expected_cooldown > 0
+
+    def test_cooldown_ordering_scan_action(self) -> None:
+        """Scan pipeline: perform_scan -> decrement -> trigger; old cooldown expires, new one set at full value."""
+        from backend.generation.events import decrement_cooldowns, EVENT_COOLDOWNS
+        state = new_game(seed=42)
+        state.ship.morale = 20
+        state.ship.fuel = 100
+        state.event_cooldowns["Ancient Signal"] = 1
+
+        perform_scan(state)
+        decrement_cooldowns(state)
+        assert "Ancient Signal" not in state.event_cooldowns
+
+        event = trigger_event(state)
+        assert event is not None
+        assert event.title in state.event_cooldowns
+        expected_cooldown = EVENT_COOLDOWNS.get(event.title, 5)
+        assert state.event_cooldowns[event.title] == expected_cooldown
+        assert expected_cooldown > 0
+
+    def test_cooldown_ordering_explore_action(self) -> None:
+        """Explore pipeline: explore_surface -> decrement -> trigger; old cooldown expires, new one set at full value."""
+        from backend.generation.events import decrement_cooldowns, EVENT_COOLDOWNS
+        state = new_game(seed=42)
+        state.ship.morale = 20
+        state.ship.fuel = 100
+        state.event_cooldowns["Ancient Signal"] = 1
+
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
+        assert planet is not None, "Need a planet for explore test"
+        land_on_body(state, planet.id)
+
+        explore_surface(state)
+        decrement_cooldowns(state)
+        assert "Ancient Signal" not in state.event_cooldowns
+
+        event = trigger_event(state)
+        assert event is not None
+        assert event.title in state.event_cooldowns
+        expected_cooldown = EVENT_COOLDOWNS.get(event.title, 5)
+        assert state.event_cooldowns[event.title] == expected_cooldown
+        assert expected_cooldown > 0
+
+    def test_cooldown_ordering_save_load_scenario(self) -> None:
+        """Save/load: cooldown at 1 survives roundtrip, decrements to expire, new event gets full cooldown."""
+        from backend.database import init_db
+        from backend.game.manager import game_load
+        from backend.generation.events import decrement_cooldowns, EVENT_COOLDOWNS
+        init_db()
+
+        state = new_game(seed=42)
+        state.ship.morale = 20
+        state.event_cooldowns["Ancient Signal"] = 1
+        game_save(state)
+
+        loaded = game_load(state.id)
+        assert loaded is not None
+        assert loaded.event_cooldowns == {"Ancient Signal": 1}
+
+        decrement_cooldowns(loaded)
+        assert "Ancient Signal" not in loaded.event_cooldowns
+
+        event = trigger_event(loaded)
+        assert event is not None
+        assert event.title in loaded.event_cooldowns
+        expected_cooldown = EVENT_COOLDOWNS.get(event.title, 5)
+        assert loaded.event_cooldowns[event.title] == expected_cooldown
+        assert expected_cooldown > 0
+
