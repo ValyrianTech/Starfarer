@@ -5,9 +5,7 @@ function renderLoreView(arcsData, progress, arcOrder) {
   if (!container) return;
 
   const order = arcOrder || Object.keys(arcsData);
-  const gameId = getGameId() || GAME_ID || '';
-
-  let html = `<div id="lore-viewer" data-component="lore-viewer" data-game-id="${gameId}">`;
+  let html = '<div id="lore-viewer" data-component="lore-viewer">';
 
   html += `
     <div class="lore-header fade-in">
