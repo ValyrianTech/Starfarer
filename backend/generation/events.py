@@ -744,6 +744,7 @@ def _create_event(template: dict, system_id: str) -> Event:
         title=template["title"],
         flavor=template["flavor"],
         event_type=template["type"],
+        category=template.get("category"),
         choices=choices,
         system_id=system_id,
     )
