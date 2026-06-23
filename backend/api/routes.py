@@ -992,6 +992,8 @@ def api_accept_mission(game_id: str, mission_id: str, req: AcceptMissionRequest)
     state.ship.fuel -= mission_found.fuel_cost
     state.ship.credits -= mission_found.credit_cost
 
+    state.accepted_missions.add(mission_id)
+
     state.add_log(
         "faction",
         f"Accepted mission '{mission_found.title}' (Tier {mission_found.tier}). "
@@ -1042,6 +1044,9 @@ def api_complete_mission(game_id: str, mission_id: str, req: CompleteMissionRequ
     for completed in state.completed_missions:
         if completed.get("mission_id") == mission_id:
             raise HTTPException(status_code=400, detail="Mission already completed")
+
+    if mission_id not in state.accepted_missions:
+        raise HTTPException(status_code=400, detail="Mission has not been accepted")
 
     mission_found = None
     for fid in FACTION_DEFINITIONS:
