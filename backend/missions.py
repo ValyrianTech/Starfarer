@@ -169,7 +169,8 @@ def get_daily_mission_key(state, system_id: str) -> str:
     """Return a key string for the daily mission slot in a system.
 
     The key combines the system ID with a date derived from the
-    number of log entries, so daily missions refresh over time.
+    number of systems visited, so daily missions refresh over time
+    as the player explores new systems.
 
     :param state: The current game state.
     :type state: GameState
@@ -178,7 +179,7 @@ def get_daily_mission_key(state, system_id: str) -> str:
     :returns: A string key like ``"sys_01:5"``.
     :rtype: str
     """
-    date_key = str(len(state.log_entries) // 10)
+    date_key = str(state.systems_visited // 3)
     return f"{system_id}:{date_key}"
 
 
