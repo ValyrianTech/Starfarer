@@ -935,10 +935,11 @@ def api_missions(game_id: str) -> dict:
 
 @router.post("/game/{game_id}/missions/{mission_id}/accept")
 def api_accept_mission(game_id: str, mission_id: str, req: AcceptMissionRequest) -> dict:
-    """Accept a faction mission, deducting its fuel and credit costs.
+    """Accept a faction mission.
 
     The mission must exist in the current system and not have been
-    completed already. Costs are deducted immediately.
+    completed already. Costs are NOT deducted until the mission is
+    completed.
 
     :param game_id: The unique identifier of the game.
     :type game_id: str
@@ -997,15 +998,11 @@ def api_accept_mission(game_id: str, mission_id: str, req: AcceptMissionRequest)
             detail=f"Not enough credits. Mission requires {mission_found.credit_cost} credits."
         )
 
-    state.ship.fuel -= mission_found.fuel_cost
-    state.ship.credits -= mission_found.credit_cost
-
     state.accepted_missions.add(mission_id)
 
     state.add_log(
         "faction",
-        f"Accepted mission '{mission_found.title}' (Tier {mission_found.tier}). "
-        f"Deducted {mission_found.fuel_cost} fuel, {mission_found.credit_cost} credits."
+        f"Accepted mission '{mission_found.title}' (Tier {mission_found.tier})."
     )
 
     game_save(state)
