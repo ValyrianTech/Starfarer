@@ -70,6 +70,7 @@ class GameState:
     jumps_since_rep_decay: int = 0
     station_visits: dict[str, int] = field(default_factory=dict)
     event_cooldowns: dict[str, int] = field(default_factory=dict)
+    crisis_cooldown: int = 0
 
     def __post_init__(self) -> None:
         """Initialize the ``game_started`` timestamp if not already set.
