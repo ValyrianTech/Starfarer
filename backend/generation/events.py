@@ -7,7 +7,7 @@ for triggering random events and resolving player choices against them.
 
 import random
 import uuid
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from backend.models.game_state import GameState
 from backend.models.event import Event, Choice
@@ -487,6 +487,17 @@ def _create_event(template: dict, system_id: str) -> Event:
     )
 
 
+_EVENT_REP_MAP: dict[str, tuple[str, tuple[int, int], Callable]] = {
+    "exploration": ("stellar_cartographers", (2, 8), lambda s: (setattr(s.ship, 'credits', s.ship.credits + 10), setattr(s.ship, 'morale', min(100, s.ship.morale + 1)))),
+    "discovery": ("stellar_cartographers", (2, 8), lambda s: (setattr(s.ship, 'credits', s.ship.credits + 10), setattr(s.ship, 'morale', min(100, s.ship.morale + 1)))),
+    "trade": ("void_traders", (2, 8), lambda s: setattr(s.ship, 'credits', s.ship.credits + 10)),
+    "encounter": ("free_pilots", (1, 6), lambda s: setattr(s.ship, 'morale', min(100, s.ship.morale + 5))),
+    "crisis": ("free_pilots", (1, 6), lambda s: setattr(s.ship, 'morale', min(100, s.ship.morale + 5))),
+    "crew": ("free_pilots", (1, 6), lambda s: setattr(s.ship, 'morale', min(100, s.ship.morale + 5))),
+    "hazard": ("free_pilots", (1, 6), lambda s: setattr(s.ship, 'morale', min(100, s.ship.morale + 5))),
+}
+
+
 def resolve_event(state: GameState, event_id: str, choice_idx: int) -> tuple[bool, str, dict]:
     """Resolve a pending event by applying the chosen outcome.
 
@@ -532,53 +543,15 @@ def resolve_event(state: GameState, event_id: str, choice_idx: int) -> tuple[boo
     rep_before = {}
     rep_after = {}
 
-    if event.event_type == "exploration":
-        rep_before["stellar_cartographers"] = state.get_faction_reputation("stellar_cartographers")
-        state.modify_faction_reputation("stellar_cartographers", event_rng.randint(2, 8))
-        rep_after["stellar_cartographers"] = state.get_faction_reputation("stellar_cartographers")
-        stellar_rep = rep_after["stellar_cartographers"]
-        if stellar_rep >= 20:
-            state.ship.credits += 10
-            state.ship.morale = min(100, state.ship.morale + 1)
-        if rep_before["stellar_cartographers"] != rep_after["stellar_cartographers"]:
-            state.add_log("faction", f"Stellar Cartographers reputation changed from {rep_before['stellar_cartographers']} to {rep_after['stellar_cartographers']}.")
-    elif event.event_type == "trade":
-        rep_before["void_traders"] = state.get_faction_reputation("void_traders")
-        state.modify_faction_reputation("void_traders", event_rng.randint(2, 8))
-        rep_after["void_traders"] = state.get_faction_reputation("void_traders")
-        void_rep = rep_after["void_traders"]
-        if void_rep >= 20:
-            state.ship.credits += 10
-        if rep_before["void_traders"] != rep_after["void_traders"]:
-            state.add_log("faction", f"Void Traders reputation changed from {rep_before['void_traders']} to {rep_after['void_traders']}.")
-    elif event.event_type in ("encounter", "crisis", "crew"):
-        rep_before["free_pilots"] = state.get_faction_reputation("free_pilots")
-        state.modify_faction_reputation("free_pilots", event_rng.randint(1, 6))
-        rep_after["free_pilots"] = state.get_faction_reputation("free_pilots")
-        free_pilots_rep = rep_after["free_pilots"]
-        if free_pilots_rep >= 20:
-            state.ship.morale = min(100, state.ship.morale + 5)
-        if rep_before["free_pilots"] != rep_after["free_pilots"]:
-            state.add_log("faction", f"Free Pilots reputation changed from {rep_before['free_pilots']} to {rep_after['free_pilots']}.")
-    elif event.event_type == "discovery":
-        rep_before["stellar_cartographers"] = state.get_faction_reputation("stellar_cartographers")
-        state.modify_faction_reputation("stellar_cartographers", event_rng.randint(2, 8))
-        rep_after["stellar_cartographers"] = state.get_faction_reputation("stellar_cartographers")
-        stellar_rep = rep_after["stellar_cartographers"]
-        if stellar_rep >= 20:
-            state.ship.credits += 10
-            state.ship.morale = min(100, state.ship.morale + 1)
-        if rep_before["stellar_cartographers"] != rep_after["stellar_cartographers"]:
-            state.add_log("faction", f"Stellar Cartographers reputation changed from {rep_before['stellar_cartographers']} to {rep_after['stellar_cartographers']}.")
-    elif event.event_type == "hazard":
-        rep_before["free_pilots"] = state.get_faction_reputation("free_pilots")
-        state.modify_faction_reputation("free_pilots", event_rng.randint(1, 6))
-        rep_after["free_pilots"] = state.get_faction_reputation("free_pilots")
-        free_pilots_rep = rep_after["free_pilots"]
-        if free_pilots_rep >= 20:
-            state.ship.morale = min(100, state.ship.morale + 5)
-        if rep_before["free_pilots"] != rep_after["free_pilots"]:
-            state.add_log("faction", f"Free Pilots reputation changed from {rep_before['free_pilots']} to {rep_after['free_pilots']}.")
+    if event.event_type in _EVENT_REP_MAP:
+        faction_id, (rep_min, rep_max), bonus_fn = _EVENT_REP_MAP[event.event_type]
+        rep_before[faction_id] = state.get_faction_reputation(faction_id)
+        state.modify_faction_reputation(faction_id, event_rng.randint(rep_min, rep_max))
+        rep_after[faction_id] = state.get_faction_reputation(faction_id)
+        if rep_after[faction_id] >= 20:
+            bonus_fn(state)
+        if rep_before[faction_id] != rep_after[faction_id]:
+            state.add_log("faction", f"{faction_id.replace('_', ' ').title()} reputation changed from {rep_before[faction_id]} to {rep_after[faction_id]}.")
 
     extra_output = {
         "title": event.title,
