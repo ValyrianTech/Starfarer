@@ -827,47 +827,50 @@ class TestReputationTrading:
         system = state.get_current_system()
         assert system is not None
         system.has_trading_station = True
+
+        # Baseline: no discount (neutral rep = 0)
         state.ship.fuel = 0
         state.ship.credits = 5000
-        state.modify_faction_reputation("void_traders", 50)
-
-        with patch("random.Random.uniform", return_value=1.0):
-            ok, _ = perform_trade(state, "buy", "fuel", 10)
+        state.faction_relations["void_traders"].reputation = 0
+        ok, _ = perform_trade(state, "buy", "fuel", 10)
         assert ok is True
-        cost_at_50 = 5000 - state.ship.credits
+        cost_neutral = 5000 - state.ship.credits
 
+        # Void Traders rep 50 (Allied) — should get the full discount
         state.ship.fuel = 0
         state.ship.credits = 5000
-        state.modify_faction_reputation("void_traders", 70)
-        with patch("random.Random.uniform", return_value=1.0):
-            ok, _ = perform_trade(state, "buy", "fuel", 10)
+        state.station_visits.clear()
+        state.faction_relations["void_traders"].reputation = 50
+        ok, _ = perform_trade(state, "buy", "fuel", 10)
         assert ok is True
-        cost_at_70 = 5000 - state.ship.credits
+        cost_50 = 5000 - state.ship.credits
 
-        assert cost_at_50 == cost_at_70
+        # Void Traders rep 70 (still Allied) — discount should be identical
+        state.ship.fuel = 0
+        state.ship.credits = 5000
+        state.station_visits.clear()
+        state.faction_relations["void_traders"].reputation = 70
+        ok, _ = perform_trade(state, "buy", "fuel", 10)
+        assert ok is True
+        cost_70 = 5000 - state.ship.credits
+
+        assert cost_50 == cost_70, f"Expected same cost, got {cost_50} vs {cost_70}"
+        assert cost_50 < cost_neutral, f"Expected discount, got {cost_50} vs {cost_neutral}"
 
     def test_void_traders_negative_rep_no_discount(self) -> None:
+        from backend.game.trading import calculate_fuel_price
         state = new_game(seed=42)
         system = state.get_current_system()
         assert system is not None
-        system.has_trading_station = True
-        state.ship.fuel = 0
-        state.ship.credits = 5000
 
         state.modify_faction_reputation("void_traders", 0)
-        credits_before = state.ship.credits
-        ok, _ = perform_trade(state, "buy", "fuel", 10)
-        assert ok is True
-        base_cost = credits_before - state.ship.credits
+        price_neutral = calculate_fuel_price(state, system)
 
-        state.ship.fuel = 0
-        state.ship.credits = 5000
         state.modify_faction_reputation("void_traders", -50)
-        ok, _ = perform_trade(state, "buy", "fuel", 10)
-        assert ok is True
-        neg_cost = 5000 - state.ship.credits
+        price_hostile = calculate_fuel_price(state, system)
 
-        assert neg_cost == base_cost or neg_cost >= base_cost
+        assert price_neutral["faction_modifier"] == 0.0
+        assert price_hostile["faction_modifier"] == 0.30
 
     def test_free_pilots_morale_on_sell(self) -> None:
         from backend.models.discovery import Discovery

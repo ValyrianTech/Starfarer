@@ -68,6 +68,7 @@ class GameState:
     game_started: str = ""
     last_event_title: Optional[str] = None
     jumps_since_rep_decay: int = 0
+    station_visits: dict[str, int] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         """Initialize the ``game_started`` timestamp if not already set.
@@ -268,3 +269,11 @@ class GameState:
         """Reset stranded turns and distress cooldown to their defaults."""
         self.ship.stranded_turns = 0
         self.ship.distress_cooldown = False
+
+    def record_station_visit(self, system_id: str) -> None:
+        """Increment the visit count for a given system's trading station.
+
+        :param system_id: The unique identifier of the star system.
+        :type system_id: str
+        """
+        self.station_visits[system_id] = self.station_visits.get(system_id, 0) + 1

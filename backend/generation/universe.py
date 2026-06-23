@@ -253,6 +253,29 @@ def generate_system(rng: random.Random, idx: int, galaxy_rng: random.Random) -> 
     }
     phenomenon_desc = phenom_descs.get(phenomenon, "A curious phenomenon.")
 
+    system_type = "civilized"
+    if phenomenon == "none":
+        if star_type in ("G", "K", "F"):
+            system_type = rng.choices(
+                ["civilized", "agricultural", "frontier"], weights=[40, 30, 30], k=1
+            )[0]
+        else:
+            system_type = rng.choices(
+                ["frontier", "civilized"], weights=[60, 40], k=1
+            )[0]
+    elif phenomenon == "nebula":
+        system_type = "nebula"
+    elif phenomenon == "asteroid_field":
+        system_type = "frontier"
+    elif phenomenon == "binary_star":
+        system_type = rng.choices(
+            ["frontier", "civilized"], weights=[50, 50], k=1
+        )[0]
+    elif phenomenon in ("pulsar", "black_hole"):
+        system_type = "uncharted"
+    elif phenomenon == "ancient_gate":
+        system_type = "ancient"
+
     num_bodies = rng.randint(MIN_ORBITALS, min(MAX_ORBITALS, 3 + idx % 5))
     bodies = []
     for b_idx in range(num_bodies):
@@ -292,6 +315,7 @@ def generate_system(rng: random.Random, idx: int, galaxy_rng: random.Random) -> 
         phenomenon=phenomenon, phenomenon_desc=phenomenon_desc,
         has_trading_station=(phenomenon == "none"),
         bodies=bodies,
+        system_type=system_type,
     )
 
 
