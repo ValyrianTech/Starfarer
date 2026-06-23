@@ -3293,3 +3293,99 @@ class TestEventCooldowns:
         apply_cooldown(state, "Unknown Event XYZ")
         assert state.event_cooldowns["Unknown Event XYZ"] == 5
 
+    def test_cooldown_fallback_respects_last_event_title_low_morale(self) -> None:
+        """When all events on cooldown share the same lowest cooldown value and the lowest-cooldown event IS last_event_title, a different event should be picked."""
+        state = new_game(seed=42)
+        state.ship.morale = 20  # low morale forces event
+        eligible = _get_eligible_templates(state, EVENT_TEMPLATES)
+        eligible = [t for t in eligible if t["type"] in ("crew", "crisis", "narrative")]
+        # Put ALL of them on cooldown with the SAME cooldown value
+        for t in eligible:
+            state.event_cooldowns[t["title"]] = 5
+        # Set last_event_title to the first eligible event
+        last_title = eligible[0]["title"]
+        state.last_event_title = last_title
+        event = trigger_event(state)
+        assert event is not None
+        # The event should NOT be the last_event_title
+        assert event.title != last_title, \
+            f"Expected event different from last_event_title '{last_title}', got '{event.title}'"
+
+    def test_cooldown_fallback_respects_last_event_title_normal_path(self) -> None:
+        """When all events on cooldown share the same lowest cooldown value and the lowest-cooldown event IS last_event_title in the normal path, a different event should be picked."""
+        import random as rnd_mod
+        state = new_game(seed=42)
+        state.ship.morale = 80  # normal morale
+        system = state.get_current_system()
+        assert system is not None
+        eligible = _get_eligible_templates(state, EVENT_TEMPLATES)
+        # Put ALL of them on cooldown with the SAME cooldown value
+        for t in eligible:
+            state.event_cooldowns[t["title"]] = 5
+        # Set last_event_title to the first eligible event
+        last_title = eligible[0]["title"]
+        state.last_event_title = last_title
+        rng = rnd_mod.Random(42)
+        rng.random()  # consume first value to pass the 35% check
+        event = trigger_event(state, rng_override=rng)
+        assert event is not None
+        # The event should NOT be the last_event_title
+        assert event.title != last_title, \
+            f"Expected event different from last_event_title '{last_title}', got '{event.title}'"
+
+    def test_cooldown_fallback_all_match_last_event_title_low_morale(self) -> None:
+        """When all eligible events are on cooldown and ALL of them match last_event_title (single event case), the fallback should still fire that event."""
+        from backend.models.game_state import GameState
+        from backend.models.ship import Ship
+        from backend.models.system import StarSystem, Body
+        from backend.config import MORALE_LOW_THRESHOLD
+
+        ship = Ship(morale=MORALE_LOW_THRESHOLD - 1)
+        state = GameState(id="test-all-match-low", seed=42, ship=ship)
+        body = Body(id="b1", name="Planet", body_type="planet", biome="ocean",
+                    size=3, distance_from_star=0.5, poi_count=1)
+        system = StarSystem(id="sys1", name="TestSys", x=0.0, y=0.0,
+                            star_type="G", star_color="#fff",
+                            phenomenon="none", phenomenon_desc="",
+                            bodies=[body])
+        state.systems = {"sys1": system}
+        state.ship.current_system_id = "sys1"
+
+        import unittest.mock as mock
+        single_template = {"type": "crew", "title": "Crew Dispute", "flavor": "...", "rarity": "common", "choices": []}
+        with mock.patch("backend.generation.events._get_eligible_templates", return_value=[single_template]):
+            state.event_cooldowns["Crew Dispute"] = 5
+            state.last_event_title = "Crew Dispute"
+            event = trigger_event(state)
+        assert event is not None
+        assert event.title == "Crew Dispute"
+
+    def test_cooldown_fallback_all_match_last_event_title_normal_path(self) -> None:
+        """When all eligible events are on cooldown and ALL of them match last_event_title (single event case) in the normal path, the fallback should still fire that event."""
+        from backend.models.game_state import GameState
+        from backend.models.ship import Ship
+        from backend.models.system import StarSystem, Body
+        from backend.config import MORALE_LOW_THRESHOLD
+        import random as rnd_mod
+
+        ship = Ship(morale=MORALE_LOW_THRESHOLD + 10)
+        state = GameState(id="test-all-match-normal", seed=42, ship=ship)
+        body = Body(id="b1", name="Planet", body_type="planet", biome="ocean",
+                    size=3, distance_from_star=0.5, poi_count=1)
+        system = StarSystem(id="sys1", name="TestSys", x=0.0, y=0.0,
+                            star_type="G", star_color="#fff",
+                            phenomenon="none", phenomenon_desc="",
+                            bodies=[body])
+        state.systems = {"sys1": system}
+        state.ship.current_system_id = "sys1"
+
+        import unittest.mock as mock
+        single_template = {"type": "hazard", "title": "Solar Flare", "flavor": "...", "rarity": "common", "choices": []}
+        with mock.patch("backend.generation.events._get_eligible_templates", return_value=[single_template]):
+            state.event_cooldowns["Solar Flare"] = 5
+            state.last_event_title = "Solar Flare"
+            rng = rnd_mod.Random(1)
+            event = trigger_event(state, rng_override=rng)
+        assert event is not None
+        assert event.title == "Solar Flare"
+
