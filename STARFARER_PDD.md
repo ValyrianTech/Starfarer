@@ -127,7 +127,7 @@ Each step has a corresponding API endpoint for AI play.
 - Crisis: Cumulative conditions create emergencies
 - Narrative: Atmospheric story events (no reputation changes)
 
-Discovery and Hazard events now properly award faction reputation (Stellar Cartographers for discovery, Free Pilots for hazard).
+Discovery and Hazard events now properly award faction reputation (Stellar Cartographers for discovery, Free Pilots for hazard). The `_distress_pilots_guild` function returns an error dict instead of raising ValueError when the current system is None, allowing the distress beacon flow to handle missing system state gracefully.
 
 #### 3.4.2 Event Structure
 Each event has:
@@ -147,6 +147,12 @@ Each event has:
 
 #### 3.5.2 Lore Fragments
 - Scattered across the universe, each fragment reveals a piece of a larger story
+- Each lore fragment includes a **hint** for undiscovered fragments, visible in the lore viewer to guide exploration
+- Discovered fragments include **discovery location** (system name - body name) and **discovery date** metadata, stored as a `discovery_timestamp` in ISO format datetime
+- The explore API response includes a `lore_fragments_discovered` array listing any lore fragments found during surface exploration, each containing `fragment_id`, `arc`, `title`, `discovery_location`, and `discovery_timestamp`
+- **Lore viewer UI** features tab-based navigation by story arc with progress bars and detailed fragment cards
+- **Notification toast:** When a new lore fragment is discovered, a toast notification appears with a "View" button to open the lore viewer
+- **Lore button pulse:** The Lore navigation button (identified by `data-lore-nav="true"`) pulses with a glow animation when there are unread fragments
 - Major lore arcs (discoverable in any order):
   1. The Architects — An ancient race that shaped the galaxy and vanished
   2. The Void Signal — A mysterious transmission from beyond known space
@@ -256,7 +262,7 @@ GET /api/game/{id}/system/{sys_id} — Detailed system view
 POST /api/game/{id}/jump/{sys_id} — Jump to another star system
 POST /api/game/{id}/scan — Scan current system (costs fuel)
 POST /api/game/{id}/land/{body_id} — Land on a planet or moon
-POST /api/game/{id}/explore — Explore current surface location
+POST /api/game/{id}/explore — Explore current surface location (response includes `lore_fragments_discovered` array)
 POST /api/game/{id}/event/{event_id}/resolve — Resolve an event with a choice
 GET /api/game/{id}/log — Ship log entries
 GET /api/game/{id}/discoveries — Discovered lore and artifacts

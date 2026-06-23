@@ -100,6 +100,10 @@ class LoreFragment:
     discovered: bool = False
     discovery_id: Optional[str] = None
     fragment_number: int = -1
+    discovery_location: str = ""
+    discovery_date: str = ""
+    discovery_timestamp: str = ""
+    hint: str = ""
 
     def to_dict(self) -> dict:
         """Serialize the lore fragment to a dictionary.
@@ -115,6 +119,10 @@ class LoreFragment:
             "discovered": self.discovered,
             "discovery_id": self.discovery_id,
             "fragment_number": self.fragment_number,
+            "discovery_location": self.discovery_location,
+            "discovery_date": self.discovery_date,
+            "discovery_timestamp": self.discovery_timestamp,
+            "hint": self.hint,
         }
 
     @classmethod
@@ -134,4 +142,8 @@ class LoreFragment:
             discovered=d.get("discovered", False),
             discovery_id=d.get("discovery_id"),
             fragment_number=d.get("fragment_number", -1),
+            discovery_location=d.get("discovery_location", ""),
+            discovery_date=d.get("discovery_date", ""),
+            discovery_timestamp=d.get("discovery_timestamp", ""),
+            hint=d.get("hint", ""),
         )

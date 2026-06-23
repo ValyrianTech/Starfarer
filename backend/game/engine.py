@@ -7,6 +7,7 @@ landing, surface exploration, and nearby system discovery.
 
 import random
 import logging
+from datetime import datetime, timezone
 from typing import Any, Callable, List, NamedTuple, Optional
 
 from backend.config import (
@@ -242,10 +243,10 @@ def explore_surface(state: GameState) -> list[Discovery]:
 
     num_finds = min(body.poi_count, item_rng.randint(1, 3))
 
-    if num_finds > 0:
-        lore_frag = get_fragment_for_body(system.id, body.id, state.lore_fragments)
-        lore_linked = False
+    lore_frag = get_fragment_for_body(system.id, body.id, state.lore_fragments)
+    lore_linked = False
 
+    if num_finds > 0:
         for i in range(num_finds):
             cat = item_rng.choice(["mineral", "artifact", "lifeform", "signal", "ruin"])
             disc = _generate_discovery(item_rng, cat, body, system)
@@ -254,11 +255,12 @@ def explore_surface(state: GameState) -> list[Discovery]:
                 # First discovery of this lore fragment — link it to this discovery
                 disc.lore_fragment_id = lore_frag.id
                 lore_frag.discovered = True
+                lore_frag.discovery_timestamp = datetime.now(timezone.utc).isoformat()
                 lore_linked = True
                 state.add_log("lore", f"Discovered lore fragment: {lore_frag.title} ({lore_frag.id}).")
             elif lore_frag and lore_frag.discovered and not lore_linked:
-                # Lore fragment already discovered in a previous explore action (genuinely stale)
-                logger.warning(f"Lore fragment {lore_frag.id} ({lore_frag.title}) already discovered but found on body {body.id}.")
+                # Lore fragment already discovered in a previous explore action — expected behavior
+                logger.debug(f"Lore fragment {lore_frag.id} ({lore_frag.title}) already discovered but found on body {body.id}.")
                 lore_linked = True
 
             discoveries.append(disc)
@@ -363,7 +365,7 @@ def _distress_pilots_guild(state: GameState, rng: Any, turns: int) -> dict:
     ship = state.ship
     system = state.get_current_system()
     if system is None:
-        raise ValueError("Cannot execute Pilots Guild rescue: no current system.")
+        return {"error": "Cannot execute Pilots Guild rescue: no current system."}
     ship.credits = max(0, ship.credits - 100)
     ship.fuel = min(ship.max_fuel, ship.fuel + 20)
     state.modify_faction_reputation("free_pilots", 5)

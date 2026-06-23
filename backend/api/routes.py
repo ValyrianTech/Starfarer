@@ -6,6 +6,7 @@ navigation, exploration, events, trading, upgrades, saving/loading,
 and the leaderboard.
 """
 
+import logging
 import time
 
 from fastapi import APIRouter, HTTPException
@@ -28,6 +29,8 @@ from backend.game.trading import get_upgrade_info, purchase_upgrade, perform_tra
 from backend.database import get_leaderboard
 from backend.generation.lore_content import ARC_DISPLAY_NAMES
 from backend.models.faction import get_faction
+
+logger = logging.getLogger(__name__)
 
 START_TIME = time.time()
 
@@ -285,7 +288,8 @@ def api_explore(game_id: str) -> dict:
     :param game_id: The unique identifier of the game.
     :type game_id: str
     :returns: A dictionary with ``result`` message, ``discoveries``
-        list, ``ship`` status, and ``pending_event`` if triggered.
+        list, ``ship`` status, ``lore_fragments_discovered``, and
+        ``pending_event`` if triggered.
     :rtype: dict
     :raises HTTPException: 404 if the game is not found.
     """
@@ -293,6 +297,17 @@ def api_explore(game_id: str) -> dict:
     if not state:
         raise HTTPException(status_code=404, detail="Game not found")
     discoveries = explore_surface(state)
+
+    lore_fragment_map = {lf.id: lf for lf in state.lore_fragments}
+    lore_fragments_found = []
+    for disc in discoveries:
+        if disc.lore_fragment_id and disc.lore_fragment_id in lore_fragment_map:
+            lf = lore_fragment_map[disc.lore_fragment_id]
+            lore_fragments_found.append({
+                "id": lf.id,
+                "title": lf.title,
+                "arc": lf.arc,
+            })
 
     event = trigger_event(state)
     if event:
@@ -303,6 +318,7 @@ def api_explore(game_id: str) -> dict:
         "result": f"Explored. Found {len(discoveries)} points of interest.",
         "discoveries": [d.to_dict() for d in discoveries],
         "ship": state.ship.to_dict(),
+        "lore_fragments_discovered": lore_fragments_found,
         "pending_event": event.to_dict() if event and not event.resolved else None,
     }
 
@@ -436,7 +452,33 @@ def api_lore(game_id: str) -> dict:
     for lore in state.lore_fragments:
         arc = lore.arc
         if arc in arcs:
-            arcs[arc]["fragments"].append(lore.to_dict())
+            frag_dict = lore.to_dict()
+
+            if lore.discovered and lore.discovery_id:
+                parts = lore.discovery_id.split("::")
+                if len(parts) == 2:
+                    sys_id, body_id = parts
+                    system = state.systems.get(sys_id)
+                    if system:
+                        body = None
+                        for b in system.bodies:
+                            if b.id == body_id:
+                                body = b
+                                break
+                        body_name = body.name if body else body_id
+                        frag_dict["discovery_location"] = f"{system.name} - {body_name}"
+                    else:
+                        # Fallback: use raw IDs so the user at least sees something
+                        logger.warning(
+                            "Lore fragment %s references unknown system %s (body %s) - possible orphaned reference",
+                            lore.id, sys_id, body_id,
+                        )
+                        frag_dict["discovery_location"] = f"Unknown system ({sys_id}) - Body ({body_id})"
+
+            if lore.discovery_timestamp:
+                frag_dict["discovery_date"] = lore.discovery_timestamp
+
+            arcs[arc]["fragments"].append(frag_dict)
             arcs[arc]["total"] += 1
             if lore.discovered:
                 arcs[arc]["collected"] += 1
