@@ -2037,12 +2037,13 @@ class TestDistressBeacon:
         assert result["error"] == "No distress outcome matched."
 
     def test_distress_pilots_guild_no_system(self) -> None:
-        """_distress_pilots_guild should raise ValueError when system is None."""
+        """_distress_pilots_guild should return error dict when system is None."""
         from backend.game.engine import _distress_pilots_guild
         state = new_game(seed=42)
         state.ship.current_system_id = "nonexistent"
-        with pytest.raises(ValueError, match="Cannot execute Pilots Guild rescue: no current system."):
-            _distress_pilots_guild(state, None, 1)
+        result = _distress_pilots_guild(state, None, 1)
+        assert "error" in result
+        assert result["error"] == "Cannot execute Pilots Guild rescue: no current system."
 
 
 class TestSalvage:
