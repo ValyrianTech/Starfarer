@@ -2921,18 +2921,19 @@ class TestBlackHoleEvents:
 
     def test_black_hole_events_can_be_triggered(self) -> None:
         """Black hole events should be triggerable in a black hole system."""
+        from unittest.mock import patch
+        import random
         state = new_game(seed=42)
         system = state.get_current_system()
         assert system is not None
         system.phenomenon = "black_hole"
         state.ship.morale = 80
         
-        # Use a fixed RNG that guarantees an event triggers (random() < 0.35)
-        import random
-        rng = random.Random(3)
-        
-        event = trigger_event(state, rng_override=rng)
-        assert event is not None, "Expected an event to trigger with RNG seed 3"
+        # Use a real Random instance with mocked random() to guarantee trigger
+        rng = random.Random(42)
+        with patch.object(rng, "random", return_value=0.2):
+            event = trigger_event(state, rng_override=rng)
+        assert event is not None, "Expected an event to trigger with mocked RNG"
         assert event.title in [t["title"] for t in EVENT_TEMPLATES]
 
     def test_black_hole_events_can_be_resolved(self) -> None:
