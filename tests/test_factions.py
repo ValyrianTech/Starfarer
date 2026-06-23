@@ -487,6 +487,42 @@ class TestEventFactionIntegration:
         rep_after = state.get_faction_reputation("free_pilots")
         assert rep_after > rep_before
 
+    def test_discovery_event_gives_stellar_cartographers_rep(self) -> None:
+        state = new_game(seed=42)
+        template = next(t for t in EVENT_TEMPLATES if t["type"] == "discovery")
+        event = _create_event(template, "sys_0000")
+        state.events.append(event)
+        rep_before = state.get_faction_reputation("stellar_cartographers")
+
+        ok, msg, extra = resolve_event(state, event.id, 0)
+        assert ok is True
+        rep_after = state.get_faction_reputation("stellar_cartographers")
+        assert rep_after > rep_before
+
+    def test_hazard_event_gives_free_pilots_rep(self) -> None:
+        state = new_game(seed=42)
+        template = next(t for t in EVENT_TEMPLATES if t["type"] == "hazard")
+        event = _create_event(template, "sys_0000")
+        state.events.append(event)
+        rep_before = state.get_faction_reputation("free_pilots")
+
+        ok, msg, extra = resolve_event(state, event.id, 0)
+        assert ok is True
+        rep_after = state.get_faction_reputation("free_pilots")
+        assert rep_after > rep_before
+
+    def test_crew_event_gives_free_pilots_rep(self) -> None:
+        state = new_game(seed=42)
+        template = next(t for t in EVENT_TEMPLATES if t["type"] == "crew")
+        event = _create_event(template, "sys_0000")
+        state.events.append(event)
+        rep_before = state.get_faction_reputation("free_pilots")
+
+        ok, msg, extra = resolve_event(state, event.id, 0)
+        assert ok is True
+        rep_after = state.get_faction_reputation("free_pilots")
+        assert rep_after > rep_before
+
 
 class TestDistressBeaconFactionIntegration:
     def test_pilots_guild_gives_free_pilots_rep(self) -> None:
@@ -1063,6 +1099,34 @@ class TestReputationEventOutcomes:
         ok, msg, extra = resolve_event(state, event.id, 0)
         assert ok is True
         # Should not get the bonus credits (no +10), just the event outcome
+
+    def test_discovery_event_rep_bonus(self) -> None:
+        from backend.generation.events import _create_event
+        state = new_game(seed=42)
+        state.modify_faction_reputation("stellar_cartographers", 25)
+        template = next(t for t in EVENT_TEMPLATES if t["type"] == "discovery" and t["title"] == "Uncharted Ruins")
+        event = _create_event(template, "sys_0000")
+        state.events.append(event)
+        credits_before = state.ship.credits
+        morale_before = state.ship.morale
+
+        ok, msg, extra = resolve_event(state, event.id, 0)
+        assert ok is True
+        assert state.ship.credits == credits_before + 10
+        assert state.ship.morale == morale_before + 1
+
+    def test_hazard_event_rep_bonus(self) -> None:
+        from backend.generation.events import _create_event
+        state = new_game(seed=42)
+        state.modify_faction_reputation("free_pilots", 25)
+        template = next(t for t in EVENT_TEMPLATES if t["type"] == "hazard" and t["title"] == "Solar Flare")
+        event = _create_event(template, "sys_0000")
+        state.events.append(event)
+        morale_before = state.ship.morale
+
+        ok, msg, extra = resolve_event(state, event.id, 0)
+        assert ok is True
+        assert state.ship.morale == morale_before + 5
 
     def test_reputation_change_log_entry(self) -> None:
         from backend.generation.events import _create_event

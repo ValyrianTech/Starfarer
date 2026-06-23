@@ -560,6 +560,25 @@ def resolve_event(state: GameState, event_id: str, choice_idx: int) -> tuple[boo
             state.ship.morale = min(100, state.ship.morale + 5)
         if rep_before["free_pilots"] != rep_after["free_pilots"]:
             state.add_log("faction", f"Free Pilots reputation changed from {rep_before['free_pilots']} to {rep_after['free_pilots']}.")
+    elif event.event_type == "discovery":
+        rep_before["stellar_cartographers"] = state.get_faction_reputation("stellar_cartographers")
+        state.modify_faction_reputation("stellar_cartographers", event_rng.randint(2, 8))
+        rep_after["stellar_cartographers"] = state.get_faction_reputation("stellar_cartographers")
+        stellar_rep = rep_after["stellar_cartographers"]
+        if stellar_rep >= 20:
+            state.ship.credits += 10
+            state.ship.morale = min(100, state.ship.morale + 1)
+        if rep_before["stellar_cartographers"] != rep_after["stellar_cartographers"]:
+            state.add_log("faction", f"Stellar Cartographers reputation changed from {rep_before['stellar_cartographers']} to {rep_after['stellar_cartographers']}.")
+    elif event.event_type == "hazard":
+        rep_before["free_pilots"] = state.get_faction_reputation("free_pilots")
+        state.modify_faction_reputation("free_pilots", event_rng.randint(1, 6))
+        rep_after["free_pilots"] = state.get_faction_reputation("free_pilots")
+        free_pilots_rep = rep_after["free_pilots"]
+        if free_pilots_rep >= 20:
+            state.ship.morale = min(100, state.ship.morale + 5)
+        if rep_before["free_pilots"] != rep_after["free_pilots"]:
+            state.add_log("faction", f"Free Pilots reputation changed from {rep_before['free_pilots']} to {rep_after['free_pilots']}.")
 
     extra_output = {
         "title": event.title,
