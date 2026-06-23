@@ -145,6 +145,17 @@ Choices have outcomes that modify stats: `fuel`, `hull`, `morale`, `credits`, `c
 
 **Strategy tip:** Prefer choices that give credits early game. Avoid choices that damage hull or morale unless the reward is high.
 
+#### Event Decision Framework
+
+| Event Type | Recommended Choice | Reasoning |
+|------------|-------------------|-----------|
+| Life Support Failure | Emergency repair | Saves crew, costs fuel/hull but survivable |
+| Mysterious Beacon | Decode first | Avoids traps, gives credits + morale |
+| Pirate/Combat | Avoid if possible | Hull damage is expensive to repair |
+| Trade Opportunity | Take it | Free credits and resources |
+| Crew Morale Event | Boost morale | Low morale triggers cascading failures |
+| Black Hole Event | Depends on situation | Time Dilation: study for credits. Hawking Radiation: harvest for fuel. Spaghettification: gravity assist for fuel. Accretion Disk: probe for credits. Gravitational Lens: study for credits+morale. |
+
 ---
 
 ## 4. Resource Management
@@ -347,6 +358,8 @@ The game persists all state to SQLite. Save frequently — especially before ris
 | GET | `/api/leaderboard` | Top players |
 
 Full OpenAPI docs at `/docs` and `/redoc`.
+
+Events may be phenomenon-specific, triggering only in systems with matching phenomena (e.g., black hole events only appear near black holes).
 
 ---
 

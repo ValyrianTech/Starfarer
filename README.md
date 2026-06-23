@@ -32,6 +32,25 @@ The database uses a versioned migration system (`backend/database.py`). Migratio
 - Database migrations run automatically at startup. No manual migration commands are needed.
 - Default database path: `~/.starfarer/data/starfarer.db`
 
+## Recent Updates
+
+### Black Hole System Events
+Five new events are now available exclusively in black hole systems:
+- **Time Dilation Anomaly** (hazard) — Navigate the effects of extreme time dilation
+- **Hawking Radiation Harvest** (discovery) — Harvest exotic energy from the event horizon
+- **Spaghettification Near-Miss** (hazard, rare) — Escape the crushing tidal forces
+- **Accretion Disk Prospecting** (discovery) — Mine valuable minerals from the accretion disk
+- **Gravitational Lens Observation** (discovery) — Use the black hole as a natural telescope
+
+These events are triggered automatically when your ship enters a system with a black hole phenomenon.
+
+### Event Reputation System
+All event types now have consistent faction reputation effects:
+- **Exploration & Discovery** events grant Stellar Cartographers reputation
+- **Trade** events grant Void Traders reputation
+- **Encounter, Crisis, Crew & Hazard** events grant Free Pilots reputation
+- **Narrative** events are atmospheric and do not affect reputation
+
 ## Quick Start
 
 ```bash

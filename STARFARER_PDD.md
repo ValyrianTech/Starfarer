@@ -125,6 +125,9 @@ Each step has a corresponding API endpoint for AI play.
 - Trade: Visiting a station opens trade opportunities
 - Discovery: Scanner detects anomalies
 - Crisis: Cumulative conditions create emergencies
+- Narrative: Atmospheric story events (no reputation changes)
+
+Discovery and Hazard events now properly award faction reputation (Stellar Cartographers for discovery, Free Pilots for hazard).
 
 #### 3.4.2 Event Structure
 Each event has:
@@ -284,7 +287,7 @@ Every page includes:
 - API: All core endpoints functional with OpenAPI docs
 
 ### Phase 2: Content & Depth
-- Backend: Events system (10+ procedural events)
+- Backend: Events system (25+ procedural events)
 - Backend: Trading system with dynamic pricing
 - Backend: Ship upgrades
 - Frontend: Surface exploration view
@@ -349,7 +352,7 @@ Every page includes:
 - **AI Playable:** Full game loop achievable via API alone (no browser needed)
 - **API Performance:** All responses under 200ms for typical requests
 - **DOM Structure:** JSON-LD state script present on every page
-- **Content:** At least 10 unique events, 2 lore arcs with 5+ fragments each
+- **Content:** At least 25 unique events, 2 lore arcs with 5+ fragments each
 - **Quality:** No crashes, save/load works correctly, edge cases handled
 - **Determinism:** Same seed + same actions always produces identical state
 
