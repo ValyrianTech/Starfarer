@@ -231,6 +231,8 @@ def _state_to_dict(state: GameState) -> dict:
         "station_visits": state.station_visits,
         "event_cooldowns": state.event_cooldowns,
         "crisis_cooldown": state.crisis_cooldown,
+        "completed_missions": state.completed_missions,
+        "daily_missions_used": state.daily_missions_used,
     }
 
 
@@ -284,6 +286,8 @@ def _state_from_dict(d: dict) -> GameState:
         station_visits=d.get("station_visits", {}),
         event_cooldowns=d.get("event_cooldowns", {}),
         crisis_cooldown=d.get("crisis_cooldown", 0),
+        completed_missions=d.get("completed_missions", []),
+        daily_missions_used=d.get("daily_missions_used", {}),
     )
 
 
