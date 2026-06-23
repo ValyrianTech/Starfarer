@@ -983,7 +983,12 @@ def api_accept_mission(game_id: str, mission_id: str, req: AcceptMissionRequest)
     if req.faction_id:
         factions_to_check = [req.faction_id]
     else:
-        factions_to_check = list(FACTION_DEFINITIONS.keys())
+        # Restrict to the system's dominant faction to match GET /missions behavior
+        from backend.utils import deterministic_hash
+        faction_ids = list(FACTION_DEFINITIONS.keys())
+        faction_idx = deterministic_hash(state.seed, current_system.id, "primary_faction") % len(faction_ids)
+        primary_faction_id = faction_ids[faction_idx]
+        factions_to_check = [primary_faction_id]
 
     mission_found = None
     for fid in factions_to_check:
