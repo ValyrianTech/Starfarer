@@ -31,7 +31,6 @@ from backend.generation.lore_content import ARC_DISPLAY_NAMES
 from backend.models.faction import get_faction, FACTION_DEFINITIONS
 from backend.missions import (
     FactionMission, generate_missions, complete_mission, get_daily_mission_key,
-    _TIER_COSTS,
 )
 
 logger = logging.getLogger(__name__)
