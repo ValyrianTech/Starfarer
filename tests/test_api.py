@@ -1391,6 +1391,46 @@ class TestAPILore:
         assert len(data["arc_order"]) == 4
         assert data["arc_order"] == ["architects", "void_signal", "fracture", "wanderer"]
 
+    def test_lore_fallback_when_system_not_found(self) -> None:
+        """When discovery_id references a system not in state.systems, fallback location is used."""
+        from backend.models.discovery import LoreFragment
+        from backend.game.manager import GAME_STORE, game_save
+
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "lore-fallback-sys"})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+
+        # Create a lore fragment with a discovery_id referencing a non-existent system
+        lf = LoreFragment(
+            id="test-fallback-lore",
+            arc="architects",
+            title="Test Fragment",
+            text="Test text",
+            discovered=True,
+            discovery_id="nonexistent_system_xyz::body_123",
+            fragment_number=1,
+        )
+        state.lore_fragments.append(lf)
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        resp = client.get(f"/api/game/{game_id}/lore")
+        assert resp.status_code == 200
+        data = resp.json()
+
+        # Find our test fragment in the response
+        architects = data["arcs"]["architects"]
+        test_frag = None
+        for frag in architects["fragments"]:
+            if frag["id"] == "test-fallback-lore":
+                test_frag = frag
+                break
+
+        assert test_frag is not None, "Test fragment should be in the response"
+        assert "discovery_location" in test_frag
+        assert test_frag["discovery_location"] == "Unknown system (nonexistent_system_xyz) - Body (body_123)"
+
 
 class TestAPIMainIndex:
     """Tests for main.py index endpoint."""
