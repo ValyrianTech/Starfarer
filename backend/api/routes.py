@@ -972,7 +972,8 @@ def api_accept_mission(game_id: str, mission_id: str, req: AcceptMissionRequest)
 
     mission_found = None
     faction_id = None
-    for fid in FACTION_DEFINITIONS:
+    factions_to_check = [req.faction_id] if req.faction_id else list(FACTION_DEFINITIONS.keys())
+    for fid in factions_to_check:
         missions = generate_missions(state, current_system, fid)
         for m in missions:
             if m.id == mission_id:
@@ -1056,11 +1057,14 @@ def api_complete_mission(game_id: str, mission_id: str, req: CompleteMissionRequ
         raise HTTPException(status_code=400, detail="Mission has not been accepted")
 
     mission_found = None
-    for fid in FACTION_DEFINITIONS:
+    faction_id = None
+    factions_to_check = [req.faction_id] if req.faction_id else list(FACTION_DEFINITIONS.keys())
+    for fid in factions_to_check:
         missions = generate_missions(state, current_system, fid)
         for m in missions:
             if m.id == mission_id:
                 mission_found = m
+                faction_id = fid
                 break
         if mission_found:
             break
