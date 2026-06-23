@@ -19,7 +19,7 @@ from backend.api.schemas import (
 from backend.game.manager import (
     GAME_STORE, new_game, get_galaxy, get_system_detail, game_save, game_load as game_load_func,
 )
-from backend.generation.events import trigger_event, resolve_event as resolve_event_func
+from backend.generation.events import trigger_event, resolve_event as resolve_event_func, decrement_cooldowns
 from backend.game.engine import (
     can_jump, perform_jump, perform_scan, get_nearby_systems,
     land_on_body, explore_surface,
@@ -203,6 +203,7 @@ def api_jump(game_id: str, sys_id: str) -> dict:
 
     result = perform_jump(state, target, int(fuel_cost))
 
+    decrement_cooldowns(state)
     event = trigger_event(state)
     if event:
         state.events.append(event)
@@ -236,6 +237,7 @@ def api_scan(game_id: str) -> dict:
         raise HTTPException(status_code=404, detail="Game not found")
     result = perform_scan(state)
 
+    decrement_cooldowns(state)
     event = trigger_event(state)
     if event:
         state.events.append(event)  # pragma: no cover  # probabilistic event trigger
@@ -309,6 +311,7 @@ def api_explore(game_id: str) -> dict:
                 "arc": lf.arc,
             })
 
+    decrement_cooldowns(state)
     event = trigger_event(state)
     if event:
         state.events.append(event)

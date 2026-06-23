@@ -15,6 +15,13 @@
 - Lore discovery notification toast: In-app notification when a lore fragment is discovered
 - Lore button pulse animation: Lore button glows when new fragments are unread
 - Safe fallback for unknown systems in lore discovery location (when system not found in state)
+- Event cooldown system: per-event cooldowns prevent event repetition within a session
+- `EVENT_COOLDOWNS` dictionary with configurable cooldown values per event title (3, 5, 6, 8, or 10 turns)
+- `apply_cooldown()` and `decrement_cooldowns()` functions for cooldown lifecycle management
+- `_apply_cooldown_fallback()` — fallback logic when all eligible events are on cooldown, picks the one with lowest remaining cooldown
+- `event_cooldowns` field to `GameState` for persistent cooldown tracking across save/load
+- Cooldown decrement in jump, scan, and explore API endpoints (called before event trigger)
+- Comprehensive test suite for event cooldown behavior (210 lines)
 
 ### Changed
 - Refactored `resolve_event()` to use `_EVENT_REP_MAP` dictionary for event type → faction mapping
@@ -42,3 +49,14 @@
 - `explore_surface` now correctly handles the `lore_linked` flag when `num_finds` is 0
 - Lore fragment discovery date extraction now uses regex instead of fragile substring matching on log messages
 - Lore fragment discovery now stores `discovery_timestamp` as ISO format datetime
+- Cooldown fallback in `trigger_event` no longer bypasses last_event_title dedup when all eligible events share the same cooldown value
+- Duplicated cooldown fallback logic in `trigger_event` consolidated into `_apply_cooldown_fallback()`
+- Resolved inconsistent cooldown decrement timing: `resolve_event` route now ticks cooldowns after resolution instead of before
+- In-place mutation of eligible list in `_apply_cooldown_fallback` fixed by using a copy of the list before sorting
+- Off-by-one cooldown decrement order relative to event trigger fixed: cooldowns now decrement before the event trigger on jump, scan, and explore, ensuring correct timing on the first action
+- `EVENT_COOLDOWNS` dictionary entries with no corresponding template no longer cause key errors during cooldown application
+- `_apply_cooldown_fallback` no longer returns an empty list when eligible is non-empty but all events have cooldown <= 0
+- `decrement_cooldowns` now uses `list(state.event_cooldowns.keys())` for safe iteration when deleting expired cooldowns
+
+### Removed
+- Dead code `get_available_events` (defined but never used in production)

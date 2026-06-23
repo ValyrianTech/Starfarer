@@ -229,6 +229,7 @@ def _state_to_dict(state: GameState) -> dict:
         "last_event_title": state.last_event_title,
         "jumps_since_rep_decay": state.jumps_since_rep_decay,
         "station_visits": state.station_visits,
+        "event_cooldowns": state.event_cooldowns,
     }
 
 
@@ -280,6 +281,7 @@ def _state_from_dict(d: dict) -> GameState:
         last_event_title=d.get("last_event_title"),
         jumps_since_rep_decay=d.get("jumps_since_rep_decay", 0),
         station_visits=d.get("station_visits", {}),
+        event_cooldowns=d.get("event_cooldowns", {}),
     )
 
 

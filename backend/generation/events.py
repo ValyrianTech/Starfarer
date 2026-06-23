@@ -439,6 +439,49 @@ EVENT_TEMPLATES: list[dict[str, Any]] = [
 ]
 
 
+# Default cooldowns per event type (keyed by event title)
+EVENT_COOLDOWNS = {
+    "Passing Merchant": 3,
+    "Solar Flare": 3,
+    "Asteroid Swarm": 3,
+    "Crew Discovery": 3,
+    "Derelict Vessel": 3,
+    "Mysterious Beacon": 3,
+    "Time Dilation Anomaly": 6,
+    "Hawking Radiation Harvest": 6,
+    "Ion Storm": 6,
+    "Protostar Formation": 6,
+    "Nebula Navigation Puzzle": 6,
+    "Radiation Pulse": 6,
+    "Pulsar Timing Signal": 6,
+    "Accretion Disk Prospecting": 6,
+    "Gravitational Lens Observation": 6,
+    "Orbital Mechanics Challenge": 6,
+    "Lagrange Point Discovery": 6,
+    "Life Support Failure": 8,
+    "Crew Dispute": 8,
+    "Spaghettification Near-Miss": 8,
+    "Neutron Star Proximity": 8,
+    "Signal from Home": 10,
+    "Gravity Anomaly": 10,
+    "Priority Salvage Rights": 10,
+    "Fuel Cache Locations": 10,
+    "Elite Crew Available": 10,
+}
+
+
+def apply_cooldown(state: GameState, event_title: str) -> None:
+    """Set cooldown for an event after it fires."""
+    state.event_cooldowns[event_title] = EVENT_COOLDOWNS.get(event_title, 5)
+
+
+def decrement_cooldowns(state: GameState) -> None:
+    """Decrement all active cooldowns by 1."""
+    for event_id in list(state.event_cooldowns):
+        state.event_cooldowns[event_id] -= 1
+        if state.event_cooldowns[event_id] <= 0:
+            del state.event_cooldowns[event_id]
+
 
 def _get_eligible_templates(state: GameState, templates: list[dict]) -> list[dict]:
     """Filter event templates based on trigger conditions in the current game state.
@@ -512,6 +555,21 @@ def _get_eligible_templates(state: GameState, templates: list[dict]) -> list[dic
     return eligible
 
 
+def _apply_cooldown_fallback(eligible: list[dict], state: GameState) -> list[dict]:
+    """Apply cooldown fallback: prefer events not on cooldown; if all are on cooldown, pick the one(s) with the lowest cooldown, avoiding last_event_title if possible."""
+    # Guard: if there are no eligible templates at all, return empty early.
+    if not eligible:
+        return []
+    eligible_not_on_cd = [t for t in eligible if state.event_cooldowns.get(t["title"], 0) <= 0]
+    if eligible_not_on_cd:
+        return eligible_not_on_cd
+    eligible = sorted(eligible, key=lambda t: state.event_cooldowns.get(t["title"], 0))
+    eligible_no_last = [t for t in eligible if t["title"] != state.last_event_title]
+    if eligible_no_last:
+        return eligible_no_last[:1]
+    return eligible[:1]
+
+
 def trigger_event(state: GameState, rng_override: Optional[random.Random] = None) -> Event | None:
     """Possibly trigger a procedural event based on the current game state.
 
@@ -527,6 +585,10 @@ def trigger_event(state: GameState, rng_override: Optional[random.Random] = None
     In the normal path, templates are filtered by trigger conditions and
     weighted by rarity (common=5, uncommon=2, rare=1). A cooldown prevents
     the same event title from appearing twice in a row.
+
+    Event cooldowns are checked via ``state.event_cooldowns``. Events with
+    active cooldowns are skipped. If all eligible events are on cooldown,
+    the one with the lowest remaining cooldown is allowed as a fallback.
 
     :param state: The current game state.
     :type state: GameState
@@ -544,22 +606,29 @@ def trigger_event(state: GameState, rng_override: Optional[random.Random] = None
     if state.ship.morale < MORALE_LOW_THRESHOLD:
         eligible = _get_eligible_templates(state, EVENT_TEMPLATES)
         eligible = [t for t in eligible if t["type"] in ("crew", "crisis", "narrative")]
-        eligible_no_cooldown = [t for t in eligible if t["title"] != state.last_event_title]
-        if eligible_no_cooldown:
-            eligible = eligible_no_cooldown
+
+        eligible = _apply_cooldown_fallback(eligible, state)
+
+        eligible_no_last = [t for t in eligible if t["title"] != state.last_event_title]
+        if eligible_no_last:
+            eligible = eligible_no_last
         if not eligible:
             return None
         template = eligible[deterministic_hash(system.id, str(len(state.log_entries))) % len(eligible)]
         state.last_event_title = template["title"]
+        apply_cooldown(state, template["title"])
         return _create_event(template, system.id)
 
     rng = rng_override or seeded_random(state.seed, "event_trigger", system.id, str(len(state.events)), str(len(state.log_entries)))
 
     if rng.random() < 0.35:
         eligible = _get_eligible_templates(state, EVENT_TEMPLATES)
-        eligible_no_cooldown = [t for t in eligible if t["title"] != state.last_event_title]
-        if eligible_no_cooldown:
-            eligible = eligible_no_cooldown
+
+        eligible = _apply_cooldown_fallback(eligible, state)
+
+        eligible_no_last = [t for t in eligible if t["title"] != state.last_event_title]
+        if eligible_no_last:
+            eligible = eligible_no_last
         if not eligible:
             return None
 
@@ -567,6 +636,7 @@ def trigger_event(state: GameState, rng_override: Optional[random.Random] = None
         weights = [rarity_weights.get(t.get("rarity", "common"), 1) for t in eligible]
         template = rng.choices(eligible, weights=weights, k=1)[0]
         state.last_event_title = template["title"]
+        apply_cooldown(state, template["title"])
         return _create_event(template, system.id)
 
     return None
