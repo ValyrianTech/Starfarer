@@ -347,9 +347,18 @@ EVENT_TEMPLATES: list[dict[str, Any]] = [
 def _get_eligible_templates(state: GameState, templates: list[dict]) -> list[dict]:
     """Filter event templates based on trigger conditions in the current game state.
 
-    Checks phenomenon, biome, min_systems_visited, max_morale, and
-    unexplored_preference conditions against the current system and
-    ship state. Templates with no trigger conditions are always eligible.
+    Checks phenomenon, biome, min_systems_visited, max_morale,
+    unexplored_preference, and min_reputation conditions against the
+    current system and ship state. Templates with no trigger conditions
+    are always eligible.
+
+    Fallback behavior: if every template that has ``trigger_conditions``
+    is filtered out, the returned list contains *only* templates with
+    **no** ``trigger_conditions``. Callers that further filter by
+    event type (such as :func:`trigger_event`'s low-morale path, which
+    keeps only ``crew``, ``crisis``, and ``narrative`` events) may end up
+    with an empty list if the fallback templates do not include those
+    types, causing the caller to return ``None``.
 
     :param state: The current game state.
     :type state: GameState
@@ -411,10 +420,17 @@ def trigger_event(state: GameState, rng_override: Optional[random.Random] = None
     """Possibly trigger a procedural event based on the current game state.
 
     Events have a base 35% chance of triggering after a jump, scan, or
-    exploration. If morale is low (<30), crew, crisis, or narrative events
-    are forced. Templates are filtered by trigger conditions and weighted
-    by rarity (common=5, uncommon=2, rare=1). A cooldown prevents the same
-    event title from appearing twice in a row.
+    exploration. If morale is low (<30), the probability roll is skipped
+    entirely and the function attempts to force a ``crew``, ``crisis``, or
+    ``narrative`` event. In this low-morale path, templates are first
+    filtered by :func:`_get_eligible_templates` and then further narrowed
+    to only those three event types. If no templates survive both filters
+    (including when the :func:`_get_eligible_templates` fallback produces
+    only templates without those types), ``None`` is returned.
+
+    In the normal path, templates are filtered by trigger conditions and
+    weighted by rarity (common=5, uncommon=2, rare=1). A cooldown prevents
+    the same event title from appearing twice in a row.
 
     :param state: The current game state.
     :type state: GameState
