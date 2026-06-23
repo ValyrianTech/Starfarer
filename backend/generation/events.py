@@ -280,6 +280,66 @@ EVENT_TEMPLATES: list[dict[str, Any]] = [
         ],
         "trigger_conditions": {"min_reputation": {"faction_id": "free_pilots", "value": 50}},
     },
+    {
+        "type": "hazard",
+        "rarity": "uncommon",
+        "title": "Time Dilation Anomaly",
+        "flavor": "Your ship's chronometers begin drifting. Time flows differently near the black hole's gravity well. You experience what feels like hours in minutes.",
+        "choices": [
+            {"text": "Push closer to study the effect", "outcome": "credits:200; hull:-15; Gained valuable scientific data from the time dilation effect."},
+            {"text": "Maintain safe distance and observe", "outcome": "credits:100; Observed the time dilation from a safe distance."},
+            {"text": "Withdraw immediately", "outcome": "A wise decision \u2014 some phenomena are best observed from afar."},
+        ],
+        "trigger_conditions": {"phenomenon": "black_hole"},
+    },
+    {
+        "type": "discovery",
+        "rarity": "uncommon",
+        "title": "Hawking Radiation Harvest",
+        "flavor": "Sensors detect a faint glow around the black hole's event horizon \u2014 Hawking radiation. Your ship's collectors could harvest this exotic energy.",
+        "choices": [
+            {"text": "Attempt to harvest", "outcome": "fuel:20; hull:-12; Successfully harvested Hawking radiation! Gained fuel and a rare Hawking Particle."},
+            {"text": "Scan and record data", "outcome": "credits:150; Recorded valuable scientific data on Hawking radiation."},
+            {"text": "Avoid the dangerous approach", "outcome": "Some risks aren't worth taking."},
+        ],
+        "trigger_conditions": {"phenomenon": "black_hole"},
+    },
+    {
+        "type": "hazard",
+        "rarity": "rare",
+        "title": "Spaghettification Near-Miss",
+        "flavor": "A gravitational eddy catches your ship, pulling you toward the event horizon. The hull groans as tidal forces begin to stretch the frame.",
+        "choices": [
+            {"text": "Full emergency thrust", "outcome": "fuel:-12; hull:-8; Escaped the gravity well with emergency thrust, but at a cost."},
+            {"text": "Ride the gravity assist", "outcome": "hull:-18; fuel:15; Used the black hole's gravity for a slingshot maneuver! Saved fuel but took hull damage."},
+            {"text": "Deploy gravity anchor", "outcome": "cargo:-1; Escaped unscathed by sacrificing some cargo to the black hole."},
+        ],
+        "trigger_conditions": {"phenomenon": "black_hole"},
+    },
+    {
+        "type": "discovery",
+        "rarity": "uncommon",
+        "title": "Accretion Disk Prospecting",
+        "flavor": "The black hole's accretion disk glows with superheated matter. Your sensors detect dense mineral clusters within the disk \u2014 extremely valuable but dangerous to reach.",
+        "choices": [
+            {"text": "Send a probe into the disk", "outcome": "credits:300; credits:-50; The probe returned with incredibly valuable mineral samples!"},
+            {"text": "Skim the edge of the disk", "outcome": "credits:150; hull:-5; Carefully skimmed the edge and recovered some valuable materials."},
+            {"text": "Observe from safe distance", "outcome": "credits:50; Recorded observations of the accretion disk from a safe distance."},
+        ],
+        "trigger_conditions": {"phenomenon": "black_hole"},
+    },
+    {
+        "type": "discovery",
+        "rarity": "uncommon",
+        "title": "Gravitational Lens Observation",
+        "flavor": "The black hole's gravity is bending light from distant stars, creating a natural telescope of unprecedented power. You can see galaxies normally hidden behind nebulae.",
+        "choices": [
+            {"text": "Study the lensed images carefully", "outcome": "credits:200; morale:10; Discovered a lore fragment and gathered valuable astronomical data!"},
+            {"text": "Quick observation", "outcome": "credits:100; Recorded useful astronomical observations."},
+            {"text": "Ignore \u2014 too busy navigating", "outcome": "A missed opportunity, but the journey continues."},
+        ],
+        "trigger_conditions": {"phenomenon": "black_hole"},
+    },
 ]
 
 
