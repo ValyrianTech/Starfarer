@@ -2956,3 +2956,202 @@ class TestBlackHoleEvents:
             assert extra["chosen_text"] == event.choices[i].text
             assert isinstance(extra["effects"], dict)
 
+
+class TestPhenomenonEvents:
+    """Tests for phenomenon-specific events (nebula, pulsar, binary star)."""
+
+    def test_nebula_events_exist(self) -> None:
+        """Verify 4 nebula events exist in EVENT_TEMPLATES with trigger_conditions {'phenomenon': 'nebula'}."""
+        nebula_events = [t for t in EVENT_TEMPLATES if t.get("trigger_conditions", {}).get("phenomenon") == "nebula"]
+        assert len(nebula_events) == 4, f"Expected 4 nebula events, got {len(nebula_events)}"
+
+    def test_pulsar_events_exist(self) -> None:
+        """Verify 3 pulsar events exist with trigger_conditions {'phenomenon': 'pulsar'}."""
+        pulsar_events = [t for t in EVENT_TEMPLATES if t.get("trigger_conditions", {}).get("phenomenon") == "pulsar"]
+        assert len(pulsar_events) == 3, f"Expected 3 pulsar events, got {len(pulsar_events)}"
+
+    def test_binary_star_events_exist(self) -> None:
+        """Verify 2 binary star events exist with trigger_conditions {'phenomenon': 'binary_star'}."""
+        binary_star_events = [t for t in EVENT_TEMPLATES if t.get("trigger_conditions", {}).get("phenomenon") == "binary_star"]
+        assert len(binary_star_events) == 2, f"Expected 2 binary star events, got {len(binary_star_events)}"
+
+    def test_phenomenon_events_have_correct_structure(self) -> None:
+        """Each phenomenon event should have title, flavor, type, choices, and trigger_conditions."""
+        phenomenon_events = [
+            t for t in EVENT_TEMPLATES
+            if t.get("trigger_conditions", {}).get("phenomenon") in ("nebula", "pulsar", "binary_star")
+        ]
+        for event in phenomenon_events:
+            assert "title" in event, f"Phenomenon event missing title: {event}"
+            assert "flavor" in event, f"Phenomenon event {event['title']} missing flavor"
+            assert "type" in event, f"Phenomenon event {event['title']} missing type"
+            assert "choices" in event, f"Phenomenon event {event['title']} missing choices"
+            assert len(event["choices"]) >= 2, f"Phenomenon event {event['title']} has fewer than 2 choices"
+            assert "trigger_conditions" in event, f"Phenomenon event {event['title']} missing trigger_conditions"
+            assert event["trigger_conditions"]["phenomenon"] in ("nebula", "pulsar", "binary_star"), \
+                f"Phenomenon event {event['title']} has unexpected phenomenon"
+
+    def test_phenomenon_events_only_eligible_in_matching_systems(self) -> None:
+        """Nebula events only in nebula systems, pulsar events only in pulsar systems, etc."""
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+
+        # Test nebula
+        system.phenomenon = "nebula"
+        eligible = _get_eligible_templates(state, EVENT_TEMPLATES)
+        nebula_eligible = [t for t in eligible if t.get("trigger_conditions", {}).get("phenomenon") == "nebula"]
+        assert len(nebula_eligible) == 4, \
+            f"Expected 4 nebula events eligible in nebula system, got {len(nebula_eligible)}"
+
+        # Test pulsar
+        system.phenomenon = "pulsar"
+        eligible = _get_eligible_templates(state, EVENT_TEMPLATES)
+        pulsar_eligible = [t for t in eligible if t.get("trigger_conditions", {}).get("phenomenon") == "pulsar"]
+        assert len(pulsar_eligible) == 3, \
+            f"Expected 3 pulsar events eligible in pulsar system, got {len(pulsar_eligible)}"
+
+        # Test binary star
+        system.phenomenon = "binary_star"
+        eligible = _get_eligible_templates(state, EVENT_TEMPLATES)
+        binary_eligible = [t for t in eligible if t.get("trigger_conditions", {}).get("phenomenon") == "binary_star"]
+        assert len(binary_eligible) == 2, \
+            f"Expected 2 binary star events eligible in binary star system, got {len(binary_eligible)}"
+
+    def test_phenomenon_events_not_eligible_in_other_systems(self) -> None:
+        """Nebula events not eligible in pulsar systems, etc."""
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+
+        # Nebula events in pulsar system
+        system.phenomenon = "pulsar"
+        eligible = _get_eligible_templates(state, EVENT_TEMPLATES)
+        nebula_eligible = [t for t in eligible if t.get("trigger_conditions", {}).get("phenomenon") == "nebula"]
+        assert len(nebula_eligible) == 0, \
+            f"Expected 0 nebula events eligible in pulsar system, got {len(nebula_eligible)}"
+
+        # Pulsar events in binary star system
+        system.phenomenon = "binary_star"
+        eligible = _get_eligible_templates(state, EVENT_TEMPLATES)
+        pulsar_eligible = [t for t in eligible if t.get("trigger_conditions", {}).get("phenomenon") == "pulsar"]
+        assert len(pulsar_eligible) == 0, \
+            f"Expected 0 pulsar events eligible in binary star system, got {len(pulsar_eligible)}"
+
+        # Binary star events in nebula system
+        system.phenomenon = "nebula"
+        eligible = _get_eligible_templates(state, EVENT_TEMPLATES)
+        binary_eligible = [t for t in eligible if t.get("trigger_conditions", {}).get("phenomenon") == "binary_star"]
+        assert len(binary_eligible) == 0, \
+            f"Expected 0 binary star events eligible in nebula system, got {len(binary_eligible)}"
+
+    def test_phenomenon_events_not_eligible_in_normal_systems(self) -> None:
+        """No phenomenon events in systems with phenomenon='none'."""
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        system.phenomenon = "none"
+        eligible = _get_eligible_templates(state, EVENT_TEMPLATES)
+        phenomenon_eligible = [
+            t for t in eligible
+            if t.get("trigger_conditions", {}).get("phenomenon") in ("nebula", "pulsar", "binary_star")
+        ]
+        assert len(phenomenon_eligible) == 0, \
+            f"Expected 0 phenomenon events eligible in normal system, got {len(phenomenon_eligible)}"
+
+    def test_phenomenon_event_choices_have_valid_outcomes(self) -> None:
+        """Each choice outcome can be parsed by apply_choice_outcome."""
+        from backend.models.game_state import GameState
+        from backend.models.ship import Ship
+
+        phenomenon_events = [
+            t for t in EVENT_TEMPLATES
+            if t.get("trigger_conditions", {}).get("phenomenon") in ("nebula", "pulsar", "binary_star")
+        ]
+        ship = Ship()
+        state = GameState(id="test-ph-outcomes", seed=42, ship=ship)
+
+        for event in phenomenon_events:
+            for i, choice in enumerate(event["choices"]):
+                effects = state.apply_choice_outcome(choice["outcome"])
+                assert isinstance(effects, dict), f"Outcome for {event['title']} choice {i} should return a dict"
+                assert any(v != 0 for v in effects.values()) or ";" not in choice["outcome"].strip(), \
+                    f"Choice {i} of {event['title']} has no stat effects: {choice['outcome']}"
+
+    def test_phenomenon_events_can_be_triggered(self) -> None:
+        """Events can be triggered in matching systems."""
+        from unittest.mock import patch
+        import random
+
+        for phenomenon in ("nebula", "pulsar", "binary_star"):
+            state = new_game(seed=42)
+            system = state.get_current_system()
+            assert system is not None
+            system.phenomenon = phenomenon
+            state.ship.morale = 80
+
+            rng = random.Random(42)
+            with patch.object(rng, "random", return_value=0.2):
+                event = trigger_event(state, rng_override=rng)
+            assert event is not None, f"Expected an event to trigger in {phenomenon} system with mocked RNG"
+            assert event.title in [t["title"] for t in EVENT_TEMPLATES]
+
+    def test_phenomenon_events_can_be_resolved(self) -> None:
+        """Events resolve correctly for each phenomenon type."""
+        from backend.generation.events import _create_event
+
+        # Pick one template per phenomenon type
+        nebula_template = [t for t in EVENT_TEMPLATES if t.get("trigger_conditions", {}).get("phenomenon") == "nebula"][0]
+        pulsar_template = [t for t in EVENT_TEMPLATES if t.get("trigger_conditions", {}).get("phenomenon") == "pulsar"][0]
+        binary_template = [t for t in EVENT_TEMPLATES if t.get("trigger_conditions", {}).get("phenomenon") == "binary_star"][0]
+
+        for template in (nebula_template, pulsar_template, binary_template):
+            for i in range(len(template["choices"])):
+                state = new_game(seed=42)
+                event = _create_event(template, state.get_current_system().id)
+                state.events.append(event)
+
+                ok, msg, extra = resolve_event(state, event.id, i)
+                assert ok is True, f"Failed to resolve choice {i} of '{template['title']}': {msg}"
+                assert extra["title"] == template["title"]
+                assert extra["chosen_text"] == event.choices[i].text
+                assert isinstance(extra["effects"], dict)
+
+    def test_nebula_events_have_valid_event_types(self) -> None:
+        """Nebula events use hazard, discovery, encounter types."""
+        nebula_events = [t for t in EVENT_TEMPLATES if t.get("trigger_conditions", {}).get("phenomenon") == "nebula"]
+        valid_types = {"hazard", "discovery", "encounter"}
+        for event in nebula_events:
+            assert event["type"] in valid_types, \
+                f"Nebula event '{event['title']}' has invalid type: {event['type']}"
+        actual_types = {e["type"] for e in nebula_events}
+        assert actual_types.issubset(valid_types), f"Nebula events have unexpected types: {actual_types - valid_types}"
+
+    def test_pulsar_events_have_valid_event_types(self) -> None:
+        """Pulsar events use hazard, discovery types."""
+        pulsar_events = [t for t in EVENT_TEMPLATES if t.get("trigger_conditions", {}).get("phenomenon") == "pulsar"]
+        valid_types = {"hazard", "discovery"}
+        for event in pulsar_events:
+            assert event["type"] in valid_types, \
+                f"Pulsar event '{event['title']}' has invalid type: {event['type']}"
+        actual_types = {e["type"] for e in pulsar_events}
+        assert actual_types.issubset(valid_types), f"Pulsar events have unexpected types: {actual_types - valid_types}"
+
+    def test_binary_star_events_have_valid_event_types(self) -> None:
+        """Binary star events use encounter, discovery types."""
+        binary_star_events = [t for t in EVENT_TEMPLATES if t.get("trigger_conditions", {}).get("phenomenon") == "binary_star"]
+        valid_types = {"encounter", "discovery"}
+        for event in binary_star_events:
+            assert event["type"] in valid_types, \
+                f"Binary star event '{event['title']}' has invalid type: {event['type']}"
+        actual_types = {e["type"] for e in binary_star_events}
+        assert actual_types.issubset(valid_types), f"Binary star events have unexpected types: {actual_types - valid_types}"
+
+    def test_all_phenomenon_events_count(self) -> None:
+        """Total new events = 9 (4 nebula + 3 pulsar + 2 binary)."""
+        nebula_events = [t for t in EVENT_TEMPLATES if t.get("trigger_conditions", {}).get("phenomenon") == "nebula"]
+        pulsar_events = [t for t in EVENT_TEMPLATES if t.get("trigger_conditions", {}).get("phenomenon") == "pulsar"]
+        binary_events = [t for t in EVENT_TEMPLATES if t.get("trigger_conditions", {}).get("phenomenon") == "binary_star"]
+        total = len(nebula_events) + len(pulsar_events) + len(binary_events)
+        assert total == 9, f"Expected 9 total phenomenon events, got {total} (nebula={len(nebula_events)}, pulsar={len(pulsar_events)}, binary={len(binary_events)})"
+
