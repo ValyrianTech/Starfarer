@@ -827,6 +827,13 @@ def api_faction_mission(game_id: str, faction_id: str) -> dict:
             raise HTTPException(status_code=400, detail="No available missions")
         mission = rng.choice(remaining)
 
+    # Check if this mission was already accepted (but not yet completed)
+    if mission.id in state.accepted_missions:
+        remaining = [m for m in standard_missions if m.id not in state.accepted_missions and m.id not in completed_ids]
+        if not remaining:
+            raise HTTPException(status_code=400, detail="No available missions")
+        mission = rng.choice(remaining)
+
     if state.ship.fuel < mission.fuel_cost:
         raise HTTPException(
             status_code=400,

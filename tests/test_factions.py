@@ -1172,6 +1172,78 @@ class TestFactionAPI:
         assert resp.status_code == 400
         assert "No available missions" in resp.json()["detail"]
 
+    def test_faction_mission_skips_accepted_mission(self) -> None:
+        resp = client.post(
+            "/api/game/new",
+            json={"seed": 42, "game_id": "mission-skip-accepted"},
+        )
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        state.ship.fuel = 100
+        state.ship.credits = 500
+        current_system = state.get_current_system()
+        assert current_system is not None
+        current_system.has_trading_station = True
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        resp = client.get(f"/api/game/{game_id}/missions")
+        missions_data = resp.json()
+        standard_missions = missions_data["missions"]
+        assert len(standard_missions) >= 2
+
+        accepted_mission_id = standard_missions[0]["id"]
+        faction_id = missions_data["faction_id"]
+        state.accepted_missions[accepted_mission_id] = faction_id
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        mock_rng = MagicMock()
+        mock_rng.choice.side_effect = lambda lst: lst[0]
+
+        with patch("backend.utils.seeded_random", return_value=mock_rng):
+            resp = client.post(
+                f"/api/game/{game_id}/faction/{faction_id}/mission"
+            )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["effect"] == "success"
+        assert data["mission"]["id"] != accepted_mission_id
+
+    def test_faction_mission_all_accepted_returns_400(self) -> None:
+        resp = client.post(
+            "/api/game/new",
+            json={"seed": 42, "game_id": "mission-all-accepted"},
+        )
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        state.ship.fuel = 100
+        state.ship.credits = 500
+        current_system = state.get_current_system()
+        assert current_system is not None
+        current_system.has_trading_station = True
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        resp = client.get(f"/api/game/{game_id}/missions")
+        missions_data = resp.json()
+        faction_id = missions_data["faction_id"]
+
+        for mission in missions_data["missions"]:
+            state.accepted_missions[mission["id"]] = faction_id
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        resp = client.post(
+            f"/api/game/{game_id}/faction/{faction_id}/mission"
+        )
+
+        assert resp.status_code == 400
+        assert "No available missions" in resp.json()["detail"]
+
     def test_api_accept_mission_already_accepted(self) -> None:
         resp = client.post(
             "/api/game/new",
