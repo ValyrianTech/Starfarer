@@ -102,9 +102,11 @@ class AcceptMissionRequest(BaseModel):
     """Request body for accepting a faction mission."""
 
     mission_id: str
+    faction_id: Optional[str] = None
 
 
 class CompleteMissionRequest(BaseModel):
     """Request body for completing a faction mission."""
 
     mission_id: str
+    faction_id: Optional[str] = None
