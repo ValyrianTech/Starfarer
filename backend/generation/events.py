@@ -322,7 +322,7 @@ EVENT_TEMPLATES: list[dict[str, Any]] = [
         "title": "Accretion Disk Prospecting",
         "flavor": "The black hole's accretion disk glows with superheated matter. Your sensors detect dense mineral clusters within the disk \u2014 extremely valuable but dangerous to reach.",
         "choices": [
-            {"text": "Send a probe into the disk", "outcome": "credits:300; credits:-50; The probe returned with incredibly valuable mineral samples!"},
+            {"text": "Send a probe into the disk", "outcome": "credits:250; The probe returned with incredibly valuable mineral samples!"},
             {"text": "Skim the edge of the disk", "outcome": "credits:150; hull:-5; Carefully skimmed the edge and recovered some valuable materials."},
             {"text": "Observe from safe distance", "outcome": "credits:50; Recorded observations of the accretion disk from a safe distance."},
         ],
