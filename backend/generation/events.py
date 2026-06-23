@@ -487,6 +487,9 @@ def _create_event(template: dict, system_id: str) -> Event:
     )
 
 
+# Only event types explicitly listed in this map receive faction reputation
+# changes when resolved. Any event type not present (e.g. "narrative") is
+# silently skipped — no reputation changes, no bonus, no log entry.
 _EVENT_REP_MAP: dict[str, tuple[str, tuple[int, int], Callable]] = {
     "exploration": ("stellar_cartographers", (2, 8), lambda s: (setattr(s.ship, 'credits', s.ship.credits + 10), setattr(s.ship, 'morale', min(100, s.ship.morale + 1)))),
     "discovery": ("stellar_cartographers", (2, 8), lambda s: (setattr(s.ship, 'credits', s.ship.credits + 10), setattr(s.ship, 'morale', min(100, s.ship.morale + 1)))),
@@ -552,9 +555,6 @@ def resolve_event(state: GameState, event_id: str, choice_idx: int) -> tuple[boo
             bonus_fn(state)
         if rep_before[faction_id] != rep_after[faction_id]:
             state.add_log("faction", f"{faction_id.replace('_', ' ').title()} reputation changed from {rep_before[faction_id]} to {rep_after[faction_id]}.")
-    elif event.event_type == "narrative":
-        # Narrative events are atmospheric/story events and do not affect faction reputation
-        pass
 
     extra_output = {
         "title": event.title,
