@@ -295,17 +295,16 @@ def api_explore(game_id: str) -> dict:
         raise HTTPException(status_code=404, detail="Game not found")
     discoveries = explore_surface(state)
 
+    lore_fragment_map = {lf.id: lf for lf in state.lore_fragments}
     lore_fragments_found = []
     for disc in discoveries:
-        if disc.lore_fragment_id:
-            for lf in state.lore_fragments:
-                if lf.id == disc.lore_fragment_id:
-                    lore_fragments_found.append({
-                        "id": lf.id,
-                        "title": lf.title,
-                        "arc": lf.arc,
-                    })
-                    break
+        if disc.lore_fragment_id and disc.lore_fragment_id in lore_fragment_map:
+            lf = lore_fragment_map[disc.lore_fragment_id]
+            lore_fragments_found.append({
+                "id": lf.id,
+                "title": lf.title,
+                "arc": lf.arc,
+            })
 
     event = trigger_event(state)
     if event:
