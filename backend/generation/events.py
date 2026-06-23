@@ -487,17 +487,33 @@ def _create_event(template: dict, system_id: str) -> Event:
     )
 
 
+def _bonus_credits_morale(state: GameState) -> None:
+    """Add 10 credits and 1 morale (capped at 100) as a reputation bonus."""
+    state.ship.credits += 10
+    state.ship.morale = min(100, state.ship.morale + 1)
+
+
+def _bonus_credits(state: GameState) -> None:
+    """Add 10 credits as a reputation bonus."""
+    state.ship.credits += 10
+
+
+def _bonus_morale(state: GameState) -> None:
+    """Add 5 morale (capped at 100) as a reputation bonus."""
+    state.ship.morale = min(100, state.ship.morale + 5)
+
+
 # Only event types explicitly listed in this map receive faction reputation
 # changes when resolved. Any event type not present (e.g. "narrative") is
 # silently skipped — no reputation changes, no bonus, no log entry.
 _EVENT_REP_MAP: dict[str, tuple[str, tuple[int, int], Callable]] = {
-    "exploration": ("stellar_cartographers", (2, 8), lambda s: (setattr(s.ship, 'credits', s.ship.credits + 10), setattr(s.ship, 'morale', min(100, s.ship.morale + 1)))),
-    "discovery": ("stellar_cartographers", (2, 8), lambda s: (setattr(s.ship, 'credits', s.ship.credits + 10), setattr(s.ship, 'morale', min(100, s.ship.morale + 1)))),
-    "trade": ("void_traders", (2, 8), lambda s: setattr(s.ship, 'credits', s.ship.credits + 10)),
-    "encounter": ("free_pilots", (1, 6), lambda s: setattr(s.ship, 'morale', min(100, s.ship.morale + 5))),
-    "crisis": ("free_pilots", (1, 6), lambda s: setattr(s.ship, 'morale', min(100, s.ship.morale + 5))),
-    "crew": ("free_pilots", (1, 6), lambda s: setattr(s.ship, 'morale', min(100, s.ship.morale + 5))),
-    "hazard": ("free_pilots", (1, 6), lambda s: setattr(s.ship, 'morale', min(100, s.ship.morale + 5))),
+    "exploration": ("stellar_cartographers", (2, 8), _bonus_credits_morale),
+    "discovery": ("stellar_cartographers", (2, 8), _bonus_credits_morale),
+    "trade": ("void_traders", (2, 8), _bonus_credits),
+    "encounter": ("free_pilots", (1, 6), _bonus_morale),
+    "crisis": ("free_pilots", (1, 6), _bonus_morale),
+    "crew": ("free_pilots", (1, 6), _bonus_morale),
+    "hazard": ("free_pilots", (1, 6), _bonus_morale),
 }
 
 
