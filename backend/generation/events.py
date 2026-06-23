@@ -565,6 +565,20 @@ def _get_eligible_templates(state: GameState, templates: list[dict]) -> list[dic
     return eligible
 
 
+def _apply_cooldown_fallback(eligible: list[dict], state: GameState) -> list[dict]:
+    """Apply cooldown fallback: prefer events not on cooldown; if all are on cooldown, pick the one(s) with the lowest cooldown, avoiding last_event_title if possible."""
+    eligible_not_on_cd = [t for t in eligible if state.event_cooldowns.get(t["title"], 0) <= 0]
+    if eligible_not_on_cd:
+        return eligible_not_on_cd
+    if not eligible:
+        return []
+    eligible.sort(key=lambda t: state.event_cooldowns.get(t["title"], 0))
+    eligible_no_last = [t for t in eligible if t["title"] != state.last_event_title]
+    if eligible_no_last:
+        return eligible_no_last[:1]
+    return eligible[:1]
+
+
 def trigger_event(state: GameState, rng_override: Optional[random.Random] = None) -> Event | None:
     """Possibly trigger a procedural event based on the current game state.
 
@@ -602,16 +616,7 @@ def trigger_event(state: GameState, rng_override: Optional[random.Random] = None
         eligible = _get_eligible_templates(state, EVENT_TEMPLATES)
         eligible = [t for t in eligible if t["type"] in ("crew", "crisis", "narrative")]
 
-        eligible_not_on_cd = [t for t in eligible if state.event_cooldowns.get(t["title"], 0) <= 0]
-        if eligible_not_on_cd:
-            eligible = eligible_not_on_cd
-        elif eligible:
-            eligible.sort(key=lambda t: state.event_cooldowns.get(t["title"], 0))
-            eligible_no_last = [t for t in eligible if t["title"] != state.last_event_title]
-            if eligible_no_last:
-                eligible = eligible_no_last[:1]
-            else:
-                eligible = eligible[:1]
+        eligible = _apply_cooldown_fallback(eligible, state)
 
         eligible_no_last = [t for t in eligible if t["title"] != state.last_event_title]
         if eligible_no_last:
@@ -628,16 +633,7 @@ def trigger_event(state: GameState, rng_override: Optional[random.Random] = None
     if rng.random() < 0.35:
         eligible = _get_eligible_templates(state, EVENT_TEMPLATES)
 
-        eligible_not_on_cd = [t for t in eligible if state.event_cooldowns.get(t["title"], 0) <= 0]
-        if eligible_not_on_cd:
-            eligible = eligible_not_on_cd
-        elif eligible:
-            eligible.sort(key=lambda t: state.event_cooldowns.get(t["title"], 0))
-            eligible_no_last = [t for t in eligible if t["title"] != state.last_event_title]
-            if eligible_no_last:
-                eligible = eligible_no_last[:1]
-            else:
-                eligible = eligible[:1]
+        eligible = _apply_cooldown_fallback(eligible, state)
 
         eligible_no_last = [t for t in eligible if t["title"] != state.last_event_title]
         if eligible_no_last:
