@@ -1244,6 +1244,234 @@ class TestFactionAPI:
         assert resp.status_code == 400
         assert "No available missions" in resp.json()["detail"]
 
+    def test_faction_mission_all_completed_remaining_empty(self) -> None:
+        from backend.missions import FactionMission
+
+        resp = client.post(
+            "/api/game/new",
+            json={"seed": 42, "game_id": "mission-all-comp-remaining"},
+        )
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        state.ship.fuel = 100
+        state.ship.credits = 500
+        current_system = state.get_current_system()
+        assert current_system is not None
+        current_system.has_trading_station = True
+
+        standard_mission = FactionMission(
+            id="mission_std_001",
+            faction_id="stellar_cartographers",
+            tier=2,
+            title="Standard Mission",
+            description="A standard non-daily mission.",
+            objective_type="courier",
+            objective_target="Station Alpha",
+            fuel_cost=5,
+            credit_cost=20,
+            credit_reward=100,
+            reputation_reward=10,
+        )
+
+        state.completed_missions.append({
+            "mission_id": "mission_std_001",
+            "faction_id": "stellar_cartographers",
+            "title": "Standard Mission",
+            "tier": 2,
+        })
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        with patch(
+            "backend.api.routes.generate_missions",
+            return_value=[standard_mission],
+        ):
+            resp = client.post(
+                f"/api/game/{game_id}/faction/stellar_cartographers/mission"
+            )
+
+        assert resp.status_code == 400
+        assert "No available missions" in resp.json()["detail"]
+
+    def test_faction_mission_all_accepted_remaining_empty(self) -> None:
+        from backend.missions import FactionMission
+
+        resp = client.post(
+            "/api/game/new",
+            json={"seed": 42, "game_id": "mission-all-accept-remaining"},
+        )
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        state.ship.fuel = 100
+        state.ship.credits = 500
+        current_system = state.get_current_system()
+        assert current_system is not None
+        current_system.has_trading_station = True
+
+        standard_mission = FactionMission(
+            id="mission_std_002",
+            faction_id="stellar_cartographers",
+            tier=2,
+            title="Standard Mission",
+            description="A standard non-daily mission.",
+            objective_type="courier",
+            objective_target="Station Alpha",
+            fuel_cost=5,
+            credit_cost=20,
+            credit_reward=100,
+            reputation_reward=10,
+        )
+
+        state.accepted_missions["mission_std_002"] = "stellar_cartographers"
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        with patch(
+            "backend.api.routes.generate_missions",
+            return_value=[standard_mission],
+        ):
+            resp = client.post(
+                f"/api/game/{game_id}/faction/stellar_cartographers/mission"
+            )
+
+        assert resp.status_code == 400
+        assert "No available missions" in resp.json()["detail"]
+
+    def test_faction_mission_completed_chooses_remaining(self) -> None:
+        from backend.missions import FactionMission
+
+        resp = client.post(
+            "/api/game/new",
+            json={"seed": 42, "game_id": "mission-comp-choose-rem"},
+        )
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        state.ship.fuel = 100
+        state.ship.credits = 500
+        current_system = state.get_current_system()
+        assert current_system is not None
+        current_system.has_trading_station = True
+
+        mission_a = FactionMission(
+            id="mission_a_001",
+            faction_id="stellar_cartographers",
+            tier=2,
+            title="Mission A",
+            description="First standard mission.",
+            objective_type="courier",
+            objective_target="Station Alpha",
+            fuel_cost=5,
+            credit_cost=20,
+            credit_reward=100,
+            reputation_reward=10,
+        )
+        mission_b = FactionMission(
+            id="mission_b_001",
+            faction_id="stellar_cartographers",
+            tier=2,
+            title="Mission B",
+            description="Second standard mission.",
+            objective_type="delivery",
+            objective_target="Outpost Beta",
+            fuel_cost=5,
+            credit_cost=20,
+            credit_reward=100,
+            reputation_reward=10,
+        )
+
+        state.completed_missions.append({
+            "mission_id": "mission_a_001",
+            "faction_id": "stellar_cartographers",
+            "title": "Mission A",
+            "tier": 2,
+        })
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        mock_rng = MagicMock()
+        mock_rng.choice.side_effect = lambda lst: lst[0]
+
+        with patch(
+            "backend.api.routes.generate_missions",
+            return_value=[mission_a, mission_b],
+        ):
+            with patch("backend.utils.seeded_random", return_value=mock_rng):
+                resp = client.post(
+                    f"/api/game/{game_id}/faction/stellar_cartographers/mission"
+                )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["effect"] == "success"
+        assert data["mission"]["id"] == "mission_b_001"
+
+    def test_faction_mission_accepted_chooses_remaining(self) -> None:
+        from backend.missions import FactionMission
+
+        resp = client.post(
+            "/api/game/new",
+            json={"seed": 42, "game_id": "mission-accept-choose-rem"},
+        )
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        state.ship.fuel = 100
+        state.ship.credits = 500
+        current_system = state.get_current_system()
+        assert current_system is not None
+        current_system.has_trading_station = True
+
+        mission_a = FactionMission(
+            id="mission_a_002",
+            faction_id="stellar_cartographers",
+            tier=2,
+            title="Mission A",
+            description="First standard mission.",
+            objective_type="courier",
+            objective_target="Station Alpha",
+            fuel_cost=5,
+            credit_cost=20,
+            credit_reward=100,
+            reputation_reward=10,
+        )
+        mission_b = FactionMission(
+            id="mission_b_002",
+            faction_id="stellar_cartographers",
+            tier=2,
+            title="Mission B",
+            description="Second standard mission.",
+            objective_type="delivery",
+            objective_target="Outpost Beta",
+            fuel_cost=5,
+            credit_cost=20,
+            credit_reward=100,
+            reputation_reward=10,
+        )
+
+        state.accepted_missions["mission_a_002"] = "stellar_cartographers"
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        mock_rng = MagicMock()
+        mock_rng.choice.side_effect = lambda lst: lst[0]
+
+        with patch(
+            "backend.api.routes.generate_missions",
+            return_value=[mission_a, mission_b],
+        ):
+            with patch("backend.utils.seeded_random", return_value=mock_rng):
+                resp = client.post(
+                    f"/api/game/{game_id}/faction/stellar_cartographers/mission"
+                )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["effect"] == "success"
+        assert data["mission"]["id"] == "mission_b_002"
+
     def test_api_accept_mission_already_accepted(self) -> None:
         resp = client.post(
             "/api/game/new",
