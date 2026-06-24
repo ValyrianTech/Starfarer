@@ -1071,6 +1071,33 @@ class TestManagerAdvanced:
         assert loaded.log_entries[4]["id"] == 13
         assert loaded._next_log_id == 14
 
+    def test_state_from_dict_with_boolean_ids(self) -> None:
+        """_state_from_dict should treat boolean IDs as non-integer and reassign them."""
+        from backend.database import init_db
+        init_db()
+        state = new_game(seed=42)
+        data = get_game_state(state)
+        data["log_entries"] = [
+            {"id": True, "type": "system", "message": "entry with boolean True id"},
+            {"id": 5, "type": "navigation", "message": "valid entry with id 5"},
+            {"id": False, "type": "exploration", "message": "entry with boolean False id"},
+            {"id": 10, "type": "combat", "message": "valid entry with id 10"},
+        ]
+        del data["_next_log_id"]
+        loaded = _state_from_dict(data)
+        assert loaded is not None
+        assert len(loaded.log_entries) == 4
+        # Boolean True should be reassigned a sequential id (1)
+        assert loaded.log_entries[0]["id"] == 1
+        # Valid int id 5 should be kept
+        assert loaded.log_entries[1]["id"] == 5
+        # Boolean False should be reassigned a sequential id (6, since max_id=5 then +=1)
+        assert loaded.log_entries[2]["id"] == 6
+        # Valid int id 10 should be kept
+        assert loaded.log_entries[3]["id"] == 10
+        # _next_log_id should be max_id + 1 = 10 + 1 = 11
+        assert loaded._next_log_id == 11
+
 
 class TestEvents:
     def test_event_templates_exist(self) -> None:
