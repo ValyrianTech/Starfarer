@@ -404,7 +404,7 @@ def api_discoveries(game_id: str) -> dict:
 
 
 @router.get("/game/{game_id}/cargo")
-def api_cargo(game_id: str) -> dict:
+def api_cargo(game_id: str, sort: str = "value", order: str = "desc") -> dict:
     """Retrieve detailed cargo hold contents.
 
     Returns the current cargo count, cargo capacity, and a list of
@@ -413,8 +413,12 @@ def api_cargo(game_id: str) -> dict:
 
     :param game_id: The unique identifier of the game.
     :type game_id: str
-    :returns: A dictionary with ``cargo``, ``cargo_capacity``, and
-        ``cargo_items`` list.
+    :param sort: Sort key — ``"value"`` or ``"name"``.
+    :type sort: str
+    :param order: Sort order — ``"asc"`` or ``"desc"``.
+    :type order: str
+    :returns: A dictionary with ``cargo``, ``cargo_capacity``,
+        ``cargo_items`` list, and ``total_value``.
     :rtype: dict
     :raises HTTPException: 404 if the game is not found.
     """
@@ -422,10 +426,21 @@ def api_cargo(game_id: str) -> dict:
     if not state:
         raise HTTPException(status_code=404, detail="Game not found")
     cargo_items = [d.to_cargo_dict() for d in state.discoveries]
+
+    if sort == "value":
+        reverse = order == "desc"
+        cargo_items.sort(key=lambda i: i.get("value", 0), reverse=reverse)
+    elif sort == "name":
+        reverse = order == "desc"
+        cargo_items.sort(key=lambda i: i.get("name", ""), reverse=reverse)
+
+    total_value = sum(item["value"] for item in cargo_items)
+
     return {
         "cargo": state.ship.cargo,
         "cargo_capacity": state.ship.max_cargo,
         "cargo_items": cargo_items,
+        "total_value": total_value,
     }
 
 
@@ -1168,5 +1183,6 @@ def _full_state_response(state: GameState) -> dict:
         "reputation_summary": state.build_reputation_summary(),
         "cargo": state.ship.cargo,
         "cargo_items": [d.to_cargo_dict() for d in state.discoveries],
+        "total_value": sum(d.value for d in state.discoveries),
         "fuel_status": get_fuel_status(state, state.systems),
     }

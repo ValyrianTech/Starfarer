@@ -1907,6 +1907,179 @@ class TestAPICargo:
         assert len(nonsellable) == 1
         assert nonsellable[0]["id"] == "tc-nonsellable"
 
+    def test_cargo_endpoint_has_total_value(self) -> None:
+        """GET /api/game/{id}/cargo should include total_value field."""
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+        resp = client.get(f"/api/game/{game_id}/cargo")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "total_value" in data
+        assert data["total_value"] == 0
+
+    def test_cargo_endpoint_total_value_with_items(self) -> None:
+        """total_value should be sum of all cargo item values."""
+        from backend.models.discovery import Discovery
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "cargo-total-val"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        current_sys = state.get_current_system()
+        state.discoveries.append(
+            Discovery(id="tv-disc-1", category="mineral", name="Gold",
+                      description="Gold ore", value=100, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="tv-disc-2", category="artifact", name="Relic",
+                      description="Ancient relic", value=50, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="tv-disc-3", category="mineral", name="Silver",
+                      description="Silver ore", value=25, system_id=current_sys.id)
+        )
+        GAME_STORE[game_id] = state
+        game_save(state)
+        resp = client.get(f"/api/game/{game_id}/cargo")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total_value"] == 175  # 100 + 50 + 25
+
+    def test_cargo_sort_value_desc_default(self) -> None:
+        """Default sort should be by value descending."""
+        from backend.models.discovery import Discovery
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "cargo-sort-vd"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        current_sys = state.get_current_system()
+        state.discoveries.append(
+            Discovery(id="vsd-1", category="mineral", name="Low",
+                      description="Low value", value=10, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="vsd-2", category="artifact", name="High",
+                      description="High value", value=100, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="vsd-3", category="mineral", name="Medium",
+                      description="Medium value", value=50, system_id=current_sys.id)
+        )
+        GAME_STORE[game_id] = state
+        game_save(state)
+        resp = client.get(f"/api/game/{game_id}/cargo")
+        assert resp.status_code == 200
+        data = resp.json()
+        values = [item["value"] for item in data["cargo_items"]]
+        assert values == [100, 50, 10]
+
+    def test_cargo_sort_value_asc(self) -> None:
+        """Sort by value ascending should work."""
+        from backend.models.discovery import Discovery
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "cargo-sort-va"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        current_sys = state.get_current_system()
+        state.discoveries.append(
+            Discovery(id="vsa-1", category="mineral", name="Low",
+                      description="Low value", value=10, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="vsa-2", category="artifact", name="High",
+                      description="High value", value=100, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="vsa-3", category="mineral", name="Medium",
+                      description="Medium value", value=50, system_id=current_sys.id)
+        )
+        GAME_STORE[game_id] = state
+        game_save(state)
+        resp = client.get(f"/api/game/{game_id}/cargo?sort=value&order=asc")
+        assert resp.status_code == 200
+        data = resp.json()
+        values = [item["value"] for item in data["cargo_items"]]
+        assert values == [10, 50, 100]
+
+    def test_cargo_sort_name_asc(self) -> None:
+        """Sort by name ascending should work."""
+        from backend.models.discovery import Discovery
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "cargo-sort-na"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        current_sys = state.get_current_system()
+        state.discoveries.append(
+            Discovery(id="sna-1", category="mineral", name="Zeta Ore",
+                      description="Zeta", value=50, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="sna-2", category="artifact", name="Alpha Relic",
+                      description="Alpha", value=100, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="sna-3", category="mineral", name="Beta Crystal",
+                      description="Beta", value=25, system_id=current_sys.id)
+        )
+        GAME_STORE[game_id] = state
+        game_save(state)
+        resp = client.get(f"/api/game/{game_id}/cargo?sort=name&order=asc")
+        assert resp.status_code == 200
+        data = resp.json()
+        names = [item["name"] for item in data["cargo_items"]]
+        assert names == ["Alpha Relic", "Beta Crystal", "Zeta Ore"]
+
+    def test_cargo_sort_name_desc(self) -> None:
+        """Sort by name descending should work."""
+        from backend.models.discovery import Discovery
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "cargo-sort-nd"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        current_sys = state.get_current_system()
+        state.discoveries.append(
+            Discovery(id="snd-1", category="mineral", name="Alpha Ore",
+                      description="Alpha", value=50, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="snd-2", category="artifact", name="Zeta Relic",
+                      description="Zeta", value=100, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="snd-3", category="mineral", name="Beta Crystal",
+                      description="Beta", value=25, system_id=current_sys.id)
+        )
+        GAME_STORE[game_id] = state
+        game_save(state)
+        resp = client.get(f"/api/game/{game_id}/cargo?sort=name&order=desc")
+        assert resp.status_code == 200
+        data = resp.json()
+        names = [item["name"] for item in data["cargo_items"]]
+        assert names == ["Zeta Relic", "Beta Crystal", "Alpha Ore"]
+
+    def test_cargo_total_value_in_full_state(self) -> None:
+        """GET /api/game/{id} should include total_value field."""
+        from backend.models.discovery import Discovery
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "cargo-full-tv"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        current_sys = state.get_current_system()
+        state.discoveries.append(
+            Discovery(id="ftv-1", category="mineral", name="Gold",
+                      description="Gold ore", value=100, system_id=current_sys.id)
+        )
+        GAME_STORE[game_id] = state
+        game_save(state)
+        resp = client.get(f"/api/game/{game_id}")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "total_value" in data
+        assert data["total_value"] == 100
+
+    def test_cargo_sort_empty_items(self) -> None:
+        """Sorting with empty cargo should return empty list."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "cargo-sort-empty"})
+        game_id = resp.json()["game_id"]
+        resp = client.get(f"/api/game/{game_id}/cargo?sort=value&order=desc")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["cargo_items"] == []
+        assert data["total_value"] == 0
+
 
 class TestFuelWarningSystem:
     """Tests for the fuel warning status system (backend/fuel.py)."""
