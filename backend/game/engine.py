@@ -25,7 +25,7 @@ from backend.generation.lore import get_fragment_for_body
 logger = logging.getLogger(__name__)
 
 
-def can_jump(ship: Ship, target: StarSystem, current: Optional[StarSystem]) -> tuple[bool, float, str]:
+def can_jump(ship: Ship, target: StarSystem, current: Optional[StarSystem]) -> tuple[bool, int, str]:
     """Check whether a jump to a target system is possible.
 
     Validates that the ship has sufficient fuel and jump range to
@@ -41,7 +41,7 @@ def can_jump(ship: Ship, target: StarSystem, current: Optional[StarSystem]) -> t
         ``can_jump`` indicates whether the jump is allowed,
         ``fuel_cost`` is the estimated fuel required, and ``message``
         is an empty string on success or an error description.
-    :rtype: tuple[bool, float, str]
+    :rtype: tuple[bool, int, str]
     """
     if ship.current_system_id == target.id:
         return False, 0, "Already in this system."
@@ -57,7 +57,7 @@ def can_jump(ship: Ship, target: StarSystem, current: Optional[StarSystem]) -> t
     return True, fuel_cost, ""
 
 
-def perform_jump(state: GameState, target_system: StarSystem, fuel_cost: int | float) -> str:
+def perform_jump(state: GameState, target_system: StarSystem, fuel_cost: int) -> str:
     """Execute a hyperspace jump to the target star system.
 
     Deducts fuel, applies morale decay (modified by life support
@@ -74,7 +74,7 @@ def perform_jump(state: GameState, target_system: StarSystem, fuel_cost: int | f
     :rtype: str
     """
     current = state.get_current_system() or state.systems.get(state.ship.current_system_id)
-    state.ship.fuel -= int(fuel_cost)
+    state.ship.fuel -= fuel_cost
 
     life_support_level = state.ship.morale_decay_reduction
     morale_decay = max(1, MORALE_DECAY_PER_JUMP - life_support_level)
@@ -86,7 +86,7 @@ def perform_jump(state: GameState, target_system: StarSystem, fuel_cost: int | f
 
     if current:
         dist = distance_between(current, target_system)
-        state.add_log("navigation", f"Jumped from {current.name} to {target_system.name} ({round(dist/10, 1)} LY). Fuel cost: {fuel_cost}.", category="jump", title="Hyperspace Jump", system=target_system.name, fuel_change=-int(fuel_cost))
+        state.add_log("navigation", f"Jumped from {current.name} to {target_system.name} ({round(dist/10, 1)} LY). Fuel cost: {fuel_cost}.", category="jump", title="Hyperspace Jump", system=target_system.name, fuel_change=-fuel_cost)
     else:
         state.add_log("navigation", f"Arrived at {target_system.name}.", category="jump", title="System Arrival", system=target_system.name)
 

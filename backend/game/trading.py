@@ -7,12 +7,27 @@ at trading stations.
 """
 
 import random
-
 from backend.config import UPGRADE_COSTS, UPGRADE_EFFECTS, UPGRADE_MAX_LEVELS, FUEL_BASE_PRICE
 from backend.utils import deterministic_hash
 from backend.models.game_state import GameState, rep_label
 from backend.models.ship import Ship
 from backend.models.system import StarSystem
+
+
+def round_half_up(x: float) -> int:
+    """Round a float to the nearest integer, with .5 rounding up.
+
+    Uses the "round half up" (or "commercial") rounding convention,
+    which is not the same as Python's built-in ``round()`` (which
+    rounds .5 to the nearest even integer). This function rounds
+    .5 up for both positive and negative numbers.
+
+    :param x: The number to round.
+    :type x: float
+    :returns: The rounded integer.
+    :rtype: int
+    """
+    return int(x + 0.5 if x >= 0 else x - 0.5)
 
 
 def get_upgrade_info(ship: Ship) -> list[dict]:
@@ -276,7 +291,7 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
             if amount <= 0:
                 return False, "Fuel tank is already full."
             price_info = calculate_fuel_price(state, system)
-            cost = int(amount * price_info["final_price"])
+            cost = round_half_up(amount * price_info["final_price"])
             if state.ship.credits < cost:
                 return False, f"Not enough credits. Need {cost}."
             state.ship.credits -= cost

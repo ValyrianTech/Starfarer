@@ -115,6 +115,14 @@
 - `_fuel_low_no_station` now guards against negative fuel values (clamps to 0)
 - `test_first_crisis_detects_title_with_crisis` renamed to accurately reflect what it tests
 - `_first_uncharted` hint condition no longer tightly coupled to starting-system-has-station assumption — now handles edge case where player visits a station before exploring uncharted systems
+- `_mission_seed` and `generate_missions` now accept a `completed_count` parameter to refresh the deterministic mission pool when missions are completed, preventing double-counting of completed missions
+- Docstring type mismatch in `can_jump` fixed: return type docstring now says `int` instead of `float`
+- Docstrings for `_mission_seed` and `generate_missions` updated to document the new `completed_count` parameter
+- `faction_completed_count` is now computed correctly in `api_faction_mission` by filtering completed missions by faction_id, preventing double-counting
+- Mission selection in `api_faction_mission` now filters out completed and accepted missions before picking a random mission, preventing misleading "No available missions" errors when all missions are completed
+- `perform_jump` fuel cost type inconsistency resolved: `can_jump` now correctly returns `int` (not `float`), and `perform_jump` accepts `int` instead of `int | float`
+- Redundant `int()` casts removed from `can_jump` return and `perform_jump` log call
+- `round()` in `perform_trade` now uses round-half-up (`int(x + 0.5)`) instead of banker's rounding to prevent unexpected results from fractional credit truncation
 
 ### Removed
 - Unused `Optional` import from `backend/hints.py`

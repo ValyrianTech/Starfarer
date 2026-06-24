@@ -9,7 +9,7 @@ from backend.game.engine import (
     land_on_body, explore_surface,
     activate_distress_beacon, perform_salvage, emergency_craft,
 )
-from backend.game.trading import get_upgrade_info, purchase_upgrade, perform_trade, perform_bulk_sell, calculate_fuel_price
+from backend.game.trading import get_upgrade_info, purchase_upgrade, perform_trade, perform_bulk_sell, calculate_fuel_price, round_half_up
 from backend.game.manager import new_game, get_galaxy, get_system_detail, game_save, load_or_create, get_game_state, _state_from_dict
 from backend.generation.events import trigger_event, resolve_event, EVENT_TEMPLATES, _get_eligible_templates, _apply_cooldown_fallback
 from backend.config import SCAN_FUEL_COST
@@ -1653,6 +1653,50 @@ class TestTradingValidateQuantity:
         from backend.game.trading import _validate_quantity
         result = _validate_quantity(5)
         assert result is None
+
+
+class TestRoundHalfUp:
+    """Tests for round_half_up rounding function."""
+
+    def test_positive_half_up(self) -> None:
+        """round_half_up(2.5) should round to 3."""
+        assert round_half_up(2.5) == 3
+
+    def test_positive_round_down(self) -> None:
+        """round_half_up(2.4) should round to 2."""
+        assert round_half_up(2.4) == 2
+
+    def test_positive_round_up(self) -> None:
+        """round_half_up(2.6) should round to 3."""
+        assert round_half_up(2.6) == 3
+
+    def test_negative_half_up(self) -> None:
+        """round_half_up(-2.5) should round to -3."""
+        assert round_half_up(-2.5) == -3
+
+    def test_negative_round_down(self) -> None:
+        """round_half_up(-2.4) should round to -2."""
+        assert round_half_up(-2.4) == -2
+
+    def test_negative_round_up(self) -> None:
+        """round_half_up(-2.6) should round to -3."""
+        assert round_half_up(-2.6) == -3
+
+    def test_zero(self) -> None:
+        """round_half_up(0) should be 0."""
+        assert round_half_up(0) == 0
+
+    def test_edge_positive_half(self) -> None:
+        """round_half_up(0.5) should round to 1."""
+        assert round_half_up(0.5) == 1
+
+    def test_edge_negative_half(self) -> None:
+        """round_half_up(-0.5) should round to -1."""
+        assert round_half_up(-0.5) == -1
+
+    def test_large_positive(self) -> None:
+        """round_half_up(1000000.5) should round to 1000001."""
+        assert round_half_up(1000000.5) == 1000001
 
 
 class TestTradingPerformTradeEdgeCases:
