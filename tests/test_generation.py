@@ -1456,6 +1456,87 @@ class TestLoreFragmentNumberFixup:
         assert frags_by_id["lore_void_signal_5"].fragment_number == 5
 
 
+class TestOldSaveLogEntryIdCollision:
+    """Tests for _next_log_id computation when loading old saves without _next_log_id."""
+
+    def test_next_log_id_computed_from_max_existing_id(self) -> None:
+        """_next_log_id should be max(existing log entry IDs) + 1 when missing from old save."""
+        from backend.game.manager import _state_to_dict, _state_from_dict
+
+        ship = Ship()
+        state = GameState(id="test-old-save", seed=42, ship=ship)
+        state.add_log("test", "Entry 1")
+        state.add_log("test", "Entry 2")
+        state.add_log("test", "Entry 3")
+
+        assert len(state.log_entries) == 3
+        assert state.log_entries[0]["id"] == 1
+        assert state.log_entries[1]["id"] == 2
+        assert state.log_entries[2]["id"] == 3
+
+        d = _state_to_dict(state)
+        # Simulate an old save by removing _next_log_id
+        del d["_next_log_id"]
+        assert "_next_log_id" not in d
+
+        restored = _state_from_dict(d)
+
+        # _next_log_id should be 4 (max existing ID 3 + 1)
+        assert restored._next_log_id == 4
+
+        # Adding a new log entry should get ID 4 (no collision)
+        restored.add_log("test", "Entry 4")
+        assert len(restored.log_entries) == 4
+        assert restored.log_entries[3]["id"] == 4
+
+    def test_next_log_id_defaults_to_1_with_empty_log(self) -> None:
+        """_next_log_id should default to 1 when log_entries is empty and _next_log_id is missing."""
+        from backend.game.manager import _state_to_dict, _state_from_dict
+
+        ship = Ship()
+        state = GameState(id="test-empty-log", seed=42, ship=ship)
+
+        d = _state_to_dict(state)
+        # Simulate old save without _next_log_id and with empty log
+        del d["_next_log_id"]
+        assert d.get("log_entries") == []
+
+        restored = _state_from_dict(d)
+
+        assert restored._next_log_id == 1
+
+        # Adding a new log entry should get ID 1
+        restored.add_log("test", "First entry")
+        assert restored.log_entries[0]["id"] == 1
+
+    def test_next_log_id_with_non_sequential_ids(self) -> None:
+        """_next_log_id should be max ID + 1 even with non-sequential IDs (e.g., 5, 10, 3)."""
+        from backend.game.manager import _state_to_dict, _state_from_dict
+
+        ship = Ship()
+        state = GameState(id="test-nonseq", seed=42, ship=ship)
+
+        # Manually create non-sequential log entries (simulating edge case)
+        state.log_entries = [
+            {"id": 5, "type": "test", "message": "Entry 5", "timestamp": "", "title": "", "description": ""},
+            {"id": 10, "type": "test", "message": "Entry 10", "timestamp": "", "title": "", "description": ""},
+            {"id": 3, "type": "test", "message": "Entry 3", "timestamp": "", "title": "", "description": ""},
+        ]
+        state._next_log_id = 11
+
+        d = _state_to_dict(state)
+        del d["_next_log_id"]
+
+        restored = _state_from_dict(d)
+
+        # _next_log_id should be 11 (max ID 10 + 1)
+        assert restored._next_log_id == 11
+
+        # Adding a new log entry should get ID 11 (no collision)
+        restored.add_log("test", "New entry")
+        assert restored.log_entries[-1]["id"] == 11
+
+
 class TestAncientGateSystemType:
     """Tests for the ancient_gate phenomenon producing the 'ancient' system type."""
 
