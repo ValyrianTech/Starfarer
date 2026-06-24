@@ -335,6 +335,20 @@ def complete_mission(state: GameState, mission: FactionMission) -> dict:
         reputation rewards.
     :rtype: dict
     """
+    # Check sufficient resources before deducting
+    if state.ship.fuel < mission.fuel_cost:
+        return {
+            "error": f"Not enough fuel. Mission requires {mission.fuel_cost} fuel.",
+            "fuel_available": state.ship.fuel,
+            "fuel_required": mission.fuel_cost,
+        }
+    if state.ship.credits < mission.credit_cost:
+        return {
+            "error": f"Not enough credits. Mission requires {mission.credit_cost} credits.",
+            "credits_available": state.ship.credits,
+            "credits_required": mission.credit_cost,
+        }
+
     state.ship.fuel -= mission.fuel_cost
     state.ship.credits -= mission.credit_cost
 

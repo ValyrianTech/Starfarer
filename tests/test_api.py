@@ -3225,3 +3225,246 @@ class TestAPILogPaginated:
         for eid in ids:
             assert isinstance(eid, int)
         assert ids == sorted(ids, reverse=True)
+
+
+class TestAPICompleteMissionResourceChecks:
+    """Tests for the resource checks moved into complete_mission."""
+
+    def test_complete_mission_insufficient_fuel(self) -> None:
+        """complete_mission should return error dict when fuel is insufficient."""
+        from backend.missions import complete_mission, FactionMission
+        from backend.game.manager import new_game
+
+        state = new_game(seed=42)
+        state.ship.fuel = 2  # Not enough for a tier 1 mission (costs 3 fuel)
+
+        mission = FactionMission(
+            id="test_mission_fuel",
+            faction_id="stellar_cartographers",
+            tier=1,
+            title="Test Mission",
+            description="A test mission",
+            objective_type="courier",
+            objective_target="target",
+            fuel_cost=3,
+            credit_cost=10,
+            credit_reward=50,
+            reputation_reward=5,
+        )
+
+        result = complete_mission(state, mission)
+        assert "error" in result
+        assert "fuel" in result["error"].lower()
+        assert result["fuel_available"] == 2
+        assert result["fuel_required"] == 3
+        # State should not be modified
+        assert state.ship.fuel == 2
+
+    def test_complete_mission_insufficient_credits(self) -> None:
+        """complete_mission should return error dict when credits are insufficient."""
+        from backend.missions import complete_mission, FactionMission
+        from backend.game.manager import new_game
+
+        state = new_game(seed=42)
+        state.ship.credits = 5  # Not enough for a tier 1 mission (costs 10 credits)
+        state.ship.fuel = 100  # Enough fuel
+
+        mission = FactionMission(
+            id="test_mission_credits",
+            faction_id="stellar_cartographers",
+            tier=1,
+            title="Test Mission",
+            description="A test mission",
+            objective_type="courier",
+            objective_target="target",
+            fuel_cost=3,
+            credit_cost=10,
+            credit_reward=50,
+            reputation_reward=5,
+        )
+
+        result = complete_mission(state, mission)
+        assert "error" in result
+        assert "credits" in result["error"].lower()
+        assert result["credits_available"] == 5
+        assert result["credits_required"] == 10
+        # State should not be modified
+        assert state.ship.credits == 5
+        assert state.ship.fuel == 100
+
+    def test_complete_mission_sufficient_resources(self) -> None:
+        """complete_mission should succeed when resources are sufficient."""
+        from backend.missions import complete_mission, FactionMission
+        from backend.game.manager import new_game
+
+        state = new_game(seed=42)
+        state.ship.fuel = 100
+        state.ship.credits = 1000
+
+        mission = FactionMission(
+            id="test_mission_success",
+            faction_id="stellar_cartographers",
+            tier=1,
+            title="Test Mission",
+            description="A test mission",
+            objective_type="courier",
+            objective_target="target",
+            fuel_cost=3,
+            credit_cost=10,
+            credit_reward=50,
+            reputation_reward=5,
+        )
+
+        result = complete_mission(state, mission)
+        assert "error" not in result
+        assert result["credit_reward"] == 50
+        assert result["reputation_reward"] == 5
+        # State should be modified
+        assert state.ship.fuel == 97  # 100 - 3
+        assert state.ship.credits == 1040  # 1000 - 10 + 50
+
+    def test_complete_mission_zero_cost_success(self) -> None:
+        """complete_mission should succeed with zero-cost missions (e.g. daily)."""
+        from backend.missions import complete_mission, FactionMission
+        from backend.game.manager import new_game
+
+        state = new_game(seed=42)
+        state.ship.fuel = 0
+        state.ship.credits = 0
+
+        mission = FactionMission(
+            id="test_mission_zero",
+            faction_id="stellar_cartographers",
+            tier=1,
+            title="Daily Opportunity",
+            description="Free daily mission",
+            objective_type="daily",
+            objective_target="sys_01",
+            fuel_cost=0,
+            credit_cost=0,
+            credit_reward=50,
+            reputation_reward=5,
+        )
+
+        result = complete_mission(state, mission)
+        assert "error" not in result
+        assert result["credit_reward"] == 50
+        assert state.ship.credits == 50
+
+    def test_api_faction_mission_insufficient_fuel(self) -> None:
+        """POST /api/game/{id}/faction/{faction}/mission should 400 when fuel is insufficient."""
+        from backend.game.manager import GAME_STORE, game_save
+
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "fm-insuf-fuel"})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+
+        state = GAME_STORE[game_id]
+        state.ship.fuel = 0  # No fuel for any mission
+        state.ship.credits = 1000  # Enough credits
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        resp = client.post(f"/api/game/{game_id}/faction/stellar_cartographers/mission")
+        assert resp.status_code == 400
+        assert "fuel" in resp.json()["detail"].lower()
+
+    def test_api_faction_mission_insufficient_credits(self) -> None:
+        """POST /api/game/{id}/faction/{faction}/mission should 400 when credits are insufficient."""
+        from backend.game.manager import GAME_STORE, game_save
+
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "fm-insuf-cred"})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+
+        state = GAME_STORE[game_id]
+        state.ship.fuel = 100  # Enough fuel
+        state.ship.credits = 0  # No credits for mission costs
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        resp = client.post(f"/api/game/{game_id}/faction/stellar_cartographers/mission")
+        assert resp.status_code == 400
+        assert "credits" in resp.json()["detail"].lower()
+
+    def test_api_complete_mission_insufficient_fuel(self) -> None:
+        """POST /api/game/{id}/missions/{mid}/complete should 400 when fuel is insufficient."""
+        from backend.game.manager import GAME_STORE, game_save
+
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "cm-insuf-fuel"})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+
+        state = GAME_STORE[game_id]
+        current_sys = state.get_current_system()
+        current_sys.has_trading_station = True
+
+        # Create a mission directly in accepted_missions
+        mission_id = "test_mission_fuel_check"
+        state.accepted_missions[mission_id] = {
+            "faction_id": "stellar_cartographers",
+            "tier": 1,
+            "title": "Test Mission",
+            "description": "A test mission",
+            "objective_type": "courier",
+            "objective_target": "target",
+            "fuel_cost": 3,
+            "credit_cost": 10,
+            "credit_reward": 50,
+            "reputation_reward": 5,
+            "item_reward": None,
+        }
+
+        # Set fuel to 0 so completion fails
+        state.ship.fuel = 0
+        state.ship.credits = 1000
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        # Try to complete
+        resp = client.post(f"/api/game/{game_id}/missions/{mission_id}/complete", json={
+            "mission_id": mission_id
+        })
+        assert resp.status_code == 400
+        assert "fuel" in resp.json()["detail"].lower()
+
+    def test_api_complete_mission_insufficient_credits(self) -> None:
+        """POST /api/game/{id}/missions/{mid}/complete should 400 when credits are insufficient."""
+        from backend.game.manager import GAME_STORE, game_save
+
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "cm-insuf-cred"})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+
+        state = GAME_STORE[game_id]
+        current_sys = state.get_current_system()
+        current_sys.has_trading_station = True
+
+        # Create a mission directly in accepted_missions
+        mission_id = "test_mission_credits_check"
+        state.accepted_missions[mission_id] = {
+            "faction_id": "stellar_cartographers",
+            "tier": 1,
+            "title": "Test Mission",
+            "description": "A test mission",
+            "objective_type": "courier",
+            "objective_target": "target",
+            "fuel_cost": 3,
+            "credit_cost": 10,
+            "credit_reward": 50,
+            "reputation_reward": 5,
+            "item_reward": None,
+        }
+
+        # Set credits to 0 so completion fails
+        state.ship.fuel = 100
+        state.ship.credits = 0
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        # Try to complete
+        resp = client.post(f"/api/game/{game_id}/missions/{mission_id}/complete", json={
+            "mission_id": mission_id
+        })
+        assert resp.status_code == 400
+        assert "credits" in resp.json()["detail"].lower()
