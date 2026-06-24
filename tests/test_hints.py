@@ -99,6 +99,11 @@ class TestConditionFunctions:
         state.ship.fuel = 8
         assert _fuel_low_no_station(state, state.systems) is False
 
+    def test_fuel_low_no_station_negative_fuel(self) -> None:
+        state = _make_game()
+        state.ship.fuel = -5
+        assert _fuel_low_no_station(state, state.systems) is False
+
     def test_first_uncharted_trigger(self) -> None:
         state = _make_game()
         state.systems_visited = 2
