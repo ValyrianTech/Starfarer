@@ -403,10 +403,22 @@ Complete state dump: ship, current system, pending events, discoveries, log entr
 ### Cargo Hold
 
 ```http
-GET /api/game/{game_id}/cargo
+GET /api/game/{game_id}/cargo?sort=value&order=desc
 ```
 
-Returns a detailed breakdown of your cargo hold: current item count, max capacity, and a list of every discovery with its ID, name, category, value, and sellability status. Lore-linked items are marked as not sellable.
+Returns a detailed breakdown of your cargo hold, including:
+- `count` — current number of items
+- `max_cargo` — maximum capacity
+- `total_value` — sum of all cargo item credit values
+- `cargo` — list of every discovery with its ID, name, category, value, and sellability status. Lore-linked items are marked as not sellable.
+
+**Query parameters:**
+| Parameter | Values | Default | Description |
+|-----------|--------|---------|-------------|
+| `sort` | `"value"`, `"name"` | `"value"` | Sort cargo by credit value or item name |
+| `order` | `"asc"`, `"desc"` | `"desc"` | Sort order: ascending or descending |
+
+Invalid sort or order values return a 422 error with a helpful message listing the accepted values.
 
 ### Lore Collection
 
@@ -574,7 +586,7 @@ The game persists all state to SQLite. Save frequently — especially before ris
 | POST | `/api/game/{id}/salvage/craft` | Craft discovery into resources |
 | GET | `/api/game/{id}/log` | Ship log |
 | GET | `/api/game/{id}/discoveries` | Discovery list |
-| GET | `/api/game/{id}/cargo` | Cargo hold details |
+| GET | `/api/game/{id}/cargo?sort={value\|name}&order={asc\|desc}` | Cargo hold details (sortable, includes total_value) |
 | GET | `/api/game/{id}/lore` | Lore fragment collection |
 | POST | `/api/game/{id}/trade` | Buy/sell at station |
 | POST | `/api/game/{id}/trade/bulk-sell` | Sell multiple discoveries |
