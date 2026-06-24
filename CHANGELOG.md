@@ -22,6 +22,12 @@
 - `event_cooldowns` field to `GameState` for persistent cooldown tracking across save/load
 - Cooldown decrement in jump, scan, and explore API endpoints (called before event trigger)
 - Comprehensive test suite for event cooldown behavior (210 lines)
+- Tiered faction mission system with 3 tiers and scaling costs/rewards: Tier 1 (fuel=3, credits=10, reward=50-100 cr, 5-10 rep), Tier 2 (fuel=6, credits=25, reward=150-300 cr, 10-15 rep, rep≥15), Tier 3 (fuel=10, credits=50, reward=400-800 cr, 20-30 rep, rep≥30)
+- Free daily mission ("Daily Opportunity") per system: 0 fuel/credit cost, 25-75 credits reward, 5-10 reputation
+- Mission types per tier: Tier 1 (courier, survey), Tier 2 (exploration, salvage, patrol), Tier 3 (special_ops, diplomatic)
+- New API endpoints: `GET /api/game/{id}/missions` (list available missions), `POST /api/game/{id}/missions/{mid}/accept` (accept mission, deduct costs), `POST /api/game/{id}/missions/{mid}/complete` (complete mission, claim rewards)
+- New request schemas: `AcceptMissionRequest` and `CompleteMissionRequest` (both with `mission_id: str` and optional `faction_id: str`)
+- New game state fields: `completed_missions` (list[dict]), `daily_missions_used` (dict[str, str]), `accepted_missions` (set[str])
 
 ### Changed
 - Refactored `resolve_event()` to use `_EVENT_REP_MAP` dictionary for event type → faction mapping
@@ -30,6 +36,7 @@
 - Lore fragment lookup in api_explore and api_lore changed from O(n²) to O(1) using hash maps
 - Lore viewer HTML structure completely redesigned with arc tabs, progress bars, and fragment cards
 - Lore button now has `data-lore-nav="true"` attribute for targeted pulse animation
+- `POST /api/game/{id}/faction/{fid}/mission` now uses tiered mission system: guaranteed success (no random success/failure), costs/rewards scale with reputation, requires being at a trading station, response includes `mission` field with details
 
 ### Fixed
 - Narrative event type now correctly resolves without attempting reputation changes
@@ -57,6 +64,12 @@
 - `EVENT_COOLDOWNS` dictionary entries with no corresponding template no longer cause key errors during cooldown application
 - `_apply_cooldown_fallback` no longer returns an empty list when eligible is non-empty but all events have cooldown <= 0
 - `decrement_cooldowns` now uses `list(state.event_cooldowns.keys())` for safe iteration when deleting expired cooldowns
+- Duplicate mission acceptance prevented via `accepted_missions` set tracking
+- `accepted_missions` set now cleaned up on mission completion (`.discard()`)
+- Completed missions now checked before applying rewards
+- Free daily mission no longer selectable via random choice for standard mission slot
+- Mission lookup now only generates missions for the relevant faction (not all factions)
 
 ### Removed
 - Dead code `get_available_events` (defined but never used in production)
+- Unused imports: `get_daily_mission_key`, `_TIER_COSTS`, and `faction_id` variable

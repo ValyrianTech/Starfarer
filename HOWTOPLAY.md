@@ -419,22 +419,64 @@ GET /api/game/{game_id}/faction/{faction_id}
 
 Returns detailed faction info plus your reputation and whether the faction is known.
 
-#### Run a Faction Mission
+#### Faction Missions
+
+Factions offer tiered missions at trading stations. Higher reputation unlocks higher tiers with better rewards. Mission success is guaranteed — costs (fuel and credits) are deducted only when the mission is completed, and rewards are always received.
+
+##### Tier System
+
+| Tier | Fuel Cost | Credit Cost | Credit Reward | Rep Reward | Rep Required |
+|------|-----------|-------------|---------------|------------|-------------|
+| 1 | 3 | 10 | 50–100 | 5–10 | 0 |
+| 2 | 6 | 25 | 150–300 | 10–15 | 15 |
+| 3 | 10 | 50 | 400–800 | 20–30 | 30 |
+
+**Mission types by tier:** Tier 1 (courier, survey), Tier 2 (exploration, salvage, patrol), Tier 3 (special_ops, diplomatic).
+
+##### Daily Missions
+
+Each trading station offers one free "Daily Opportunity" mission per day cycle (~10 log entries per cycle): 0 fuel/credit cost, 25–75 credits reward, 5–10 reputation.
+
+##### Mission Flow
+
+1. **List available missions** at the current trading station:
+```http
+GET /api/game/{game_id}/missions
+```
+Returns available standard missions, the daily mission (if available), and the dominant faction.
+
+2. **Accept a mission** (costs are NOT deducted until the mission is completed):
+```http
+POST /api/game/{game_id}/missions/{mission_id}/accept
+Content-Type: application/json
+
+{ "mission_id": "mission_sys_0000_12345" }
+```
+Optional: add `"faction_id"` to scope lookup to a specific faction.
+
+3. **Complete a mission** (rewards are applied):
+```http
+POST /api/game/{game_id}/missions/{mission_id}/complete
+Content-Type: application/json
+
+{ "mission_id": "mission_sys_0000_12345" }
+```
+
+Missions cannot be accepted twice and must be accepted before completing. Completed missions are tracked and cannot be repeated.
+
+##### Legacy One-Shot Endpoint
 
 ```http
 POST /api/game/{game_id}/faction/{faction_id}/mission
 ```
 
-Costs 10 fuel and 50 credits. Success chance scales with your current reputation with that faction (40% base, up to 90% at high reputation).
+Randomly picks a mission from the available pool, deducts costs, and immediately awards rewards in a single call. Requires being at a trading station (`has_trading_station` must be true).
 
 | Faction | Alignment | Bonus |
 |---|---|---|
 | Stellar Cartographers Union | Explorer | +10 credits, +1 morale on exploration/discovery events at rep ≥20 |
 | Void Traders Syndicate | Corporate | Discounted fuel/repairs at high rep; +10 credits on trade events at rep ≥20 |
 | Free Pilots Guild | Explorer | +5 morale on encounter/crisis/crew/hazard events at rep ≥20 |
-
-**Success:** +10-30 reputation, +50-150 credits.  
-**Failure:** -5-15 reputation.
 
 ### Leaderboard
 
@@ -518,7 +560,10 @@ The game persists all state to SQLite. Save frequently — especially before ris
 | GET | `/api/game/{id}/nearby` | Nearby systems |
 | GET | `/api/game/{id}/factions` | List all factions |
 | GET | `/api/game/{id}/faction/{fid}` | Single faction detail |
-| POST | `/api/game/{id}/faction/{fid}/mission` | Run faction mission |
+| POST | `/api/game/{id}/faction/{fid}/mission` | Run one-shot faction mission (tiered) |
+| GET | `/api/game/{id}/missions` | List available missions at station |
+| POST | `/api/game/{id}/missions/{mid}/accept` | Accept a mission (costs deducted on completion) |
+| POST | `/api/game/{id}/missions/{mid}/complete` | Complete accepted mission (claims rewards) |
 | POST | `/api/game/{id}/save` | Save game |
 | POST | `/api/game/{id}/load` | Load game |
 | GET | `/api/leaderboard` | Top players |

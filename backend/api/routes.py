@@ -13,8 +13,8 @@ from fastapi import APIRouter, HTTPException
 
 from backend.models.game_state import GameState
 from backend.api.schemas import (
-    BulkSellRequest, CraftRequest, NewGameRequest, ResolveEventRequest, TradeRequest,
-    UpgradeRequest, HealthResponse,
+    AcceptMissionRequest, BulkSellRequest, CompleteMissionRequest, CraftRequest,
+    NewGameRequest, ResolveEventRequest, TradeRequest, UpgradeRequest, HealthResponse,
 )
 from backend.game.manager import (
     GAME_STORE, new_game, get_galaxy, get_system_detail, game_save, game_load as game_load_func,
@@ -28,7 +28,10 @@ from backend.game.engine import (
 from backend.game.trading import get_upgrade_info, purchase_upgrade, perform_trade, perform_bulk_sell
 from backend.database import get_leaderboard
 from backend.generation.lore_content import ARC_DISPLAY_NAMES
-from backend.models.faction import get_faction
+from backend.models.faction import get_faction, FACTION_DEFINITIONS
+from backend.missions import (
+    generate_missions, complete_mission,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -773,15 +776,16 @@ def api_faction_detail(game_id: str, faction_id: str) -> dict:
 def api_faction_mission(game_id: str, faction_id: str) -> dict:
     """Run a faction mission to earn reputation with that faction.
 
-    Missions cost credits and fuel but grant reputation. Success chance
-    depends on current reputation — higher reputation yields better odds.
+    Uses the tiered mission system. Costs and rewards scale with the
+    player's reputation — higher reputation unlocks higher-tier missions
+    with better payouts.
 
     :param game_id: The unique identifier of the game.
     :type game_id: str
     :param faction_id: The unique identifier of the faction.
     :type faction_id: str
     :returns: A dictionary with ``result`` message, ``effect``, ``reputation``,
-        and ``ship`` status.
+        ``ship`` status, and ``mission`` details.
     :rtype: dict
     :raises HTTPException: 404 if the game or faction is not found; 400 if
         the mission cannot be attempted.
@@ -793,54 +797,291 @@ def api_faction_mission(game_id: str, faction_id: str) -> dict:
     if not faction:
         raise HTTPException(status_code=404, detail="Faction not found")
 
-    import random
+    current_system = state.get_current_system()
+    if not current_system:
+        raise HTTPException(status_code=400, detail="Not in a star system")
+    if not current_system.has_trading_station:
+        raise HTTPException(status_code=400, detail="No trading station in this system")
+
+    from backend.utils import seeded_random, deterministic_hash
+
+    missions = generate_missions(state, current_system, faction_id)
+    if not missions:
+        raise HTTPException(status_code=400, detail="No missions available from this faction")
+
+    standard_missions = [m for m in missions if m.objective_type != "daily"]
+    if not standard_missions:
+        raise HTTPException(status_code=400, detail="No missions available from this faction")
+
+    rng = seeded_random(
+        deterministic_hash(state.seed, faction_id, str(len(state.log_entries))),
+        "faction_mission",
+    )
+    mission = rng.choice(standard_missions)
+
+    # Check if this mission was already completed
+    completed_ids = {c.get("mission_id") for c in state.completed_missions}
+    if mission.id in completed_ids:
+        remaining = [m for m in standard_missions if m.id not in completed_ids]
+        if not remaining:
+            raise HTTPException(status_code=400, detail="No available missions")
+        mission = rng.choice(remaining)
+
+    # Check if this mission was already accepted (but not yet completed)
+    if mission.id in state.accepted_missions:
+        remaining = [m for m in standard_missions if m.id not in state.accepted_missions and m.id not in completed_ids]
+        if not remaining:
+            raise HTTPException(status_code=400, detail="No available missions")
+        mission = rng.choice(remaining)
+
+    if state.ship.fuel < mission.fuel_cost:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Not enough fuel. Mission requires {mission.fuel_cost} fuel."
+        )
+    if state.ship.credits < mission.credit_cost:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Not enough credits. Mission requires {mission.credit_cost} credits."
+        )
+
+    # Delegate to shared complete_mission() for consistent behavior
+    completion_result = complete_mission(state, mission)
+
+    # Ensure the faction is marked as known
+    if faction_id in state.faction_relations:
+        state.faction_relations[faction_id].known = True
+
+    game_save(state)
+
+    return {
+        "result": (
+            f"Mission '{mission.title}' for {faction.name} completed! "
+            f"Reputation +{mission.reputation_reward}, Credits +{mission.credit_reward}."
+        ),
+        "effect": "success",
+        "reputation": state.get_faction_reputation(faction_id),
+        "ship": state.ship.to_dict(),
+        "mission": {
+            "id": mission.id,
+            "title": mission.title,
+            "tier": mission.tier,
+            "fuel_cost": mission.fuel_cost,
+            "credit_cost": mission.credit_cost,
+        },
+    }
+
+
+@router.get("/game/{game_id}/missions")
+def api_missions(game_id: str) -> dict:
+    """Retrieve available tiered missions for the current system.
+
+    Missions are generated procedurally based on the system type,
+    the dominant faction present, and the player's reputation with
+    that faction. Higher reputation unlocks higher-tier missions.
+
+    :param game_id: The unique identifier of the game.
+    :type game_id: str
+    :returns: A dictionary with ``system_id``, ``system_name``,
+        ``faction_id``, ``faction_name``, ``missions`` list, and
+        ``daily_available`` flag.
+    :rtype: dict
+    :raises HTTPException: 404 if the game is not found; 400 if
+        not in a system or no trading station.
+    """
+    state = _get_state(game_id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Game not found")
+
+    current_system = state.get_current_system()
+    if not current_system:
+        raise HTTPException(status_code=400, detail="Not in a star system")
+    if not current_system.has_trading_station:
+        raise HTTPException(status_code=400, detail="No trading station in this system")
+
     from backend.utils import deterministic_hash
 
-    ship = state.ship
+    faction_ids = list(FACTION_DEFINITIONS.keys())
+    faction_idx = deterministic_hash(state.seed, current_system.id, "primary_faction") % len(faction_ids)
+    primary_faction_id = faction_ids[faction_idx]
 
-    if ship.fuel < 10:
-        raise HTTPException(status_code=400, detail="Not enough fuel. Mission requires 10 fuel.")
-    if ship.credits < 50:
-        raise HTTPException(status_code=400, detail="Not enough credits. Mission requires 50 credits.")
+    missions = generate_missions(state, current_system, primary_faction_id)
 
-    ship.fuel -= 10
-    ship.credits -= 50
+    faction = get_faction(primary_faction_id)
 
-    det_seed = deterministic_hash(state.seed, faction_id, len(state.log_entries))
-    rng = random.Random(det_seed)
+    daily_available = any(m.objective_type == "daily" for m in missions)
+    standard_missions = [m for m in missions if m.objective_type != "daily"]
 
-    current_rep = state.get_faction_reputation(faction_id)
-    success_chance = 0.4 + (current_rep / 500.0)
-    success_chance = max(0.1, min(0.9, success_chance))
+    return {
+        "system_id": current_system.id,
+        "system_name": current_system.name,
+        "faction_id": primary_faction_id,
+        "faction_name": faction.name if faction else primary_faction_id,
+        "missions": [m.to_dict() for m in standard_missions],
+        "daily_mission": next(
+            (m.to_dict() for m in missions if m.objective_type == "daily"), None
+        ),
+        "daily_available": daily_available,
+    }
 
-    if rng.random() < success_chance:
-        rep_gain = rng.randint(10, 30)
-        state.modify_faction_reputation(faction_id, rep_gain)
-        relation = state.faction_relations[faction_id]
-        relation.known = True
-        credits_gain = rng.randint(50, 150)
-        ship.credits += credits_gain
-        state.add_log("faction", f"Completed a mission for {faction.name}. Gained {rep_gain} reputation and {credits_gain} credits.")
-        game_save(state)
-        return {
-            "result": f"Mission for {faction.name} successful! Reputation +{rep_gain}, Credits +{credits_gain}.",
-            "effect": "success",
-            "reputation": relation.reputation,
-            "ship": ship.to_dict(),
-        }
+
+@router.post("/game/{game_id}/missions/{mission_id}/accept")
+def api_accept_mission(game_id: str, mission_id: str, req: AcceptMissionRequest) -> dict:
+    """Accept a faction mission.
+
+    The mission must exist in the current system and not have been
+    completed already. Costs are NOT deducted until the mission is
+    completed.
+
+    :param game_id: The unique identifier of the game.
+    :type game_id: str
+    :param mission_id: The unique identifier of the mission to accept.
+    :type mission_id: str
+    :param req: The accept mission request body.
+    :type req: AcceptMissionRequest
+    :returns: A dictionary with ``result`` message, ``mission`` details,
+        and ``ship`` status.
+    :rtype: dict
+    :raises HTTPException: 404 if the game is not found; 400 if the
+        mission cannot be accepted.
+    """
+    state = _get_state(game_id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Game not found")
+
+    current_system = state.get_current_system()
+    if not current_system:
+        raise HTTPException(status_code=400, detail="Not in a star system")
+    if not current_system.has_trading_station:
+        raise HTTPException(status_code=400, detail="No trading station in this system")
+
+    if mission_id != req.mission_id:
+        raise HTTPException(status_code=400, detail="Mission ID in path and body must match")
+
+    for completed in state.completed_missions:
+        if completed.get("mission_id") == mission_id:
+            raise HTTPException(status_code=400, detail="Mission already completed")
+
+    if mission_id in state.accepted_missions:
+        raise HTTPException(status_code=400, detail="Mission already accepted")
+
+    if req.faction_id:
+        factions_to_check = [req.faction_id]
     else:
-        rep_loss = rng.randint(5, 15)
-        state.modify_faction_reputation(faction_id, -rep_loss)
-        relation = state.faction_relations[faction_id]
-        relation.known = True
-        state.add_log("faction", f"Failed a mission for {faction.name}. Lost {rep_loss} reputation.")
-        game_save(state)
-        return {
-            "result": f"Mission for {faction.name} failed. Reputation -{rep_loss}.",
-            "effect": "failure",
-            "reputation": relation.reputation,
-            "ship": ship.to_dict(),
-        }
+        # Restrict to the system's dominant faction to match GET /missions behavior
+        from backend.utils import deterministic_hash
+        faction_ids = list(FACTION_DEFINITIONS.keys())
+        faction_idx = deterministic_hash(state.seed, current_system.id, "primary_faction") % len(faction_ids)
+        primary_faction_id = faction_ids[faction_idx]
+        factions_to_check = [primary_faction_id]
+
+    mission_found = None
+    for fid in factions_to_check:
+        missions = generate_missions(state, current_system, fid)
+        for m in missions:
+            if m.id == mission_id:
+                mission_found = m
+                break
+        if mission_found:
+            break
+
+    if not mission_found:
+        raise HTTPException(status_code=400, detail="Mission not found in current system")
+
+    if state.ship.fuel < mission_found.fuel_cost:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Not enough fuel. Mission requires {mission_found.fuel_cost} fuel."
+        )
+    if state.ship.credits < mission_found.credit_cost:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Not enough credits. Mission requires {mission_found.credit_cost} credits."
+        )
+
+    state.accepted_missions[mission_id] = mission_found.faction_id
+
+    state.add_log(
+        "faction",
+        f"Accepted mission '{mission_found.title}' (Tier {mission_found.tier})."
+    )
+
+    game_save(state)
+
+    return {
+        "result": f"Mission '{mission_found.title}' accepted.",
+        "mission": mission_found.to_dict(),
+        "ship": state.ship.to_dict(),
+    }
+
+
+@router.post("/game/{game_id}/missions/{mission_id}/complete")
+def api_complete_mission(game_id: str, mission_id: str, req: CompleteMissionRequest) -> dict:
+    """Complete an accepted faction mission and claim rewards.
+
+    The mission must exist in the current system, not have been
+    completed already. Rewards (credits and reputation) are applied.
+
+    :param game_id: The unique identifier of the game.
+    :type game_id: str
+    :param mission_id: The unique identifier of the mission to complete.
+    :type mission_id: str
+    :param req: The complete mission request body.
+    :type req: CompleteMissionRequest
+    :returns: A dictionary with ``result`` message, ``mission`` details,
+        ``rewards``, and ``ship`` status.
+    :rtype: dict
+    :raises HTTPException: 404 if the game is not found; 400 if the
+        mission cannot be completed.
+    """
+    state = _get_state(game_id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Game not found")
+
+    current_system = state.get_current_system()
+    if not current_system:
+        raise HTTPException(status_code=400, detail="Not in a star system")
+    if not current_system.has_trading_station:
+        raise HTTPException(status_code=400, detail="No trading station in this system")
+
+    if mission_id != req.mission_id:
+        raise HTTPException(status_code=400, detail="Mission ID in path and body must match")
+
+    for completed in state.completed_missions:
+        if completed.get("mission_id") == mission_id:
+            raise HTTPException(status_code=400, detail="Mission already completed")
+
+    if mission_id not in state.accepted_missions:
+        raise HTTPException(status_code=400, detail="Mission has not been accepted")
+
+    if req.faction_id:
+        factions_to_check = [req.faction_id]
+    else:
+        factions_to_check = [state.accepted_missions[mission_id]]
+
+    mission_found = None
+    for fid in factions_to_check:
+        missions = generate_missions(state, current_system, fid)
+        for m in missions:
+            if m.id == mission_id:
+                mission_found = m
+                break
+        if mission_found:
+            break
+
+    if not mission_found:
+        raise HTTPException(status_code=400, detail="Mission not found in current system")
+
+    completion_result = complete_mission(state, mission_found)
+
+    game_save(state)
+
+    return {
+        "result": f"Mission '{mission_found.title}' completed.",
+        "mission": mission_found.to_dict(),
+        "rewards": completion_result,
+        "ship": state.ship.to_dict(),
+    }
 
 
 @router.post("/game/{game_id}/save")

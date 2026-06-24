@@ -71,6 +71,9 @@ class GameState:
     station_visits: dict[str, int] = field(default_factory=dict)
     event_cooldowns: dict[str, int] = field(default_factory=dict)
     crisis_cooldown: int = 0
+    completed_missions: list[dict] = field(default_factory=list)
+    daily_missions_used: dict[str, str] = field(default_factory=dict)
+    accepted_missions: dict[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         """Initialize the ``game_started`` timestamp if not already set.

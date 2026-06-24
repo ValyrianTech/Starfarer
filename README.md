@@ -27,7 +27,7 @@ See **[HOWTOPLAY.md](HOWTOPLAY.md)** — a complete gameplay guide covering all 
 
 All game actions are REST API calls. The browser UI is a reference client — you can play entirely via the API.
 
-Phenomenon-specific events (Ion Storm, Radiation Pulse, Lagrange Point Discovery, and more) trigger when entering nebula, pulsar, or binary star systems. Events have per-event cooldowns (3–10 turns depending on rarity) to prevent the same event from repeating back-to-back. Cooldowns decrement each time you jump, scan, or explore. If all eligible events are on cooldown, the event with the lowest remaining cooldown may fire as a fallback, avoiding the last-fired event when possible.
+Phenomenon-specific events (Ion Storm, Radiation Pulse, Lagrange Point Discovery, and more) trigger when entering nebula, pulsar, or binary star systems. Factions offer a tiered mission system (via the dedicated `backend/missions.py` module) with three tiers gated by reputation, plus rotating daily missions at trading stations. Events have per-event cooldowns (3–10 turns depending on rarity) to prevent the same event from repeating back-to-back. Cooldowns decrement each time you jump, scan, or explore. If all eligible events are on cooldown, the event with the lowest remaining cooldown may fire as a fallback, avoiding the last-fired event when possible.
 
 ## Configuration
 
