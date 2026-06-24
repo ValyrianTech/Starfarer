@@ -945,7 +945,7 @@ def api_faction_mission(game_id: str, faction_id: str) -> dict:
 
     # Delegate to shared complete_mission() for consistent behavior
     state.accepted_missions[mission.id] = mission.faction_id
-    _ = complete_mission(state, mission)
+    completion = complete_mission(state, mission)
 
     # Ensure the faction is marked as known
     if faction_id in state.faction_relations:
@@ -955,15 +955,15 @@ def api_faction_mission(game_id: str, faction_id: str) -> dict:
 
     return {
         "result": (
-            f"Mission '{mission.title}' for {faction.name} completed! "
-            f"Reputation +{mission.reputation_reward}, Credits +{mission.credit_reward}."
+            f"Mission '{completion['title']}' for {faction.name} completed! "
+            f"Reputation +{completion['reputation_reward']}, Credits +{completion['credit_reward']}."
         ),
         "effect": "success",
-        "reputation": state.get_faction_reputation(faction_id),
+        "reputation": completion['new_reputation'],
         "ship": state.ship.to_dict(),
         "mission": {
-            "id": mission.id,
-            "title": mission.title,
+            "id": completion['mission_id'],
+            "title": completion['title'],
             "tier": mission.tier,
             "fuel_cost": mission.fuel_cost,
             "credit_cost": mission.credit_cost,
