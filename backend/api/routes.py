@@ -1242,7 +1242,7 @@ def _full_state_response(state: GameState, sort: str | None = None, order: str |
         "reputation_summary": state.build_reputation_summary(),
         "cargo": state.ship.cargo,
         "cargo_items": cargo_items,
-        "total_value": sum(d.value for d in state.discoveries),
+        "total_value": sum(item["value"] for item in cargo_items),
         "top3_ids": [item["id"] for item in sorted(cargo_items, key=lambda i: i.get("value", 0), reverse=True)[:3]],
         "fuel_status": get_fuel_status(state, state.systems),
     }
