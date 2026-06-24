@@ -272,6 +272,24 @@ def _state_from_dict(d: dict) -> GameState:
             known=fr_data.get("known", False),
         )
 
+    log_entries_raw = d.get("log_entries", [])
+    cleaned_entries = []
+    max_id = 0
+    for e in log_entries_raw:
+        if isinstance(e, dict):
+            if "id" not in e:
+                max_id += 1
+                cleaned_entries.append({**e, "id": max_id})
+            elif isinstance(e["id"], int) and not isinstance(e["id"], bool):
+                max_id = max(max_id, e["id"])
+                cleaned_entries.append(e)
+            else:
+                # Non-integer id — assign a new sequential id
+                max_id += 1
+                cleaned_entries.append({**e, "id": max_id})
+
+    _next_log_id = d.get("_next_log_id", max_id + 1)
+
     return GameState(
         id=d["id"],
         seed=d["seed"],
@@ -280,7 +298,7 @@ def _state_from_dict(d: dict) -> GameState:
         events=events,
         discoveries=discoveries,
         lore_fragments=lore,
-        log_entries=d.get("log_entries", []),
+        log_entries=cleaned_entries,
         faction_relations=faction_relations,
         systems_visited=d.get("systems_visited", 0),
         game_started=d.get("game_started", ""),
@@ -293,7 +311,7 @@ def _state_from_dict(d: dict) -> GameState:
         daily_missions_used=d.get("daily_missions_used", {}),
         accepted_missions=dict(d.get("accepted_missions", {})),
         dismissed_hints=set(d.get("dismissed_hints", [])),
-        _next_log_id=d.get("_next_log_id", max((e["id"] for e in d.get("log_entries", []) if isinstance(e, dict) and "id" in e), default=0) + 1),
+        _next_log_id=_next_log_id,
     )
 
 

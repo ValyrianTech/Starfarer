@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- Comprehensive docstrings for `Hint.__init__` and `_format_message` in `backend/hints.py`
 - Sort and order query parameters to GET /api/game/{id}/cargo endpoint: `sort` (\"value\" or \"name\", default \"value\") and `order` (\"asc\" or \"desc\", default \"desc\")
 - Sort and order query parameters to GET /api/game/{id} full game state endpoint (same values as cargo endpoint)
 - `total_value` field to GET /api/game/{id}/cargo response (sum of all cargo item values)
@@ -63,6 +64,12 @@
 - Added type annotations across multiple modules to fix mypy errors
 
 ### Fixed
+- `perform_salvage` now returns an error when there is no current system (e.g., after loading a save with an invalid `current_system_id`), instead of crashing with a `TypeError`
+- `_state_from_dict` no longer crashes on non-integer `id` values in log entries (e.g., string IDs, float IDs, `None` IDs) — non-integer IDs are reassigned sequential integer IDs
+- `_state_from_dict` no longer treats boolean values (`True`/`False`) as valid integer IDs in log entries — booleans are now correctly detected as non-integer and reassigned sequential IDs
+- `_state_from_dict` now properly initializes `_next_log_id` when loading old saves that lack the field, computing it from the maximum existing log entry ID
+- `_state_from_dict` now filters out non-dict log entries (e.g., plain strings) instead of crashing
+- `_apply_cooldown_fallback` no longer returns events still on cooldown when all eligible events share the same cooldown value — now filters to only events with the minimum cooldown before applying `last_event_title` deduplication
 - Query parameters now URL-encoded in `api.js` cargo method using `encodeURIComponent()`
 - Validation of sort and order query parameters in API cargo endpoint returns 422 with helpful error messages for invalid values
 - Narrative event type now correctly resolves without attempting reputation changes
@@ -110,6 +117,8 @@
 - `_first_uncharted` hint condition no longer tightly coupled to starting-system-has-station assumption — now handles edge case where player visits a station before exploring uncharted systems
 
 ### Removed
+- Unused `Optional` import from `backend/hints.py`
+- Unused imports (`INITIAL_FUEL`, `INITIAL_HULL`, `INITIAL_CARGO`, `INITIAL_CREW`, `INITIAL_MORALE`) from `tests/test_hints.py`
 - Dead code `get_available_events` (defined but never used in production)
 - Unused imports: `get_daily_mission_key`, `_TIER_COSTS`, and `faction_id` variable
 - Unused `uuid` import from `backend/models/game_state.py`

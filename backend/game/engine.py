@@ -574,6 +574,10 @@ def perform_salvage(state: GameState) -> dict:
     if not ship.current_body_id:
         return {"error": "Must be landed on a body to salvage."}
 
+    system = state.get_current_system()
+    if not system:
+        return {"error": "No current system."}
+
     body_id = ship.current_body_id
     current_attempts = ship.salvage_attempts.get(body_id, 0)
 
@@ -584,13 +588,11 @@ def perform_salvage(state: GameState) -> dict:
     ship.morale = max(0, ship.morale - morale_cost)
     ship.salvage_attempts[body_id] = current_attempts + 1
 
-    system = state.get_current_system()
     body = None
-    if system:
-        for b in system.bodies:
-            if b.id == body_id:
-                body = b
-                break
+    for b in system.bodies:
+        if b.id == body_id:
+            body = b
+            break
 
     rng = seeded_random(state.seed, "salvage", body_id, str(current_attempts))
     roll = rng.random()

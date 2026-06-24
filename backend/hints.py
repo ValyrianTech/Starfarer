@@ -6,7 +6,7 @@ without intrusive tutorials.
 """
 
 from __future__ import annotations
-from typing import Any, Callable, Optional
+from typing import Callable
 
 from backend.fuel import get_fuel_status
 from backend.models.game_state import GameState
@@ -31,6 +31,21 @@ class Hint:
         command: str | None = None,
         priority: int = 0,
     ) -> None:
+        """Initialize a Hint instance.
+
+        :param hint_id: Unique identifier for this hint.
+        :type hint_id: str
+        :param severity: Severity level (e.g. 'critical', 'warning', 'info', 'tip').
+        :type severity: str
+        :param message_template: Template string for the hint message, may contain placeholders.
+        :type message_template: str
+        :param condition: Callable that takes (GameState, dict[str, StarSystem]) and returns True if the hint should be shown.
+        :type condition: Callable[[GameState, dict[str, StarSystem]], bool]
+        :param command: Optional slash command associated with the hint.
+        :type command: str | None
+        :param priority: Priority value for ordering hints (higher = more important).
+        :type priority: int
+        """
         self.id = hint_id
         self.severity = severity
         self.message_template = message_template
@@ -204,7 +219,22 @@ HINT_DEFINITIONS: list[Hint] = [
 
 
 def _format_message(template: str, game_state: GameState, systems: dict[str, StarSystem]) -> str:
-    """Format a hint message template with dynamic values."""
+    """Format a hint message template with dynamic values.
+
+    Substitutes ``{nearest_station}`` and ``{distance}`` placeholders in the
+    template string using the current fuel status information. If the template
+    contains neither placeholder, it is returned unchanged.
+
+    :param template: The hint message template string, which may contain
+        ``{nearest_station}`` and/or ``{distance}`` format placeholders.
+    :type template: str
+    :param game_state: The current game state.
+    :type game_state: GameState
+    :param systems: Dictionary of all star systems, keyed by system name.
+    :type systems: dict[str, StarSystem]
+    :returns: The formatted message string with placeholders replaced.
+    :rtype: str
+    """
     if "{nearest_station}" in template or "{distance}" in template:
         fuel_status = get_fuel_status(game_state, systems)
         nearest = fuel_status.get("nearest_station_system")

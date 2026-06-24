@@ -25,7 +25,6 @@ from backend.hints import (
 )
 from backend.models.game_state import GameState
 from backend.models.event import Event, Choice
-from backend.config import INITIAL_FUEL, INITIAL_HULL, INITIAL_CARGO, INITIAL_CREW, INITIAL_MORALE
 
 client = TestClient(app)
 
