@@ -1606,6 +1606,89 @@ class TestFactionAPI:
         assert "rewards" in data
         assert "ship" in data
 
+    def test_api_complete_mission_not_enough_fuel(self) -> None:
+        """Complete should reject if the player doesn't have enough fuel."""
+        resp = client.post(
+            "/api/game/new",
+            json={"seed": 42, "game_id": "complete-nofuel"},
+        )
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        state.ship.fuel = 100
+        state.ship.credits = 500
+        current_system = state.get_current_system()
+        assert current_system is not None
+        current_system.has_trading_station = True
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        # Get a mission and accept it
+        resp = client.get(f"/api/game/{game_id}/missions")
+        missions_data = resp.json()
+        mission_id = missions_data["missions"][0]["id"]
+        resp = client.post(
+            f"/api/game/{game_id}/missions/{mission_id}/accept",
+            json={"mission_id": mission_id},
+        )
+        assert resp.status_code == 200
+
+        # Now drain fuel to 0 so the mission can't be completed
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        state.ship.fuel = 0
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        resp = client.post(
+            f"/api/game/{game_id}/missions/{mission_id}/complete",
+            json={"mission_id": mission_id},
+        )
+        assert resp.status_code == 400
+        assert "Not enough fuel" in resp.json()["detail"]
+
+    def test_api_complete_mission_not_enough_credits(self) -> None:
+        """Complete should reject if the player doesn't have enough credits."""
+        resp = client.post(
+            "/api/game/new",
+            json={"seed": 42, "game_id": "complete-nocredits"},
+        )
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        state.ship.fuel = 100
+        state.ship.credits = 500
+        current_system = state.get_current_system()
+        assert current_system is not None
+        current_system.has_trading_station = True
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        # Get a mission and accept it
+        resp = client.get(f"/api/game/{game_id}/missions")
+        missions_data = resp.json()
+        mission_id = missions_data["missions"][0]["id"]
+        resp = client.post(
+            f"/api/game/{game_id}/missions/{mission_id}/accept",
+            json={"mission_id": mission_id},
+        )
+        assert resp.status_code == 200
+
+        # Now drain credits to 0 so the mission can't be completed
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        state.ship.fuel = 100
+        state.ship.credits = 0
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        resp = client.post(
+            f"/api/game/{game_id}/missions/{mission_id}/complete",
+            json={"mission_id": mission_id},
+        )
+        assert resp.status_code == 400
+        assert "Not enough credits" in resp.json()["detail"]
+
 
 class TestTradingFactionIntegration:
     def test_stellar_cartographers_positive_reputation_bonus(self) -> None:

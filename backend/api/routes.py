@@ -1179,6 +1179,17 @@ def api_complete_mission(game_id: str, mission_id: str, req: CompleteMissionRequ
         item_reward=stored.get("item_reward"),
     )
 
+    if state.ship.fuel < mission_found.fuel_cost:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Not enough fuel. Mission requires {mission_found.fuel_cost} fuel."
+        )
+    if state.ship.credits < mission_found.credit_cost:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Not enough credits. Mission requires {mission_found.credit_cost} credits."
+        )
+
     completion_result = complete_mission(state, mission_found)
 
     game_save(state)
