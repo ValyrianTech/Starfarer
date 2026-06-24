@@ -3,6 +3,13 @@
 ## [Unreleased]
 
 ### Added
+- Sort and order query parameters to GET /api/game/{id}/cargo endpoint: `sort` (\"value\" or \"name\", default \"value\") and `order` (\"asc\" or \"desc\", default \"desc\")
+- Sort and order query parameters to GET /api/game/{id} full game state endpoint (same values as cargo endpoint)
+- `total_value` field to GET /api/game/{id}/cargo response (sum of all cargo item values)
+- `total_value` field to GET /api/game/{id} full game state response
+- `top3_ids` field to GET /api/game/{id}/cargo response (list of the 3 most valuable cargo item IDs)
+- `top3_ids` field to GET /api/game/{id} full game state response (list of the 3 most valuable cargo item IDs)
+- Cargo UI enhancement — floating cargo panel with sort-by dropdown (Value High-Low, Value Low-High, Name A-Z, Name Z-A), total value display in credits, top-3 most valuable items highlighted with star and orange border, empty state message when cargo is empty
 - 9 new phenomenon-specific events: 4 nebula events (Ion Storm, Protostar Formation, Nebula Navigation Puzzle), 3 pulsar events (Radiation Pulse, Pulsar Timing Signal, Neutron Star Proximity), and 2 binary star events (Orbital Mechanics Challenge, Lagrange Point Discovery)
 - 5 new black hole system-specific events: Time Dilation Anomaly, Hawking Radiation Harvest, Spaghettification Near-Miss, Accretion Disk Prospecting, and Gravitational Lens Observation
 - Reputation handling for `discovery` and `hazard` event types in `resolve_event()`
@@ -33,6 +40,7 @@
 - Type annotations and docstrings for `missions.py` functions (`get_daily_mission_key`, `generate_missions`, `complete_mission`, `_mission_seed`, `FactionMission.to_dict`)
 
 ### Changed
+- Added type annotations to `get_fuel_status` function parameters in `backend/fuel.py`
 - Refactored `resolve_event()` to use `_EVENT_REP_MAP` dictionary for event type → faction mapping
 - Updated fuel pricing tests to use local variable names avoiding shadowing
 - Re-exploring an already-discovered lore fragment now logs at DEBUG level instead of WARNING
@@ -42,6 +50,8 @@
 - `POST /api/game/{id}/faction/{fid}/mission` now uses tiered mission system: guaranteed success (no random success/failure), costs/rewards scale with reputation, requires being at a trading station, response includes `mission` field with details
 
 ### Fixed
+- Query parameters now URL-encoded in `api.js` cargo method using `encodeURIComponent()`
+- Validation of sort and order query parameters in API cargo endpoint returns 422 with helpful error messages for invalid values
 - Narrative event type now correctly resolves without attempting reputation changes
 - Discovery and hazard events now properly award faction reputation
 - Contradictory outcome in Accretion Disk Prospecting event resolved

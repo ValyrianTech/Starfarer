@@ -29,6 +29,8 @@ All game actions are REST API calls. The browser UI is a reference client — yo
 
 Phenomenon-specific events (Ion Storm, Radiation Pulse, Lagrange Point Discovery, and more) trigger when entering nebula, pulsar, or binary star systems. Factions offer a tiered mission system (via the dedicated `backend/missions.py` module) with three tiers gated by reputation, plus rotating daily missions at trading stations. Events have per-event cooldowns (3–10 turns depending on rarity) to prevent the same event from repeating back-to-back. Cooldowns decrement each time you jump, scan, or explore. If all eligible events are on cooldown, the event with the lowest remaining cooldown may fire as a fallback, avoiding the last-fired event when possible. A fuel warning system (`backend/fuel.py`) continuously evaluates fuel levels against the nearest trading station, returning a contextual warning level (green/yellow/red/critical/unknown) in the full game state response.
 
+The cargo API (`GET /api/game/{id}/cargo`) supports sortable queries by value or name in ascending or descending order, and returns a `total_value` field summing all cargo item credit values. The full game state endpoint (`GET /api/game/{id}`) also accepts optional `sort` and `order` query parameters for cargo items and includes `total_value` and `top3_ids` in its response. The browser UI features a floating cargo panel with a sort-by dropdown, total value display, and top-3 most valuable items highlighted with a star icon and orange border.
+
 ## Configuration
 
 | Variable | Purpose |

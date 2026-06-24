@@ -117,21 +117,28 @@ def api_new_game(req: NewGameRequest) -> dict:
 
 
 @router.get("/game/{game_id}")
-def api_get_game(game_id: str) -> dict:
+def api_get_game(game_id: str, sort: str | None = None, order: str | None = None) -> dict:
     """Retrieve the full game state for a given game ID.
 
     :param game_id: The unique identifier of the game.
     :type game_id: str
+    :param sort: Optional sort key for cargo items — ``"value"``
+        or ``"name"``. Not applied when ``None``.
+    :type sort: str or None
+    :param order: Optional sort order for cargo items — ``"asc"``
+        or ``"desc"``. Not applied when ``None``.
+    :type order: str or None
     :returns: A dictionary with game_id, seed, ship, current system,
         discoveries, cargo_capacity, pending events, log entries,
         and stats.
     :rtype: dict
-    :raises HTTPException: 404 if the game is not found.
+    :raises HTTPException: 404 if the game is not found; 422 if
+        ``sort`` or ``order`` is invalid.
     """
     state = _get_state(game_id)
     if not state:
         raise HTTPException(status_code=404, detail="Game not found")
-    return _full_state_response(state)
+    return _full_state_response(state, sort=sort, order=order)
 
 
 @router.get("/game/{game_id}/galaxy")
@@ -404,7 +411,7 @@ def api_discoveries(game_id: str) -> dict:
 
 
 @router.get("/game/{game_id}/cargo")
-def api_cargo(game_id: str) -> dict:
+def api_cargo(game_id: str, sort: str = "value", order: str = "desc") -> dict:
     """Retrieve detailed cargo hold contents.
 
     Returns the current cargo count, cargo capacity, and a list of
@@ -413,8 +420,12 @@ def api_cargo(game_id: str) -> dict:
 
     :param game_id: The unique identifier of the game.
     :type game_id: str
-    :returns: A dictionary with ``cargo``, ``cargo_capacity``, and
-        ``cargo_items`` list.
+    :param sort: Sort key — ``"value"`` or ``"name"``.
+    :type sort: str
+    :param order: Sort order — ``"asc"`` or ``"desc"``.
+    :type order: str
+    :returns: A dictionary with ``cargo``, ``cargo_capacity``,
+        ``cargo_items`` list, and ``total_value``.
     :rtype: dict
     :raises HTTPException: 404 if the game is not found.
     """
@@ -422,10 +433,38 @@ def api_cargo(game_id: str) -> dict:
     if not state:
         raise HTTPException(status_code=404, detail="Game not found")
     cargo_items = [d.to_cargo_dict() for d in state.discoveries]
+
+    valid_sorts = {"value", "name"}
+    valid_orders = {"asc", "desc"}
+
+    if sort not in valid_sorts:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid sort key '{sort}'. Must be one of: {', '.join(sorted(valid_sorts))}"
+        )
+    if order not in valid_orders:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid order '{order}'. Must be one of: {', '.join(sorted(valid_orders))}"
+        )
+
+    total_value = sum(item["value"] for item in cargo_items)
+
+    top3_ids = [item["id"] for item in sorted(cargo_items, key=lambda i: i.get("value", 0), reverse=True)[:3]]
+
+    if sort == "value":
+        reverse = order == "desc"
+        cargo_items.sort(key=lambda i: i.get("value", 0), reverse=reverse)
+    else:  # sort == "name"
+        reverse = order == "desc"
+        cargo_items.sort(key=lambda i: i.get("name", ""), reverse=reverse)
+
     return {
         "cargo": state.ship.cargo,
         "cargo_capacity": state.ship.max_cargo,
         "cargo_items": cargo_items,
+        "total_value": total_value,
+        "top3_ids": top3_ids,
     }
 
 
@@ -1135,7 +1174,7 @@ def api_leaderboard() -> dict:
     }
 
 
-def _full_state_response(state: GameState) -> dict:
+def _full_state_response(state: GameState, sort: str | None = None, order: str | None = None) -> dict:
     """Build the full game state response dictionary.
 
     Serializes all relevant game state fields into a dictionary
@@ -1143,12 +1182,47 @@ def _full_state_response(state: GameState) -> dict:
     ship data, current system, discoveries, pending events, the
     most recent log entries, and visit statistics.
 
+    Cargo items (``cargo_items``) are returned unsorted by default.
+    Pass ``sort`` and ``order`` to sort them by ``"value"`` or
+    ``"name"`` in ``"asc"`` or ``"desc"`` order.
+
     :param state: The current game state.
     :type state: GameState
+    :param sort: Optional sort key for cargo items — ``"value"``
+        or ``"name"``. Not applied when ``None``.
+    :type sort: str or None
+    :param order: Optional sort order for cargo items — ``"asc"``
+        or ``"desc"``. Not applied when ``None``.
+    :type order: str or None
     :returns: A dictionary with all game state fields.
     :rtype: dict
+    :raises HTTPException: 422 if ``sort`` or ``order`` is invalid.
     """
     current_system = state.get_current_system()
+    cargo_items = [d.to_cargo_dict() for d in state.discoveries]
+
+    if sort is not None or order is not None:
+        valid_sorts = {"value", "name"}
+        valid_orders = {"asc", "desc"}
+
+        if sort is not None and sort not in valid_sorts:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Invalid sort key '{sort}'. Must be one of: {', '.join(sorted(valid_sorts))}"
+            )
+        if order is not None and order not in valid_orders:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Invalid order '{order}'. Must be one of: {', '.join(sorted(valid_orders))}"
+            )
+
+        if sort is not None and order is not None:
+            if sort == "value":
+                reverse = order == "desc"
+                cargo_items.sort(key=lambda i: i.get("value", 0), reverse=reverse)
+            else:  # sort == "name"
+                reverse = order == "desc"
+                cargo_items.sort(key=lambda i: i.get("name", ""), reverse=reverse)
 
     return {
         "game_id": state.id,
@@ -1167,6 +1241,8 @@ def _full_state_response(state: GameState) -> dict:
         "factions": state.get_known_factions(),
         "reputation_summary": state.build_reputation_summary(),
         "cargo": state.ship.cargo,
-        "cargo_items": [d.to_cargo_dict() for d in state.discoveries],
+        "cargo_items": cargo_items,
+        "total_value": sum(item["value"] for item in cargo_items),
+        "top3_ids": [item["id"] for item in sorted(cargo_items, key=lambda i: i.get("value", 0), reverse=True)[:3]],
         "fuel_status": get_fuel_status(state, state.systems),
     }

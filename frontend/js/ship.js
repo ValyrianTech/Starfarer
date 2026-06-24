@@ -47,4 +47,72 @@ function renderShipStatus(ship) {
 
 function updateShipStatus(ship) {
   renderShipStatus(ship);
+  renderCargoPanel();
+}
+
+let _cargoRequestId = 0;
+
+async function renderCargoPanel() {
+  const gameId = GAME_ID;
+  if (!gameId) return;
+
+  if (!$('#cargo-panel')) {
+    const container = document.createElement('div');
+    container.innerHTML = `
+      <div class="ui-panel" style="position:fixed;right:1rem;top:1rem;z-index:20;min-width:280px;" id="cargo-panel">
+        <div class="ui-panel-title">Cargo Hold</div>
+        <div style="margin-bottom:0.5rem;">
+          <select id="cargo-sort-select" class="cargo-sort-select">
+            <option value="value_desc">Value (High to Low)</option>
+            <option value="value_asc">Value (Low to High)</option>
+            <option value="name_asc">Name (A-Z)</option>
+            <option value="name_desc">Name (Z-A)</option>
+          </select>
+          <div id="cargo-total-value" class="cargo-total-value">Total Value: —</div>
+        </div>
+        <div id="cargo-items-list"></div>
+      </div>
+    `;
+    document.body.appendChild(container.firstElementChild);
+    document.getElementById('cargo-sort-select').addEventListener('change', () => {
+      renderCargoPanel();
+    });
+  }
+
+  const select = document.getElementById('cargo-sort-select');
+  const val = select ? select.value : 'value_desc';
+  const [sortKey, order] = val.split('_');
+
+  try {
+    const requestId = ++_cargoRequestId;
+    const data = await API.cargo(gameId, sortKey, order);
+    if (requestId !== _cargoRequestId) return;
+
+    const totalEl = document.getElementById('cargo-total-value');
+    if (totalEl) totalEl.textContent = `Total Value: ${formatNumber(data.total_value || 0)} cr`;
+
+    const top3Ids = new Set(data.top3_ids || []);
+
+    const listEl = document.getElementById('cargo-items-list');
+    if (listEl) {
+      if (data.cargo_items.length === 0) {
+        listEl.innerHTML = '<div class="cargo-empty">Cargo hold is empty.</div>';
+      } else {
+        listEl.innerHTML = data.cargo_items.map(item => {
+          const isTop3 = top3Ids.has(item.id);
+          return `
+            <div class="cargo-item${isTop3 ? ' cargo-item-top' : ''}">
+              <div class="cargo-item-name">${isTop3 ? '<span class="cargo-star">\u2605</span>' : ''}${item.name}</div>
+              <div class="cargo-item-meta">
+                <span class="cargo-item-category">${item.category}</span>
+                <span class="cargo-item-value">${formatNumber(item.value)} cr</span>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+    }
+  } catch (e) {
+    console.error('Cargo panel error:', e);
+  }
 }
