@@ -89,7 +89,7 @@ def purchase_upgrade(state: GameState, upgrade_id: str) -> tuple[bool, str]:
     if "morale_decay_reduction" in effect:
         ship.morale_decay_reduction += effect["morale_decay_reduction"]
 
-    state.add_log("upgrade", f"Upgraded {upgrade_id} to level {current_level + 1}.")
+    state.add_log("upgrade", f"Upgraded {upgrade_id} to level {current_level + 1}.", category="upgrade", title="Ship Upgrade")
     return True, f"Upgraded {upgrade_id} to level {current_level + 1}."
 
 
@@ -263,7 +263,8 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
             state.discoveries.remove(disc)
         state.ship.credits += total_price
         result_message = f"Sold {len(sold_items)} item(s) for {total_price} credits."
-        state.add_log("trade", result_message)
+        system_name = system.name
+        state.add_log("trade", result_message, category="trade", title="Trade", system=system_name, credits_change=total_price)
         trade_completed = True
 
     elif action == "buy":
@@ -282,7 +283,7 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
             state.ship.fuel += amount
             breakdown_str = "\n".join(price_info["breakdown_lines"])
             result_message = f"Purchased {amount} fuel for {cost} credits.\n{breakdown_str}"
-            state.add_log("trade", result_message)
+            state.add_log("trade", result_message, category="trade", title="Trade", system=system.name, credits_change=-cost, fuel_change=amount)
             trade_completed = True
 
         elif item == "repair":
@@ -308,7 +309,7 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
             state.ship.credits -= cost
             state.ship.hull += repair_amount
             result_message = f"Repaired hull by {repair_amount} for {cost} credits."
-            state.add_log("trade", result_message)
+            state.add_log("trade", result_message, category="trade", title="Trade", system=system.name, credits_change=-cost, hull_change=repair_amount)
             trade_completed = True
 
     if trade_completed:
@@ -408,7 +409,7 @@ def perform_bulk_sell(state: GameState, items: list[dict]) -> tuple[bool, str, i
     log_msg = f"Bulk sold {sold_count} item(s) for {total_price} credits."
     if errors:
         log_msg += f" ({len(errors)} partial failure(s))"
-    state.add_log("trade", log_msg)
+    state.add_log("trade", log_msg, category="trade", title="Bulk Sell", system=system.name, credits_change=total_price)
 
     success_msg = f"Sold {sold_count} item(s) for {total_price} credits."
     if errors:

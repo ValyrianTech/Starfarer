@@ -818,7 +818,7 @@ def resolve_event(state: GameState, event_id: str, choice_idx: int) -> tuple[boo
 
     choice = event.choices[choice_idx]
     effects = state.apply_choice_outcome(choice.outcome)
-    state.add_log("event", f"Event '{event.title}' resolved: {choice.text}. {choice.outcome}")
+    state.add_log("event", f"Event '{event.title}' resolved: {choice.text}. {choice.outcome}", category="event", title=event.title)
 
     event_rng = seeded_random(state.seed, "event_reputation", event.id, str(choice_idx))
 
@@ -833,7 +833,7 @@ def resolve_event(state: GameState, event_id: str, choice_idx: int) -> tuple[boo
         if rep_after[faction_id] >= 20:
             bonus_fn(state)
         if rep_before[faction_id] != rep_after[faction_id]:
-            state.add_log("faction", f"{faction_id.replace('_', ' ').title()} reputation changed from {rep_before[faction_id]} to {rep_after[faction_id]}.")
+            state.add_log("faction", f"{faction_id.replace('_', ' ').title()} reputation changed from {rep_before[faction_id]} to {rep_after[faction_id]}.", category="system", title="Reputation Change")
 
     extra_output = {
         "title": event.title,

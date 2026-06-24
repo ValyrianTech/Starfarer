@@ -93,7 +93,7 @@ class GameState:
         """
         return self.systems.get(self.ship.current_system_id)
 
-    def add_log(self, entry_type: str, message: str) -> None:
+    def add_log(self, entry_type: str, message: str, **kwargs) -> None:
         """Append a new entry to the ship's log.
 
         :param entry_type: The category of the log entry (e.g.
@@ -101,13 +101,32 @@ class GameState:
         :type entry_type: str
         :param message: The human-readable log message.
         :type message: str
+        :param kwargs: Optional metadata fields: ``category``,
+            ``title``, ``description``, ``system``, ``body``,
+            ``credits_change``, ``fuel_change``, ``hull_change``,
+            ``morale_change``, ``cargo_change``.
         """
-        self.log_entries.append({
-            "id": str(uuid.uuid4())[:8],
+        entry_id = len(self.log_entries) + 1
+        title = kwargs.get("title", "")
+        if not title and entry_type:
+            title = entry_type.replace("_", " ").title()
+        entry = {
+            "id": entry_id,
             "type": entry_type,
             "message": message,
             "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
+            "category": kwargs.get("category", entry_type),
+            "title": title,
+            "description": kwargs.get("description", message),
+            "system": kwargs.get("system"),
+            "body": kwargs.get("body"),
+            "credits_change": kwargs.get("credits_change"),
+            "fuel_change": kwargs.get("fuel_change"),
+            "hull_change": kwargs.get("hull_change"),
+            "morale_change": kwargs.get("morale_change"),
+            "cargo_change": kwargs.get("cargo_change"),
+        }
+        self.log_entries.append(entry)
 
     def apply_choice_outcome(self, outcome: str) -> dict:
         """Parse an outcome string and apply its effects to the ship.

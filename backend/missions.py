@@ -340,7 +340,8 @@ def complete_mission(state: GameState, mission: FactionMission) -> dict:
     state.add_log(
         "faction",
         f"Completed mission '{mission.title}' for {faction_name}. "
-        f"Earned {mission.credit_reward} credits and {mission.reputation_reward} reputation."
+        f"Earned {mission.credit_reward} credits and {mission.reputation_reward} reputation.",
+        category="system", title="Mission Completed",
     )
 
     state.completed_missions.append({
