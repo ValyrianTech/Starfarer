@@ -91,12 +91,7 @@ async function renderCargoPanel() {
     const totalEl = document.getElementById('cargo-total-value');
     if (totalEl) totalEl.textContent = `Total Value: ${formatNumber(data.total_value || 0)} cr`;
 
-    const top3Ids = new Set(
-      [...data.cargo_items]
-        .sort((a, b) => (b.value || 0) - (a.value || 0))
-        .slice(0, 3)
-        .map(i => i.id)
-    );
+    const top3Ids = new Set(data.top3_ids || []);
 
     const listEl = document.getElementById('cargo-items-list');
     if (listEl) {

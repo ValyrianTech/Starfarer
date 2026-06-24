@@ -450,6 +450,8 @@ def api_cargo(game_id: str, sort: str = "value", order: str = "desc") -> dict:
 
     total_value = sum(item["value"] for item in cargo_items)
 
+    top3_ids = [item["id"] for item in sorted(cargo_items, key=lambda i: i.get("value", 0), reverse=True)[:3]]
+
     if sort == "value":
         reverse = order == "desc"
         cargo_items.sort(key=lambda i: i.get("value", 0), reverse=reverse)
@@ -462,6 +464,7 @@ def api_cargo(game_id: str, sort: str = "value", order: str = "desc") -> dict:
         "cargo_capacity": state.ship.max_cargo,
         "cargo_items": cargo_items,
         "total_value": total_value,
+        "top3_ids": top3_ids,
     }
 
 
