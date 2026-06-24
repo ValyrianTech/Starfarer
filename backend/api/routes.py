@@ -33,6 +33,7 @@ from backend.models.faction import get_faction, FACTION_DEFINITIONS
 from backend.missions import (
     generate_missions, complete_mission,
 )
+from backend.utils import seeded_random, deterministic_hash
 
 logger = logging.getLogger(__name__)
 
@@ -804,8 +805,6 @@ def api_faction_mission(game_id: str, faction_id: str) -> dict:
     if not current_system.has_trading_station:
         raise HTTPException(status_code=400, detail="No trading station in this system")
 
-    from backend.utils import seeded_random, deterministic_hash
-
     missions = generate_missions(state, current_system, faction_id)
     if not missions:
         raise HTTPException(status_code=400, detail="No missions available from this faction")
@@ -900,8 +899,6 @@ def api_missions(game_id: str) -> dict:
     if not current_system.has_trading_station:
         raise HTTPException(status_code=400, detail="No trading station in this system")
 
-    from backend.utils import deterministic_hash
-
     faction_ids = list(FACTION_DEFINITIONS.keys())
     faction_idx = deterministic_hash(state.seed, current_system.id, "primary_faction") % len(faction_ids)
     primary_faction_id = faction_ids[faction_idx]
@@ -970,7 +967,6 @@ def api_accept_mission(game_id: str, mission_id: str, req: AcceptMissionRequest)
         factions_to_check = [req.faction_id]
     else:
         # Restrict to the system's dominant faction to match GET /missions behavior
-        from backend.utils import deterministic_hash
         faction_ids = list(FACTION_DEFINITIONS.keys())
         faction_idx = deterministic_hash(state.seed, current_system.id, "primary_faction") % len(faction_ids)
         primary_faction_id = faction_ids[faction_idx]
