@@ -26,13 +26,23 @@ def get_fuel_status(game_state, systems) -> dict:
     current_system_id = game_state.ship.current_system_id
     current_fuel = game_state.ship.fuel
 
+    # Early return: if already at a trading station, fuel status is always green
+    if current_system and current_system.has_trading_station:
+        return {
+            "level": "green",
+            "message": "",
+            "current_fuel": current_fuel,
+            "fuel_for_round_trip": 0,
+            "fuel_for_one_way": 0,
+            "nearest_station_system": current_system.name,
+            "nearest_station_distance": 0.0,
+        }
+
     nearest_system = None
     nearest_distance = float("inf")
 
     if current_system:
         for sys_id, sys_data in systems.items():
-            if sys_id == current_system_id and current_system.has_trading_station:
-                continue
             if not sys_data.has_trading_station:
                 continue
             dist = distance_between(current_system, sys_data)
@@ -41,16 +51,6 @@ def get_fuel_status(game_state, systems) -> dict:
                 nearest_system = sys_data
 
     if nearest_system is None:
-        if current_system and current_system.has_trading_station:
-            return {
-                "level": "green",
-                "message": "",
-                "current_fuel": current_fuel,
-                "fuel_for_round_trip": 0,
-                "fuel_for_one_way": 0,
-                "nearest_station_system": current_system.name,
-                "nearest_station_distance": 0.0,
-            }
         return {
             "level": "unknown",
             "message": "No trading stations in known space",
