@@ -214,7 +214,7 @@ def api_jump(game_id: str, sys_id: str) -> dict:
     if not ok:
         raise HTTPException(status_code=400, detail=f"Cannot jump to {target.name}: {msg}")
 
-    result = perform_jump(state, target, int(fuel_cost))
+    result = perform_jump(state, target, fuel_cost)
 
     decrement_cooldowns(state)
     event = trigger_event(state)

@@ -25,7 +25,7 @@ from backend.generation.lore import get_fragment_for_body
 logger = logging.getLogger(__name__)
 
 
-def can_jump(ship: Ship, target: StarSystem, current: Optional[StarSystem]) -> tuple[bool, float, str]:
+def can_jump(ship: Ship, target: StarSystem, current: Optional[StarSystem]) -> tuple[bool, int, str]:
     """Check whether a jump to a target system is possible.
 
     Validates that the ship has sufficient fuel and jump range to
@@ -54,10 +54,10 @@ def can_jump(ship: Ship, target: StarSystem, current: Optional[StarSystem]) -> t
         return False, fuel_cost, f"Not enough fuel. Need {fuel_cost}, have {ship.fuel}."
     if dist_ly > ship.jump_range:
         return False, fuel_cost, f"Distance {dist_ly} LY exceeds jump range {ship.jump_range}."
-    return True, fuel_cost, ""
+    return True, int(fuel_cost), ""
 
 
-def perform_jump(state: GameState, target_system: StarSystem, fuel_cost: int | float) -> str:
+def perform_jump(state: GameState, target_system: StarSystem, fuel_cost: int) -> str:
     """Execute a hyperspace jump to the target star system.
 
     Deducts fuel, applies morale decay (modified by life support
@@ -74,7 +74,7 @@ def perform_jump(state: GameState, target_system: StarSystem, fuel_cost: int | f
     :rtype: str
     """
     current = state.get_current_system() or state.systems.get(state.ship.current_system_id)
-    state.ship.fuel -= int(fuel_cost)
+    state.ship.fuel -= fuel_cost
 
     life_support_level = state.ship.morale_decay_reduction
     morale_decay = max(1, MORALE_DECAY_PER_JUMP - life_support_level)
