@@ -41,7 +41,7 @@ def can_jump(ship: Ship, target: StarSystem, current: Optional[StarSystem]) -> t
         ``can_jump`` indicates whether the jump is allowed,
         ``fuel_cost`` is the estimated fuel required, and ``message``
         is an empty string on success or an error description.
-    :rtype: tuple[bool, float, str]
+    :rtype: tuple[bool, int, str]
     """
     if ship.current_system_id == target.id:
         return False, 0, "Already in this system."
