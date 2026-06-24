@@ -8,6 +8,7 @@ without intrusive tutorials.
 from __future__ import annotations
 from typing import Any, Callable, Optional
 
+from backend.fuel import get_fuel_status
 from backend.models.game_state import GameState
 from backend.models.system import StarSystem
 
@@ -205,7 +206,6 @@ HINT_DEFINITIONS: list[Hint] = [
 def _format_message(template: str, game_state: GameState, systems: dict[str, StarSystem]) -> str:
     """Format a hint message template with dynamic values."""
     if "{nearest_station}" in template or "{distance}" in template:
-        from backend.fuel import get_fuel_status
         fuel_status = get_fuel_status(game_state, systems)
         nearest = fuel_status.get("nearest_station_system")
         if nearest is None:

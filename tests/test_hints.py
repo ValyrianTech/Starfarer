@@ -534,7 +534,7 @@ class TestMessageFormatting:
             "nearest_station_system": None,
             "nearest_station_distance": 0.0,
         }
-        with patch("backend.fuel.get_fuel_status", return_value=mock_status):
+        with patch("backend.hints.get_fuel_status", return_value=mock_status):
             msg = _format_message(
                 "Nearest station: {nearest_station} ({distance} LY)",
                 state,
