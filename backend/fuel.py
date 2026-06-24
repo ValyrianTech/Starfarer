@@ -8,9 +8,11 @@ level and supporting information.
 
 from backend.generation.universe import distance_between
 from backend.config import JUMP_FUEL_COST_PER_LY
+from backend.models.game_state import GameState
+from backend.models.system import StarSystem
 
 
-def get_fuel_status(game_state, systems) -> dict:
+def get_fuel_status(game_state: GameState, systems: dict[str, StarSystem]) -> dict:
     """Evaluate fuel status relative to the nearest trading station.
 
     :param game_state: The current GameState instance.
