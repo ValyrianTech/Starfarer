@@ -4,8 +4,11 @@
 
 ### Added
 - Sort and order query parameters to GET /api/game/{id}/cargo endpoint: `sort` (\"value\" or \"name\", default \"value\") and `order` (\"asc\" or \"desc\", default \"desc\")
+- Sort and order query parameters to GET /api/game/{id} full game state endpoint (same values as cargo endpoint)
 - `total_value` field to GET /api/game/{id}/cargo response (sum of all cargo item values)
 - `total_value` field to GET /api/game/{id} full game state response
+- `top3_ids` field to GET /api/game/{id}/cargo response (list of the 3 most valuable cargo item IDs)
+- `top3_ids` field to GET /api/game/{id} full game state response (list of the 3 most valuable cargo item IDs)
 - Cargo UI enhancement — floating cargo panel with sort-by dropdown (Value High-Low, Value Low-High, Name A-Z, Name Z-A), total value display in credits, top-3 most valuable items highlighted with star and orange border, empty state message when cargo is empty
 - 9 new phenomenon-specific events: 4 nebula events (Ion Storm, Protostar Formation, Nebula Navigation Puzzle), 3 pulsar events (Radiation Pulse, Pulsar Timing Signal, Neutron Star Proximity), and 2 binary star events (Orbital Mechanics Challenge, Lagrange Point Discovery)
 - 5 new black hole system-specific events: Time Dilation Anomaly, Hawking Radiation Harvest, Spaghettification Near-Miss, Accretion Disk Prospecting, and Gravitational Lens Observation

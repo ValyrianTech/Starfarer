@@ -395,10 +395,10 @@ Everything you've found, organized by category with credit values.
 ### Full Game State
 
 ```http
-GET /api/game/{game_id}
+GET /api/game/{game_id}?sort=value&order=desc
 ```
 
-Complete state dump: ship, current system, pending events, discoveries, log entries, fuel status, and reputation summary.
+Complete state dump: ship, current system, pending events, discoveries, log entries, fuel status, and reputation summary. Accepts optional `sort` (`"value"` or `"name"`) and `order` (`"asc"` or `"desc"`) query parameters for sorting cargo items in the response. The response includes `total_value` (sum of all cargo credit values) and `top3_ids` (the 3 most valuable cargo item IDs) fields.
 
 ### Cargo Hold
 
@@ -410,6 +410,7 @@ Returns a detailed breakdown of your cargo hold, including:
 - `count` — current number of items
 - `max_cargo` — maximum capacity
 - `total_value` — sum of all cargo item credit values
+- `top3_ids` — list of the 3 most valuable cargo item IDs (by credit value, descending)
 - `cargo` — list of every discovery with its ID, name, category, value, and sellability status. Lore-linked items are marked as not sellable.
 
 **Query parameters:**
@@ -573,7 +574,7 @@ The game persists all state to SQLite. Save frequently — especially before ris
 |--------|----------|-------------|
 | GET | `/api/health` | Server health check |
 | POST | `/api/game/new` | Create new game |
-| GET | `/api/game/{id}` | Full game state (ship, system, events, log, fuel_status, reputation) |
+| GET | `/api/game/{id}?sort={value\|name}&order={asc\|desc}` | Full game state (ship, system, events, log, fuel_status, reputation, total_value, top3_ids) |
 | GET | `/api/game/{id}/galaxy` | Galaxy map data |
 | GET | `/api/game/{id}/system/{sid}` | System details |
 | POST | `/api/game/{id}/jump/{sid}` | Jump to system |
