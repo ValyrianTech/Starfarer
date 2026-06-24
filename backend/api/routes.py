@@ -974,8 +974,8 @@ def api_faction_mission(game_id: str, faction_id: str) -> dict:
             "id": completion['mission_id'],
             "title": completion['title'],
             "tier": mission.tier,
-            "fuel_cost": mission.fuel_cost,
-            "credit_cost": mission.credit_cost,
+            "fuel_cost_incurred": mission.fuel_cost,
+            "credit_cost_incurred": mission.credit_cost,
         },
     }
 

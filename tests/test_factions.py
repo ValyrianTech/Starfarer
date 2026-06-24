@@ -360,8 +360,8 @@ class TestFactionAPI:
         assert data["effect"] == "success"
         assert "mission" in data
         assert "tier" in data["mission"]
-        assert "fuel_cost" in data["mission"]
-        assert "credit_cost" in data["mission"]
+        assert "fuel_cost_incurred" in data["mission"]
+        assert "credit_cost_incurred" in data["mission"]
         assert data["mission"]["tier"] in (1, 2, 3)
 
     def test_generate_missions_nonexistent_faction(self) -> None:
@@ -1095,8 +1095,8 @@ class TestFactionAPI:
         data = resp.json()
         assert data["effect"] == "success"
         assert data["mission"]["id"] == "mission_standard_001"
-        assert data["mission"]["fuel_cost"] > 0
-        assert data["mission"]["credit_cost"] > 0
+        assert data["mission"]["fuel_cost_incurred"] > 0
+        assert data["mission"]["credit_cost_incurred"] > 0
 
     def test_faction_mission_skips_completed_mission(self) -> None:
         resp = client.post(
