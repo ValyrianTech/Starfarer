@@ -932,17 +932,6 @@ def api_faction_mission(game_id: str, faction_id: str) -> dict:
     
     mission = rng.choice(available)
 
-    if state.ship.fuel < mission.fuel_cost:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Not enough fuel. Mission requires {mission.fuel_cost} fuel."
-        )
-    if state.ship.credits < mission.credit_cost:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Not enough credits. Mission requires {mission.credit_cost} credits."
-        )
-
     state.accepted_missions[mission.id] = {
         "faction_id": mission.faction_id,
         "tier": mission.tier,
@@ -964,6 +953,8 @@ def api_faction_mission(game_id: str, faction_id: str) -> dict:
     )
 
     completion = complete_mission(state, mission)
+    if "error" in completion:
+        raise HTTPException(status_code=400, detail=completion["error"])
 
     # Ensure the faction is marked as known
     if faction_id in state.faction_relations:
@@ -1198,18 +1189,9 @@ def api_complete_mission(game_id: str, mission_id: str, req: CompleteMissionRequ
         item_reward=stored.get("item_reward"),
     )
 
-    if state.ship.fuel < mission_found.fuel_cost:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Not enough fuel. Mission requires {mission_found.fuel_cost} fuel."
-        )
-    if state.ship.credits < mission_found.credit_cost:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Not enough credits. Mission requires {mission_found.credit_cost} credits."
-        )
-
     completion_result = complete_mission(state, mission_found)
+    if "error" in completion_result:
+        raise HTTPException(status_code=400, detail=completion_result["error"])
 
     game_save(state)
 
