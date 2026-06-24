@@ -66,8 +66,8 @@ def new_game(seed: int | None = None, ship_name: str | None = None) -> GameState
     if first_sys:
         first_sys.visited = True
     state.systems_visited = 1
-    state.add_log("system", f"New game started. Universe seed: {s}. Ship: {name}.")
-    state.add_log("navigation", f"Began journey in the {first_sys.name if first_sys else 'Unknown'} system.")
+    state.add_log("system", f"New game started. Universe seed: {s}. Ship: {name}.", category="system", title="New Game Started")
+    state.add_log("navigation", f"Began journey in the {first_sys.name if first_sys else 'Unknown'} system.", category="system", title="Journey Begins")
     return state
 
 
@@ -234,6 +234,7 @@ def _state_to_dict(state: GameState) -> dict:
         "completed_missions": state.completed_missions,
         "daily_missions_used": state.daily_missions_used,
         "accepted_missions": dict(state.accepted_missions),
+        "_next_log_id": state._next_log_id,
     }
 
 
@@ -290,6 +291,7 @@ def _state_from_dict(d: dict) -> GameState:
         completed_missions=d.get("completed_missions", []),
         daily_missions_used=d.get("daily_missions_used", {}),
         accepted_missions=dict(d.get("accepted_missions", {})),
+        _next_log_id=d.get("_next_log_id", max((e["id"] for e in d.get("log_entries", []) if isinstance(e, dict) and "id" in e), default=0) + 1),
     )
 
 

@@ -38,6 +38,10 @@
 - Fuel warning status system (`backend/fuel.py`): evaluates fuel level relative to the nearest trading station and returns a warning level (`green`, `yellow`, `red`, `critical`, `unknown`) with supporting information
 - `fuel_status` field in full game state response (`GET /api/game/{id}`): includes `level`, `message`, `current_fuel`, `fuel_for_round_trip`, `fuel_for_one_way`, `nearest_station_system`, and `nearest_station_distance`
 - Type annotations and docstrings for `missions.py` functions (`get_daily_mission_key`, `generate_missions`, `complete_mission`, `_mission_seed`, `FactionMission.to_dict`)
+- Paginated log endpoint `GET /api/game/{game_id}/log/paginated` with query parameters `page` (int, default 1), `per_page` (int, default 20, max 100), `category` (str, optional filter), `search` (str, optional full-text search). Returns `log_entries`, `page`, `per_page`, `total_entries`, `total_pages`. Entries returned most-recent-first. Returns 404 if game not found.
+- Enhanced log entry schema with structured metadata fields: `id` (sequential integer), `type`, `message`, `timestamp`, `category`, `title`, `description`, `system`, `body`, `credits_change`, `fuel_change`, `hull_change`, `morale_change`, `cargo_change`. The old `/api/game/{id}/log` endpoint is backward-compatible and also returns the new fields.
+- Sequential integer log entry IDs with `_next_log_id` counter in GameState for collision prevention on save/load cycles
+- Backward compatibility for old saves without `_next_log_id` (computed from max existing ID + 1, defaults to 1 if log is empty)
 
 ### Changed
 - Added type annotations to `get_fuel_status` function parameters in `backend/fuel.py`
@@ -48,6 +52,8 @@
 - Lore viewer HTML structure completely redesigned with arc tabs, progress bars, and fragment cards
 - Lore button now has `data-lore-nav="true"` attribute for targeted pulse animation
 - `POST /api/game/{id}/faction/{fid}/mission` now uses tiered mission system: guaranteed success (no random success/failure), costs/rewards scale with reputation, requires being at a trading station, response includes `mission` field with details
+- All game action log calls now include structured metadata fields (category, title, system, body, resource changes) for: jumps, scans, landings, exploration, distress calls, salvage, emergency crafting, trading, upgrades, missions, events, and faction reputation changes
+- Mission completion log entry now includes `credits_change` metadata
 
 ### Fixed
 - Query parameters now URL-encoded in `api.js` cargo method using `encodeURIComponent()`
@@ -82,7 +88,10 @@
 - Completed missions now checked before applying rewards
 - Free daily mission no longer selectable via random choice for standard mission slot
 - Mission lookup now only generates missions for the relevant faction (not all factions)
+- Log entry ID collision risk on save/load cycles
+- `total_pages` returns 0 instead of 1 when there are 0 log entries in paginated endpoint
 
 ### Removed
 - Dead code `get_available_events` (defined but never used in production)
 - Unused imports: `get_daily_mission_key`, `_TIER_COSTS`, and `faction_id` variable
+- Unused `uuid` import from `backend/models/game_state.py`

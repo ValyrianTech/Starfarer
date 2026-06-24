@@ -86,12 +86,12 @@ def perform_jump(state: GameState, target_system: StarSystem, fuel_cost: int | f
 
     if current:
         dist = distance_between(current, target_system)
-        state.add_log("navigation", f"Jumped from {current.name} to {target_system.name} ({round(dist/10, 1)} LY). Fuel cost: {fuel_cost}.")
+        state.add_log("navigation", f"Jumped from {current.name} to {target_system.name} ({round(dist/10, 1)} LY). Fuel cost: {fuel_cost}.", category="jump", title="Hyperspace Jump", system=target_system.name, fuel_change=-int(fuel_cost))
     else:
-        state.add_log("navigation", f"Arrived at {target_system.name}.")
+        state.add_log("navigation", f"Arrived at {target_system.name}.", category="jump", title="System Arrival", system=target_system.name)
 
     if target_system.phenomenon != "none":
-        state.add_log("discovery", f"Detected phenomenon: {target_system.phenomenon_desc}")
+        state.add_log("discovery", f"Detected phenomenon: {target_system.phenomenon_desc}", category="discovery", title="Phenomenon Detected", system=target_system.name)
 
     state.update_stranded_state()
 
@@ -129,7 +129,7 @@ def perform_scan(state: GameState) -> str:
         return "No current system to scan."
     ship.fuel -= SCAN_FUEL_COST
     system.scanned = True
-    state.add_log("exploration", f"Scanned {system.name}. {len(system.bodies)} orbital bodies detected.")
+    state.add_log("exploration", f"Scanned {system.name}. {len(system.bodies)} orbital bodies detected.", category="scan", title="System Scan", system=system.name, fuel_change=-SCAN_FUEL_COST)
     return f"Scan complete. {len(system.bodies)} bodies found."
 
 
@@ -201,7 +201,7 @@ def land_on_body(state: GameState, body_id: str) -> tuple[bool, str]:
         return False, f"Body {body_id} not found in this system."
     state.ship.current_body_id = body_id
     target.explored = True
-    state.add_log("exploration", f"Landed on {target.name}, a {target.biome} {target.body_type}.")
+    state.add_log("exploration", f"Landed on {target.name}, a {target.biome} {target.body_type}.", category="exploration", title="Surface Landing", system=system.name, body=target.name)
     return True, f"Landed on {target.name}."
 
 
@@ -257,7 +257,7 @@ def explore_surface(state: GameState) -> list[Discovery]:
                 lore_frag.discovered = True
                 lore_frag.discovery_timestamp = datetime.now(timezone.utc).isoformat()
                 lore_linked = True
-                state.add_log("lore", f"Discovered lore fragment: {lore_frag.title} ({lore_frag.id}).")
+                state.add_log("lore", f"Discovered lore fragment: {lore_frag.title} ({lore_frag.id}).", category="discovery", title="Lore Fragment Discovered", system=system.name, body=body.name)
             elif lore_frag and lore_frag.discovered and not lore_linked:
                 # Lore fragment already discovered in a previous explore action — expected behavior
                 logger.debug(f"Lore fragment {lore_frag.id} ({lore_frag.title}) already discovered but found on body {body.id}.")
@@ -268,7 +268,7 @@ def explore_surface(state: GameState) -> list[Discovery]:
 
     ship.fuel -= EXPLORE_FUEL_COST
 
-    state.add_log("exploration", f"Explored {body.name}. Found {len(discoveries)} points of interest.")
+    state.add_log("exploration", f"Explored {body.name}. Found {len(discoveries)} points of interest.", category="exploration", title="Surface Exploration", system=system.name, body=body.name, fuel_change=-EXPLORE_FUEL_COST)
     body.poi_count = max(0, body.poi_count - num_finds)
     return discoveries
 
@@ -369,7 +369,7 @@ def _distress_pilots_guild(state: GameState, rng: Any, turns: int) -> dict:
     ship.credits = max(0, ship.credits - 100)
     ship.fuel = min(ship.max_fuel, ship.fuel + 20)
     state.modify_faction_reputation("free_pilots", 5)
-    state.add_log("emergency", f"Pilots Guild answered your distress call in {system.name}. They delivered 20 fuel for 100 credits.")
+    state.add_log("emergency", f"Pilots Guild answered your distress call in {system.name}. They delivered 20 fuel for 100 credits.", category="crisis", title="Pilots Guild Rescue", system=system.name, credits_change=-100, fuel_change=20)
     return {
         "result": f"Pilots Guild rescue! 20 fuel delivered for 100 credits. Arrived in {turns} turns.",
         "outcome": "pilots_guild",
@@ -382,7 +382,7 @@ def _distress_passerby_help(state: GameState, rng: Any, turns: int) -> dict:
     ship = state.ship
     fuel_given = rng.randint(10, 25)
     ship.fuel = min(ship.max_fuel, ship.fuel + fuel_given)
-    state.add_log("emergency", f"A friendly passerby answered your distress call and shared {fuel_given} fuel.")
+    state.add_log("emergency", f"A friendly passerby answered your distress call and shared {fuel_given} fuel.", category="crisis", title="Friendly Passerby", fuel_change=fuel_given)
     return {
         "result": f"Friendly passerby shared {fuel_given} fuel! Arrived in {turns} turns.",
         "outcome": "passerby_help",
@@ -395,7 +395,7 @@ def _distress_piracy(state: GameState, rng: Any, turns: int) -> dict:
     ship = state.ship
     credits_stolen = min(ship.credits, rng.randint(20, 80))
     ship.credits = max(0, ship.credits - credits_stolen)
-    state.add_log("emergency", f"Pirates responded to your distress call and stole {credits_stolen} credits!")
+    state.add_log("emergency", f"Pirates responded to your distress call and stole {credits_stolen} credits!", category="crisis", title="Pirate Attack", credits_change=-credits_stolen)
     return {
         "result": f"Pirates answered your call and stole {credits_stolen} credits!",
         "outcome": "piracy",
@@ -405,7 +405,7 @@ def _distress_piracy(state: GameState, rng: Any, turns: int) -> dict:
 
 def _distress_passerby_ignore(state: GameState, rng: Any, turns: int) -> dict:
     """Ship passes by without responding."""
-    state.add_log("emergency", "A ship passed nearby but did not respond to your distress call.")
+    state.add_log("emergency", "A ship passed nearby but did not respond to your distress call.", category="crisis", title="Passerby Ignores")
     return {
         "result": "A ship passed nearby but did not respond.",
         "outcome": "passerby_ignore",
@@ -418,7 +418,7 @@ def _distress_signal_friendly(state: GameState, rng: Any, turns: int) -> dict:
     ship = state.ship
     fuel_given = rng.randint(5, 15)
     ship.fuel = min(ship.max_fuel, ship.fuel + fuel_given)
-    state.add_log("emergency", f"An emergency signal brought a friendly responder who delivered {fuel_given} fuel.")
+    state.add_log("emergency", f"An emergency signal brought a friendly responder who delivered {fuel_given} fuel.", category="crisis", title="Friendly Responder", fuel_change=fuel_given)
     return {
         "result": f"Friendly emergency responder delivered {fuel_given} fuel! Arrived in {turns} turns.",
         "outcome": "signal_friendly",
@@ -431,7 +431,7 @@ def _distress_signal_hostile(state: GameState, rng: Any, turns: int) -> dict:
     ship = state.ship
     hull_damage = rng.randint(5, 15)
     ship.hull = max(0, ship.hull - hull_damage)
-    state.add_log("emergency", f"A hostile ship intercepted your emergency signal and attacked, causing {hull_damage} hull damage.")
+    state.add_log("emergency", f"A hostile ship intercepted your emergency signal and attacked, causing {hull_damage} hull damage.", category="crisis", title="Hostile Intercept", hull_change=-hull_damage)
     return {
         "result": f"Hostile ship intercepted your signal! Took {hull_damage} hull damage.",
         "outcome": "signal_hostile",
@@ -524,7 +524,7 @@ def activate_distress_beacon(state: GameState) -> dict:
     rescued = rng.random() < 0.6
     if not rescued:
         turns = rng.randint(2, 4)
-        state.add_log("emergency", f"Distress beacon activated in {system.name}. No response yet — try again in {turns} turns.")
+        state.add_log("emergency", f"Distress beacon activated in {system.name}. No response yet — try again in {turns} turns.", category="crisis", title="Distress Beacon Activated", system=system.name)
         return {
             "result": f"Distress beacon activated. No response yet — try again in {turns} turns.",
             "outcome": "no_response",
@@ -598,7 +598,7 @@ def perform_salvage(state: GameState) -> dict:
     if roll < 0.4:
         fuel_found = rng.randint(2, 8)
         ship.fuel = min(ship.max_fuel, ship.fuel + fuel_found)
-        state.add_log("emergency", f"Salvaged a fuel cache on {body.name if body else body_id}: +{fuel_found} fuel.")
+        state.add_log("emergency", f"Salvaged a fuel cache on {body.name if body else body_id}: +{fuel_found} fuel.", category="crisis", title="Salvage: Fuel Cache", fuel_change=fuel_found)
         return {
             "result": f"Found a fuel cache! +{fuel_found} fuel.",
             "find": "fuel_cache",
@@ -607,7 +607,7 @@ def perform_salvage(state: GameState) -> dict:
     elif roll < 0.7:
         repair_amount = rng.randint(5, 15)
         ship.hull = min(ship.max_hull, ship.hull + repair_amount)
-        state.add_log("emergency", f"Salvaged repair materials on {body.name if body else body_id}: +{repair_amount} hull repaired.")
+        state.add_log("emergency", f"Salvaged repair materials on {body.name if body else body_id}: +{repair_amount} hull repaired.", category="crisis", title="Salvage: Repair Materials", hull_change=repair_amount)
         return {
             "result": f"Found repair materials! +{repair_amount} hull.",
             "find": "repair_materials",
@@ -623,14 +623,14 @@ def perform_salvage(state: GameState) -> dict:
             body_id=body_id,
         )
         state.discoveries.append(disc)
-        state.add_log("emergency", f"Salvaged spare parts on {body.name if body else body_id} (value: {spare_value} credits).")
+        state.add_log("emergency", f"Salvaged spare parts on {body.name if body else body_id} (value: {spare_value} credits).", category="crisis", title="Salvage: Spare Parts", cargo_change=1)
         return {
             "result": f"Found salvageable spare parts! Value: {spare_value} credits.",
             "find": "spare_parts",
             "effects": {"cargo": 1},
         }
     else:
-        state.add_log("emergency", f"Salvage attempt on {body.name if body else body_id} turned up nothing useful.")
+        state.add_log("emergency", f"Salvage attempt on {body.name if body else body_id} turned up nothing useful.", category="crisis", title="Salvage: Nothing Found")
         return {
             "result": "Nothing useful found.",
             "find": "nothing",
@@ -678,7 +678,7 @@ def emergency_craft(state: GameState, discovery_id: str, output: str) -> dict:
     ship = state.ship
     if output == "fuel":
         ship.fuel = min(ship.max_fuel, ship.fuel + rate)
-        state.add_log("emergency", f"Emergency crafted {matching_disc.name} into +{rate} fuel.")
+        state.add_log("emergency", f"Emergency crafted {matching_disc.name} into +{rate} fuel.", category="crisis", title="Emergency Craft: Fuel", fuel_change=rate)
         return {
             "result": f"Crafted {matching_disc.name} into +{rate} fuel.",
             "crafted": "fuel",
@@ -686,7 +686,7 @@ def emergency_craft(state: GameState, discovery_id: str, output: str) -> dict:
         }
     elif output == "repair":
         ship.hull = min(ship.max_hull, ship.hull + rate)
-        state.add_log("emergency", f"Emergency crafted {matching_disc.name} into +{rate} hull repair.")
+        state.add_log("emergency", f"Emergency crafted {matching_disc.name} into +{rate} hull repair.", category="crisis", title="Emergency Craft: Repair", hull_change=rate)
         return {
             "result": f"Crafted {matching_disc.name} into +{rate} hull repair.",
             "crafted": "repair",
@@ -694,7 +694,7 @@ def emergency_craft(state: GameState, discovery_id: str, output: str) -> dict:
         }
     elif output == "morale":
         ship.morale = min(100, ship.morale + rate)
-        state.add_log("emergency", f"Emergency crafted {matching_disc.name} into +{rate} morale.")
+        state.add_log("emergency", f"Emergency crafted {matching_disc.name} into +{rate} morale.", category="crisis", title="Emergency Craft: Morale", morale_change=rate)
         return {
             "result": f"Crafted {matching_disc.name} into +{rate} morale boost.",
             "crafted": "morale",
@@ -702,7 +702,7 @@ def emergency_craft(state: GameState, discovery_id: str, output: str) -> dict:
         }
     elif output == "credits":
         ship.credits += rate
-        state.add_log("emergency", f"Emergency crafted {matching_disc.name} and sold for +{rate} credits.")
+        state.add_log("emergency", f"Emergency crafted {matching_disc.name} and sold for +{rate} credits.", category="crisis", title="Emergency Craft: Credits", credits_change=rate)
         return {
             "result": f"Crafted {matching_disc.name} and sold for +{rate} credits.",
             "crafted": "credits",

@@ -10,7 +10,7 @@ from backend.game.engine import (
     activate_distress_beacon, perform_salvage, emergency_craft,
 )
 from backend.game.trading import get_upgrade_info, purchase_upgrade, perform_trade, perform_bulk_sell, calculate_fuel_price
-from backend.game.manager import new_game, get_galaxy, get_system_detail, game_save, load_or_create, get_game_state
+from backend.game.manager import new_game, get_galaxy, get_system_detail, game_save, load_or_create, get_game_state, _state_from_dict
 from backend.generation.events import trigger_event, resolve_event, EVENT_TEMPLATES, _get_eligible_templates, _apply_cooldown_fallback
 from backend.config import SCAN_FUEL_COST
 from backend.models.game_state import GameState
@@ -968,6 +968,24 @@ class TestManagerAdvanced:
         assert isinstance(result, dict)
         assert result["id"] == state.id
         assert result["seed"] == state.seed
+
+    def test_state_from_dict_with_non_dict_log_entries(self) -> None:
+        """_state_from_dict should handle non-dict log entries gracefully."""
+        from backend.database import init_db
+        init_db()
+        state = new_game(seed=42)
+        data = get_game_state(state)
+        data["log_entries"] = [
+            "old style string entry",
+            {"id": 1, "type": "system", "message": "valid entry"},
+            12345,
+            {"id": 2, "type": "navigation", "message": "another valid entry"},
+            None,
+        ]
+        del data["_next_log_id"]
+        loaded = _state_from_dict(data)
+        assert loaded is not None
+        assert loaded._next_log_id == 3
 
 
 class TestEvents:

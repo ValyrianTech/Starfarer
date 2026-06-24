@@ -390,6 +390,69 @@ def api_log(game_id: str) -> dict:
     }
 
 
+@router.get("/game/{game_id}/log/paginated")
+def api_log_paginated(
+    game_id: str,
+    page: int = 1,
+    per_page: int = 20,
+    category: str | None = None,
+    search: str | None = None,
+) -> dict:
+    """Retrieve paginated, filterable ship's log entries.
+
+    :param game_id: The unique identifier of the game.
+    :type game_id: str
+    :param page: Page number (1-based).
+    :type page: int
+    :param per_page: Number of entries per page (max 100).
+    :type per_page: int
+    :param category: Filter by log entry category.
+    :type category: str | None
+    :param search: Full-text search across log entry title,
+        message, and description fields.
+    :type search: str | None
+    :returns: A dictionary with ``log_entries``, ``page``,
+        ``per_page``, ``total_entries``, and ``total_pages``.
+    :rtype: dict
+    :raises HTTPException: 404 if the game is not found.
+    """
+    state = _get_state(game_id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Game not found")
+
+    page = max(1, page)
+    per_page = max(1, min(per_page, 100))
+
+    entries = list(reversed(state.log_entries))
+
+    if category:
+        entries = [e for e in entries if e.get("category") == category]
+
+    if search:
+        search_lower = search.lower()
+        entries = [
+            e for e in entries
+            if search_lower in str(e.get("title", "")).lower()
+            or search_lower in str(e.get("message", "")).lower()
+            or search_lower in str(e.get("description", "")).lower()
+        ]
+
+    total_entries = len(entries)
+    total_pages = (total_entries - 1) // per_page + 1 if total_entries > 0 else 0
+
+    start = (page - 1) * per_page
+    end = start + per_page
+    page_entries = entries[start:end]
+
+    return {
+        "log_entries": page_entries,
+        "page": page,
+        "per_page": per_page,
+        "total_entries": total_entries,
+        "total_pages": total_pages,
+    }
+
+
 @router.get("/game/{game_id}/discoveries")
 def api_discoveries(game_id: str) -> dict:
     """Retrieve all discoveries made during the game.
@@ -1039,7 +1102,8 @@ def api_accept_mission(game_id: str, mission_id: str, req: AcceptMissionRequest)
 
     state.add_log(
         "faction",
-        f"Accepted mission '{mission_found.title}' (Tier {mission_found.tier})."
+        f"Accepted mission '{mission_found.title}' (Tier {mission_found.tier}).",
+        category="system", title="Mission Accepted",
     )
 
     game_save(state)
