@@ -1691,10 +1691,10 @@ class TestAcceptedMissionsMigration:
             "description": "Migrated from old save format.",
             "objective_type": "courier",
             "objective_target": "",
-            "fuel_cost": 0,
-            "credit_cost": 0,
-            "credit_reward": 0,
-            "reputation_reward": 0,
+            "fuel_cost": 3,
+            "credit_cost": 10,
+            "credit_reward": 75,
+            "reputation_reward": 7,
         }
         assert state.accepted_missions["mission_old_1"] == expected_defaults
         expected_defaults["faction_id"] = "void_traders"
@@ -1778,10 +1778,10 @@ class TestAcceptedMissionsMigration:
             "description": "Migrated from old save format.",
             "objective_type": "courier",
             "objective_target": "",
-            "fuel_cost": 0,
-            "credit_cost": 0,
-            "credit_reward": 0,
-            "reputation_reward": 0,
+            "fuel_cost": 3,
+            "credit_cost": 10,
+            "credit_reward": 75,
+            "reputation_reward": 7,
         }
         assert state.accepted_missions["mission_old"] == expected_old_defaults
         assert state.accepted_missions["mission_new"] == {

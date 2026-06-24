@@ -302,10 +302,10 @@ def _state_from_dict(d: dict) -> GameState:
                 "description": "Migrated from old save format.",
                 "objective_type": "courier",
                 "objective_target": "",
-                "fuel_cost": 0,
-                "credit_cost": 0,
-                "credit_reward": 0,
-                "reputation_reward": 0,
+                "fuel_cost": 3,
+                "credit_cost": 10,
+                "credit_reward": 75,
+                "reputation_reward": 7,
             }
         else:
             accepted_missions[k] = v
