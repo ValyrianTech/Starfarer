@@ -41,7 +41,7 @@ def get_fuel_status(game_state, systems) -> dict:
     nearest_distance = float("inf")
 
     if current_system:
-        for sys_id, sys_data in systems.items():
+        for sys_data in systems.values():
             if not sys_data.has_trading_station:
                 continue
             dist = distance_between(current_system, sys_data)
