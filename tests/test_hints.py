@@ -195,6 +195,75 @@ class TestConditionFunctions:
         state.events.append(crisis)
         assert _first_crisis(state, state.systems) is False
 
+    def test_first_crisis_resolved_before_unresolved(self) -> None:
+        """When a resolved crisis precedes an unresolved one, should return True."""
+        state = _make_game()
+        resolved_crisis = Event(
+            id="crisis_001",
+            title="Hull Breach",
+            flavor="A hull breach!",
+            event_type="crisis",
+            choices=[Choice(text="Patch it", outcome="hull:-15")],
+            resolved=True,
+        )
+        unresolved_crisis = Event(
+            id="crisis_002",
+            title="Life Support Failure",
+            flavor="Life support failing!",
+            event_type="crisis",
+            choices=[Choice(text="Fix it", outcome="fuel:-5")],
+            resolved=False,
+        )
+        state.events.append(resolved_crisis)
+        state.events.append(unresolved_crisis)
+        assert _first_crisis(state, state.systems) is True
+
+    def test_first_crisis_unresolved_before_resolved(self) -> None:
+        """When an unresolved crisis precedes a resolved one, should return True."""
+        state = _make_game()
+        unresolved_crisis = Event(
+            id="crisis_001",
+            title="Life Support Failure",
+            flavor="Life support failing!",
+            event_type="crisis",
+            choices=[Choice(text="Fix it", outcome="fuel:-5")],
+            resolved=False,
+        )
+        resolved_crisis = Event(
+            id="crisis_002",
+            title="Hull Breach",
+            flavor="A hull breach!",
+            event_type="crisis",
+            choices=[Choice(text="Patch it", outcome="hull:-15")],
+            resolved=True,
+        )
+        state.events.append(unresolved_crisis)
+        state.events.append(resolved_crisis)
+        assert _first_crisis(state, state.systems) is True
+
+    def test_first_crisis_all_resolved(self) -> None:
+        """When all crisis events are resolved, should return False."""
+        state = _make_game()
+        crisis1 = Event(
+            id="crisis_001",
+            title="Hull Breach",
+            flavor="A hull breach!",
+            event_type="crisis",
+            choices=[Choice(text="Patch it", outcome="hull:-15")],
+            resolved=True,
+        )
+        crisis2 = Event(
+            id="crisis_002",
+            title="Fire",
+            flavor="Fire on board!",
+            event_type="crisis",
+            choices=[Choice(text="Extinguish", outcome="hull:-5")],
+            resolved=True,
+        )
+        state.events.append(crisis1)
+        state.events.append(crisis2)
+        assert _first_crisis(state, state.systems) is False
+
     def test_morale_low_true(self) -> None:
         state = _make_game()
         state.ship.morale = 20

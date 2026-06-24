@@ -108,9 +108,8 @@ def _first_crisis(game_state: GameState, systems: dict[str, StarSystem]) -> bool
             return False
     for event in game_state.events:
         if event.event_type == "crisis":
-            if event.resolved:
-                return False
-            return True
+            if not event.resolved:
+                return True
     return False
 
 
