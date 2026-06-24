@@ -32,7 +32,7 @@ from backend.fuel import get_fuel_status
 from backend.generation.lore_content import ARC_DISPLAY_NAMES
 from backend.models.faction import get_faction, FACTION_DEFINITIONS
 from backend.missions import (
-    generate_missions, complete_mission,
+    generate_missions, complete_mission, FactionMission,
 )
 from backend.utils import seeded_random, deterministic_hash
 
@@ -932,20 +932,29 @@ def api_faction_mission(game_id: str, faction_id: str) -> dict:
     
     mission = rng.choice(available)
 
-    if state.ship.fuel < mission.fuel_cost:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Not enough fuel. Mission requires {mission.fuel_cost} fuel."
-        )
-    if state.ship.credits < mission.credit_cost:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Not enough credits. Mission requires {mission.credit_cost} credits."
-        )
+    state.accepted_missions[mission.id] = {
+        "faction_id": mission.faction_id,
+        "tier": mission.tier,
+        "objective_type": mission.objective_type,
+        "objective_target": mission.objective_target,
+        "fuel_cost": mission.fuel_cost,
+        "credit_cost": mission.credit_cost,
+        "credit_reward": mission.credit_reward,
+        "reputation_reward": mission.reputation_reward,
+        "title": mission.title,
+        "description": mission.description,
+        "item_reward": mission.item_reward,
+    }
 
-    # Delegate to shared complete_mission() for consistent behavior
-    state.accepted_missions[mission.id] = mission.faction_id
+    state.add_log(
+        "faction",
+        f"Accepted mission '{mission.title}' (Tier {mission.tier}).",
+        category="system", title="Mission Accepted",
+    )
+
     completion = complete_mission(state, mission)
+    if "error" in completion:
+        raise HTTPException(status_code=400, detail=completion["error"])
 
     # Ensure the faction is marked as known
     if faction_id in state.faction_relations:
@@ -965,8 +974,8 @@ def api_faction_mission(game_id: str, faction_id: str) -> dict:
             "id": completion['mission_id'],
             "title": completion['title'],
             "tier": mission.tier,
-            "fuel_cost": mission.fuel_cost,
-            "credit_cost": mission.credit_cost,
+            "fuel_cost_incurred": mission.fuel_cost,
+            "credit_cost_incurred": mission.credit_cost,
         },
     }
 
@@ -1095,7 +1104,19 @@ def api_accept_mission(game_id: str, mission_id: str, req: AcceptMissionRequest)
             detail=f"Not enough credits. Mission requires {mission_found.credit_cost} credits."
         )
 
-    state.accepted_missions[mission_id] = mission_found.faction_id
+    state.accepted_missions[mission_id] = {
+        "faction_id": mission_found.faction_id,
+        "tier": mission_found.tier,
+        "objective_type": mission_found.objective_type,
+        "objective_target": mission_found.objective_target,
+        "fuel_cost": mission_found.fuel_cost,
+        "credit_cost": mission_found.credit_cost,
+        "credit_reward": mission_found.credit_reward,
+        "reputation_reward": mission_found.reputation_reward,
+        "title": mission_found.title,
+        "description": mission_found.description,
+        "item_reward": mission_found.item_reward,
+    }
 
     state.add_log(
         "faction",
@@ -1151,25 +1172,26 @@ def api_complete_mission(game_id: str, mission_id: str, req: CompleteMissionRequ
     if mission_id not in state.accepted_missions:
         raise HTTPException(status_code=400, detail="Mission has not been accepted")
 
-    if req.faction_id:
-        factions_to_check = [req.faction_id]
-    else:
-        factions_to_check = [state.accepted_missions[mission_id]]
+    stored = state.accepted_missions[mission_id]
 
-    mission_found = None
-    for fid in factions_to_check:
-        missions = generate_missions(state, current_system, fid)
-        for m in missions:
-            if m.id == mission_id:
-                mission_found = m
-                break
-        if mission_found:
-            break
-
-    if not mission_found:
-        raise HTTPException(status_code=400, detail="Mission not found in current system")
+    mission_found = FactionMission(
+        id=mission_id,
+        faction_id=stored["faction_id"],
+        tier=stored["tier"],
+        title=stored["title"],
+        description=stored["description"],
+        objective_type=stored["objective_type"],
+        objective_target=stored["objective_target"],
+        fuel_cost=stored["fuel_cost"],
+        credit_cost=stored["credit_cost"],
+        credit_reward=stored["credit_reward"],
+        reputation_reward=stored["reputation_reward"],
+        item_reward=stored.get("item_reward"),
+    )
 
     completion_result = complete_mission(state, mission_found)
+    if "error" in completion_result:
+        raise HTTPException(status_code=400, detail=completion_result["error"])
 
     game_save(state)
 

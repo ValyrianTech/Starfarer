@@ -1536,6 +1536,350 @@ class TestOldSaveLogEntryIdCollision:
         restored.add_log("test", "New entry")
         assert restored.log_entries[-1]["id"] == 11
 
+    def test_next_log_id_does_not_regress_when_present_in_dict(self) -> None:
+        """_next_log_id should not regress when present in dict but lower than max_id + 1.
+
+        This tests the fix: _next_log_id = max(d.get("_next_log_id", max_id + 1), max_id + 1)
+        """
+        from backend.game.manager import _state_to_dict, _state_from_dict
+
+        ship = Ship()
+        state = GameState(id="test-regress", seed=42, ship=ship)
+        state.add_log("test", "Entry 1")
+        state.add_log("test", "Entry 2")
+        state.add_log("test", "Entry 3")
+
+        d = _state_to_dict(state)
+        # _next_log_id is 4, max_id is 3
+        assert d["_next_log_id"] == 4
+
+        # Simulate the bug: _next_log_id in the dict is lower than max_id + 1
+        # This can happen if the cleaning loop assigned IDs higher than the saved _next_log_id
+        # For example, if a log entry had a non-integer ID that got reassigned
+        d["_next_log_id"] = 2  # This is lower than max_id (3) + 1 = 4
+
+        restored = _state_from_dict(d)
+
+        # _next_log_id should be max_id + 1 = 4, NOT the regressed value 2
+        assert restored._next_log_id == 4, f"Expected 4, got {restored._next_log_id}"
+
+        # Adding a new log entry should get ID 4 (no collision)
+        restored.add_log("test", "Entry 4")
+        assert len(restored.log_entries) == 4
+        assert restored.log_entries[3]["id"] == 4
+
+    def test_next_log_id_does_not_regress_with_cleaned_entries(self) -> None:
+        """_next_log_id should not regress when cleaning loop assigns higher IDs.
+
+        Scenario: dict has _next_log_id=5 and log entries with IDs [1, "abc", 3, 4].
+        The cleaning loop reassigns "abc" to ID 2, so max_id = 4.
+        _next_log_id should be max(5, 4+1) = 5, not the regressed value.
+        """
+        from backend.game.manager import _state_to_dict, _state_from_dict
+
+        ship = Ship()
+        state = GameState(id="test-regress-clean", seed=42, ship=ship)
+        state.add_log("test", "Entry 1")
+        state.add_log("test", "Entry 2")
+        state.add_log("test", "Entry 3")
+        state.add_log("test", "Entry 4")
+
+        d = _state_to_dict(state)
+        # _next_log_id is 5, max_id is 4
+        assert d["_next_log_id"] == 5
+
+        # Now simulate: a log entry with a non-integer ID that gets reassigned during cleaning
+        # The cleaning loop would assign it max_id + 1, making max_id higher
+        d["log_entries"] = [
+            {"id": 1, "type": "test", "message": "Entry 1", "timestamp": "", "title": "", "description": ""},
+            {"id": "abc", "type": "test", "message": "Entry with non-int id", "timestamp": "", "title": "", "description": ""},
+            {"id": 3, "type": "test", "message": "Entry 3", "timestamp": "", "title": "", "description": ""},
+            {"id": 4, "type": "test", "message": "Entry 4", "timestamp": "", "title": "", "description": ""},
+        ]
+        # _next_log_id in dict is 5, but the cleaning loop will assign "abc" to ID 2
+        # max_id after cleaning = max(1, 2, 3, 4) = 4
+        # _next_log_id should be max(5, 4+1) = 5
+
+        restored = _state_from_dict(d)
+
+        assert restored._next_log_id == 5, f"Expected 5, got {restored._next_log_id}"
+
+        # Adding a new log entry should get ID 5 (no collision)
+        restored.add_log("test", "Entry 5")
+        assert len(restored.log_entries) == 5
+        assert restored.log_entries[4]["id"] == 5
+
+    def test_next_log_id_uses_max_when_cleaning_assigns_higher_ids(self) -> None:
+        """When cleaning assigns IDs higher than the saved _next_log_id, use max_id + 1.
+
+        Scenario: dict has _next_log_id=3 and log entries with IDs [1, 2, "xyz"].
+        The cleaning loop reassigns "xyz" to ID 3, so max_id = 3.
+        _next_log_id should be max(3, 3+1) = 4, not 3.
+        """
+        from backend.game.manager import _state_to_dict, _state_from_dict
+
+        ship = Ship()
+        state = GameState(id="test-regress-clean2", seed=42, ship=ship)
+        state.add_log("test", "Entry 1")
+        state.add_log("test", "Entry 2")
+
+        d = _state_to_dict(state)
+        # _next_log_id is 3, max_id is 2
+        assert d["_next_log_id"] == 3
+
+        # Now simulate: a log entry with a non-integer ID that gets reassigned to ID 3
+        # This means max_id becomes 3, which equals _next_log_id
+        d["log_entries"] = [
+            {"id": 1, "type": "test", "message": "Entry 1", "timestamp": "", "title": "", "description": ""},
+            {"id": 2, "type": "test", "message": "Entry 2", "timestamp": "", "title": "", "description": ""},
+            {"id": "xyz", "type": "test", "message": "Entry with non-int id", "timestamp": "", "title": "", "description": ""},
+        ]
+        # _next_log_id in dict is 3, but the cleaning loop will assign "xyz" to ID 3
+        # max_id after cleaning = max(1, 2, 3) = 3
+        # _next_log_id should be max(3, 3+1) = 4
+
+        restored = _state_from_dict(d)
+
+        assert restored._next_log_id == 4, f"Expected 4, got {restored._next_log_id}"
+
+        # Adding a new log entry should get ID 4 (no collision)
+        restored.add_log("test", "Entry 4")
+        assert len(restored.log_entries) == 4
+        assert restored.log_entries[3]["id"] == 4
+
+    def test_next_log_id_warns_when_overridden(self, caplog) -> None:
+        """A warning should be logged when _next_log_id from save data is lower than max_id + 1.
+
+        This tests the warning added per PR #53 change request 5.
+        """
+        import logging
+        from backend.game.manager import _state_to_dict, _state_from_dict
+
+        ship = Ship()
+        state = GameState(id="test-warn-override", seed=42, ship=ship)
+        state.add_log("test", "Entry 1")
+        state.add_log("test", "Entry 2")
+        state.add_log("test", "Entry 3")
+
+        d = _state_to_dict(state)
+        # _next_log_id is 4, max_id is 3
+        assert d["_next_log_id"] == 4
+
+        # Simulate the bug: _next_log_id in the dict is lower than max_id + 1
+        d["_next_log_id"] = 2  # This is lower than max_id (3) + 1 = 4
+
+        with caplog.at_level(logging.WARNING):
+            restored = _state_from_dict(d)
+
+        # _next_log_id should be max_id + 1 = 4, NOT the regressed value 2
+        assert restored._next_log_id == 4, f"Expected 4, got {restored._next_log_id}"
+
+        # Verify the warning was logged
+        warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+        assert len(warning_messages) >= 1, f"Expected at least 1 warning, got {len(warning_messages)}"
+        assert any(
+            "_next_log_id from save data (2) is lower than max_id + 1 (4)" in msg
+            for msg in warning_messages
+        ), f"Expected warning about _next_log_id override, got: {warning_messages}"
+
+
+class TestAcceptedMissionsMigration:
+    """Tests for the accepted_missions migration in _state_from_dict.
+
+    Old saves stored accepted_missions values as plain faction_id strings.
+    The migration converts them to {"faction_id": v} dicts.
+    """
+
+    def test_old_format_string_values_are_migrated(self) -> None:
+        """Old-format string values should be converted to dict with all default fields."""
+        from backend.game.manager import _state_from_dict
+        from backend.models.ship import Ship
+        from backend.models.system import StarSystem
+
+        d = {
+            "id": "test-migrate",
+            "seed": 42,
+            "ship": Ship(name="Test", current_system_id="s1").to_dict(),
+            "systems": {
+                "s1": StarSystem(
+                    id="s1", name="Sys1", x=0.0, y=0.0, star_type="G",
+                    star_color="#fff", phenomenon="none", phenomenon_desc="",
+                ).to_dict(),
+            },
+            "events": [],
+            "discoveries": [],
+            "lore_fragments": [],
+            "log_entries": [],
+            "faction_relations": {},
+            "systems_visited": 1,
+            "game_started": "",
+            "accepted_missions": {
+                "mission_old_1": "stellar_cartographers",
+                "mission_old_2": "void_traders",
+            },
+        }
+        state = _state_from_dict(d)
+        expected_defaults = {
+            "faction_id": "stellar_cartographers",
+            "tier": 1,
+            "title": "Unknown Mission",
+            "description": "Migrated from old save format.",
+            "objective_type": "courier",
+            "objective_target": "",
+            "fuel_cost": 3,
+            "credit_cost": 10,
+            "credit_reward": 75,
+            "reputation_reward": 7,
+        }
+        assert state.accepted_missions["mission_old_1"] == expected_defaults
+        expected_defaults["faction_id"] = "void_traders"
+        assert state.accepted_missions["mission_old_2"] == expected_defaults
+
+    def test_new_format_dict_values_are_preserved(self) -> None:
+        """New-format dict values should be preserved as-is."""
+        from backend.game.manager import _state_from_dict
+        from backend.models.ship import Ship
+        from backend.models.system import StarSystem
+
+        d = {
+            "id": "test-preserve",
+            "seed": 42,
+            "ship": Ship(name="Test", current_system_id="s1").to_dict(),
+            "systems": {
+                "s1": StarSystem(
+                    id="s1", name="Sys1", x=0.0, y=0.0, star_type="G",
+                    star_color="#fff", phenomenon="none", phenomenon_desc="",
+                ).to_dict(),
+            },
+            "events": [],
+            "discoveries": [],
+            "lore_fragments": [],
+            "log_entries": [],
+            "faction_relations": {},
+            "systems_visited": 1,
+            "game_started": "",
+            "accepted_missions": {
+                "mission_new_1": {
+                    "faction_id": "stellar_cartographers",
+                    "tier": 1,
+                    "title": "Test Mission",
+                },
+            },
+        }
+        state = _state_from_dict(d)
+        assert state.accepted_missions["mission_new_1"] == {
+            "faction_id": "stellar_cartographers",
+            "tier": 1,
+            "title": "Test Mission",
+        }
+
+    def test_mixed_old_and_new_formats(self) -> None:
+        """Mixed old-format strings and new-format dicts should both work."""
+        from backend.game.manager import _state_from_dict
+        from backend.models.ship import Ship
+        from backend.models.system import StarSystem
+
+        d = {
+            "id": "test-mixed",
+            "seed": 42,
+            "ship": Ship(name="Test", current_system_id="s1").to_dict(),
+            "systems": {
+                "s1": StarSystem(
+                    id="s1", name="Sys1", x=0.0, y=0.0, star_type="G",
+                    star_color="#fff", phenomenon="none", phenomenon_desc="",
+                ).to_dict(),
+            },
+            "events": [],
+            "discoveries": [],
+            "lore_fragments": [],
+            "log_entries": [],
+            "faction_relations": {},
+            "systems_visited": 1,
+            "game_started": "",
+            "accepted_missions": {
+                "mission_old": "stellar_cartographers",
+                "mission_new": {
+                    "faction_id": "void_traders",
+                    "tier": 2,
+                    "title": "Trade Run",
+                },
+            },
+        }
+        state = _state_from_dict(d)
+        expected_old_defaults = {
+            "faction_id": "stellar_cartographers",
+            "tier": 1,
+            "title": "Unknown Mission",
+            "description": "Migrated from old save format.",
+            "objective_type": "courier",
+            "objective_target": "",
+            "fuel_cost": 3,
+            "credit_cost": 10,
+            "credit_reward": 75,
+            "reputation_reward": 7,
+        }
+        assert state.accepted_missions["mission_old"] == expected_old_defaults
+        assert state.accepted_missions["mission_new"] == {
+            "faction_id": "void_traders",
+            "tier": 2,
+            "title": "Trade Run",
+        }
+
+    def test_empty_accepted_missions(self) -> None:
+        """Empty accepted_missions should result in an empty dict."""
+        from backend.game.manager import _state_from_dict
+        from backend.models.ship import Ship
+        from backend.models.system import StarSystem
+
+        d = {
+            "id": "test-empty",
+            "seed": 42,
+            "ship": Ship(name="Test", current_system_id="s1").to_dict(),
+            "systems": {
+                "s1": StarSystem(
+                    id="s1", name="Sys1", x=0.0, y=0.0, star_type="G",
+                    star_color="#fff", phenomenon="none", phenomenon_desc="",
+                ).to_dict(),
+            },
+            "events": [],
+            "discoveries": [],
+            "lore_fragments": [],
+            "log_entries": [],
+            "faction_relations": {},
+            "systems_visited": 1,
+            "game_started": "",
+            "accepted_missions": {},
+        }
+        state = _state_from_dict(d)
+        assert state.accepted_missions == {}
+
+    def test_missing_accepted_missions_key(self) -> None:
+        """Missing accepted_missions key should result in an empty dict."""
+        from backend.game.manager import _state_from_dict
+        from backend.models.ship import Ship
+        from backend.models.system import StarSystem
+
+        d = {
+            "id": "test-missing",
+            "seed": 42,
+            "ship": Ship(name="Test", current_system_id="s1").to_dict(),
+            "systems": {
+                "s1": StarSystem(
+                    id="s1", name="Sys1", x=0.0, y=0.0, star_type="G",
+                    star_color="#fff", phenomenon="none", phenomenon_desc="",
+                ).to_dict(),
+            },
+            "events": [],
+            "discoveries": [],
+            "lore_fragments": [],
+            "log_entries": [],
+            "faction_relations": {},
+            "systems_visited": 1,
+            "game_started": "",
+        }
+        state = _state_from_dict(d)
+        assert state.accepted_missions == {}
+
 
 class TestAncientGateSystemType:
     """Tests for the ancient_gate phenomenon producing the 'ancient' system type."""

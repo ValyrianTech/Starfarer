@@ -64,6 +64,14 @@
 - Added type annotations across multiple modules to fix mypy errors
 
 ### Fixed
+- `_next_log_id` regression on save/load cycles: `_state_from_dict` now warns and clamps `_next_log_id` to `max_id + 1` when the saved value is lower, preventing log entry ID collisions
+- Old-format `accepted_missions` migration: `_state_from_dict` now converts legacy string-format mission values (faction_id only) to full dict format with default costs/rewards, preventing crashes on mission completion from migrated saves
+- `api_faction_mission` now properly adds mission to `accepted_missions` dict with full metadata before calling `complete_mission`, fixing the missing accept workflow and enabling resource deduction checks
+- `api_complete_mission` now reconstructs `FactionMission` from stored mission data instead of regenerating missions from scratch, ensuring consistent costs/rewards and fixing backward-compatibility break with old saves
+- `api_complete_mission` now checks for errors from `complete_mission` (insufficient fuel/credits) and raises HTTP 400 instead of silently deducting resources into negative values
+- `complete_mission` in `backend/missions.py` now validates sufficient fuel and credits before deducting, returning an error dict if resources are insufficient
+- `api_faction_mission` response field renamed from `fuel_cost`/`credit_cost` to `fuel_cost_incurred`/`credit_cost_incurred` to clarify these are actual costs incurred, not estimated costs
+- `api_accept_mission` now stores full mission metadata dict (tier, costs, rewards, title, description) instead of just a faction_id string, enabling proper mission completion from stored data
 - `perform_salvage` now returns an error when there is no current system (e.g., after loading a save with an invalid `current_system_id`), instead of crashing with a `TypeError`
 - `_state_from_dict` no longer crashes on non-integer `id` values in log entries (e.g., string IDs, float IDs, `None` IDs) — non-integer IDs are reassigned sequential integer IDs
 - `_state_from_dict` no longer treats boolean values (`True`/`False`) as valid integer IDs in log entries — booleans are now correctly detected as non-integer and reassigned sequential IDs
@@ -99,6 +107,7 @@
 - `decrement_cooldowns` now uses `list(state.event_cooldowns.keys())` for safe iteration when deleting expired cooldowns
 - Duplicate mission acceptance prevented via `accepted_missions` set tracking
 - `accepted_missions` set now cleaned up on mission completion (`.discard()`)
+- `api_faction_mission` now calls `complete_mission` directly without first adding to `accepted_missions`, fixing the missing accept workflow
 - Completed missions now checked before applying rewards
 - Free daily mission no longer selectable via random choice for standard mission slot
 - Mission lookup now only generates missions for the relevant faction (not all factions)

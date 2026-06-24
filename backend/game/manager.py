@@ -6,6 +6,7 @@ state, serializing/deserializing state to/from dictionaries, and
 querying galaxy and system data.
 """
 
+import logging
 import uuid
 
 from backend.database import load_game, save_game as db_save, load_save
@@ -21,6 +22,8 @@ from backend.generation.universe import generate_universe
 from backend.game.engine import (
     get_nearby_systems,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def new_game(seed: int | None = None, ship_name: str | None = None) -> GameState:
@@ -289,6 +292,34 @@ def _state_from_dict(d: dict) -> GameState:
                 cleaned_entries.append({**e, "id": max_id})
 
     _next_log_id = d.get("_next_log_id", max_id + 1)
+    if _next_log_id < max_id + 1:
+        logger.warning(
+            "_next_log_id from save data (%d) is lower than max_id + 1 (%d); "
+            "using max_id + 1 to prevent ID regression. This may indicate a bug "
+            "in an older version that produced a stale _next_log_id.",
+            _next_log_id, max_id + 1,
+        )
+        _next_log_id = max_id + 1
+
+    accepted_missions_raw = d.get("accepted_missions", {})
+    accepted_missions = {}
+    for k, v in accepted_missions_raw.items():
+        if isinstance(v, str):
+            # Old format: value was just a faction_id string
+            accepted_missions[k] = {
+                "faction_id": v,
+                "tier": 1,
+                "title": "Unknown Mission",
+                "description": "Migrated from old save format.",
+                "objective_type": "courier",
+                "objective_target": "",
+                "fuel_cost": 3,
+                "credit_cost": 10,
+                "credit_reward": 75,
+                "reputation_reward": 7,
+            }
+        else:
+            accepted_missions[k] = v
 
     return GameState(
         id=d["id"],
@@ -309,7 +340,7 @@ def _state_from_dict(d: dict) -> GameState:
         crisis_cooldown=d.get("crisis_cooldown", 0),
         completed_missions=d.get("completed_missions", []),
         daily_missions_used=d.get("daily_missions_used", {}),
-        accepted_missions=dict(d.get("accepted_missions", {})),
+        accepted_missions=accepted_missions,
         dismissed_hints=set(d.get("dismissed_hints", [])),
         _next_log_id=_next_log_id,
     )

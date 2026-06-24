@@ -360,8 +360,8 @@ class TestFactionAPI:
         assert data["effect"] == "success"
         assert "mission" in data
         assert "tier" in data["mission"]
-        assert "fuel_cost" in data["mission"]
-        assert "credit_cost" in data["mission"]
+        assert "fuel_cost_incurred" in data["mission"]
+        assert "credit_cost_incurred" in data["mission"]
         assert data["mission"]["tier"] in (1, 2, 3)
 
     def test_generate_missions_nonexistent_faction(self) -> None:
@@ -783,13 +783,14 @@ class TestFactionAPI:
         GAME_STORE[game_id] = state
         game_save(state)
 
-        # Try to complete the mission in the wrong system
+        # Try to complete the mission in the other system (now works via stored data)
         resp = client.post(
             f"/api/game/{game_id}/missions/{mission_id}/complete",
             json={"mission_id": mission_id},
         )
-        assert resp.status_code == 400
-        assert "not found" in resp.json()["detail"].lower()
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["mission"]["id"] == mission_id
 
     def test_api_missions_daily_available(self) -> None:
         resp = client.post("/api/game/new", json={"seed": 42, "game_id": "daily-avail"})
@@ -1094,8 +1095,8 @@ class TestFactionAPI:
         data = resp.json()
         assert data["effect"] == "success"
         assert data["mission"]["id"] == "mission_standard_001"
-        assert data["mission"]["fuel_cost"] > 0
-        assert data["mission"]["credit_cost"] > 0
+        assert data["mission"]["fuel_cost_incurred"] > 0
+        assert data["mission"]["credit_cost_incurred"] > 0
 
     def test_faction_mission_skips_completed_mission(self) -> None:
         resp = client.post(
@@ -1203,7 +1204,7 @@ class TestFactionAPI:
 
         accepted_mission_id = standard_missions[0]["id"]
         faction_id = missions_data["faction_id"]
-        state.accepted_missions[accepted_mission_id] = faction_id
+        state.accepted_missions[accepted_mission_id] = {"faction_id": faction_id}
         GAME_STORE[game_id] = state
         game_save(state)
 
@@ -1241,7 +1242,7 @@ class TestFactionAPI:
         faction_id = missions_data["faction_id"]
 
         for mission in missions_data["missions"]:
-            state.accepted_missions[mission["id"]] = faction_id
+            state.accepted_missions[mission["id"]] = {"faction_id": faction_id}
         GAME_STORE[game_id] = state
         game_save(state)
 
@@ -1332,7 +1333,7 @@ class TestFactionAPI:
             reputation_reward=10,
         )
 
-        state.accepted_missions["mission_std_002"] = "stellar_cartographers"
+        state.accepted_missions["mission_std_002"] = {"faction_id": "stellar_cartographers"}
         GAME_STORE[game_id] = state
         game_save(state)
 
@@ -1459,7 +1460,7 @@ class TestFactionAPI:
             reputation_reward=10,
         )
 
-        state.accepted_missions["mission_a_002"] = "stellar_cartographers"
+        state.accepted_missions["mission_a_002"] = {"faction_id": "stellar_cartographers"}
         GAME_STORE[game_id] = state
         game_save(state)
 
@@ -1565,7 +1566,7 @@ class TestFactionAPI:
         assert data["mission"]["id"] == mission_id
         assert "ship" in data
         # Verify the accepted_missions dict stored the faction_id
-        assert state.accepted_missions[mission_id] == faction_id
+        assert state.accepted_missions[mission_id]["faction_id"] == faction_id
 
     def test_api_complete_mission_with_faction_id(self) -> None:
         """Complete a mission by providing faction_id explicitly."""
@@ -1604,6 +1605,89 @@ class TestFactionAPI:
         assert data["mission"]["id"] == mission_id
         assert "rewards" in data
         assert "ship" in data
+
+    def test_api_complete_mission_not_enough_fuel(self) -> None:
+        """Complete should reject if the player doesn't have enough fuel."""
+        resp = client.post(
+            "/api/game/new",
+            json={"seed": 42, "game_id": "complete-nofuel"},
+        )
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        state.ship.fuel = 100
+        state.ship.credits = 500
+        current_system = state.get_current_system()
+        assert current_system is not None
+        current_system.has_trading_station = True
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        # Get a mission and accept it
+        resp = client.get(f"/api/game/{game_id}/missions")
+        missions_data = resp.json()
+        mission_id = missions_data["missions"][0]["id"]
+        resp = client.post(
+            f"/api/game/{game_id}/missions/{mission_id}/accept",
+            json={"mission_id": mission_id},
+        )
+        assert resp.status_code == 200
+
+        # Now drain fuel to 0 so the mission can't be completed
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        state.ship.fuel = 0
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        resp = client.post(
+            f"/api/game/{game_id}/missions/{mission_id}/complete",
+            json={"mission_id": mission_id},
+        )
+        assert resp.status_code == 400
+        assert "Not enough fuel" in resp.json()["detail"]
+
+    def test_api_complete_mission_not_enough_credits(self) -> None:
+        """Complete should reject if the player doesn't have enough credits."""
+        resp = client.post(
+            "/api/game/new",
+            json={"seed": 42, "game_id": "complete-nocredits"},
+        )
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        state.ship.fuel = 100
+        state.ship.credits = 500
+        current_system = state.get_current_system()
+        assert current_system is not None
+        current_system.has_trading_station = True
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        # Get a mission and accept it
+        resp = client.get(f"/api/game/{game_id}/missions")
+        missions_data = resp.json()
+        mission_id = missions_data["missions"][0]["id"]
+        resp = client.post(
+            f"/api/game/{game_id}/missions/{mission_id}/accept",
+            json={"mission_id": mission_id},
+        )
+        assert resp.status_code == 200
+
+        # Now drain credits to 0 so the mission can't be completed
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        state.ship.fuel = 100
+        state.ship.credits = 0
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        resp = client.post(
+            f"/api/game/{game_id}/missions/{mission_id}/complete",
+            json={"mission_id": mission_id},
+        )
+        assert resp.status_code == 400
+        assert "Not enough credits" in resp.json()["detail"]
 
 
 class TestTradingFactionIntegration:
@@ -2633,3 +2717,61 @@ class TestReputationSummary:
     def test_rep_label_hostile(self) -> None:
         assert _rep_label(-21) == "Hostile"
         assert _rep_label(-100) == "Hostile"
+
+
+def test_api_complete_mission_old_format_accepted() -> None:
+    """Completing a mission that was accepted in old-format (plain string) should work.
+    
+    This tests the migration fix: old-format accepted_missions values (plain faction_id strings)
+    get default values for all required fields during _state_from_dict, so api_complete_mission
+    can reconstruct a FactionMission without KeyError.
+    """
+    resp = client.post(
+        "/api/game/new",
+        json={"seed": 42, "game_id": "complete-old-format"},
+    )
+    game_id = resp.json()["game_id"]
+    state = GAME_STORE.get(game_id)
+    assert state is not None
+    
+    state.ship.fuel = 100
+    state.ship.credits = 500
+    current_system = state.get_current_system()
+    assert current_system is not None
+    current_system.has_trading_station = True
+    
+    state.accepted_missions["mission_old_format"] = "stellar_cartographers"
+    
+    GAME_STORE[game_id] = state
+    game_save(state)
+    
+    GAME_STORE.pop(game_id, None)
+    
+    resp = client.get(f"/api/game/{game_id}")
+    assert resp.status_code == 200
+    
+    state = GAME_STORE.get(game_id)
+    assert state is not None
+    
+    stored = state.accepted_missions.get("mission_old_format")
+    assert stored is not None
+    assert stored["faction_id"] == "stellar_cartographers"
+    assert stored["tier"] == 1
+    assert stored["title"] == "Unknown Mission"
+    assert stored["description"] == "Migrated from old save format."
+    assert stored["objective_type"] == "courier"
+    assert stored["objective_target"] == ""
+    assert stored["fuel_cost"] == 3
+    assert stored["credit_cost"] == 10
+    assert stored["credit_reward"] == 75
+    assert stored["reputation_reward"] == 7
+    
+    resp = client.post(
+        f"/api/game/{game_id}/missions/mission_old_format/complete",
+        json={"mission_id": "mission_old_format"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["mission"]["id"] == "mission_old_format"
+    assert "rewards" in data
+    assert "ship" in data

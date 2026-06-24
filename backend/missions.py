@@ -275,7 +275,7 @@ def generate_missions(state: GameState, system: StarSystem, faction_id: str, com
         rep_reward = rng.randint(costs["reputation_reward_min"], costs["reputation_reward_max"])
 
         mission_id_num = deterministic_hash(
-            state.seed, system.id, faction_id, "mission", str(i), str(tier)
+            state.seed, system.id, faction_id, "mission", str(i), str(tier), str(completed_count)
         )
         mission_id = f"mission_{system.id}_{abs(mission_id_num) % 100000:05d}"
 
@@ -335,6 +335,20 @@ def complete_mission(state: GameState, mission: FactionMission) -> dict:
         reputation rewards.
     :rtype: dict
     """
+    # Check sufficient resources before deducting
+    if state.ship.fuel < mission.fuel_cost:
+        return {
+            "error": f"Not enough fuel. Mission requires {mission.fuel_cost} fuel.",
+            "fuel_available": state.ship.fuel,
+            "fuel_required": mission.fuel_cost,
+        }
+    if state.ship.credits < mission.credit_cost:
+        return {
+            "error": f"Not enough credits. Mission requires {mission.credit_cost} credits.",
+            "credits_available": state.ship.credits,
+            "credits_required": mission.credit_cost,
+        }
+
     state.ship.fuel -= mission.fuel_cost
     state.ship.credits -= mission.credit_cost
 
