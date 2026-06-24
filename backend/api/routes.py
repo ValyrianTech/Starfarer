@@ -27,6 +27,7 @@ from backend.game.engine import (
 )
 from backend.game.trading import get_upgrade_info, purchase_upgrade, perform_trade, perform_bulk_sell
 from backend.database import get_leaderboard
+from backend.fuel import get_fuel_status
 from backend.generation.lore_content import ARC_DISPLAY_NAMES
 from backend.models.faction import get_faction, FACTION_DEFINITIONS
 from backend.missions import (
@@ -1169,4 +1170,5 @@ def _full_state_response(state: GameState) -> dict:
         "lore_fragments_total": len(state.lore_fragments),
         "factions": state.get_known_factions(),
         "reputation_summary": state.build_reputation_summary(),
+        "fuel_status": get_fuel_status(state, state.systems),
     }

@@ -1908,6 +1908,178 @@ class TestAPICargo:
         assert nonsellable[0]["id"] == "tc-nonsellable"
 
 
+class TestFuelWarningSystem:
+    """Tests for the fuel warning status system (backend/fuel.py)."""
+
+    def test_fuel_status_green_current_is_only_station(self) -> None:
+        """When the current system has a trading station and no other systems do,
+        fuel_status shows green with current system as nearest and distance 0.0."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "fuel-green-only"})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        current_sys = state.get_current_system()
+        assert current_sys is not None
+        for sys_data in state.systems.values():
+            sys_data.has_trading_station = (sys_data.id == current_sys.id)
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        resp = client.get(f"/api/game/{game_id}")
+        assert resp.status_code == 200
+        fs = resp.json()["fuel_status"]
+        assert fs["level"] == "green"
+        assert fs["message"] == ""
+        assert fs["nearest_station_system"] == current_sys.name
+        assert fs["nearest_station_distance"] == 0.0
+        assert fs["fuel_for_round_trip"] == 0
+        assert fs["fuel_for_one_way"] == 0
+
+    def test_fuel_status_fields_in_full_state(self) -> None:
+        """Fuel status in the full state response contains all expected fields."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "fuel-fields"})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+
+        resp = client.get(f"/api/game/{game_id}")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "fuel_status" in data
+        fs = data["fuel_status"]
+        assert "level" in fs
+        assert "message" in fs
+        assert "current_fuel" in fs
+        assert "fuel_for_round_trip" in fs
+        assert "fuel_for_one_way" in fs
+        assert "nearest_station_system" in fs
+        assert "nearest_station_distance" in fs
+        assert isinstance(fs["current_fuel"], int)
+        assert isinstance(fs["fuel_for_round_trip"], int)
+        assert isinstance(fs["fuel_for_one_way"], int)
+        assert isinstance(fs["nearest_station_distance"], (int, float))
+
+    def test_fuel_warning_critical(self) -> None:
+        """Fuel < 5 produces 'critical' level."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "fuel-critical"})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        current_sys = state.get_current_system()
+        assert current_sys is not None
+        for sys_data in state.systems.values():
+            sys_data.has_trading_station = False
+        current_sys.has_trading_station = False
+        other = next(s for s in state.systems.values() if s.id != current_sys.id)
+        other.has_trading_station = True
+        other.x = current_sys.x + 100
+        other.y = current_sys.y
+        state.ship.fuel = 3
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        resp = client.get(f"/api/game/{game_id}")
+        assert resp.status_code == 200
+        fs = resp.json()["fuel_status"]
+        assert fs["level"] == "critical"
+        assert "CRITICAL" in fs["message"]
+
+    def test_fuel_warning_red(self) -> None:
+        """5 <= fuel < fuel_for_one_way produces 'red' level."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "fuel-red"})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        current_sys = state.get_current_system()
+        assert current_sys is not None
+        for sys_data in state.systems.values():
+            sys_data.has_trading_station = False
+        current_sys.has_trading_station = False
+        other = next(s for s in state.systems.values() if s.id != current_sys.id)
+        other.has_trading_station = True
+        other.x = current_sys.x + 100
+        other.y = current_sys.y
+        state.ship.fuel = 20
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        resp = client.get(f"/api/game/{game_id}")
+        assert resp.status_code == 200
+        fs = resp.json()["fuel_status"]
+        assert fs["level"] == "red"
+        assert "DANGER" in fs["message"]
+
+    def test_fuel_warning_yellow(self) -> None:
+        """fuel_for_one_way <= fuel < fuel_for_round_trip produces 'yellow' level."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "fuel-yellow"})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        current_sys = state.get_current_system()
+        assert current_sys is not None
+        for sys_data in state.systems.values():
+            sys_data.has_trading_station = False
+        current_sys.has_trading_station = False
+        other = next(s for s in state.systems.values() if s.id != current_sys.id)
+        other.has_trading_station = True
+        other.x = current_sys.x + 100
+        other.y = current_sys.y
+        state.ship.fuel = 40
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        resp = client.get(f"/api/game/{game_id}")
+        assert resp.status_code == 200
+        fs = resp.json()["fuel_status"]
+        assert fs["level"] == "yellow"
+        assert "Warning" in fs["message"]
+
+    def test_fuel_warning_green(self) -> None:
+        """fuel >= fuel_for_round_trip produces 'green' level."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "fuel-green"})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        current_sys = state.get_current_system()
+        assert current_sys is not None
+        for sys_data in state.systems.values():
+            sys_data.has_trading_station = False
+        current_sys.has_trading_station = False
+        other = next(s for s in state.systems.values() if s.id != current_sys.id)
+        other.has_trading_station = True
+        other.x = current_sys.x + 100
+        other.y = current_sys.y
+        state.ship.fuel = 70
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        resp = client.get(f"/api/game/{game_id}")
+        assert resp.status_code == 200
+        fs = resp.json()["fuel_status"]
+        assert fs["level"] == "green"
+        assert fs["message"] == ""
+
+    def test_fuel_status_unknown_no_stations(self) -> None:
+        """When no systems have trading stations, fuel_status is 'unknown'."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "fuel-unknown"})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        for sys_data in state.systems.values():
+            sys_data.has_trading_station = False
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        resp = client.get(f"/api/game/{game_id}")
+        assert resp.status_code == 200
+        fs = resp.json()["fuel_status"]
+        assert fs["level"] == "unknown"
+        assert fs["message"] == "No trading stations in known space"
+        assert fs["nearest_station_system"] is None
+        assert fs["nearest_station_distance"] == 0.0
+        assert fs["fuel_for_round_trip"] == 0
+        assert fs["fuel_for_one_way"] == 0
+
+
 class TestAPIReputationLabels:
     """Tests for the _rep_label function that maps reputation values to labels."""
 
