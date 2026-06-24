@@ -923,22 +923,14 @@ def api_faction_mission(game_id: str, faction_id: str) -> dict:
         deterministic_hash(state.seed, faction_id, str(len(state.log_entries)), str(faction_completed_count)),
         "faction_mission",
     )
-    mission = rng.choice(standard_missions)
-
-    # Check if this mission was already completed
+    # Filter out already completed or accepted missions
     completed_ids = {c.get("mission_id") for c in state.completed_missions}
-    if mission.id in completed_ids:
-        remaining = [m for m in standard_missions if m.id not in completed_ids]
-        if not remaining:
-            raise HTTPException(status_code=400, detail="No available missions")
-        mission = rng.choice(remaining)
-
-    # Check if this mission was already accepted (but not yet completed)
-    if mission.id in state.accepted_missions:
-        remaining = [m for m in standard_missions if m.id not in state.accepted_missions and m.id not in completed_ids]
-        if not remaining:
-            raise HTTPException(status_code=400, detail="No available missions")
-        mission = rng.choice(remaining)
+    available = [m for m in standard_missions if m.id not in completed_ids and m.id not in state.accepted_missions]
+    
+    if not available:
+        raise HTTPException(status_code=400, detail="No available missions - all missions have been completed or are already accepted")
+    
+    mission = rng.choice(available)
 
     if state.ship.fuel < mission.fuel_cost:
         raise HTTPException(
