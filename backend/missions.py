@@ -342,6 +342,7 @@ def complete_mission(state: GameState, mission: FactionMission) -> dict:
         f"Completed mission '{mission.title}' for {faction_name}. "
         f"Earned {mission.credit_reward} credits and {mission.reputation_reward} reputation.",
         category="system", title="Mission Completed",
+        credits_change=mission.credit_reward,
     )
 
     state.completed_missions.append({
