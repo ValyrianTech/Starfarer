@@ -944,6 +944,7 @@ def api_faction_mission(game_id: str, faction_id: str) -> dict:
         )
 
     # Delegate to shared complete_mission() for consistent behavior
+    state.accepted_missions[mission.id] = mission.faction_id
     _ = complete_mission(state, mission)
 
     # Ensure the faction is marked as known
