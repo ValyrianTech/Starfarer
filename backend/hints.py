@@ -64,9 +64,11 @@ def _fuel_critical(game_state: GameState, systems: dict[str, StarSystem]) -> boo
 
 
 def _fuel_low_no_station(game_state: GameState, systems: dict[str, StarSystem]) -> bool:
-    """Fuel < 10 and current system has no trading station."""
+    """Fuel < 10 (but > 0) and current system has no trading station."""
     if game_state.ship.fuel >= 10:
         return False
+    if game_state.ship.fuel == 0:
+        return False  # Can't move, so don't suggest heading to a station
     current = game_state.get_current_system()
     if current is None:
         return False
