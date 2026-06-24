@@ -920,7 +920,7 @@ def api_faction_mission(game_id: str, faction_id: str) -> dict:
         raise HTTPException(status_code=400, detail="No missions available from this faction")
 
     rng = seeded_random(
-        deterministic_hash(state.seed, faction_id, str(len(state.log_entries)), str(faction_completed_count)),
+        deterministic_hash(state.seed, faction_id, str(len(state.log_entries))),
         "faction_mission",
     )
     # Filter out already completed or accepted missions
