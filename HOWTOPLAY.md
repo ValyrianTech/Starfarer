@@ -378,11 +378,56 @@ Cost scales: `base_cost * (current_level + 1)`.
 
 ### Ship Log
 
+#### Full Log
+
 ```http
 GET /api/game/{game_id}/log
 ```
 
-All actions are logged with timestamps. Useful for understanding what happened.
+Returns all log entries (most-recent-first) with timestamps. Each entry includes:
+- `id` — sequential integer identifier
+- `type` — event type (e.g., `"jump"`, `"scan"`, `"explore"`, `"event"`, `"trade"`)
+- `message` — human-readable description
+- `timestamp` — ISO format datetime
+- `category` — log category (e.g., `"navigation"`, `"exploration"`, `"combat"`, `"trade"`, `"mission"`)
+- `title` — short summary heading
+- `description` — detailed description text
+- `system` — system name where the entry was logged
+- `body` — body name where the entry was logged
+- `credits_change` — credit delta (positive or negative) from the action
+- `fuel_change` — fuel delta from the action
+- `hull_change` — hull delta from the action
+- `morale_change` — morale delta from the action
+- `cargo_change` — cargo count delta from the action
+
+#### Paginated Log (with Filtering and Search)
+
+```http
+GET /api/game/{game_id}/log/paginated?page=1&per_page=20&category=trade&search=artifact
+```
+
+Returns a paginated subset of log entries with the same enhanced schema. Returns 404 if game not found.
+
+**Query parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `page` | int | 1 | Page number (1-indexed) |
+| `per_page` | int | 20 | Entries per page (max 100) |
+| `category` | str | (none) | Filter by log category (e.g., `"navigation"`, `"trade"`, `"mission"`, `"exploration"`, `"combat"`) |
+| `search` | str | (none) | Full-text search across title, message, and description fields |
+
+**Response fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `log_entries` | array | Paginated log entries (same enhanced schema as full log) |
+| `page` | int | Current page number |
+| `per_page` | int | Entries per page |
+| `total_entries` | int | Total number of log entries matching filters |
+| `total_pages` | int | Total number of pages (0 if no entries match) |
+
+Entries are returned most-recent-first. The paginated endpoint is useful for browsing long logs without loading every entry, and for searching specific events (e.g., all trade transactions, all exploration discoveries, or entries mentioning a particular artifact name).
 
 ### Discoveries
 
@@ -585,7 +630,8 @@ The game persists all state to SQLite. Save frequently — especially before ris
 | POST | `/api/game/{id}/distress` | Activate distress beacon |
 | POST | `/api/game/{id}/salvage` | Salvage area for resources |
 | POST | `/api/game/{id}/salvage/craft` | Craft discovery into resources |
-| GET | `/api/game/{id}/log` | Ship log |
+| GET | `/api/game/{id}/log` | Ship log (all entries, most-recent-first) |
+| GET | `/api/game/{id}/log/paginated?page={n}&per_page={n}&category={cat}&search={q}` | Paginated ship log with category filter and full-text search |
 | GET | `/api/game/{id}/discoveries` | Discovery list |
 | GET | `/api/game/{id}/cargo?sort={value\|name}&order={asc\|desc}` | Cargo hold details (sortable, includes total_value) |
 | GET | `/api/game/{id}/lore` | Lore fragment collection |
