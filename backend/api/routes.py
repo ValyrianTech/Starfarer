@@ -1166,5 +1166,7 @@ def _full_state_response(state: GameState) -> dict:
         "lore_fragments_total": len(state.lore_fragments),
         "factions": state.get_known_factions(),
         "reputation_summary": state.build_reputation_summary(),
+        "cargo": state.ship.cargo,
+        "cargo_items": [d.to_cargo_dict() for d in state.discoveries],
         "fuel_status": get_fuel_status(state, state.systems),
     }
