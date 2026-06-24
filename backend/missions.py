@@ -168,12 +168,12 @@ _TIER_COSTS: dict[int, dict] = {
 }
 
 
-def _mission_seed(seed: int, system_id: str, faction_id: str) -> int:
+def _mission_seed(seed: int, system_id: str, faction_id: str, completed_count: int = 0) -> int:
     """Generate a deterministic seed for mission generation.
 
-    Combines the game seed, system ID, and faction ID into a
-    deterministic hash used to seed the RNG for reproducible
-    mission generation.
+    Combines the game seed, system ID, faction ID, and completed
+    mission count into a deterministic hash used to seed the RNG
+    for reproducible mission generation.
 
     :param seed: The game's master seed.
     :type seed: int
@@ -181,10 +181,13 @@ def _mission_seed(seed: int, system_id: str, faction_id: str) -> int:
     :type system_id: str
     :param faction_id: The unique identifier of the faction.
     :type faction_id: str
+    :param completed_count: The number of missions already completed
+        for this faction, used to refresh the mission pool.
+    :type completed_count: int
     :returns: A deterministic integer hash for mission seeding.
     :rtype: int
     """
-    return deterministic_hash(seed, system_id, faction_id, "missions_v2")
+    return deterministic_hash(seed, system_id, faction_id, "missions_v2", str(completed_count))
 
 
 def get_daily_mission_key(state: GameState, system_id: str) -> str:
@@ -205,13 +208,14 @@ def get_daily_mission_key(state: GameState, system_id: str) -> str:
     return f"{system_id}:{date_key}"
 
 
-def generate_missions(state: GameState, system: StarSystem, faction_id: str) -> list[FactionMission]:
+def generate_missions(state: GameState, system: StarSystem, faction_id: str, completed_count: int = 0) -> list[FactionMission]:
     """Generate 2-3 tiered missions for a faction at a given system.
 
-    Mission generation is deterministic based on seed, system, and
-    faction. The available tiers depend on the player's reputation
-    with the faction. A free daily mission is included if the
-    system has not had its daily mission used on the current date.
+    Mission generation is deterministic based on seed, system,
+    faction, and completed mission count. The available tiers depend
+    on the player's reputation with the faction. A free daily mission
+    is included if the system has not had its daily mission used on
+    the current date.
 
     :param state: The current game state.
     :type state: GameState
@@ -219,6 +223,9 @@ def generate_missions(state: GameState, system: StarSystem, faction_id: str) -> 
     :type system: StarSystem
     :param faction_id: The faction offering missions.
     :type faction_id: str
+    :param completed_count: The number of missions already completed
+        for this faction, used to refresh the mission pool.
+    :type completed_count: int
     :returns: A list of generated :class:`FactionMission` objects.
     :rtype: list[FactionMission]
     """
@@ -230,7 +237,7 @@ def generate_missions(state: GameState, system: StarSystem, faction_id: str) -> 
         return []
 
     rep = state.get_faction_reputation(faction_id)
-    rng = seeded_random(_mission_seed(state.seed, system.id, faction_id), "generate")
+    rng = seeded_random(_mission_seed(state.seed, system.id, faction_id, completed_count), "generate")
 
     available_tiers = []
     for tier in [1, 2, 3]:

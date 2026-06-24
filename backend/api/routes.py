@@ -908,7 +908,10 @@ def api_faction_mission(game_id: str, faction_id: str) -> dict:
     if not current_system.has_trading_station:
         raise HTTPException(status_code=400, detail="No trading station in this system")
 
-    missions = generate_missions(state, current_system, faction_id)
+    faction_completed_count = sum(
+        1 for c in state.completed_missions if c.get("faction_id") == faction_id
+    )
+    missions = generate_missions(state, current_system, faction_id, faction_completed_count)
     if not missions:
         raise HTTPException(status_code=400, detail="No missions available from this faction")
 
@@ -917,7 +920,7 @@ def api_faction_mission(game_id: str, faction_id: str) -> dict:
         raise HTTPException(status_code=400, detail="No missions available from this faction")
 
     rng = seeded_random(
-        deterministic_hash(state.seed, faction_id, str(len(state.log_entries))),
+        deterministic_hash(state.seed, faction_id, str(len(state.log_entries)), str(faction_completed_count)),
         "faction_mission",
     )
     mission = rng.choice(standard_missions)
