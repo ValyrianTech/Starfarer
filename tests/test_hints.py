@@ -650,7 +650,7 @@ class TestHintsEdgeCases:
         hints = get_contextual_hints(state, empty_systems)
         assert isinstance(hints, list)
 
-    def test_first_crisis_detects_title_with_crisis(self) -> None:
+    def test_first_crisis_detects_crisis_event_type(self) -> None:
         state = _make_game()
         event = Event(
             id="evt_001",
@@ -662,6 +662,20 @@ class TestHintsEdgeCases:
         )
         state.events.append(event)
         assert _first_crisis(state, state.systems) is True
+
+    def test_first_crisis_ignores_title_with_crisis_when_event_type_differs(self) -> None:
+        """Events with 'crisis' in the title but a non-crisis event_type should NOT trigger the hint."""
+        state = _make_game()
+        event = Event(
+            id="evt_001",
+            title="Life Support Crisis",
+            flavor="Crisis alert!",
+            event_type="hazard",  # Not 'crisis'
+            choices=[Choice(text="Fix", outcome="hull:-10")],
+            resolved=False,
+        )
+        state.events.append(event)
+        assert _first_crisis(state, state.systems) is False
 
     def test_first_crisis_resolved_crisis_event(self) -> None:
         state = _make_game()
