@@ -288,7 +288,7 @@ def _state_from_dict(d: dict) -> GameState:
                 max_id += 1
                 cleaned_entries.append({**e, "id": max_id})
 
-    _next_log_id = d.get("_next_log_id", max_id + 1)
+    _next_log_id = max(d.get("_next_log_id", max_id + 1), max_id + 1)
 
     return GameState(
         id=d["id"],

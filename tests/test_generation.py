@@ -1536,6 +1536,117 @@ class TestOldSaveLogEntryIdCollision:
         restored.add_log("test", "New entry")
         assert restored.log_entries[-1]["id"] == 11
 
+    def test_next_log_id_does_not_regress_when_present_in_dict(self) -> None:
+        """_next_log_id should not regress when present in dict but lower than max_id + 1.
+
+        This tests the fix: _next_log_id = max(d.get("_next_log_id", max_id + 1), max_id + 1)
+        """
+        from backend.game.manager import _state_to_dict, _state_from_dict
+
+        ship = Ship()
+        state = GameState(id="test-regress", seed=42, ship=ship)
+        state.add_log("test", "Entry 1")
+        state.add_log("test", "Entry 2")
+        state.add_log("test", "Entry 3")
+
+        d = _state_to_dict(state)
+        # _next_log_id is 4, max_id is 3
+        assert d["_next_log_id"] == 4
+
+        # Simulate the bug: _next_log_id in the dict is lower than max_id + 1
+        # This can happen if the cleaning loop assigned IDs higher than the saved _next_log_id
+        # For example, if a log entry had a non-integer ID that got reassigned
+        d["_next_log_id"] = 2  # This is lower than max_id (3) + 1 = 4
+
+        restored = _state_from_dict(d)
+
+        # _next_log_id should be max_id + 1 = 4, NOT the regressed value 2
+        assert restored._next_log_id == 4, f"Expected 4, got {restored._next_log_id}"
+
+        # Adding a new log entry should get ID 4 (no collision)
+        restored.add_log("test", "Entry 4")
+        assert len(restored.log_entries) == 4
+        assert restored.log_entries[3]["id"] == 4
+
+    def test_next_log_id_does_not_regress_with_cleaned_entries(self) -> None:
+        """_next_log_id should not regress when cleaning loop assigns higher IDs.
+
+        Scenario: dict has _next_log_id=5 and log entries with IDs [1, "abc", 3, 4].
+        The cleaning loop reassigns "abc" to ID 2, so max_id = 4.
+        _next_log_id should be max(5, 4+1) = 5, not the regressed value.
+        """
+        from backend.game.manager import _state_to_dict, _state_from_dict
+
+        ship = Ship()
+        state = GameState(id="test-regress-clean", seed=42, ship=ship)
+        state.add_log("test", "Entry 1")
+        state.add_log("test", "Entry 2")
+        state.add_log("test", "Entry 3")
+        state.add_log("test", "Entry 4")
+
+        d = _state_to_dict(state)
+        # _next_log_id is 5, max_id is 4
+        assert d["_next_log_id"] == 5
+
+        # Now simulate: a log entry with a non-integer ID that gets reassigned during cleaning
+        # The cleaning loop would assign it max_id + 1, making max_id higher
+        d["log_entries"] = [
+            {"id": 1, "type": "test", "message": "Entry 1", "timestamp": "", "title": "", "description": ""},
+            {"id": "abc", "type": "test", "message": "Entry with non-int id", "timestamp": "", "title": "", "description": ""},
+            {"id": 3, "type": "test", "message": "Entry 3", "timestamp": "", "title": "", "description": ""},
+            {"id": 4, "type": "test", "message": "Entry 4", "timestamp": "", "title": "", "description": ""},
+        ]
+        # _next_log_id in dict is 5, but the cleaning loop will assign "abc" to ID 2
+        # max_id after cleaning = max(1, 2, 3, 4) = 4
+        # _next_log_id should be max(5, 4+1) = 5
+
+        restored = _state_from_dict(d)
+
+        assert restored._next_log_id == 5, f"Expected 5, got {restored._next_log_id}"
+
+        # Adding a new log entry should get ID 5 (no collision)
+        restored.add_log("test", "Entry 5")
+        assert len(restored.log_entries) == 5
+        assert restored.log_entries[4]["id"] == 5
+
+    def test_next_log_id_uses_max_when_cleaning_assigns_higher_ids(self) -> None:
+        """When cleaning assigns IDs higher than the saved _next_log_id, use max_id + 1.
+
+        Scenario: dict has _next_log_id=3 and log entries with IDs [1, 2, "xyz"].
+        The cleaning loop reassigns "xyz" to ID 3, so max_id = 3.
+        _next_log_id should be max(3, 3+1) = 4, not 3.
+        """
+        from backend.game.manager import _state_to_dict, _state_from_dict
+
+        ship = Ship()
+        state = GameState(id="test-regress-clean2", seed=42, ship=ship)
+        state.add_log("test", "Entry 1")
+        state.add_log("test", "Entry 2")
+
+        d = _state_to_dict(state)
+        # _next_log_id is 3, max_id is 2
+        assert d["_next_log_id"] == 3
+
+        # Now simulate: a log entry with a non-integer ID that gets reassigned to ID 3
+        # This means max_id becomes 3, which equals _next_log_id
+        d["log_entries"] = [
+            {"id": 1, "type": "test", "message": "Entry 1", "timestamp": "", "title": "", "description": ""},
+            {"id": 2, "type": "test", "message": "Entry 2", "timestamp": "", "title": "", "description": ""},
+            {"id": "xyz", "type": "test", "message": "Entry with non-int id", "timestamp": "", "title": "", "description": ""},
+        ]
+        # _next_log_id in dict is 3, but the cleaning loop will assign "xyz" to ID 3
+        # max_id after cleaning = max(1, 2, 3) = 3
+        # _next_log_id should be max(3, 3+1) = 4
+
+        restored = _state_from_dict(d)
+
+        assert restored._next_log_id == 4, f"Expected 4, got {restored._next_log_id}"
+
+        # Adding a new log entry should get ID 4 (no collision)
+        restored.add_log("test", "Entry 4")
+        assert len(restored.log_entries) == 4
+        assert restored.log_entries[3]["id"] == 4
+
 
 class TestAncientGateSystemType:
     """Tests for the ancient_gate phenomenon producing the 'ancient' system type."""
