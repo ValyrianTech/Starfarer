@@ -1345,6 +1345,36 @@ class TestRoutesFullStateResponse:
         resp = _full_state_response(state, order="asc")
         assert resp["cargo_items"] is not None
 
+    def test_full_state_response_sort_name_case_sensitive(self) -> None:
+        """_full_state_response with sort=name&order=asc sorts case-sensitively."""
+        from backend.api.routes import _full_state_response
+        from backend.models.discovery import Discovery
+        state = new_game(seed=42)
+        current_sys = state.get_current_system()
+        state.discoveries.append(
+            Discovery(id="fsr-cs-1", category="mineral", name="alpha",
+                      description="lower", value=10, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="fsr-cs-2", category="artifact", name="Alpha",
+                      description="mixed", value=20, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="fsr-cs-3", category="mineral", name="ALPHA",
+                      description="upper", value=30, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="fsr-cs-4", category="artifact", name="beta",
+                      description="lower", value=40, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="fsr-cs-5", category="mineral", name="BETA",
+                      description="upper", value=50, system_id=current_sys.id)
+        )
+        resp = _full_state_response(state, sort="name", order="asc")
+        names = [item["name"] for item in resp["cargo_items"]]
+        assert names == ["ALPHA", "Alpha", "BETA", "alpha", "beta"]
+
 
 class TestRoutesGetFullStateSorting:
     """Tests for GET /game/{game_id} with sort/order query parameters."""
@@ -2402,6 +2432,76 @@ class TestAPICargo:
         data = resp.json()
         names = [item["name"] for item in data["cargo_items"]]
         assert names == ["Zeta Relic", "Beta Crystal", "Alpha Ore"]
+
+    def test_cargo_sort_name_case_sensitive_asc(self) -> None:
+        """sort=name&order=asc sorts case-sensitively (ASCII: uppercase before lowercase)."""
+        from backend.models.discovery import Discovery
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "cargo-cs-asc"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        current_sys = state.get_current_system()
+        state.discoveries.append(
+            Discovery(id="csa-1", category="mineral", name="alpha",
+                      description="lower", value=10, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="csa-2", category="artifact", name="Alpha",
+                      description="mixed", value=20, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="csa-3", category="mineral", name="ALPHA",
+                      description="upper", value=30, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="csa-4", category="artifact", name="beta",
+                      description="lower", value=40, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="csa-5", category="mineral", name="BETA",
+                      description="upper", value=50, system_id=current_sys.id)
+        )
+        GAME_STORE[game_id] = state
+        game_save(state)
+        resp = client.get(f"/api/game/{game_id}/cargo?sort=name&order=asc")
+        assert resp.status_code == 200
+        data = resp.json()
+        names = [item["name"] for item in data["cargo_items"]]
+        assert names == ["ALPHA", "Alpha", "BETA", "alpha", "beta"]
+
+    def test_cargo_sort_name_case_sensitive_desc(self) -> None:
+        """sort=name&order=desc sorts case-sensitively in reverse."""
+        from backend.models.discovery import Discovery
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "cargo-cs-desc"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        current_sys = state.get_current_system()
+        state.discoveries.append(
+            Discovery(id="csd-1", category="mineral", name="alpha",
+                      description="lower", value=10, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="csd-2", category="artifact", name="Alpha",
+                      description="mixed", value=20, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="csd-3", category="mineral", name="ALPHA",
+                      description="upper", value=30, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="csd-4", category="artifact", name="beta",
+                      description="lower", value=40, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="csd-5", category="mineral", name="BETA",
+                      description="upper", value=50, system_id=current_sys.id)
+        )
+        GAME_STORE[game_id] = state
+        game_save(state)
+        resp = client.get(f"/api/game/{game_id}/cargo?sort=name&order=desc")
+        assert resp.status_code == 200
+        data = resp.json()
+        names = [item["name"] for item in data["cargo_items"]]
+        assert names == ["beta", "alpha", "BETA", "Alpha", "ALPHA"]
 
 
 class TestFuelWarningSystem:
