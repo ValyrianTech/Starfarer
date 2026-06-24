@@ -568,7 +568,8 @@ class TestDismissHintAPI:
             f"/api/game/{game_id}/hints/dismiss",
             json={"hint_id": "fuel_zero"},
         )
-        assert resp2.status_code == 200
+        assert resp2.status_code == 400
+        assert "critical" in resp2.json()["detail"].lower()
 
         resp3 = client.get(f"/api/game/{game_id}")
         data = resp3.json()
