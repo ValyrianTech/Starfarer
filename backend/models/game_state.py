@@ -71,7 +71,7 @@ class GameState:
     crisis_cooldown: int = 0
     completed_missions: list[dict] = field(default_factory=list)
     daily_missions_used: dict[str, str] = field(default_factory=dict)
-    accepted_missions: dict[str, str] = field(default_factory=dict)
+    accepted_missions: dict[str, dict] = field(default_factory=dict)
     dismissed_hints: set[str] = field(default_factory=set)
     _next_log_id: int = 1
 

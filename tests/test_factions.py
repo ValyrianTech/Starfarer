@@ -783,13 +783,14 @@ class TestFactionAPI:
         GAME_STORE[game_id] = state
         game_save(state)
 
-        # Try to complete the mission in the wrong system
+        # Try to complete the mission in the other system (now works via stored data)
         resp = client.post(
             f"/api/game/{game_id}/missions/{mission_id}/complete",
             json={"mission_id": mission_id},
         )
-        assert resp.status_code == 400
-        assert "not found" in resp.json()["detail"].lower()
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["mission"]["id"] == mission_id
 
     def test_api_missions_daily_available(self) -> None:
         resp = client.post("/api/game/new", json={"seed": 42, "game_id": "daily-avail"})
@@ -1203,7 +1204,7 @@ class TestFactionAPI:
 
         accepted_mission_id = standard_missions[0]["id"]
         faction_id = missions_data["faction_id"]
-        state.accepted_missions[accepted_mission_id] = faction_id
+        state.accepted_missions[accepted_mission_id] = {"faction_id": faction_id}
         GAME_STORE[game_id] = state
         game_save(state)
 
@@ -1241,7 +1242,7 @@ class TestFactionAPI:
         faction_id = missions_data["faction_id"]
 
         for mission in missions_data["missions"]:
-            state.accepted_missions[mission["id"]] = faction_id
+            state.accepted_missions[mission["id"]] = {"faction_id": faction_id}
         GAME_STORE[game_id] = state
         game_save(state)
 
@@ -1332,7 +1333,7 @@ class TestFactionAPI:
             reputation_reward=10,
         )
 
-        state.accepted_missions["mission_std_002"] = "stellar_cartographers"
+        state.accepted_missions["mission_std_002"] = {"faction_id": "stellar_cartographers"}
         GAME_STORE[game_id] = state
         game_save(state)
 
@@ -1459,7 +1460,7 @@ class TestFactionAPI:
             reputation_reward=10,
         )
 
-        state.accepted_missions["mission_a_002"] = "stellar_cartographers"
+        state.accepted_missions["mission_a_002"] = {"faction_id": "stellar_cartographers"}
         GAME_STORE[game_id] = state
         game_save(state)
 
@@ -1565,7 +1566,7 @@ class TestFactionAPI:
         assert data["mission"]["id"] == mission_id
         assert "ship" in data
         # Verify the accepted_missions dict stored the faction_id
-        assert state.accepted_missions[mission_id] == faction_id
+        assert state.accepted_missions[mission_id]["faction_id"] == faction_id
 
     def test_api_complete_mission_with_faction_id(self) -> None:
         """Complete a mission by providing faction_id explicitly."""
