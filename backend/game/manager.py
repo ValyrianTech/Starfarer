@@ -234,6 +234,7 @@ def _state_to_dict(state: GameState) -> dict:
         "completed_missions": state.completed_missions,
         "daily_missions_used": state.daily_missions_used,
         "accepted_missions": dict(state.accepted_missions),
+        "dismissed_hints": list(state.dismissed_hints),
         "_next_log_id": state._next_log_id,
     }
 
@@ -291,6 +292,7 @@ def _state_from_dict(d: dict) -> GameState:
         completed_missions=d.get("completed_missions", []),
         daily_missions_used=d.get("daily_missions_used", {}),
         accepted_missions=dict(d.get("accepted_missions", {})),
+        dismissed_hints=set(d.get("dismissed_hints", [])),
         _next_log_id=d.get("_next_log_id", max((e["id"] for e in d.get("log_entries", []) if isinstance(e, dict) and "id" in e), default=0) + 1),
     )
 
