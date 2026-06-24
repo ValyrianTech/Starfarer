@@ -275,7 +275,7 @@ def generate_missions(state: GameState, system: StarSystem, faction_id: str, com
         rep_reward = rng.randint(costs["reputation_reward_min"], costs["reputation_reward_max"])
 
         mission_id_num = deterministic_hash(
-            state.seed, system.id, faction_id, "mission", str(i), str(tier)
+            state.seed, system.id, faction_id, "mission", str(i), str(tier), str(completed_count)
         )
         mission_id = f"mission_{system.id}_{abs(mission_id_num) % 100000:05d}"
 
