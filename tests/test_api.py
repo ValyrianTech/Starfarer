@@ -2503,6 +2503,158 @@ class TestAPICargo:
         names = [item["name"] for item in data["cargo_items"]]
         assert names == ["beta", "alpha", "BETA", "Alpha", "ALPHA"]
 
+    def test_cargo_top3_ids_with_3_items(self) -> None:
+        """Create 3 discoveries with different values; top3_ids should have 3 IDs sorted by value desc."""
+        from backend.models.discovery import Discovery
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "top3-3items"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        current_sys = state.get_current_system()
+        state.discoveries.append(
+            Discovery(id="top3-3-a", category="mineral", name="Low",
+                      description="Low", value=10, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="top3-3-b", category="artifact", name="High",
+                      description="High", value=100, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="top3-3-c", category="mineral", name="Medium",
+                      description="Medium", value=50, system_id=current_sys.id)
+        )
+        GAME_STORE[game_id] = state
+        game_save(state)
+        resp = client.get(f"/api/game/{game_id}/cargo")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "top3_ids" in data
+        assert data["top3_ids"] == ["top3-3-b", "top3-3-c", "top3-3-a"]
+
+    def test_cargo_top3_ids_with_less_than_3_items(self) -> None:
+        """Create 1-2 discoveries; top3_ids should have fewer than 3 IDs."""
+        from backend.models.discovery import Discovery
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "top3-less3"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        current_sys = state.get_current_system()
+        state.discoveries.append(
+            Discovery(id="top3-less-a", category="mineral", name="Only",
+                      description="Only", value=100, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="top3-less-b", category="artifact", name="Second",
+                      description="Second", value=50, system_id=current_sys.id)
+        )
+        GAME_STORE[game_id] = state
+        game_save(state)
+        resp = client.get(f"/api/game/{game_id}/cargo")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "top3_ids" in data
+        assert len(data["top3_ids"]) == 2
+        assert data["top3_ids"] == ["top3-less-a", "top3-less-b"]
+
+    def test_cargo_top3_ids_with_0_items(self) -> None:
+        """No discoveries; top3_ids should be an empty list."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "top3-0items"})
+        game_id = resp.json()["game_id"]
+        resp = client.get(f"/api/game/{game_id}/cargo")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "top3_ids" in data
+        assert data["top3_ids"] == []
+
+    def test_cargo_top3_ids_with_equal_values(self) -> None:
+        """Create items with equal values; top3_ids should still return 3 IDs."""
+        from backend.models.discovery import Discovery
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "top3-equal"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        current_sys = state.get_current_system()
+        state.discoveries.append(
+            Discovery(id="top3-eq-a", category="mineral", name="First",
+                      description="First", value=50, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="top3-eq-b", category="artifact", name="Second",
+                      description="Second", value=50, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="top3-eq-c", category="mineral", name="Third",
+                      description="Third", value=50, system_id=current_sys.id)
+        )
+        GAME_STORE[game_id] = state
+        game_save(state)
+        resp = client.get(f"/api/game/{game_id}/cargo")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "top3_ids" in data
+        assert len(data["top3_ids"]) == 3
+        assert set(data["top3_ids"]) == {"top3-eq-a", "top3-eq-b", "top3-eq-c"}
+
+    def test_cargo_top3_ids_in_full_state_response(self) -> None:
+        """GET /api/game/{id} should also include correct top3_ids."""
+        from backend.models.discovery import Discovery
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "top3-full"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        current_sys = state.get_current_system()
+        state.discoveries.append(
+            Discovery(id="top3-fs-a", category="mineral", name="Low",
+                      description="Low", value=10, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="top3-fs-b", category="artifact", name="High",
+                      description="High", value=100, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="top3-fs-c", category="mineral", name="Medium",
+                      description="Medium", value=50, system_id=current_sys.id)
+        )
+        GAME_STORE[game_id] = state
+        game_save(state)
+        resp = client.get(f"/api/game/{game_id}")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "top3_ids" in data
+        assert data["top3_ids"] == ["top3-fs-b", "top3-fs-c", "top3-fs-a"]
+
+    def test_cargo_top3_ids_more_than_3_items(self) -> None:
+        """Create 5+ items; only top 3 by value should be in top3_ids."""
+        from backend.models.discovery import Discovery
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "top3-more3"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        current_sys = state.get_current_system()
+        state.discoveries.append(
+            Discovery(id="t3m-1", category="mineral", name="One",
+                      description="One", value=10, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="t3m-2", category="artifact", name="Two",
+                      description="Two", value=90, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="t3m-3", category="mineral", name="Three",
+                      description="Three", value=50, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="t3m-4", category="artifact", name="Four",
+                      description="Four", value=200, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="t3m-5", category="mineral", name="Five",
+                      description="Five", value=80, system_id=current_sys.id)
+        )
+        GAME_STORE[game_id] = state
+        game_save(state)
+        resp = client.get(f"/api/game/{game_id}/cargo")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "top3_ids" in data
+        assert len(data["top3_ids"]) == 3
+        assert data["top3_ids"] == ["t3m-4", "t3m-2", "t3m-5"]
+
 
 class TestFuelWarningSystem:
     """Tests for the fuel warning status system (backend/fuel.py)."""
