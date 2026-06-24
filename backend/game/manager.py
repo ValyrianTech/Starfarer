@@ -281,7 +281,7 @@ def _state_from_dict(d: dict) -> GameState:
                 max_id += 1
                 e["id"] = max_id
                 cleaned_entries.append(e)
-            elif isinstance(e["id"], int):
+            elif isinstance(e["id"], int) and not isinstance(e["id"], bool):
                 max_id = max(max_id, e["id"])
                 cleaned_entries.append(e)
             else:
