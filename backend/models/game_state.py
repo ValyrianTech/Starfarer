@@ -92,7 +92,7 @@ class GameState:
         """
         return self.systems.get(self.ship.current_system_id)
 
-    def add_log(self, entry_type: str, message: str, **kwargs) -> None:
+    def add_log(self, entry_type: str, message: str, **kwargs: str | int) -> None:
         """Append a new entry to the ship's log.
 
         :param entry_type: The category of the log entry (e.g.
