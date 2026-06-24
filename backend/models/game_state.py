@@ -10,8 +10,6 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Optional
-import uuid
-
 from backend.models.ship import Ship
 from backend.models.system import StarSystem
 from backend.models.event import Event
