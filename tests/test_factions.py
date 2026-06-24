@@ -1142,7 +1142,7 @@ class TestFactionAPI:
         assert data["effect"] == "success"
         assert data["mission"]["id"] != completed_mission_id
 
-    def test_faction_mission_all_completed_returns_400(self) -> None:
+    def test_faction_mission_all_completed_returns_200(self) -> None:
         resp = client.post(
             "/api/game/new",
             json={"seed": 42, "game_id": "mission-all-completed"},
@@ -1176,8 +1176,9 @@ class TestFactionAPI:
             f"/api/game/{game_id}/faction/{faction_id}/mission"
         )
 
-        assert resp.status_code == 400
-        assert "No available missions" in resp.json()["detail"]
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["effect"] == "success"
 
     def test_faction_mission_skips_accepted_mission(self) -> None:
         resp = client.post(
