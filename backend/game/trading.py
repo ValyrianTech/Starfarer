@@ -257,12 +257,12 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
         if not item or not isinstance(item, str):
             return False, "Item must be a non-empty string."
         # Try exact name match first
-        name_matches = [d for d in state.discoveries if d.name == item]
+        name_matches = [d for d in state.discoveries if d.name == item and d.lore_fragment_id is None]
         if name_matches:
             matching = name_matches
         else:
             # Fall back to category match
-            matching = [d for d in state.discoveries if d.category == item]
+            matching = [d for d in state.discoveries if d.category == item and d.lore_fragment_id is None]
         if not matching:
             return False, f"No discoveries matching '{item}' to sell."
         total_price = 0

@@ -390,6 +390,7 @@ class TestTradingAdvanced:
 
     def test_sell_discovery_by_category(self) -> None:
         """Selling a discovery by category should remove it and grant credits."""
+        from backend.models.discovery import Discovery
         state = new_game(seed=42)
         system = state.get_current_system()
         assert system is not None
@@ -398,16 +399,26 @@ class TestTradingAdvanced:
             return  # pragma: no cover  # no planet in starting system
         land_on_body(state, planet.id)
         explore_surface(state)
+        state.discoveries.clear()
+        disc = Discovery(
+            id="sell_cat_disc",
+            name="Test Mineral",
+            category="mineral",
+            description="A test mineral",
+            lore_fragment_id=None,
+            value=100,
+        )
+        state.discoveries.append(disc)
         assert len(state.discoveries) > 0
-        cat = state.discoveries[0].category
         credits_before = state.ship.credits
-        ok, msg = perform_trade(state, "sell", cat, 1)
+        ok, msg = perform_trade(state, "sell", "mineral", 1)
         assert ok is True
         assert "Sold" in msg
         assert state.ship.credits > credits_before
 
     def test_sell_discovery_by_name(self) -> None:
         """Selling a discovery by name should remove it and grant credits."""
+        from backend.models.discovery import Discovery
         state = new_game(seed=42)
         system = state.get_current_system()
         assert system is not None
@@ -416,10 +427,19 @@ class TestTradingAdvanced:
             return  # pragma: no cover  # no planet in starting system
         land_on_body(state, planet.id)
         explore_surface(state)
+        state.discoveries.clear()
+        disc = Discovery(
+            id="sell_name_disc",
+            name="Mysterious Orb",
+            category="artifact",
+            description="A mysterious orb",
+            lore_fragment_id=None,
+            value=100,
+        )
+        state.discoveries.append(disc)
         assert len(state.discoveries) > 0
-        name = state.discoveries[0].name
         credits_before = state.ship.credits
-        ok, msg = perform_trade(state, "sell", name, 1)
+        ok, msg = perform_trade(state, "sell", "Mysterious Orb", 1)
         assert ok is True
         assert "Sold" in msg
         assert state.ship.credits > credits_before
@@ -536,6 +556,7 @@ class TestTradingAdvanced:
 
     def test_sell_quantity_exceeds_available(self) -> None:
         """Selling with quantity exceeding available discoveries should return an error."""
+        from backend.models.discovery import Discovery
         state = new_game(seed=42)
         system = state.get_current_system()
         assert system is not None
@@ -544,15 +565,20 @@ class TestTradingAdvanced:
             return  # pragma: no cover
         land_on_body(state, planet.id)
         explore_surface(state)
-        assert len(state.discoveries) > 0
-        cat = state.discoveries[0].category
-        same_cat = [d for d in state.discoveries if d.category == cat]
-        if len(same_cat) == 0:
-            return  # pragma: no cover
+        state.discoveries.clear()
+        disc = Discovery(
+            id="sell_qty_disc",
+            name="Test Mineral",
+            category="mineral",
+            description="A test mineral",
+            lore_fragment_id=None,
+            value=100,
+        )
+        state.discoveries.append(disc)
         count_before = len(state.discoveries)
         credits_before = state.ship.credits
         # Request to sell more than available
-        ok, msg = perform_trade(state, "sell", cat, 999)
+        ok, msg = perform_trade(state, "sell", "mineral", 999)
         assert ok is False
         assert "Only" in msg
         assert "requested" in msg
@@ -1859,6 +1885,80 @@ class TestTradingPerformTradeEdgeCases:
         ok, msg = perform_trade(state, "sell", 123, 1)
         assert ok is False
         assert msg == "Item must be a non-empty string."
+
+    def test_sell_lore_linked_discovery_by_name_excluded(self) -> None:
+        """Lore-linked discoveries should not be sold when selling by name."""
+        from backend.models.discovery import Discovery
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
+        if not planet:
+            return  # pragma: no cover
+        land_on_body(state, planet.id)
+        explore_surface(state)
+        lore_disc = Discovery(
+            id="lore_trade_disc",
+            name="Ancient Artifact",
+            category="artifact",
+            description="A lore-linked artifact",
+            lore_fragment_id="frag_001",
+            value=1000,
+        )
+        regular_disc = Discovery(
+            id="regular_trade_disc",
+            name="Ancient Artifact",
+            category="artifact",
+            description="A regular artifact",
+            lore_fragment_id=None,
+            value=500,
+        )
+        state.discoveries.clear()
+        state.discoveries.append(lore_disc)
+        state.discoveries.append(regular_disc)
+        credits_before = state.ship.credits
+        ok, msg = perform_trade(state, "sell", "Ancient Artifact")
+        assert ok is True
+        assert lore_disc in state.discoveries
+        assert regular_disc not in state.discoveries
+        assert state.ship.credits > credits_before
+
+    def test_sell_lore_linked_discovery_by_category_excluded(self) -> None:
+        """Lore-linked discoveries should not be sold when selling by category."""
+        from backend.models.discovery import Discovery
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
+        if not planet:
+            return  # pragma: no cover
+        land_on_body(state, planet.id)
+        explore_surface(state)
+        lore_disc = Discovery(
+            id="lore_cat_trade_disc",
+            name="Mysterious Relic",
+            category="mineral",
+            description="A lore-linked mineral",
+            lore_fragment_id="frag_002",
+            value=2000,
+        )
+        regular_disc = Discovery(
+            id="regular_cat_trade_disc",
+            name="Common Ore",
+            category="mineral",
+            description="A regular mineral",
+            lore_fragment_id=None,
+            value=300,
+        )
+        state.discoveries.clear()
+        state.discoveries.append(lore_disc)
+        state.discoveries.append(regular_disc)
+        credits_before = state.ship.credits
+        ok, msg = perform_trade(state, "sell", "mineral")
+        assert ok is True
+        assert lore_disc in state.discoveries
+        assert regular_disc not in state.discoveries
+        assert state.ship.credits > credits_before
 
 
 class TestDatabaseGetLeaderboard:
