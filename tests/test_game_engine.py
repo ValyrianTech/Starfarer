@@ -1014,6 +1014,63 @@ class TestManagerAdvanced:
         # _next_log_id should be max_id + 1 = 6 + 1 = 7
         assert loaded._next_log_id == 7
 
+    def test_state_from_dict_with_non_integer_id_string(self) -> None:
+        """_state_from_dict should handle string IDs by assigning new sequential IDs."""
+        from backend.database import init_db
+        init_db()
+        state = new_game(seed=42)
+        data = get_game_state(state)
+        data["log_entries"] = [
+            {"id": "abc", "type": "system", "message": "entry with string id"},
+            {"id": 5, "type": "navigation", "message": "valid entry with id 5"},
+            {"id": 1.5, "type": "exploration", "message": "entry with float id"},
+            {"id": None, "type": "combat", "message": "entry with None id"},
+        ]
+        del data["_next_log_id"]
+        loaded = _state_from_dict(data)
+        assert loaded is not None
+        # All 4 dict entries should be kept
+        assert len(loaded.log_entries) == 4
+        # The string id entry should get a new sequential id (1)
+        assert loaded.log_entries[0]["id"] == 1
+        # The valid int id entry should keep its id (5)
+        assert loaded.log_entries[1]["id"] == 5
+        # The float id entry should get a new sequential id (6)
+        assert loaded.log_entries[2]["id"] == 6
+        # The None id entry should get a new sequential id (7)
+        assert loaded.log_entries[3]["id"] == 7
+        # _next_log_id should be max_id + 1 = 7 + 1 = 8
+        assert loaded._next_log_id == 8
+
+    def test_state_from_dict_with_mixed_valid_and_non_integer_ids(self) -> None:
+        """_state_from_dict should handle a mix of valid int IDs, missing IDs, and non-integer IDs."""
+        from backend.database import init_db
+        init_db()
+        state = new_game(seed=42)
+        data = get_game_state(state)
+        data["log_entries"] = [
+            {"id": 10, "type": "system", "message": "valid entry with id 10"},
+            {"type": "navigation", "message": "entry without id"},
+            {"id": "abc", "type": "exploration", "message": "entry with string id"},
+            {"id": 3, "type": "combat", "message": "valid entry with id 3"},
+            {"id": None, "type": "system", "message": "entry with None id"},
+        ]
+        del data["_next_log_id"]
+        loaded = _state_from_dict(data)
+        assert loaded is not None
+        assert len(loaded.log_entries) == 5
+        # Entry with id 10 should keep it
+        assert loaded.log_entries[0]["id"] == 10
+        # Entry without id should get 11 (max_id was 10, then +=1)
+        assert loaded.log_entries[1]["id"] == 11
+        # String id entry should get 12 (max_id was 11, +=1)
+        assert loaded.log_entries[2]["id"] == 12
+        # Entry with id 3 should keep it (max_id becomes max(12, 3) = 12)
+        assert loaded.log_entries[3]["id"] == 3
+        # None id entry should get 13 (max_id was 12, +=1)
+        assert loaded.log_entries[4]["id"] == 13
+        assert loaded._next_log_id == 14
+
 
 class TestEvents:
     def test_event_templates_exist(self) -> None:
