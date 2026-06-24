@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from backend.utils import deterministic_hash, seeded_random
-from backend.models.faction import get_faction, FACTION_DEFINITIONS
+from backend.models.faction import get_faction
 
 
 @dataclass
