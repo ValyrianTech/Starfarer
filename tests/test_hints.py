@@ -118,6 +118,9 @@ class TestConditionFunctions:
         current = state.get_current_system()
         current.visited = False
         current.has_trading_station = False
+        # Ensure no station has been visited (fallback won't trigger)
+        for s in state.systems.values():
+            s.visited = False
         assert _first_uncharted(state, state.systems) is False
 
     def test_first_uncharted_has_station(self) -> None:
@@ -126,6 +129,52 @@ class TestConditionFunctions:
         current = state.get_current_system()
         current.visited = False
         current.has_trading_station = True
+        assert _first_uncharted(state, state.systems) is False
+
+    def test_first_uncharted_fallback_trigger(self) -> None:
+        state = _make_game()
+        state.systems_visited = 5
+        current = state.get_current_system()
+        current.visited = False
+        current.has_trading_station = False
+        # Mark a station system as visited to trigger the fallback
+        for s in state.systems.values():
+            if s.id != current.id:
+                s.has_trading_station = True
+                s.visited = True
+                break
+        assert _first_uncharted(state, state.systems) is True
+
+    def test_first_uncharted_fallback_no_trigger_when_uncharted_visited(self) -> None:
+        state = _make_game()
+        state.systems_visited = 5
+        current = state.get_current_system()
+        current.visited = False
+        current.has_trading_station = False
+        # Mark an uncharted system as visited
+        for s in state.systems.values():
+            if not s.has_trading_station and s.id != current.id:
+                s.visited = True
+                break
+        assert _first_uncharted(state, state.systems) is False
+
+    def test_first_uncharted_fallback_no_trigger_no_station_visited(self) -> None:
+        state = _make_game()
+        state.systems_visited = 5
+        current = state.get_current_system()
+        current.visited = False
+        current.has_trading_station = False
+        # Mark all systems as not visited (no station visited)
+        for s in state.systems.values():
+            s.visited = False
+        assert _first_uncharted(state, state.systems) is False
+
+    def test_first_uncharted_current_visited(self) -> None:
+        state = _make_game()
+        state.systems_visited = 2
+        current = state.get_current_system()
+        current.visited = True
+        current.has_trading_station = False
         assert _first_uncharted(state, state.systems) is False
 
     def test_hull_low_true(self) -> None:

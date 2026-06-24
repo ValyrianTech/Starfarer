@@ -84,8 +84,20 @@ def _first_uncharted(game_state: GameState, systems: dict[str, StarSystem]) -> b
         return False
     if current.has_trading_station:
         return False
-    if game_state.systems_visited == 2 and not current.visited:
+    if current.visited:
+        return False
+    # Standard case: first jump from starting system to uncharted
+    if game_state.systems_visited == 2:
         return True
+    # Fallback: player has visited at least one station, and no uncharted
+    # system has been visited yet (covers edge case where starting system
+    # has no station, so the player visits a station first, then enters
+    # an uncharted system with systems_visited > 2)
+    has_visited_station = any(s.visited and s.has_trading_station for s in systems.values())
+    if has_visited_station:
+        visited_uncharted = any(s.visited and not s.has_trading_station for s in systems.values())
+        if not visited_uncharted:
+            return True
     return False
 
 
