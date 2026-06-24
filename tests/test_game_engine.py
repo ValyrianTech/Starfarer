@@ -987,6 +987,33 @@ class TestManagerAdvanced:
         assert loaded is not None
         assert loaded._next_log_id == 3
 
+    def test_state_from_dict_with_dict_missing_id(self) -> None:
+        """_state_from_dict should assign IDs to dict entries missing them."""
+        from backend.database import init_db
+        init_db()
+        state = new_game(seed=42)
+        data = get_game_state(state)
+        # Include dict entries without 'id' field, non-dict entries, and dict entries with IDs
+        data["log_entries"] = [
+            {"type": "system", "message": "old entry without id"},  # no id
+            "old style string entry",  # non-dict
+            {"id": 5, "type": "navigation", "message": "valid entry with id 5"},  # has id
+            {"type": "exploration", "message": "another entry without id"},  # no id
+            None,  # non-dict
+        ]
+        del data["_next_log_id"]
+        loaded = _state_from_dict(data)
+        assert loaded is not None
+        # Non-dict entries should be filtered out
+        assert len(loaded.log_entries) == 3
+        # The entry without id should have been assigned id 1 (max_id starts at 0, then +=1)
+        assert loaded.log_entries[0]["id"] == 1
+        assert loaded.log_entries[1]["id"] == 5
+        # After seeing id=5, max_id=5, so next missing-id entry gets id 6
+        assert loaded.log_entries[2]["id"] == 6
+        # _next_log_id should be max_id + 1 = 6 + 1 = 7
+        assert loaded._next_log_id == 7
+
 
 class TestEvents:
     def test_event_templates_exist(self) -> None:
