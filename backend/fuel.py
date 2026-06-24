@@ -23,7 +23,6 @@ def get_fuel_status(game_state, systems) -> dict:
     :rtype: dict
     """
     current_system = game_state.get_current_system()
-    current_system_id = game_state.ship.current_system_id
     current_fuel = game_state.ship.fuel
 
     # Early return: if already at a trading station, fuel status is always green
