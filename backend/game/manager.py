@@ -290,6 +290,15 @@ def _state_from_dict(d: dict) -> GameState:
 
     _next_log_id = max(d.get("_next_log_id", max_id + 1), max_id + 1)
 
+    accepted_missions_raw = d.get("accepted_missions", {})
+    accepted_missions = {}
+    for k, v in accepted_missions_raw.items():
+        if isinstance(v, str):
+            # Old format: value was just a faction_id string
+            accepted_missions[k] = {"faction_id": v}
+        else:
+            accepted_missions[k] = v
+
     return GameState(
         id=d["id"],
         seed=d["seed"],
@@ -309,7 +318,7 @@ def _state_from_dict(d: dict) -> GameState:
         crisis_cooldown=d.get("crisis_cooldown", 0),
         completed_missions=d.get("completed_missions", []),
         daily_missions_used=d.get("daily_missions_used", {}),
-        accepted_missions=dict(d.get("accepted_missions", {})),
+        accepted_missions=accepted_missions,
         dismissed_hints=set(d.get("dismissed_hints", [])),
         _next_log_id=_next_log_id,
     )

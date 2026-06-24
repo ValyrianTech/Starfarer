@@ -1648,6 +1648,179 @@ class TestOldSaveLogEntryIdCollision:
         assert restored.log_entries[3]["id"] == 4
 
 
+class TestAcceptedMissionsMigration:
+    """Tests for the accepted_missions migration in _state_from_dict.
+
+    Old saves stored accepted_missions values as plain faction_id strings.
+    The migration converts them to {"faction_id": v} dicts.
+    """
+
+    def test_old_format_string_values_are_migrated(self) -> None:
+        """Old-format string values should be converted to dict format."""
+        from backend.game.manager import _state_from_dict
+        from backend.models.ship import Ship
+        from backend.models.system import StarSystem
+
+        d = {
+            "id": "test-migrate",
+            "seed": 42,
+            "ship": Ship(name="Test", current_system_id="s1").to_dict(),
+            "systems": {
+                "s1": StarSystem(
+                    id="s1", name="Sys1", x=0.0, y=0.0, star_type="G",
+                    star_color="#fff", phenomenon="none", phenomenon_desc="",
+                ).to_dict(),
+            },
+            "events": [],
+            "discoveries": [],
+            "lore_fragments": [],
+            "log_entries": [],
+            "faction_relations": {},
+            "systems_visited": 1,
+            "game_started": "",
+            "accepted_missions": {
+                "mission_old_1": "stellar_cartographers",
+                "mission_old_2": "void_traders",
+            },
+        }
+        state = _state_from_dict(d)
+        assert state.accepted_missions["mission_old_1"] == {"faction_id": "stellar_cartographers"}
+        assert state.accepted_missions["mission_old_2"] == {"faction_id": "void_traders"}
+
+    def test_new_format_dict_values_are_preserved(self) -> None:
+        """New-format dict values should be preserved as-is."""
+        from backend.game.manager import _state_from_dict
+        from backend.models.ship import Ship
+        from backend.models.system import StarSystem
+
+        d = {
+            "id": "test-preserve",
+            "seed": 42,
+            "ship": Ship(name="Test", current_system_id="s1").to_dict(),
+            "systems": {
+                "s1": StarSystem(
+                    id="s1", name="Sys1", x=0.0, y=0.0, star_type="G",
+                    star_color="#fff", phenomenon="none", phenomenon_desc="",
+                ).to_dict(),
+            },
+            "events": [],
+            "discoveries": [],
+            "lore_fragments": [],
+            "log_entries": [],
+            "faction_relations": {},
+            "systems_visited": 1,
+            "game_started": "",
+            "accepted_missions": {
+                "mission_new_1": {
+                    "faction_id": "stellar_cartographers",
+                    "tier": 1,
+                    "title": "Test Mission",
+                },
+            },
+        }
+        state = _state_from_dict(d)
+        assert state.accepted_missions["mission_new_1"] == {
+            "faction_id": "stellar_cartographers",
+            "tier": 1,
+            "title": "Test Mission",
+        }
+
+    def test_mixed_old_and_new_formats(self) -> None:
+        """Mixed old-format strings and new-format dicts should both work."""
+        from backend.game.manager import _state_from_dict
+        from backend.models.ship import Ship
+        from backend.models.system import StarSystem
+
+        d = {
+            "id": "test-mixed",
+            "seed": 42,
+            "ship": Ship(name="Test", current_system_id="s1").to_dict(),
+            "systems": {
+                "s1": StarSystem(
+                    id="s1", name="Sys1", x=0.0, y=0.0, star_type="G",
+                    star_color="#fff", phenomenon="none", phenomenon_desc="",
+                ).to_dict(),
+            },
+            "events": [],
+            "discoveries": [],
+            "lore_fragments": [],
+            "log_entries": [],
+            "faction_relations": {},
+            "systems_visited": 1,
+            "game_started": "",
+            "accepted_missions": {
+                "mission_old": "stellar_cartographers",
+                "mission_new": {
+                    "faction_id": "void_traders",
+                    "tier": 2,
+                    "title": "Trade Run",
+                },
+            },
+        }
+        state = _state_from_dict(d)
+        assert state.accepted_missions["mission_old"] == {"faction_id": "stellar_cartographers"}
+        assert state.accepted_missions["mission_new"] == {
+            "faction_id": "void_traders",
+            "tier": 2,
+            "title": "Trade Run",
+        }
+
+    def test_empty_accepted_missions(self) -> None:
+        """Empty accepted_missions should result in an empty dict."""
+        from backend.game.manager import _state_from_dict
+        from backend.models.ship import Ship
+        from backend.models.system import StarSystem
+
+        d = {
+            "id": "test-empty",
+            "seed": 42,
+            "ship": Ship(name="Test", current_system_id="s1").to_dict(),
+            "systems": {
+                "s1": StarSystem(
+                    id="s1", name="Sys1", x=0.0, y=0.0, star_type="G",
+                    star_color="#fff", phenomenon="none", phenomenon_desc="",
+                ).to_dict(),
+            },
+            "events": [],
+            "discoveries": [],
+            "lore_fragments": [],
+            "log_entries": [],
+            "faction_relations": {},
+            "systems_visited": 1,
+            "game_started": "",
+            "accepted_missions": {},
+        }
+        state = _state_from_dict(d)
+        assert state.accepted_missions == {}
+
+    def test_missing_accepted_missions_key(self) -> None:
+        """Missing accepted_missions key should result in an empty dict."""
+        from backend.game.manager import _state_from_dict
+        from backend.models.ship import Ship
+        from backend.models.system import StarSystem
+
+        d = {
+            "id": "test-missing",
+            "seed": 42,
+            "ship": Ship(name="Test", current_system_id="s1").to_dict(),
+            "systems": {
+                "s1": StarSystem(
+                    id="s1", name="Sys1", x=0.0, y=0.0, star_type="G",
+                    star_color="#fff", phenomenon="none", phenomenon_desc="",
+                ).to_dict(),
+            },
+            "events": [],
+            "discoveries": [],
+            "lore_fragments": [],
+            "log_entries": [],
+            "faction_relations": {},
+            "systems_visited": 1,
+            "game_started": "",
+        }
+        state = _state_from_dict(d)
+        assert state.accepted_missions == {}
+
+
 class TestAncientGateSystemType:
     """Tests for the ancient_gate phenomenon producing the 'ancient' system type."""
 
