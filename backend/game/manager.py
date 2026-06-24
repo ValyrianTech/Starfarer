@@ -6,6 +6,7 @@ state, serializing/deserializing state to/from dictionaries, and
 querying galaxy and system data.
 """
 
+import logging
 import uuid
 
 from backend.database import load_game, save_game as db_save, load_save
@@ -21,6 +22,8 @@ from backend.generation.universe import generate_universe
 from backend.game.engine import (
     get_nearby_systems,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def new_game(seed: int | None = None, ship_name: str | None = None) -> GameState:
@@ -288,7 +291,15 @@ def _state_from_dict(d: dict) -> GameState:
                 max_id += 1
                 cleaned_entries.append({**e, "id": max_id})
 
-    _next_log_id = max(d.get("_next_log_id", max_id + 1), max_id + 1)
+    _next_log_id = d.get("_next_log_id", max_id + 1)
+    if _next_log_id < max_id + 1:
+        logger.warning(
+            "_next_log_id from save data (%d) is lower than max_id + 1 (%d); "
+            "using max_id + 1 to prevent ID regression. This may indicate a bug "
+            "in an older version that produced a stale _next_log_id.",
+            _next_log_id, max_id + 1,
+        )
+        _next_log_id = max_id + 1
 
     accepted_missions_raw = d.get("accepted_missions", {})
     accepted_missions = {}

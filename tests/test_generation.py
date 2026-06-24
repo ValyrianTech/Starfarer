@@ -1647,6 +1647,41 @@ class TestOldSaveLogEntryIdCollision:
         assert len(restored.log_entries) == 4
         assert restored.log_entries[3]["id"] == 4
 
+    def test_next_log_id_warns_when_overridden(self, caplog) -> None:
+        """A warning should be logged when _next_log_id from save data is lower than max_id + 1.
+
+        This tests the warning added per PR #53 change request 5.
+        """
+        import logging
+        from backend.game.manager import _state_to_dict, _state_from_dict
+
+        ship = Ship()
+        state = GameState(id="test-warn-override", seed=42, ship=ship)
+        state.add_log("test", "Entry 1")
+        state.add_log("test", "Entry 2")
+        state.add_log("test", "Entry 3")
+
+        d = _state_to_dict(state)
+        # _next_log_id is 4, max_id is 3
+        assert d["_next_log_id"] == 4
+
+        # Simulate the bug: _next_log_id in the dict is lower than max_id + 1
+        d["_next_log_id"] = 2  # This is lower than max_id (3) + 1 = 4
+
+        with caplog.at_level(logging.WARNING):
+            restored = _state_from_dict(d)
+
+        # _next_log_id should be max_id + 1 = 4, NOT the regressed value 2
+        assert restored._next_log_id == 4, f"Expected 4, got {restored._next_log_id}"
+
+        # Verify the warning was logged
+        warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+        assert len(warning_messages) >= 1, f"Expected at least 1 warning, got {len(warning_messages)}"
+        assert any(
+            "_next_log_id from save data (2) is lower than max_id + 1 (4)" in msg
+            for msg in warning_messages
+        ), f"Expected warning about _next_log_id override, got: {warning_messages}"
+
 
 class TestAcceptedMissionsMigration:
     """Tests for the accepted_missions migration in _state_from_dict.
