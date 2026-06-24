@@ -104,6 +104,10 @@ class GameState:
             ``title``, ``description``, ``system``, ``body``,
             ``credits_change``, ``fuel_change``, ``hull_change``,
             ``morale_change``, ``cargo_change``.
+
+            Note: If ``description`` is not provided in kwargs, it
+            defaults to the ``message`` parameter for backward
+            compatibility.
         """
         entry_id = self._next_log_id
         self._next_log_id += 1
