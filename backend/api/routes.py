@@ -438,7 +438,7 @@ def api_log_paginated(
         ]
 
     total_entries = len(entries)
-    total_pages = max(1, (total_entries + per_page - 1) // per_page)
+    total_pages = (total_entries + per_page - 1) // per_page if total_entries > 0 else 0
 
     start = (page - 1) * per_page
     end = start + per_page

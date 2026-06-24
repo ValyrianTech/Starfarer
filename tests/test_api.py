@@ -3026,6 +3026,7 @@ class TestAPILogPaginated:
         data = resp.json()
         assert data["total_entries"] == 0
         assert data["log_entries"] == []
+        assert data["total_pages"] == 0
 
     def test_paginated_log_search_text(self) -> None:
         """Search should match text in title, message, and description."""
@@ -3048,6 +3049,7 @@ class TestAPILogPaginated:
         data = resp.json()
         assert data["total_entries"] == 0
         assert data["log_entries"] == []
+        assert data["total_pages"] == 0
 
     def test_paginated_log_pagination(self) -> None:
         """Pagination should return correct slices."""
