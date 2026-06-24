@@ -427,10 +427,24 @@ def api_cargo(game_id: str, sort: str = "value", order: str = "desc") -> dict:
         raise HTTPException(status_code=404, detail="Game not found")
     cargo_items = [d.to_cargo_dict() for d in state.discoveries]
 
+    valid_sorts = {"value", "name"}
+    valid_orders = {"asc", "desc"}
+
+    if sort not in valid_sorts:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid sort key '{sort}'. Must be one of: {', '.join(sorted(valid_sorts))}"
+        )
+    if order not in valid_orders:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid order '{order}'. Must be one of: {', '.join(sorted(valid_orders))}"
+        )
+
     if sort == "value":
         reverse = order == "desc"
         cargo_items.sort(key=lambda i: i.get("value", 0), reverse=reverse)
-    elif sort == "name":
+    else:  # sort == "name"
         reverse = order == "desc"
         cargo_items.sort(key=lambda i: i.get("name", ""), reverse=reverse)
 

@@ -2080,6 +2080,66 @@ class TestAPICargo:
         assert data["cargo_items"] == []
         assert data["total_value"] == 0
 
+    def test_cargo_invalid_sort_key(self) -> None:
+        """Invalid sort key should return 422 with helpful error message."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "cargo-inv-sort"})
+        game_id = resp.json()["game_id"]
+        resp = client.get(f"/api/game/{game_id}/cargo?sort=category")
+        assert resp.status_code == 422
+        detail = resp.json()["detail"]
+        assert "Invalid sort key 'category'" in detail
+        assert "Must be one of:" in detail
+        assert "name" in detail
+        assert "value" in detail
+
+    def test_cargo_invalid_order(self) -> None:
+        """Invalid order value should return 422 with helpful error message."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "cargo-inv-order"})
+        game_id = resp.json()["game_id"]
+        resp = client.get(f"/api/game/{game_id}/cargo?sort=value&order=ascending")
+        assert resp.status_code == 422
+        detail = resp.json()["detail"]
+        assert "Invalid order 'ascending'" in detail
+        assert "Must be one of:" in detail
+        assert "asc" in detail
+        assert "desc" in detail
+
+    def test_cargo_invalid_sort_and_order(self) -> None:
+        """Sort validation fires first when both sort and order are invalid."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "cargo-inv-both"})
+        game_id = resp.json()["game_id"]
+        resp = client.get(f"/api/game/{game_id}/cargo?sort=category&order=ascending")
+        assert resp.status_code == 422
+        detail = resp.json()["detail"]
+        assert "Invalid sort key 'category'" in detail
+
+    def test_cargo_sort_name_desc_with_valid_params(self) -> None:
+        """Valid sort=name&order=desc should sort correctly (regression test)."""
+        from backend.models.discovery import Discovery
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "cargo-regr-nd"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        current_sys = state.get_current_system()
+        state.discoveries.append(
+            Discovery(id="rnd-1", category="mineral", name="Alpha Ore",
+                      description="Alpha", value=50, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="rnd-2", category="artifact", name="Zeta Relic",
+                      description="Zeta", value=100, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="rnd-3", category="mineral", name="Beta Crystal",
+                      description="Beta", value=25, system_id=current_sys.id)
+        )
+        GAME_STORE[game_id] = state
+        game_save(state)
+        resp = client.get(f"/api/game/{game_id}/cargo?sort=name&order=desc")
+        assert resp.status_code == 200
+        data = resp.json()
+        names = [item["name"] for item in data["cargo_items"]]
+        assert names == ["Zeta Relic", "Beta Crystal", "Alpha Ore"]
+
 
 class TestFuelWarningSystem:
     """Tests for the fuel warning status system (backend/fuel.py)."""
