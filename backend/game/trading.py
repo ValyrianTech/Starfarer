@@ -257,12 +257,12 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
         if not item or not isinstance(item, str):
             return False, "Item must be a non-empty string."
         # Try exact name match first
-        name_matches = [d for d in state.discoveries if d.name == item]
+        name_matches = [d for d in state.discoveries if d.name == item and d.lore_fragment_id is None]
         if name_matches:
             matching = name_matches
         else:
             # Fall back to category match
-            matching = [d for d in state.discoveries if d.category == item]
+            matching = [d for d in state.discoveries if d.category == item and d.lore_fragment_id is None]
         if not matching:
             return False, f"No discoveries matching '{item}' to sell."
         total_price = 0
@@ -271,11 +271,12 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
         if quantity > len(matching):
             return False, f"Only {len(matching)} item(s) found matching '{item}', requested {quantity}."
         to_sell = matching[:quantity]
+        to_sell_ids = {disc.id for disc in to_sell}
         for disc in to_sell:
             sell_price = int(disc.value * price_mod * stellar_sell_mod)
             total_price += sell_price
             sold_items.append(disc.name)
-            state.discoveries.remove(disc)
+        state.discoveries = [d for d in state.discoveries if d.id not in to_sell_ids]
         state.ship.credits += total_price
         result_message = f"Sold {len(sold_items)} item(s) for {total_price} credits."
         system_name = system.name
@@ -387,12 +388,12 @@ def perform_bulk_sell(state: GameState, items: list[dict]) -> tuple[bool, str, i
 
         available = [d for d in discoveries_snapshot if d.id not in sold_ids]
         # Try exact name match first
-        name_matches = [d for d in available if d.name == item_name]
+        name_matches = [d for d in available if d.name == item_name and d.lore_fragment_id is None]
         if name_matches:
             matching = name_matches
         else:
             # Fall back to category match
-            matching = [d for d in available if d.category == item_name]
+            matching = [d for d in available if d.category == item_name and d.lore_fragment_id is None]
         if not matching:
             errors.append(f"No discoveries matching '{item_name}' to sell.")
             continue
