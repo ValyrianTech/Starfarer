@@ -1185,6 +1185,241 @@ class TestRoutesFullStateResponse:
         resp = _full_state_response(state)
         assert resp["current_system"] is None
 
+    def test_full_state_response_sort_value_desc(self) -> None:
+        """_full_state_response with sort=value, order=desc should sort by value descending."""
+        from backend.api.routes import _full_state_response
+        from backend.models.discovery import Discovery
+        state = new_game(seed=42)
+        current_sys = state.get_current_system()
+        state.discoveries.append(
+            Discovery(id="fsr-vd-1", category="mineral", name="Low",
+                      description="Low value", value=10, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="fsr-vd-2", category="artifact", name="High",
+                      description="High value", value=100, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="fsr-vd-3", category="mineral", name="Medium",
+                      description="Medium value", value=50, system_id=current_sys.id)
+        )
+        resp = _full_state_response(state, sort="value", order="desc")
+        values = [item["value"] for item in resp["cargo_items"]]
+        assert values == [100, 50, 10]
+
+    def test_full_state_response_sort_value_asc(self) -> None:
+        """_full_state_response with sort=value, order=asc should sort by value ascending."""
+        from backend.api.routes import _full_state_response
+        from backend.models.discovery import Discovery
+        state = new_game(seed=42)
+        current_sys = state.get_current_system()
+        state.discoveries.append(
+            Discovery(id="fsr-va-1", category="mineral", name="Low",
+                      description="Low value", value=10, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="fsr-va-2", category="artifact", name="High",
+                      description="High value", value=100, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="fsr-va-3", category="mineral", name="Medium",
+                      description="Medium value", value=50, system_id=current_sys.id)
+        )
+        resp = _full_state_response(state, sort="value", order="asc")
+        values = [item["value"] for item in resp["cargo_items"]]
+        assert values == [10, 50, 100]
+
+    def test_full_state_response_sort_name_asc(self) -> None:
+        """_full_state_response with sort=name, order=asc should sort by name ascending."""
+        from backend.api.routes import _full_state_response
+        from backend.models.discovery import Discovery
+        state = new_game(seed=42)
+        current_sys = state.get_current_system()
+        state.discoveries.append(
+            Discovery(id="fsr-na-1", category="mineral", name="Zeta Ore",
+                      description="Zeta", value=50, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="fsr-na-2", category="artifact", name="Alpha Relic",
+                      description="Alpha", value=100, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="fsr-na-3", category="mineral", name="Beta Crystal",
+                      description="Beta", value=25, system_id=current_sys.id)
+        )
+        resp = _full_state_response(state, sort="name", order="asc")
+        names = [item["name"] for item in resp["cargo_items"]]
+        assert names == ["Alpha Relic", "Beta Crystal", "Zeta Ore"]
+
+    def test_full_state_response_sort_name_desc(self) -> None:
+        """_full_state_response with sort=name, order=desc should sort by name descending."""
+        from backend.api.routes import _full_state_response
+        from backend.models.discovery import Discovery
+        state = new_game(seed=42)
+        current_sys = state.get_current_system()
+        state.discoveries.append(
+            Discovery(id="fsr-nd-1", category="mineral", name="Alpha Ore",
+                      description="Alpha", value=50, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="fsr-nd-2", category="artifact", name="Zeta Relic",
+                      description="Zeta", value=100, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="fsr-nd-3", category="mineral", name="Beta Crystal",
+                      description="Beta", value=25, system_id=current_sys.id)
+        )
+        resp = _full_state_response(state, sort="name", order="desc")
+        names = [item["name"] for item in resp["cargo_items"]]
+        assert names == ["Zeta Relic", "Beta Crystal", "Alpha Ore"]
+
+    def test_full_state_response_no_sorting_backward_compat(self) -> None:
+        """_full_state_response without sort/order should preserve original order."""
+        from backend.api.routes import _full_state_response
+        from backend.models.discovery import Discovery
+        state = new_game(seed=42)
+        current_sys = state.get_current_system()
+        state.discoveries.append(
+            Discovery(id="fsr-bc-1", category="mineral", name="Beta",
+                      description="B", value=50, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="fsr-bc-2", category="artifact", name="Alpha",
+                      description="A", value=100, system_id=current_sys.id)
+        )
+        resp = _full_state_response(state)
+        names = [item["name"] for item in resp["cargo_items"]]
+        assert names == ["Beta", "Alpha"]
+
+    def test_full_state_response_invalid_sort_key(self) -> None:
+        """_full_state_response with invalid sort key should raise HTTPException 422."""
+        from backend.api.routes import _full_state_response
+        from fastapi import HTTPException
+        state = new_game(seed=42)
+        with pytest.raises(HTTPException) as exc_info:
+            _full_state_response(state, sort="category", order="desc")
+        assert exc_info.value.status_code == 422
+        assert "Invalid sort key 'category'" in exc_info.value.detail
+
+    def test_full_state_response_invalid_order(self) -> None:
+        """_full_state_response with invalid order should raise HTTPException 422."""
+        from backend.api.routes import _full_state_response
+        from fastapi import HTTPException
+        state = new_game(seed=42)
+        with pytest.raises(HTTPException) as exc_info:
+            _full_state_response(state, sort="value", order="ascending")
+        assert exc_info.value.status_code == 422
+        assert "Invalid order 'ascending'" in exc_info.value.detail
+
+    def test_full_state_response_sort_without_order_is_ok(self) -> None:
+        """_full_state_response with sort but no order should validate but not sort."""
+        from backend.api.routes import _full_state_response
+        from backend.models.discovery import Discovery
+        state = new_game(seed=42)
+        current_sys = state.get_current_system()
+        state.discoveries.append(
+            Discovery(id="fsr-so-1", category="mineral", name="Beta",
+                      description="B", value=50, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="fsr-so-2", category="artifact", name="Alpha",
+                      description="A", value=100, system_id=current_sys.id)
+        )
+        resp = _full_state_response(state, sort="value")
+        assert resp["cargo_items"] is not None
+
+    def test_full_state_response_order_without_sort_is_ok(self) -> None:
+        """_full_state_response with order but no sort should validate but not sort."""
+        from backend.api.routes import _full_state_response
+        from backend.models.discovery import Discovery
+        state = new_game(seed=42)
+        current_sys = state.get_current_system()
+        state.discoveries.append(
+            Discovery(id="fsr-os-1", category="mineral", name="Beta",
+                      description="B", value=50, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="fsr-os-2", category="artifact", name="Alpha",
+                      description="A", value=100, system_id=current_sys.id)
+        )
+        resp = _full_state_response(state, order="asc")
+        assert resp["cargo_items"] is not None
+
+
+class TestRoutesGetFullStateSorting:
+    """Tests for GET /game/{game_id} with sort/order query parameters."""
+
+    def test_get_game_sort_value_asc(self) -> None:
+        """Full game state endpoint with sort=value&order=asc."""
+        from backend.models.discovery import Discovery
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "fs-api-va"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        current_sys = state.get_current_system()
+        state.discoveries.append(
+            Discovery(id="api-va-1", category="mineral", name="Low",
+                      description="Low value", value=10, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="api-va-2", category="artifact", name="High",
+                      description="High value", value=100, system_id=current_sys.id)
+        )
+        GAME_STORE[game_id] = state
+        game_save(state)
+        resp = client.get(f"/api/game/{game_id}?sort=value&order=asc")
+        assert resp.status_code == 200
+        values = [item["value"] for item in resp.json()["cargo_items"]]
+        assert values == [10, 100]
+
+    def test_get_game_sort_name_desc(self) -> None:
+        """Full game state endpoint with sort=name&order=desc."""
+        from backend.models.discovery import Discovery
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "fs-api-nd"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        current_sys = state.get_current_system()
+        state.discoveries.append(
+            Discovery(id="api-nd-1", category="mineral", name="Alpha Ore",
+                      description="A", value=50, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="api-nd-2", category="artifact", name="Zeta Relic",
+                      description="Z", value=100, system_id=current_sys.id)
+        )
+        GAME_STORE[game_id] = state
+        game_save(state)
+        resp = client.get(f"/api/game/{game_id}?sort=name&order=desc")
+        assert resp.status_code == 200
+        names = [item["name"] for item in resp.json()["cargo_items"]]
+        assert names == ["Zeta Relic", "Alpha Ore"]
+
+    def test_get_game_no_sort_is_backward_compat(self) -> None:
+        """Full game state endpoint without sort/order should work as before."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "fs-api-bc"})
+        game_id = resp.json()["game_id"]
+        resp = client.get(f"/api/game/{game_id}")
+        assert resp.status_code == 200
+        assert "cargo_items" in resp.json()
+        assert "total_value" in resp.json()
+
+    def test_get_game_invalid_sort_returns_422(self) -> None:
+        """Full game state endpoint with invalid sort should return 422."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "fs-api-inv-s"})
+        game_id = resp.json()["game_id"]
+        resp = client.get(f"/api/game/{game_id}?sort=category&order=desc")
+        assert resp.status_code == 422
+        detail = resp.json()["detail"]
+        assert "Invalid sort key 'category'" in detail
+
+    def test_get_game_invalid_order_returns_422(self) -> None:
+        """Full game state endpoint with invalid order should return 422."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "fs-api-inv-o"})
+        game_id = resp.json()["game_id"]
+        resp = client.get(f"/api/game/{game_id}?sort=value&order=ascending")
+        assert resp.status_code == 422
+        detail = resp.json()["detail"]
+        assert "Invalid order 'ascending'" in detail
+
 
 class TestRoutesGetState:
     """Tests for _get_state helper."""
