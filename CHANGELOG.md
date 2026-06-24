@@ -42,6 +42,11 @@
 - Enhanced log entry schema with structured metadata fields: `id` (sequential integer), `type`, `message`, `timestamp`, `category`, `title`, `description`, `system`, `body`, `credits_change`, `fuel_change`, `hull_change`, `morale_change`, `cargo_change`. The old `/api/game/{id}/log` endpoint is backward-compatible and also returns the new fields.
 - Sequential integer log entry IDs with `_next_log_id` counter in GameState for collision prevention on save/load cycles
 - Backward compatibility for old saves without `_next_log_id` (computed from max existing ID + 1, defaults to 1 if log is empty)
+- Contextual hint system (`backend/hints.py`) with 8 hint definitions (`fuel_zero`, `fuel_critical`, `fuel_low_no_station`, `hull_low`, `morale_low`, `first_uncharted`, `cargo_full`, `first_crisis`) that evaluate game state conditions and return contextual survival tips. Hints have severity levels (critical/warning/info/tip), priority ordering, and a maximum of 2 hints returned at a time. Critical hints (`fuel_zero`) cannot be dismissed.
+- `POST /api/game/{id}/hints/dismiss` endpoint to dismiss a contextual hint for the remainder of the session
+- `DismissHintRequest` schema in `backend/api/schemas.py` with `hint_id: str` field
+- `dismissed_hints` field (`set[str]`) added to `GameState` for persistent hint dismissal tracking across save/load
+- `hints` field in full game state response (`GET /api/game/{id}`) — an array of active hint dicts with `id`, `severity`, `message`, and optional `command`
 
 ### Changed
 - Added type annotations to `get_fuel_status` function parameters in `backend/fuel.py`
@@ -54,6 +59,8 @@
 - `POST /api/game/{id}/faction/{fid}/mission` now uses tiered mission system: guaranteed success (no random success/failure), costs/rewards scale with reputation, requires being at a trading station, response includes `mission` field with details
 - All game action log calls now include structured metadata fields (category, title, system, body, resource changes) for: jumps, scans, landings, exploration, distress calls, salvage, emergency crafting, trading, upgrades, missions, events, and faction reputation changes
 - Mission completion log entry now includes `credits_change` metadata
+- Added type annotations to `add_log` method (`**kwargs: str | int`)
+- Added type annotations across multiple modules to fix mypy errors
 
 ### Fixed
 - Query parameters now URL-encoded in `api.js` cargo method using `encodeURIComponent()`
@@ -90,6 +97,17 @@
 - Mission lookup now only generates missions for the relevant faction (not all factions)
 - Log entry ID collision risk on save/load cycles
 - `total_pages` returns 0 instead of 1 when there are 0 log entries in paginated endpoint
+- `_fuel_low_no_station` hint no longer suggests heading to a station when player has 0 fuel and cannot move
+- `_first_crisis` hint no longer fires multiple times when a resolved crisis precedes an unresolved one
+- `_format_message` no longer displays "None" for nearest station when no trading stations exist
+- `_first_crisis` condition now correctly detects resolved crisis events by checking log entries for crisis category
+- `_first_crisis` log-entry check no longer uses overly broad substring match on "crisis" in the title — now uses exact category matching
+- `_format_message` no longer imports `get_fuel_status` inside the function body (moved to module-level import)
+- `_fuel_low_no_station` hint severity corrected from `info` to `warning` (was logically a warning but had wrong severity)
+- Critical hints (`fuel_zero`) are no longer added to `dismissed_hints` when displayed — they cannot be dismissed
+- `_fuel_low_no_station` now guards against negative fuel values (clamps to 0)
+- `test_first_crisis_detects_title_with_crisis` renamed to accurately reflect what it tests
+- `_first_uncharted` hint condition no longer tightly coupled to starting-system-has-station assumption — now handles edge case where player visits a station before exploring uncharted systems
 
 ### Removed
 - Dead code `get_available_events` (defined but never used in production)

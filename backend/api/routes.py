@@ -14,7 +14,7 @@ from fastapi import APIRouter, HTTPException
 from backend.models.game_state import GameState
 from backend.api.schemas import (
     AcceptMissionRequest, BulkSellRequest, CompleteMissionRequest, CraftRequest,
-    NewGameRequest, ResolveEventRequest, TradeRequest, UpgradeRequest, HealthResponse,
+    DismissHintRequest, NewGameRequest, ResolveEventRequest, TradeRequest, UpgradeRequest, HealthResponse,
 )
 from backend.game.manager import (
     GAME_STORE, new_game, get_galaxy, get_system_detail, game_save, game_load as game_load_func,
@@ -27,6 +27,7 @@ from backend.game.engine import (
 )
 from backend.game.trading import get_upgrade_info, purchase_upgrade, perform_trade, perform_bulk_sell
 from backend.database import get_leaderboard
+from backend.hints import HINT_DEFINITIONS, get_contextual_hints
 from backend.fuel import get_fuel_status
 from backend.generation.lore_content import ARC_DISPLAY_NAMES
 from backend.models.faction import get_faction, FACTION_DEFINITIONS
@@ -1225,6 +1226,30 @@ def api_load(game_id: str) -> dict:
     }
 
 
+@router.post("/game/{game_id}/hints/dismiss")
+def api_dismiss_hint(game_id: str, req: DismissHintRequest) -> dict:
+    """Dismiss a hint for the remainder of the session.
+
+    :param game_id: The unique identifier of the game.
+    :type game_id: str
+    :param req: The dismiss request containing the hint_id to dismiss.
+    :type req: DismissHintRequest
+    :returns: A dictionary with ``result`` message.
+    :rtype: dict
+    :raises HTTPException: 404 if the game is not found; 400 if the hint is critical and cannot be dismissed.
+    """
+    state = _get_state(game_id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Game not found")
+    hint_defs = {h.id: h for h in HINT_DEFINITIONS}
+    hint_def = hint_defs.get(req.hint_id)
+    if hint_def and hint_def.severity == "critical":
+        raise HTTPException(status_code=400, detail="Critical hints cannot be dismissed")
+    state.dismissed_hints.add(req.hint_id)
+    game_save(state)
+    return {"result": f"Hint '{req.hint_id}' dismissed."}
+
+
 @router.get("/leaderboard")
 def api_leaderboard() -> dict:
     """Retrieve the top 10 players from the leaderboard.
@@ -1288,6 +1313,8 @@ def _full_state_response(state: GameState, sort: str | None = None, order: str |
                 reverse = order == "desc"
                 cargo_items.sort(key=lambda i: i.get("name", ""), reverse=reverse)
 
+    hints = get_contextual_hints(state, state.systems, state.dismissed_hints)
+
     return {
         "game_id": state.id,
         "seed": state.seed,
@@ -1309,4 +1336,5 @@ def _full_state_response(state: GameState, sort: str | None = None, order: str |
         "total_value": sum(item["value"] for item in cargo_items),
         "top3_ids": [item["id"] for item in sorted(cargo_items, key=lambda i: i.get("value", 0), reverse=True)[:3]],
         "fuel_status": get_fuel_status(state, state.systems),
+        "hints": hints,
     }

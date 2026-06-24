@@ -72,6 +72,7 @@ class GameState:
     completed_missions: list[dict] = field(default_factory=list)
     daily_missions_used: dict[str, str] = field(default_factory=dict)
     accepted_missions: dict[str, str] = field(default_factory=dict)
+    dismissed_hints: set[str] = field(default_factory=set)
     _next_log_id: int = 1
 
     def __post_init__(self) -> None:
@@ -92,7 +93,7 @@ class GameState:
         """
         return self.systems.get(self.ship.current_system_id)
 
-    def add_log(self, entry_type: str, message: str, **kwargs) -> None:
+    def add_log(self, entry_type: str, message: str, **kwargs: str | int) -> None:
         """Append a new entry to the ship's log.
 
         :param entry_type: The category of the log entry (e.g.
