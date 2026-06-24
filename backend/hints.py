@@ -6,7 +6,7 @@ without intrusive tutorials.
 """
 
 from __future__ import annotations
-from typing import Any, Callable, Optional
+from typing import Callable
 
 from backend.fuel import get_fuel_status
 from backend.models.game_state import GameState
