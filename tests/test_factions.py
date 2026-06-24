@@ -2717,3 +2717,61 @@ class TestReputationSummary:
     def test_rep_label_hostile(self) -> None:
         assert _rep_label(-21) == "Hostile"
         assert _rep_label(-100) == "Hostile"
+
+
+def test_api_complete_mission_old_format_accepted() -> None:
+    """Completing a mission that was accepted in old-format (plain string) should work.
+    
+    This tests the migration fix: old-format accepted_missions values (plain faction_id strings)
+    get default values for all required fields during _state_from_dict, so api_complete_mission
+    can reconstruct a FactionMission without KeyError.
+    """
+    resp = client.post(
+        "/api/game/new",
+        json={"seed": 42, "game_id": "complete-old-format"},
+    )
+    game_id = resp.json()["game_id"]
+    state = GAME_STORE.get(game_id)
+    assert state is not None
+    
+    state.ship.fuel = 100
+    state.ship.credits = 500
+    current_system = state.get_current_system()
+    assert current_system is not None
+    current_system.has_trading_station = True
+    
+    state.accepted_missions["mission_old_format"] = "stellar_cartographers"
+    
+    GAME_STORE[game_id] = state
+    game_save(state)
+    
+    GAME_STORE.pop(game_id, None)
+    
+    resp = client.get(f"/api/game/{game_id}")
+    assert resp.status_code == 200
+    
+    state = GAME_STORE.get(game_id)
+    assert state is not None
+    
+    stored = state.accepted_missions.get("mission_old_format")
+    assert stored is not None
+    assert stored["faction_id"] == "stellar_cartographers"
+    assert stored["tier"] == 1
+    assert stored["title"] == "Unknown Mission"
+    assert stored["description"] == "Migrated from old save format."
+    assert stored["objective_type"] == "courier"
+    assert stored["objective_target"] == ""
+    assert stored["fuel_cost"] == 0
+    assert stored["credit_cost"] == 0
+    assert stored["credit_reward"] == 0
+    assert stored["reputation_reward"] == 0
+    
+    resp = client.post(
+        f"/api/game/{game_id}/missions/mission_old_format/complete",
+        json={"mission_id": "mission_old_format"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["mission"]["id"] == "mission_old_format"
+    assert "rewards" in data
+    assert "ship" in data

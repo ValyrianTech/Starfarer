@@ -1656,7 +1656,7 @@ class TestAcceptedMissionsMigration:
     """
 
     def test_old_format_string_values_are_migrated(self) -> None:
-        """Old-format string values should be converted to dict format."""
+        """Old-format string values should be converted to dict with all default fields."""
         from backend.game.manager import _state_from_dict
         from backend.models.ship import Ship
         from backend.models.system import StarSystem
@@ -1684,8 +1684,21 @@ class TestAcceptedMissionsMigration:
             },
         }
         state = _state_from_dict(d)
-        assert state.accepted_missions["mission_old_1"] == {"faction_id": "stellar_cartographers"}
-        assert state.accepted_missions["mission_old_2"] == {"faction_id": "void_traders"}
+        expected_defaults = {
+            "faction_id": "stellar_cartographers",
+            "tier": 1,
+            "title": "Unknown Mission",
+            "description": "Migrated from old save format.",
+            "objective_type": "courier",
+            "objective_target": "",
+            "fuel_cost": 0,
+            "credit_cost": 0,
+            "credit_reward": 0,
+            "reputation_reward": 0,
+        }
+        assert state.accepted_missions["mission_old_1"] == expected_defaults
+        expected_defaults["faction_id"] = "void_traders"
+        assert state.accepted_missions["mission_old_2"] == expected_defaults
 
     def test_new_format_dict_values_are_preserved(self) -> None:
         """New-format dict values should be preserved as-is."""
@@ -1758,7 +1771,19 @@ class TestAcceptedMissionsMigration:
             },
         }
         state = _state_from_dict(d)
-        assert state.accepted_missions["mission_old"] == {"faction_id": "stellar_cartographers"}
+        expected_old_defaults = {
+            "faction_id": "stellar_cartographers",
+            "tier": 1,
+            "title": "Unknown Mission",
+            "description": "Migrated from old save format.",
+            "objective_type": "courier",
+            "objective_target": "",
+            "fuel_cost": 0,
+            "credit_cost": 0,
+            "credit_reward": 0,
+            "reputation_reward": 0,
+        }
+        assert state.accepted_missions["mission_old"] == expected_old_defaults
         assert state.accepted_missions["mission_new"] == {
             "faction_id": "void_traders",
             "tier": 2,
