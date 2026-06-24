@@ -3156,6 +3156,29 @@ class TestAPILogPaginated:
             combined = f"{entry.get('title', '')} {entry.get('message', '')} {entry.get('description', '')}".lower()
             assert "new" in combined
 
+    def test_paginated_log_combined_filter_page2(self) -> None:
+        """Combined category+search filtering with pagination page 2 should work."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "pag-combined-filter-page2"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        state.add_log("system", "The journey begins", category="system")
+        state.add_log("system", "Continuing the journey", category="system")
+        state.add_log("system", "Journey complete", category="system")
+        GAME_STORE[game_id] = state
+        game_save(state)
+        resp = client.get(f"/api/game/{game_id}/log/paginated?category=system&search=journey&per_page=1&page=2")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["page"] == 2
+        assert data["per_page"] == 1
+        assert data["total_entries"] >= 2
+        assert data["total_pages"] >= 2
+        assert len(data["log_entries"]) == 1
+        entry = data["log_entries"][0]
+        assert entry["category"] == "system"
+        combined = f"{entry.get('title', '')} {entry.get('message', '')} {entry.get('description', '')}".lower()
+        assert "journey" in combined
+
     def test_paginated_log_nonexistent_game(self) -> None:
         """Paginated log should 404 for nonexistent game."""
         resp = client.get("/api/game/nonexistent-gid/log/paginated")
