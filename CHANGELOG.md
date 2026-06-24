@@ -60,6 +60,7 @@
 - All game action log calls now include structured metadata fields (category, title, system, body, resource changes) for: jumps, scans, landings, exploration, distress calls, salvage, emergency crafting, trading, upgrades, missions, events, and faction reputation changes
 - Mission completion log entry now includes `credits_change` metadata
 - Added type annotations to `add_log` method (`**kwargs: str | int`)
+- Added type annotations across multiple modules to fix mypy errors
 
 ### Fixed
 - Query parameters now URL-encoded in `api.js` cargo method using `encodeURIComponent()`
@@ -100,6 +101,13 @@
 - `_first_crisis` hint no longer fires multiple times when a resolved crisis precedes an unresolved one
 - `_format_message` no longer displays "None" for nearest station when no trading stations exist
 - `_first_crisis` condition now correctly detects resolved crisis events by checking log entries for crisis category
+- `_first_crisis` log-entry check no longer uses overly broad substring match on "crisis" in the title — now uses exact category matching
+- `_format_message` no longer imports `get_fuel_status` inside the function body (moved to module-level import)
+- `_fuel_low_no_station` hint severity corrected from `info` to `warning` (was logically a warning but had wrong severity)
+- Critical hints (`fuel_zero`) are no longer added to `dismissed_hints` when displayed — they cannot be dismissed
+- `_fuel_low_no_station` now guards against negative fuel values (clamps to 0)
+- `test_first_crisis_detects_title_with_crisis` renamed to accurately reflect what it tests
+- `_first_uncharted` hint condition no longer tightly coupled to starting-system-has-station assumption — now handles edge case where player visits a station before exploring uncharted systems
 
 ### Removed
 - Dead code `get_available_events` (defined but never used in production)
