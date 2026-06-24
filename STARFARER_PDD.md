@@ -269,7 +269,8 @@ POST /api/game/{id}/scan — Scan current system (costs fuel)
 POST /api/game/{id}/land/{body_id} — Land on a planet or moon
 POST /api/game/{id}/explore — Explore current surface location (response includes `lore_fragments_discovered` array)
 POST /api/game/{id}/event/{event_id}/resolve — Resolve an event with a choice
-GET /api/game/{id}/log — Ship log entries
+GET /api/game/{id}/log — Ship log entries (all entries, most-recent-first, with structured metadata: category, title, description, system, body, credits_change, fuel_change, hull_change, morale_change, cargo_change)
+GET /api/game/{id}/log/paginated — Paginated ship log with category filter and full-text search
 GET /api/game/{id}/discoveries — Discovered lore and artifacts
 POST /api/game/{id}/trade — Buy or sell at a station
 POST /api/game/{id}/upgrade — Purchase a ship upgrade

@@ -119,6 +119,7 @@
 | Buy upgrade | `POST /api/game/{id}/upgrade` | Body: `{"upgrade_id": "hyperdrive"}` |
 | Nearby systems | `GET /api/game/{id}/nearby` | Sorted by distance |
 | Jump to system | `POST /api/game/{id}/jump/{sid}` | Costs 3 fuel per LY |
+| View paginated log | `GET /api/game/{id}/log/paginated?page=1&per_page=20&category=trade&search=artifact` | Paginated, filterable, searchable log |
 
 ---
 
