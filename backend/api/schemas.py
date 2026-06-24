@@ -110,3 +110,9 @@ class CompleteMissionRequest(BaseModel):
 
     mission_id: str
     faction_id: Optional[str] = None
+
+
+class DismissHintRequest(BaseModel):
+    """Request body for dismissing a hint."""
+
+    hint_id: str
