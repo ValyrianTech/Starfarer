@@ -118,14 +118,19 @@ class GameState:
             "category": kwargs.get("category", entry_type),
             "title": title,
             "description": kwargs.get("description", message),
-            "system": kwargs.get("system"),
-            "body": kwargs.get("body"),
-            "credits_change": kwargs.get("credits_change"),
-            "fuel_change": kwargs.get("fuel_change"),
-            "hull_change": kwargs.get("hull_change"),
-            "morale_change": kwargs.get("morale_change"),
-            "cargo_change": kwargs.get("cargo_change"),
         }
+        for key in (
+            "system",
+            "body",
+            "credits_change",
+            "fuel_change",
+            "hull_change",
+            "morale_change",
+            "cargo_change",
+        ):
+            value = kwargs.get(key)
+            if value is not None:
+                entry[key] = value
         self.log_entries.append(entry)
 
     def apply_choice_outcome(self, outcome: str) -> dict:

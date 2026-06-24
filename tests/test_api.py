@@ -2999,7 +2999,7 @@ class TestAPILogPaginated:
             assert "category" in entry
             assert "title" in entry
             assert "description" in entry
-            assert "system" in entry
+            assert entry.get("system") is None or isinstance(entry["system"], str)
             assert entry.get("credits_change") is None or isinstance(entry["credits_change"], int)
             assert entry.get("fuel_change") is None or isinstance(entry["fuel_change"], int)
             assert entry.get("hull_change") is None or isinstance(entry["hull_change"], int)
