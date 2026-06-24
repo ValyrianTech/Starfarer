@@ -448,14 +448,14 @@ def api_cargo(game_id: str, sort: str = "value", order: str = "desc") -> dict:
             detail=f"Invalid order '{order}'. Must be one of: {', '.join(sorted(valid_orders))}"
         )
 
+    total_value = sum(item["value"] for item in cargo_items)
+
     if sort == "value":
         reverse = order == "desc"
         cargo_items.sort(key=lambda i: i.get("value", 0), reverse=reverse)
     else:  # sort == "name"
         reverse = order == "desc"
         cargo_items.sort(key=lambda i: i.get("name", ""), reverse=reverse)
-
-    total_value = sum(item["value"] for item in cargo_items)
 
     return {
         "cargo": state.ship.cargo,
