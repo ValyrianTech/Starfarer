@@ -153,7 +153,7 @@ HINT_DEFINITIONS: list[Hint] = [
     ),
     Hint(
         hint_id="fuel_low_no_station",
-        severity="info",
+        severity="warning",
         message_template="Consider heading to a station for refueling. Nearest station: {nearest_station} ({distance} LY)",
         condition=_fuel_low_no_station,
         command=None,
