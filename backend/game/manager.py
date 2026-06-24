@@ -234,6 +234,7 @@ def _state_to_dict(state: GameState) -> dict:
         "completed_missions": state.completed_missions,
         "daily_missions_used": state.daily_missions_used,
         "accepted_missions": dict(state.accepted_missions),
+        "_next_log_id": state._next_log_id,
     }
 
 
@@ -290,6 +291,7 @@ def _state_from_dict(d: dict) -> GameState:
         completed_missions=d.get("completed_missions", []),
         daily_missions_used=d.get("daily_missions_used", {}),
         accepted_missions=dict(d.get("accepted_missions", {})),
+        _next_log_id=d.get("_next_log_id", 1),
     )
 
 

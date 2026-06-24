@@ -330,6 +330,37 @@ class TestGameState:
         assert len(state.log_entries) == 1
         assert state.log_entries[0]["type"] == "test"
         assert state.log_entries[0]["message"] == "Test message"
+        assert state.log_entries[0]["id"] == 1
+
+    def test_add_log_id_starts_at_1(self) -> None:
+        ship = Ship()
+        state = GameState(id="test-2b", seed=42, ship=ship)
+        state.add_log("test", "First entry")
+        assert state.log_entries[0]["id"] == 1
+
+    def test_add_log_id_persists_across_save_load(self) -> None:
+        from backend.game.manager import _state_to_dict, _state_from_dict
+
+        ship = Ship()
+        state = GameState(id="test-persist", seed=42, ship=ship)
+        state.add_log("test", "Entry 1")
+        state.add_log("test", "Entry 2")
+        state.add_log("test", "Entry 3")
+
+        assert len(state.log_entries) == 3
+        assert state.log_entries[0]["id"] == 1
+        assert state.log_entries[1]["id"] == 2
+        assert state.log_entries[2]["id"] == 3
+
+        d = _state_to_dict(state)
+        restored = _state_from_dict(d)
+
+        restored.add_log("test", "Entry 4")
+        restored.add_log("test", "Entry 5")
+
+        assert len(restored.log_entries) == 5
+        assert restored.log_entries[3]["id"] == 4
+        assert restored.log_entries[4]["id"] == 5
 
     def test_apply_choice_outcome(self) -> None:
         ship = Ship(fuel=50, max_fuel=100)

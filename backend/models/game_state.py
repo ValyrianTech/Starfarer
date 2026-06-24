@@ -74,6 +74,7 @@ class GameState:
     completed_missions: list[dict] = field(default_factory=list)
     daily_missions_used: dict[str, str] = field(default_factory=dict)
     accepted_missions: dict[str, str] = field(default_factory=dict)
+    _next_log_id: int = 1
 
     def __post_init__(self) -> None:
         """Initialize the ``game_started`` timestamp if not already set.
@@ -106,7 +107,8 @@ class GameState:
             ``credits_change``, ``fuel_change``, ``hull_change``,
             ``morale_change``, ``cargo_change``.
         """
-        entry_id = len(self.log_entries) + 1
+        entry_id = self._next_log_id
+        self._next_log_id += 1
         title = kwargs.get("title", "")
         if not title and entry_type:
             title = entry_type.replace("_", " ").title()
