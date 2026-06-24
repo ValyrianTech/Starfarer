@@ -194,7 +194,9 @@ def _format_message(template: str, game_state: GameState, systems: dict[str, Sta
     if "{nearest_station}" in template or "{distance}" in template:
         from backend.fuel import get_fuel_status
         fuel_status = get_fuel_status(game_state, systems)
-        nearest = fuel_status.get("nearest_station_system", "Unknown")
+        nearest = fuel_status.get("nearest_station_system")
+        if nearest is None:
+            nearest = "Unknown"
         distance = fuel_status.get("nearest_station_distance", 0.0)
         return template.format(nearest_station=nearest, distance=distance)
     return template

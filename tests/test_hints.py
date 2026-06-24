@@ -3,6 +3,7 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import pytest
+from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 from backend.main import app
@@ -403,6 +404,21 @@ class TestMessageFormatting:
         hints = get_contextual_hints(state, state.systems)
         fuel_low_hints = [h for h in hints if h["id"] == "fuel_low_no_station"]
         assert len(fuel_low_hints) >= 0
+
+    def test_format_with_no_nearest_station(self) -> None:
+        state = _make_game()
+        mock_status = {
+            "nearest_station_system": None,
+            "nearest_station_distance": 0.0,
+        }
+        with patch("backend.fuel.get_fuel_status", return_value=mock_status):
+            msg = _format_message(
+                "Nearest station: {nearest_station} ({distance} LY)",
+                state,
+                state.systems,
+            )
+        assert "Unknown" in msg
+        assert "None" not in msg
 
 
 class TestHintsInGameStateResponse:
