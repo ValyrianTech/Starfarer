@@ -50,6 +50,8 @@ function updateShipStatus(ship) {
   renderCargoPanel();
 }
 
+let _cargoRequestId = 0;
+
 async function renderCargoPanel() {
   const gameId = GAME_ID;
   if (!gameId) return;
@@ -82,7 +84,9 @@ async function renderCargoPanel() {
   const [sortKey, order] = val.split('_');
 
   try {
+    const requestId = ++_cargoRequestId;
     const data = await API.cargo(gameId, sortKey, order);
+    if (requestId !== _cargoRequestId) return;
 
     const totalEl = document.getElementById('cargo-total-value');
     if (totalEl) totalEl.textContent = `Total Value: ${formatNumber(data.total_value || 0)} cr`;
