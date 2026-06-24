@@ -1216,6 +1216,7 @@ class TestBulkSell:
 
     def test_bulk_sell_success(self) -> None:
         """Basic successful bulk sell of multiple discoveries."""
+        from backend.models.discovery import Discovery
         state = new_game(seed=42)
         system = state.get_current_system()
         assert system is not None
@@ -1224,15 +1225,32 @@ class TestBulkSell:
             return  # pragma: no cover
         land_on_body(state, planet.id)
         explore_surface(state)
-        assert len(state.discoveries) > 0
-        cat = state.discoveries[0].category
+        # Clear lore-linked discoveries and add regular ones
+        state.discoveries.clear()
+        d1 = Discovery(
+            id="bulk_sell_d1",
+            name="Common Ore",
+            category="mineral",
+            description="A common mineral",
+            lore_fragment_id=None,
+            value=100,
+        )
+        d2 = Discovery(
+            id="bulk_sell_d2",
+            name="Rare Ore",
+            category="mineral",
+            description="A rare mineral",
+            lore_fragment_id=None,
+            value=200,
+        )
+        state.discoveries.append(d1)
+        state.discoveries.append(d2)
         credits_before = state.ship.credits
-        count_before = len(state.discoveries)
-        ok, msg, sold_count, total_price = perform_bulk_sell(state, [{"item": cat, "quantity": 2}])
+        ok, msg, sold_count, total_price = perform_bulk_sell(state, [{"item": "mineral", "quantity": 2}])
         assert ok is True
         assert "Sold" in msg
         assert state.ship.credits > credits_before
-        assert len(state.discoveries) <= count_before - 1
+        assert len(state.discoveries) == 0
 
     def test_bulk_sell_bool_quantity_rejected(self) -> None:
         """Passing quantity=True should be rejected with an error."""
@@ -1338,6 +1356,7 @@ class TestBulkSell:
 
     def test_bulk_sell_partial_failure(self) -> None:
         """Some items fail but others succeed in a partial failure scenario."""
+        from backend.models.discovery import Discovery
         state = new_game(seed=42)
         system = state.get_current_system()
         assert system is not None
@@ -1346,11 +1365,20 @@ class TestBulkSell:
             return  # pragma: no cover
         land_on_body(state, planet.id)
         explore_surface(state)
-        assert len(state.discoveries) > 0
-        cat = state.discoveries[0].category
+        # Clear lore-linked discoveries and add a regular one
+        state.discoveries.clear()
+        d1 = Discovery(
+            id="bulk_sell_partial_d1",
+            name="Common Ore",
+            category="mineral",
+            description="A common mineral",
+            lore_fragment_id=None,
+            value=100,
+        )
+        state.discoveries.append(d1)
         credits_before = state.ship.credits
         ok, msg, sold_count, total_price = perform_bulk_sell(state, [
-            {"item": cat, "quantity": 1},
+            {"item": "mineral", "quantity": 1},
             {"item": "nonexistent_category", "quantity": 1},
         ])
         assert ok is True
@@ -1402,6 +1430,88 @@ class TestBulkSell:
         assert "No items could be sold." in msg
         assert "No discoveries matching 'nonexistent_alpha'" in msg
         assert "No discoveries matching 'nonexistent_beta'" in msg
+
+    def test_bulk_sell_lore_linked_discoveries_excluded(self) -> None:
+        """Lore-linked discoveries should not be sold by bulk sell."""
+        from backend.models.discovery import Discovery
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
+        if not planet:
+            return  # pragma: no cover
+        land_on_body(state, planet.id)
+        explore_surface(state)
+        # Create a lore-linked discovery
+        lore_disc = Discovery(
+            id="lore_linked_disc",
+            name="Ancient Artifact",
+            category="artifact",
+            description="A lore-linked artifact",
+            lore_fragment_id="frag_001",
+            value=1000,
+        )
+        # Create a regular sellable discovery with the same name
+        regular_disc = Discovery(
+            id="regular_disc",
+            name="Ancient Artifact",
+            category="artifact",
+            description="A regular artifact",
+            lore_fragment_id=None,
+            value=500,
+        )
+        state.discoveries.clear()
+        state.discoveries.append(lore_disc)
+        state.discoveries.append(regular_disc)
+        credits_before = state.ship.credits
+        # Try to sell by name - should only sell the non-lore one
+        ok, msg, sold_count, total_price = perform_bulk_sell(state, [{"item": "Ancient Artifact", "quantity": 2}])
+        assert ok is True
+        assert sold_count == 1
+        assert lore_disc in state.discoveries  # lore-linked should remain
+        assert regular_disc not in state.discoveries  # regular should be sold
+        assert state.ship.credits > credits_before
+
+    def test_bulk_sell_lore_linked_by_category_excluded(self) -> None:
+        """Lore-linked discoveries should be excluded when selling by category."""
+        from backend.models.discovery import Discovery
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
+        if not planet:
+            return  # pragma: no cover
+        land_on_body(state, planet.id)
+        explore_surface(state)
+        # Create a lore-linked discovery
+        lore_disc = Discovery(
+            id="lore_cat_disc",
+            name="Mysterious Relic",
+            category="mineral",
+            description="A lore-linked mineral",
+            lore_fragment_id="frag_002",
+            value=2000,
+        )
+        # Create a regular sellable discovery in the same category
+        regular_disc = Discovery(
+            id="regular_cat_disc",
+            name="Common Ore",
+            category="mineral",
+            description="A regular mineral",
+            lore_fragment_id=None,
+            value=300,
+        )
+        state.discoveries.clear()
+        state.discoveries.append(lore_disc)
+        state.discoveries.append(regular_disc)
+        credits_before = state.ship.credits
+        # Try to sell by category - should only sell the non-lore one
+        ok, msg, sold_count, total_price = perform_bulk_sell(state, [{"item": "mineral", "quantity": 2}])
+        assert ok is True
+        assert sold_count == 1
+        assert lore_disc in state.discoveries  # lore-linked should remain
+        assert regular_disc not in state.discoveries  # regular should be sold
+        assert state.ship.credits > credits_before
 
 
 class TestDatabaseModule:
