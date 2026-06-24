@@ -99,6 +99,7 @@
 - `decrement_cooldowns` now uses `list(state.event_cooldowns.keys())` for safe iteration when deleting expired cooldowns
 - Duplicate mission acceptance prevented via `accepted_missions` set tracking
 - `accepted_missions` set now cleaned up on mission completion (`.discard()`)
+- `api_faction_mission` now calls `complete_mission` directly without first adding to `accepted_missions`, fixing the missing accept workflow
 - Completed missions now checked before applying rewards
 - Free daily mission no longer selectable via random choice for standard mission slot
 - Mission lookup now only generates missions for the relevant faction (not all factions)
