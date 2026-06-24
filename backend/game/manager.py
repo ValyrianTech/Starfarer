@@ -291,7 +291,7 @@ def _state_from_dict(d: dict) -> GameState:
         completed_missions=d.get("completed_missions", []),
         daily_missions_used=d.get("daily_missions_used", {}),
         accepted_missions=dict(d.get("accepted_missions", {})),
-        _next_log_id=d.get("_next_log_id", 1),
+        _next_log_id=d.get("_next_log_id", max((e["id"] for e in d.get("log_entries", [])), default=0) + 1),
     )
 
 
