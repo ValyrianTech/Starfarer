@@ -566,9 +566,22 @@ class TestHintsEdgeCases:
             id="evt_001",
             title="Life Support Crisis",
             flavor="Crisis alert!",
-            event_type="hazard",
+            event_type="crisis",
             choices=[Choice(text="Fix", outcome="hull:-10")],
             resolved=False,
         )
         state.events.append(event)
         assert _first_crisis(state, state.systems) is True
+
+    def test_first_crisis_resolved_crisis_event(self) -> None:
+        state = _make_game()
+        crisis = Event(
+            id="crisis_002",
+            title="Hull Breach",
+            flavor="A hull breach!",
+            event_type="crisis",
+            choices=[Choice(text="Patch it", outcome="hull:-15")],
+            resolved=True,
+        )
+        state.events.append(crisis)
+        assert _first_crisis(state, state.systems) is False

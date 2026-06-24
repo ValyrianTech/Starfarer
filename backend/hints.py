@@ -105,7 +105,9 @@ def _first_crisis(game_state: GameState, systems: dict[str, StarSystem]) -> bool
         if entry.get("category") == "crisis" or "crisis" in entry.get("title", "").lower():
             return False
     for event in game_state.events:
-        if not event.resolved and ("crisis" in event.title.lower() or event.event_type == "crisis"):
+        if event.event_type == "crisis":
+            if event.resolved:
+                return False
             return True
     return False
 
