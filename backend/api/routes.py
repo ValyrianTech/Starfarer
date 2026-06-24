@@ -27,11 +27,13 @@ from backend.game.engine import (
 )
 from backend.game.trading import get_upgrade_info, purchase_upgrade, perform_trade, perform_bulk_sell
 from backend.database import get_leaderboard
+from backend.fuel import get_fuel_status
 from backend.generation.lore_content import ARC_DISPLAY_NAMES
 from backend.models.faction import get_faction, FACTION_DEFINITIONS
 from backend.missions import (
     generate_missions, complete_mission,
 )
+from backend.utils import seeded_random, deterministic_hash
 
 logger = logging.getLogger(__name__)
 
@@ -803,8 +805,6 @@ def api_faction_mission(game_id: str, faction_id: str) -> dict:
     if not current_system.has_trading_station:
         raise HTTPException(status_code=400, detail="No trading station in this system")
 
-    from backend.utils import seeded_random, deterministic_hash
-
     missions = generate_missions(state, current_system, faction_id)
     if not missions:
         raise HTTPException(status_code=400, detail="No missions available from this faction")
@@ -846,7 +846,7 @@ def api_faction_mission(game_id: str, faction_id: str) -> dict:
         )
 
     # Delegate to shared complete_mission() for consistent behavior
-    completion_result = complete_mission(state, mission)
+    _ = complete_mission(state, mission)
 
     # Ensure the faction is marked as known
     if faction_id in state.faction_relations:
@@ -898,8 +898,6 @@ def api_missions(game_id: str) -> dict:
         raise HTTPException(status_code=400, detail="Not in a star system")
     if not current_system.has_trading_station:
         raise HTTPException(status_code=400, detail="No trading station in this system")
-
-    from backend.utils import deterministic_hash
 
     faction_ids = list(FACTION_DEFINITIONS.keys())
     faction_idx = deterministic_hash(state.seed, current_system.id, "primary_faction") % len(faction_ids)
@@ -969,7 +967,6 @@ def api_accept_mission(game_id: str, mission_id: str, req: AcceptMissionRequest)
         factions_to_check = [req.faction_id]
     else:
         # Restrict to the system's dominant faction to match GET /missions behavior
-        from backend.utils import deterministic_hash
         faction_ids = list(FACTION_DEFINITIONS.keys())
         faction_idx = deterministic_hash(state.seed, current_system.id, "primary_faction") % len(faction_ids)
         primary_faction_id = faction_ids[faction_idx]
@@ -1169,4 +1166,7 @@ def _full_state_response(state: GameState) -> dict:
         "lore_fragments_total": len(state.lore_fragments),
         "factions": state.get_known_factions(),
         "reputation_summary": state.build_reputation_summary(),
+        "cargo": state.ship.cargo,
+        "cargo_items": [d.to_cargo_dict() for d in state.discoveries],
+        "fuel_status": get_fuel_status(state, state.systems),
     }

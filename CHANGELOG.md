@@ -28,6 +28,9 @@
 - New API endpoints: `GET /api/game/{id}/missions` (list available missions), `POST /api/game/{id}/missions/{mid}/accept` (accept mission, deduct costs), `POST /api/game/{id}/missions/{mid}/complete` (complete mission, claim rewards)
 - New request schemas: `AcceptMissionRequest` and `CompleteMissionRequest` (both with `mission_id: str` and optional `faction_id: str`)
 - New game state fields: `completed_missions` (list[dict]), `daily_missions_used` (dict[str, str]), `accepted_missions` (set[str])
+- Fuel warning status system (`backend/fuel.py`): evaluates fuel level relative to the nearest trading station and returns a warning level (`green`, `yellow`, `red`, `critical`, `unknown`) with supporting information
+- `fuel_status` field in full game state response (`GET /api/game/{id}`): includes `level`, `message`, `current_fuel`, `fuel_for_round_trip`, `fuel_for_one_way`, `nearest_station_system`, and `nearest_station_distance`
+- Type annotations and docstrings for `missions.py` functions (`get_daily_mission_key`, `generate_missions`, `complete_mission`, `_mission_seed`, `FactionMission.to_dict`)
 
 ### Changed
 - Refactored `resolve_event()` to use `_EVENT_REP_MAP` dictionary for event type → faction mapping

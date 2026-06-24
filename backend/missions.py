@@ -9,7 +9,9 @@ from dataclasses import dataclass
 from typing import Optional
 
 from backend.utils import deterministic_hash, seeded_random
-from backend.models.faction import get_faction, FACTION_DEFINITIONS
+from backend.models.faction import get_faction
+from backend.models.game_state import GameState
+from backend.models.system import StarSystem
 
 
 @dataclass
@@ -35,6 +37,11 @@ class FactionMission:
     item_reward: Optional[str] = None
 
     def to_dict(self) -> dict:
+        """Serialize the mission to a dictionary for API responses.
+
+        :returns: A dictionary containing all mission fields.
+        :rtype: dict
+        """
         return {
             "id": self.id,
             "faction_id": self.faction_id,
@@ -162,10 +169,25 @@ _TIER_COSTS: dict[int, dict] = {
 
 
 def _mission_seed(seed: int, system_id: str, faction_id: str) -> int:
+    """Generate a deterministic seed for mission generation.
+
+    Combines the game seed, system ID, and faction ID into a
+    deterministic hash used to seed the RNG for reproducible
+    mission generation.
+
+    :param seed: The game's master seed.
+    :type seed: int
+    :param system_id: The unique identifier of the star system.
+    :type system_id: str
+    :param faction_id: The unique identifier of the faction.
+    :type faction_id: str
+    :returns: A deterministic integer hash for mission seeding.
+    :rtype: int
+    """
     return deterministic_hash(seed, system_id, faction_id, "missions_v2")
 
 
-def get_daily_mission_key(state, system_id: str) -> str:
+def get_daily_mission_key(state: GameState, system_id: str) -> str:
     """Return a key string for the daily mission slot in a system.
 
     The key combines the system ID with a date derived from the
@@ -183,7 +205,7 @@ def get_daily_mission_key(state, system_id: str) -> str:
     return f"{system_id}:{date_key}"
 
 
-def generate_missions(state, system, faction_id: str) -> list[FactionMission]:
+def generate_missions(state: GameState, system: StarSystem, faction_id: str) -> list[FactionMission]:
     """Generate 2-3 tiered missions for a faction at a given system.
 
     Mission generation is deterministic based on seed, system, and
@@ -290,7 +312,7 @@ def generate_missions(state, system, faction_id: str) -> list[FactionMission]:
     return missions
 
 
-def complete_mission(state, mission: FactionMission) -> dict:
+def complete_mission(state: GameState, mission: FactionMission) -> dict:
     """Apply mission rewards to the game state and record completion.
 
     Fuel and credit costs are deducted at completion time. Credits

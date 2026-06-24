@@ -256,6 +256,29 @@ Content-Type: application/json
 - **Morale < 30:** Crew events trigger more frequently and are more dangerous.
 - **Cargo > max_cargo:** Can't collect more. Sell or discard items.
 
+### 4.3 Fuel Warning Levels
+
+The full game state response (`GET /api/game/{id}`) includes a `fuel_status` field that evaluates your fuel level relative to the nearest trading station:
+
+| Level | Meaning |
+|-------|---------|
+| `green` | Sufficient fuel for a round trip to the nearest station (or already at a station) |
+| `yellow` | Enough fuel to reach the nearest station one-way, but not enough for a round trip |
+| `red` | Insufficient fuel to reach the nearest station |
+| `critical` | Fuel reserves nearly depleted (below 5 units) |
+| `unknown` | No trading stations found in known space |
+
+The `fuel_status` object includes:
+- `level` — warning level string
+- `message` — human-readable warning message
+- `current_fuel` — current fuel amount
+- `fuel_for_one_way` — fuel needed for a one-way trip to the nearest station
+- `fuel_for_round_trip` — fuel needed for a round trip to the nearest station
+- `nearest_station_system` — name of the nearest system with a trading station
+- `nearest_station_distance` — distance to the nearest station in light-years
+
+If you are already at a trading station, the status is always `green` with zero distances.
+
 ---
 
 ## 5. Trading
@@ -375,7 +398,7 @@ Everything you've found, organized by category with credit values.
 GET /api/game/{game_id}
 ```
 
-Complete state dump: ship, current system, pending events, discoveries, log entries.
+Complete state dump: ship, current system, pending events, discoveries, log entries, fuel status, and reputation summary.
 
 ### Cargo Hold
 
@@ -538,7 +561,7 @@ The game persists all state to SQLite. Save frequently — especially before ris
 |--------|----------|-------------|
 | GET | `/api/health` | Server health check |
 | POST | `/api/game/new` | Create new game |
-| GET | `/api/game/{id}` | Full game state |
+| GET | `/api/game/{id}` | Full game state (ship, system, events, log, fuel_status, reputation) |
 | GET | `/api/game/{id}/galaxy` | Galaxy map data |
 | GET | `/api/game/{id}/system/{sid}` | System details |
 | POST | `/api/game/{id}/jump/{sid}` | Jump to system |
