@@ -27,7 +27,7 @@ from backend.game.engine import (
 )
 from backend.game.trading import get_upgrade_info, purchase_upgrade, perform_trade, perform_bulk_sell
 from backend.database import get_leaderboard
-from backend.hints import get_contextual_hints
+from backend.hints import HINT_DEFINITIONS, get_contextual_hints
 from backend.fuel import get_fuel_status
 from backend.generation.lore_content import ARC_DISPLAY_NAMES
 from backend.models.faction import get_faction, FACTION_DEFINITIONS
@@ -1236,11 +1236,15 @@ def api_dismiss_hint(game_id: str, req: DismissHintRequest) -> dict:
     :type req: DismissHintRequest
     :returns: A dictionary with ``result`` message.
     :rtype: dict
-    :raises HTTPException: 404 if the game is not found.
+    :raises HTTPException: 404 if the game is not found; 400 if the hint is critical and cannot be dismissed.
     """
     state = _get_state(game_id)
     if not state:
         raise HTTPException(status_code=404, detail="Game not found")
+    hint_defs = {h.id: h for h in HINT_DEFINITIONS}
+    hint_def = hint_defs.get(req.hint_id)
+    if hint_def and hint_def.severity == "critical":
+        raise HTTPException(status_code=400, detail="Critical hints cannot be dismissed")
     state.dismissed_hints.add(req.hint_id)
     game_save(state)
     return {"result": f"Hint '{req.hint_id}' dismissed."}
