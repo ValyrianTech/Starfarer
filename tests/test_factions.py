@@ -437,6 +437,13 @@ class TestFactionAPI:
         assert len(state.completed_missions) == 1
         assert state.completed_missions[0]["mission_id"] == "test_mission_001"
 
+        # Verify the log entry includes credits_change metadata
+        log_entry = state.log_entries[-1]
+        assert log_entry["credits_change"] == 50
+        assert log_entry["type"] == "faction"
+        assert log_entry["category"] == "system"
+        assert log_entry["title"] == "Mission Completed"
+
     def test_complete_daily_mission(self) -> None:
         from backend.missions import FactionMission, complete_mission
         state = new_game(seed=42)
