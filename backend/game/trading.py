@@ -271,11 +271,12 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
         if quantity > len(matching):
             return False, f"Only {len(matching)} item(s) found matching '{item}', requested {quantity}."
         to_sell = matching[:quantity]
+        to_sell_ids = {disc.id for disc in to_sell}
         for disc in to_sell:
             sell_price = int(disc.value * price_mod * stellar_sell_mod)
             total_price += sell_price
             sold_items.append(disc.name)
-            state.discoveries.remove(disc)
+        state.discoveries = [d for d in state.discoveries if d.id not in to_sell_ids]
         state.ship.credits += total_price
         result_message = f"Sold {len(sold_items)} item(s) for {total_price} credits."
         system_name = system.name
