@@ -276,7 +276,7 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
             if amount <= 0:
                 return False, "Fuel tank is already full."
             price_info = calculate_fuel_price(state, system)
-            cost = int(amount * price_info["final_price"])
+            cost = round(amount * price_info["final_price"])
             if state.ship.credits < cost:
                 return False, f"Not enough credits. Need {cost}."
             state.ship.credits -= cost
