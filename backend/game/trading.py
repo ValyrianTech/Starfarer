@@ -7,6 +7,7 @@ at trading stations.
 """
 
 import random
+import math
 
 from backend.config import UPGRADE_COSTS, UPGRADE_EFFECTS, UPGRADE_MAX_LEVELS, FUEL_BASE_PRICE
 from backend.utils import deterministic_hash
@@ -276,7 +277,7 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
             if amount <= 0:
                 return False, "Fuel tank is already full."
             price_info = calculate_fuel_price(state, system)
-            cost = round(amount * price_info["final_price"])
+            cost = int(amount * price_info["final_price"] + 0.5)
             if state.ship.credits < cost:
                 return False, f"Not enough credits. Need {cost}."
             state.ship.credits -= cost
