@@ -2178,6 +2178,34 @@ class TestAPICargo:
         data = resp.json()
         assert data["total_value"] == 175  # 100 + 50 + 25
 
+    def test_cargo_endpoint_total_value_zero_items(self) -> None:
+        """total_value should be 0 when all items have value=0."""
+        from backend.models.discovery import Discovery
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "cargo-zero-val"})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        current_sys = state.get_current_system()
+        state.discoveries.append(
+            Discovery(id="zv-disc-1", category="mineral", name="Common Rock",
+                      description="A plain rock", value=0, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="zv-disc-2", category="artifact", name="Dull Relic",
+                      description="A relic with no value", value=0, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="zv-disc-3", category="mineral", name="Dust",
+                      description="Just dust", value=0, system_id=current_sys.id)
+        )
+        GAME_STORE[game_id] = state
+        game_save(state)
+        resp = client.get(f"/api/game/{game_id}/cargo")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total_value"] == 0
+        assert len(data["cargo_items"]) == 3
+
     def test_cargo_sort_value_desc_default(self) -> None:
         """Default sort should be by value descending."""
         from backend.models.discovery import Discovery
