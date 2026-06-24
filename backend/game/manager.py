@@ -295,7 +295,18 @@ def _state_from_dict(d: dict) -> GameState:
     for k, v in accepted_missions_raw.items():
         if isinstance(v, str):
             # Old format: value was just a faction_id string
-            accepted_missions[k] = {"faction_id": v}
+            accepted_missions[k] = {
+                "faction_id": v,
+                "tier": 1,
+                "title": "Unknown Mission",
+                "description": "Migrated from old save format.",
+                "objective_type": "courier",
+                "objective_target": "",
+                "fuel_cost": 0,
+                "credit_cost": 0,
+                "credit_reward": 0,
+                "reputation_reward": 0,
+            }
         else:
             accepted_missions[k] = v
 
