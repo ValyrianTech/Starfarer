@@ -54,7 +54,7 @@ def can_jump(ship: Ship, target: StarSystem, current: Optional[StarSystem]) -> t
         return False, fuel_cost, f"Not enough fuel. Need {fuel_cost}, have {ship.fuel}."
     if dist_ly > ship.jump_range:
         return False, fuel_cost, f"Distance {dist_ly} LY exceeds jump range {ship.jump_range}."
-    return True, int(fuel_cost), ""
+    return True, fuel_cost, ""
 
 
 def perform_jump(state: GameState, target_system: StarSystem, fuel_cost: int) -> str:
@@ -86,7 +86,7 @@ def perform_jump(state: GameState, target_system: StarSystem, fuel_cost: int) ->
 
     if current:
         dist = distance_between(current, target_system)
-        state.add_log("navigation", f"Jumped from {current.name} to {target_system.name} ({round(dist/10, 1)} LY). Fuel cost: {fuel_cost}.", category="jump", title="Hyperspace Jump", system=target_system.name, fuel_change=-int(fuel_cost))
+        state.add_log("navigation", f"Jumped from {current.name} to {target_system.name} ({round(dist/10, 1)} LY). Fuel cost: {fuel_cost}.", category="jump", title="Hyperspace Jump", system=target_system.name, fuel_change=-fuel_cost)
     else:
         state.add_log("navigation", f"Arrived at {target_system.name}.", category="jump", title="System Arrival", system=target_system.name)
 
