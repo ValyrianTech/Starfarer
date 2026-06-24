@@ -943,20 +943,7 @@ def api_faction_mission(game_id: str, faction_id: str) -> dict:
             detail=f"Not enough credits. Mission requires {mission.credit_cost} credits."
         )
 
-    # Delegate to shared complete_mission() for consistent behavior
-    state.accepted_missions[mission.id] = {
-        "faction_id": mission.faction_id,
-        "tier": mission.tier,
-        "objective_type": mission.objective_type,
-        "objective_target": mission.objective_target,
-        "fuel_cost": mission.fuel_cost,
-        "credit_cost": mission.credit_cost,
-        "credit_reward": mission.credit_reward,
-        "reputation_reward": mission.reputation_reward,
-        "title": mission.title,
-        "description": mission.description,
-        "item_reward": mission.item_reward,
-    }
+    # Call complete_mission directly without adding to accepted_missions first
     completion = complete_mission(state, mission)
 
     # Ensure the faction is marked as known
