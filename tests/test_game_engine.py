@@ -2118,6 +2118,16 @@ class TestSalvage:
         assert "error" in result
         assert "landed" in result["error"].lower()
 
+    def test_perform_salvage_no_current_system(self) -> None:
+        """Salvage should return error when there is no current system."""
+        state = new_game(seed=42)
+        state.ship.fuel = 0
+        state.ship.current_body_id = "body_1"
+        state.ship.current_system_id = "nonexistent"
+        result = perform_salvage(state)
+        assert "error" in result
+        assert "No current system" in result["error"]
+
     def test_perform_salvage_max_attempts(self) -> None:
         state = self._make_salvage_state()
         body_id = state.ship.current_body_id
