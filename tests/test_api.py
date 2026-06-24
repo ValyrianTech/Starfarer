@@ -387,6 +387,10 @@ class TestAPIAllEndpoints404:
         resp = client.get("/api/game/nonexistent-gid/log")
         assert resp.status_code == 404
 
+    def test_log_paginated_nonexistent(self) -> None:
+        resp = client.get("/api/game/nonexistent-gid/log/paginated")
+        assert resp.status_code == 404
+
     def test_discoveries_nonexistent(self) -> None:
         resp = client.get("/api/game/nonexistent-gid/discoveries")
         assert resp.status_code == 404
@@ -2945,3 +2949,254 @@ class TestAPIReputationLabels:
         assert rs["free_pilots"]["reputation"] == -100
         assert rs["free_pilots"]["label"] == "Hostile"
         GAME_STORE.pop(game_id, None)
+
+
+class TestAPILogPaginated:
+    """Tests for GET /api/game/{game_id}/log/paginated with filtering and pagination."""
+
+    def test_paginated_log_basic(self) -> None:
+        """Paginated log should return properly structured response."""
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+        resp = client.get(f"/api/game/{game_id}/log/paginated")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "log_entries" in data
+        assert "page" in data
+        assert "per_page" in data
+        assert "total_entries" in data
+        assert "total_pages" in data
+        assert data["page"] == 1
+        assert data["per_page"] == 20
+        assert data["total_entries"] >= 2
+        assert data["total_pages"] >= 1
+        assert len(data["log_entries"]) >= 2
+
+    def test_paginated_log_most_recent_first(self) -> None:
+        """Entries should be returned with most recent first."""
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+        resp = client.get(f"/api/game/{game_id}/log/paginated")
+        assert resp.status_code == 200
+        data = resp.json()
+        entries = data["log_entries"]
+        timestamps = [e["timestamp"] for e in entries]
+        assert timestamps == sorted(timestamps, reverse=True)
+
+    def test_paginated_log_enhanced_fields(self) -> None:
+        """Log entries should contain the new enhanced fields."""
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+        resp = client.get(f"/api/game/{game_id}/log/paginated")
+        assert resp.status_code == 200
+        data = resp.json()
+        for entry in data["log_entries"]:
+            assert "id" in entry
+            assert isinstance(entry["id"], int)
+            assert "type" in entry
+            assert "message" in entry
+            assert "timestamp" in entry
+            assert "category" in entry
+            assert "title" in entry
+            assert "description" in entry
+            assert "system" in entry
+            assert entry.get("credits_change") is None or isinstance(entry["credits_change"], int)
+            assert entry.get("fuel_change") is None or isinstance(entry["fuel_change"], int)
+            assert entry.get("hull_change") is None or isinstance(entry["hull_change"], int)
+            assert entry.get("morale_change") is None or isinstance(entry["morale_change"], int)
+            assert entry.get("cargo_change") is None or isinstance(entry["cargo_change"], int)
+
+    def test_paginated_log_filter_by_category(self) -> None:
+        """Filtering by category should return only matching entries."""
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+        resp = client.get(f"/api/game/{game_id}/log/paginated?category=system")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total_entries"] >= 1
+        for entry in data["log_entries"]:
+            assert entry["category"] == "system"
+
+    def test_paginated_log_filter_by_nonexistent_category(self) -> None:
+        """Filtering by a category with no entries should return empty."""
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+        resp = client.get(f"/api/game/{game_id}/log/paginated?category=nonexistent")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total_entries"] == 0
+        assert data["log_entries"] == []
+
+    def test_paginated_log_search_text(self) -> None:
+        """Search should match text in title, message, and description."""
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+        resp = client.get(f"/api/game/{game_id}/log/paginated?search=journey")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total_entries"] >= 1
+        for entry in data["log_entries"]:
+            combined = f"{entry.get('title', '')} {entry.get('message', '')} {entry.get('description', '')}".lower()
+            assert "journey" in combined
+
+    def test_paginated_log_search_no_match(self) -> None:
+        """Search with no matching text should return empty."""
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+        resp = client.get(f"/api/game/{game_id}/log/paginated?search=xyznonexistenttext")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total_entries"] == 0
+        assert data["log_entries"] == []
+
+    def test_paginated_log_pagination(self) -> None:
+        """Pagination should return correct slices."""
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+        resp = client.get(f"/api/game/{game_id}/log/paginated?per_page=1")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["per_page"] == 1
+        assert len(data["log_entries"]) <= 1
+        total_entries = data["total_entries"]
+        assert data["total_pages"] >= total_entries
+
+    def test_paginated_log_page_2_with_1_per_page(self) -> None:
+        """Page 2 with per_page=1 should return the second entry."""
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+        resp = client.get(f"/api/game/{game_id}/log/paginated?per_page=1")
+        assert resp.status_code == 200
+        all_data = resp.json()
+        first_entry = all_data["log_entries"][0]
+        resp = client.get(f"/api/game/{game_id}/log/paginated?per_page=1&page=2")
+        assert resp.status_code == 200
+        page2 = resp.json()
+        assert page2["page"] == 2
+        assert len(page2["log_entries"]) == 1
+        assert page2["log_entries"][0] != first_entry
+
+    def test_paginated_log_page_2_with_1_per_page_few_entries(self) -> None:
+        """When there are fewer than 2 entries, page 2 should still work."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "pag-few-entries"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        # Clear all log entries except the first one
+        state.log_entries = state.log_entries[:1]
+        GAME_STORE[game_id] = state
+        game_save(state)
+        resp = client.get(f"/api/game/{game_id}/log/paginated?per_page=1")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total_entries"] == 1
+        assert data["total_pages"] == 1
+        # Page 2 should return empty
+        resp = client.get(f"/api/game/{game_id}/log/paginated?per_page=1&page=2")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["log_entries"] == []
+
+    def test_paginated_log_page_beyond_range(self) -> None:
+        """Requesting a page beyond total_pages should return empty list."""
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+        resp = client.get(f"/api/game/{game_id}/log/paginated?page=99999")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["log_entries"] == []
+
+    def test_paginated_log_page_zero_clamped_to_one(self) -> None:
+        """Page 0 should be clamped to page 1."""
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+        resp = client.get(f"/api/game/{game_id}/log/paginated?page=0")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["page"] == 1
+
+    def test_paginated_log_negative_page_clamped_to_one(self) -> None:
+        """Negative page should be clamped to page 1."""
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+        resp = client.get(f"/api/game/{game_id}/log/paginated?page=-5")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["page"] == 1
+
+    def test_paginated_log_per_page_clamped(self) -> None:
+        """per_page above 100 should be clamped to 100."""
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+        resp = client.get(f"/api/game/{game_id}/log/paginated?per_page=200")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["per_page"] == 100
+
+    def test_paginated_log_per_page_zero_clamped_to_one(self) -> None:
+        """per_page 0 should be clamped to 1."""
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+        resp = client.get(f"/api/game/{game_id}/log/paginated?per_page=0")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["per_page"] == 1
+
+    def test_paginated_log_combined_filter(self) -> None:
+        """Combined category and search filters should work."""
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+        resp = client.get(f"/api/game/{game_id}/log/paginated?category=system&search=new")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total_entries"] >= 1
+        for entry in data["log_entries"]:
+            assert entry["category"] == "system"
+            combined = f"{entry.get('title', '')} {entry.get('message', '')} {entry.get('description', '')}".lower()
+            assert "new" in combined
+
+    def test_paginated_log_nonexistent_game(self) -> None:
+        """Paginated log should 404 for nonexistent game."""
+        resp = client.get("/api/game/nonexistent-gid/log/paginated")
+        assert resp.status_code == 404
+
+    def test_paginated_log_db_fallback(self) -> None:
+        """Paginated log should work via DB fallback."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "pag-log-fallback"})
+        game_id = resp.json()["game_id"]
+        GAME_STORE.pop(game_id, None)
+        resp = client.get(f"/api/game/{game_id}/log/paginated")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "log_entries" in data
+
+    def test_paginated_log_total_pages_calculation(self) -> None:
+        """total_pages should be correctly calculated."""
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+        resp = client.get(f"/api/game/{game_id}/log/paginated?per_page=1")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total_pages"] == data["total_entries"]
+
+    def test_existing_log_endpoint_still_works(self) -> None:
+        """The existing /api/game/{id}/log endpoint should still work."""
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+        resp = client.get(f"/api/game/{game_id}/log")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "count" in data
+        assert "entries" in data
+        assert data["count"] >= 2
+
+    def test_log_entry_backward_compat_id_int(self) -> None:
+        """New log entries have sequential integer IDs."""
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+        resp = client.get(f"/api/game/{game_id}/log")
+        assert resp.status_code == 200
+        data = resp.json()
+        ids = [e["id"] for e in data["entries"]]
+        for eid in ids:
+            assert isinstance(eid, int)
+        assert ids == sorted(ids, reverse=True)
