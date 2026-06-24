@@ -279,16 +279,14 @@ def _state_from_dict(d: dict) -> GameState:
         if isinstance(e, dict):
             if "id" not in e:
                 max_id += 1
-                e["id"] = max_id
-                cleaned_entries.append(e)
+                cleaned_entries.append({**e, "id": max_id})
             elif isinstance(e["id"], int) and not isinstance(e["id"], bool):
                 max_id = max(max_id, e["id"])
                 cleaned_entries.append(e)
             else:
                 # Non-integer id — assign a new sequential id
                 max_id += 1
-                e["id"] = max_id
-                cleaned_entries.append(e)
+                cleaned_entries.append({**e, "id": max_id})
 
     _next_log_id = d.get("_next_log_id", max_id + 1)
 
