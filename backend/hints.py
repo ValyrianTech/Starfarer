@@ -117,7 +117,7 @@ def _cargo_full(game_state: GameState, systems: dict[str, StarSystem]) -> bool:
 def _first_crisis(game_state: GameState, systems: dict[str, StarSystem]) -> bool:
     """First crisis event encountered."""
     for entry in game_state.log_entries:
-        if entry.get("category") == "crisis" or "crisis" in entry.get("title", "").lower():
+        if entry.get("category") == "crisis":
             return False
     for event in game_state.events:
         if event.event_type == "crisis":
