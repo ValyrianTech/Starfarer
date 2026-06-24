@@ -7,8 +7,6 @@ at trading stations.
 """
 
 import random
-import math
-
 from backend.config import UPGRADE_COSTS, UPGRADE_EFFECTS, UPGRADE_MAX_LEVELS, FUEL_BASE_PRICE
 from backend.utils import deterministic_hash
 from backend.models.game_state import GameState, rep_label
