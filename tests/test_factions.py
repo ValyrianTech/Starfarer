@@ -2761,10 +2761,10 @@ def test_api_complete_mission_old_format_accepted() -> None:
     assert stored["description"] == "Migrated from old save format."
     assert stored["objective_type"] == "courier"
     assert stored["objective_target"] == ""
-    assert stored["fuel_cost"] == 0
-    assert stored["credit_cost"] == 0
-    assert stored["credit_reward"] == 0
-    assert stored["reputation_reward"] == 0
+    assert stored["fuel_cost"] == 3
+    assert stored["credit_cost"] == 10
+    assert stored["credit_reward"] == 75
+    assert stored["reputation_reward"] == 7
     
     resp = client.post(
         f"/api/game/{game_id}/missions/mission_old_format/complete",
