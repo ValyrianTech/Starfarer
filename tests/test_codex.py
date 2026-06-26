@@ -385,6 +385,11 @@ class TestGameStateResponseIncludesBiomesVisited:
 
         resp2 = client.get(f"/api/game/{game_id}")
         assert resp2.status_code == 200
+        data = resp2.json()
+        assert "biomes_visited" in data
+        assert "biomes_visited_count" in data
+        assert data["biomes_visited"] == ["jungle"]
+        assert data["biomes_visited_count"] == 1
 
     def test_game_state_summary_includes_biomes_visited(self) -> None:
         state = _make_game()

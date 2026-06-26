@@ -1379,4 +1379,6 @@ def _full_state_response(state: GameState, sort: str | None = None, order: str |
         "top3_ids": [item["id"] for item in sorted(cargo_items, key=lambda i: i.get("value", 0), reverse=True)[:3]],
         "fuel_status": get_fuel_status(state, state.systems),
         "hints": hints,
+        "biomes_visited": list(state.biomes_visited),
+        "biomes_visited_count": len(state.biomes_visited),
     }
