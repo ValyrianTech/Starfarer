@@ -477,6 +477,49 @@ class TestMultiplayerGhosts:
         assert "Ghost Relic" in result["discoveries"]
         GAME_STORE.pop(state.id, None)
 
+    def test_record_ghost_filters_discoveries_by_system(self) -> None:
+        """Verify that record_ghost filters both discoveries and body_visits to the current system."""
+        state = new_game(42, "GhostShip", shared_universe=True)
+        GAME_STORE[state.id] = state
+        system = state.get_current_system()
+        assert system is not None
+
+        # Add a discovery in the current system with a body_id
+        current_sys_disc = _make_discovery(
+            name="Current System Relic",
+            system_id=system.id,
+        )
+        current_sys_disc.body_id = "body-1"
+        state.discoveries.append(current_sys_disc)
+
+        # Add discoveries in other systems
+        other_sys_disc1 = _make_discovery(
+            name="Other System Artifact",
+            system_id="other-system-1",
+        )
+        other_sys_disc1.body_id = "body-other-1"
+        state.discoveries.append(other_sys_disc1)
+
+        other_sys_disc2 = _make_discovery(
+            name="Another System Relic",
+            system_id="other-system-2",
+        )
+        state.discoveries.append(other_sys_disc2)
+
+        result = record_ghost(state, system.id)
+
+        # Should only include the current system discovery name
+        assert "Current System Relic" in result["discoveries"]
+        assert "Other System Artifact" not in result["discoveries"]
+        assert "Another System Relic" not in result["discoveries"]
+        assert len(result["discoveries"]) == 1
+
+        # body_visits should only include body_id from current system discoveries that have a body_id
+        assert "body-1" in result["body_visits"]
+        assert "body-other-1" not in result["body_visits"]
+        assert len(result["body_visits"]) == 1
+        GAME_STORE.pop(state.id, None)
+
     def test_record_ghost_with_message(self) -> None:
         state = new_game(42, "GhostShip", shared_universe=True)
         GAME_STORE[state.id] = state
