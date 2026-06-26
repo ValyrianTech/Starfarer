@@ -255,7 +255,7 @@ def post_message(game_state: GameState, text: str) -> dict:
         category="multiplayer",
         title="Message Posted",
     )
-    return msg.to_dict()
+    return {"success": True, "message": msg.to_dict()}
 
 
 def get_messages() -> list[dict]:

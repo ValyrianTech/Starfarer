@@ -821,7 +821,9 @@ class TestMultiplayerCrossroads:
     def test_post_message_success(self) -> None:
         state = new_game(42, "Poster", shared_universe=True)
         GAME_STORE[state.id] = state
-        msg = post_message(state, "Hello from the crossroads!")
+        result = post_message(state, "Hello from the crossroads!")
+        assert result["success"] is True
+        msg = result["message"]
         assert "id" in msg
         assert msg["text"] == "Hello from the crossroads!"
         assert msg["player_name"] == "Poster"
