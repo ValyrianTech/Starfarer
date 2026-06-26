@@ -27,6 +27,7 @@ BIOME_WEIGHTS = {
     "volcanic": 1,
     "barren": 1,
     "gas_giant": 1,
+    None: 1,
 }
 
 MAX_FRAGMENTS_PER_SYSTEM = 2
