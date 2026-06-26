@@ -668,8 +668,8 @@ def _apply_cooldown_fallback(eligible: list[dict], state: GameState) -> list[dic
     eligible = [t for t in eligible if state.event_cooldowns.get(t["title"], 0) == min_cooldown]
     eligible_no_last = [t for t in eligible if t["title"] != state.last_event_title]
     if eligible_no_last:
-        return eligible_no_last[:1]
-    return eligible[:1]
+        return eligible_no_last
+    return eligible
 
 
 def trigger_event(state: GameState, rng_override: Optional[random.Random] = None) -> Event | None:
