@@ -201,7 +201,7 @@ def land_on_body(state: GameState, body_id: str) -> tuple[bool, str]:
         return False, f"Body {body_id} not found in this system."
     state.ship.current_body_id = body_id
     target.explored = True
-    state.add_log("exploration", f"Landed on {target.name}, a {target.biome} {target.body_type}.", category="exploration", title="Surface Landing", system=system.name, body=target.name)
+    state.add_log("exploration", f"Landed on {target.name}, a {target.biome or 'unknown'} {target.body_type}.", category="exploration", title="Surface Landing", system=system.name, body=target.name)
     return True, f"Landed on {target.name}."
 
 

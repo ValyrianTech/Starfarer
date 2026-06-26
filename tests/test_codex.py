@@ -317,7 +317,7 @@ class TestExploreRecordsBiome:
         state = _make_game()
         target_body = self._get_or_create_body_with_poi(state)
 
-        target_body.biome = None  # type: ignore[assignment]
+        target_body.biome = None
         state.ship.current_body_id = target_body.id
 
         assert state.biomes_visited == set()
