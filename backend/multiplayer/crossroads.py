@@ -6,6 +6,7 @@ and posting messages visible to all players at the Crossroads — the
 shared gathering point for travellers across all game sessions.
 """
 
+import math
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -18,7 +19,7 @@ from backend.multiplayer.models import (
 from backend.multiplayer.database import (
     save_crossroads_item, get_available_items, claim_item as db_claim_item,
     save_crossroads_lore, get_available_lore, claim_lore as db_claim_lore,
-    save_crossroads_message, get_recent_messages,
+    save_crossroads_message, get_recent_messages_paginated,
 )
 
 MAX_MESSAGE_LENGTH = 500
@@ -258,11 +259,25 @@ def post_message(game_state: GameState, text: str) -> dict:
     return {"success": True, "message": msg.to_dict()}
 
 
-def get_messages() -> list[dict]:
+def get_messages(page: int = 1, per_page: int = 10) -> dict:
     """Retrieve recent Crossroads messages that have not yet expired.
 
-    :returns: A list of message dictionaries, newest first.
-    :rtype: list[dict]
+    Supports pagination via ``page`` and ``per_page`` parameters.
+
+    :param page: The page number to retrieve (1-indexed, minimum 1).
+    :type page: int
+    :param per_page: Number of messages per page (1-50, capped at 50).
+    :type per_page: int
+    :returns: A dictionary with ``messages`` list, ``page``, ``per_page``,
+        ``total_messages``, and ``total_pages``.
+    :rtype: dict
     """
-    msgs = get_recent_messages(limit=50)
-    return [m.to_dict() for m in msgs]
+    page_msgs, total, page, per_page = get_recent_messages_paginated(page=page, per_page=per_page)
+    total_pages = math.ceil(total / per_page)
+    return {
+        "messages": [m.to_dict() for m in page_msgs],
+        "page": page,
+        "per_page": per_page,
+        "total_messages": total,
+        "total_pages": total_pages,
+    }

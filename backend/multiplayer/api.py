@@ -82,24 +82,31 @@ def _check_game(game_id: str):
 
 
 @router.get("/game/{game_id}/system/{sys_id}/ghosts")
-def api_system_ghosts(game_id: str, sys_id: str) -> dict:
+def api_system_ghosts(game_id: str, sys_id: str, page: int = 1, per_page: int = 10) -> dict:
     """Retrieve ghost signatures left by other players in a star system.
 
     Ghost signatures are automatically recorded on jump, scan, and
     explore actions. They provide a trace of other travellers who
-    have passed through the system.
+    have passed through the system. Supports pagination via optional
+    ``page`` and ``per_page`` query parameters.
 
     :param game_id: The unique identifier of the game.
     :type game_id: str
     :param sys_id: The unique identifier of the star system.
     :type sys_id: str
-    :returns: A dictionary with ``ghosts`` list of ghost signature dicts.
+    :param page: The page number to retrieve (1-indexed, default 1).
+    :type page: int
+    :param per_page: Number of ghosts per page (max 50, default 10).
+    :type per_page: int
+    :returns: A dictionary with ``ghosts``, ``page``, ``per_page``,
+        ``total_ghosts``, and ``total_pages``.
     :rtype: dict
     :raises HTTPException: 404 if the game is not found.
+    :raises HTTPException: 404 if page exceeds total pages with active ghosts.
     """
     state = _check_game(game_id)
-    ghosts = get_system_ghosts(sys_id)
-    return {"ghosts": ghosts}
+    result = get_system_ghosts(sys_id, page=page, per_page=per_page)
+    return result
 
 
 @router.post("/game/{game_id}/leave-ghost")
@@ -268,16 +275,25 @@ def api_claim_lore(donation_id: str, req: ClaimLoreRequest) -> dict:
 
 
 @router.get("/crossroads/messages")
-def api_crossroads_messages() -> dict:
+def api_crossroads_messages(page: int = 1, per_page: int = 10) -> dict:
     """Retrieve recent messages posted at the Crossroads.
 
-    Messages older than 7 days are automatically excluded.
+    Messages older than 7 days are automatically excluded. Supports
+    pagination via optional ``page`` and ``per_page`` query parameters.
 
-    :returns: A dictionary with ``messages`` list of message dicts.
+    :param page: The page number to retrieve (1-indexed, default 1).
+    :type page: int
+    :param per_page: Number of messages per page (max 50, default 10).
+    :type per_page: int
+    :returns: A dictionary with ``messages`` list, ``page``, ``per_page``,
+        ``total_messages``, and ``total_pages``.
     :rtype: dict
+    :raises HTTPException: 404 if page exceeds total pages with active messages.
     """
-    msgs = get_messages()
-    return {"messages": msgs}
+    result = get_messages(page=page, per_page=per_page)
+    if page > result["total_pages"] and result["total_messages"] > 0:
+        raise HTTPException(status_code=404, detail="Page out of range")
+    return result
 
 
 @router.post("/crossroads/post-message")
@@ -321,6 +337,8 @@ def api_ripples(game_id: str) -> dict:
     :raises HTTPException: 404 if the game is not found.
     """
     state = _check_game(game_id)
+    # No lock needed: ripple data is read from the database, not from in-memory game state.
+    # The game state is only used to determine the player's current system for filtering.
     ripples = get_pending_ripples(state)
     return {"ripples": ripples}
 

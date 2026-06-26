@@ -76,6 +76,8 @@
 - 3 new black hole events: 'Event Horizon Approach' (hazard, uncommon, no scanner required), 'Hawking Radiation Harvest (Deep Scan)' (discovery, uncommon, scanner_required=2), and 'Time Dilation Echo' (discovery, rare, scanner_required=3)
 - `scanner_required` field in event trigger conditions — events with this field are only eligible if the ship's scanner level meets or exceeds the requirement
 - Cooldown entries for 'Event Horizon Approach' (8), 'Hawking Radiation Harvest (Deep Scan)' (8), and 'Time Dilation Echo' (10)
+- Pagination support for ghost signatures endpoint: `GET /api/game/{id}/system/{sys_id}/ghosts` now accepts optional `page` (default 1) and `per_page` (default 10, max 50) query parameters. Returns paginated response with `ghosts`, `page`, `per_page`, `total_ghosts`, and `total_pages` fields. Returns 404 if page exceeds total pages with active ghosts.
+- Pagination support for Crossroads messages endpoint: `GET /api/crossroads/messages` now accepts optional `page` (default 1) and `per_page` (default 10, max 50) query parameters. Returns paginated response with `messages`, `page`, `per_page`, `total_messages`, and `total_pages` fields.
 
 ### Changed
 - `Body.biome` field type changed from `str` to `Optional[str]` (defaults to `None`); `Body.from_dict` now uses `d.get("biome")` instead of `d["biome"]` for safe deserialization of None biomes
@@ -98,8 +100,10 @@
 - Added type annotations across multiple modules to fix mypy errors
 - Black hole event count raised from 5 to 8 (from the original 5 plus the 3 new events above)
 - Hawking Radiation Harvest cooldown changed from 6 to 8 (to disambiguate from the new 'Hawking Radiation Harvest (Deep Scan)' event)
-
 ### Fixed
+- `get_pending_ripples` performance: now uses database-level filtering (`get_pending_ripples_for_system`) instead of loading all ripples from the database and filtering in Python.
+- `api_ripples` no longer acquires the game lock since ripple data is read from the database, not from in-memory game state.
+- Frontend `renderGhostsTab` now accepts a `totalGhosts` parameter and displays the total ghost count instead of the page count.
 - `BIOME_WEIGHTS` in `backend/generation/lore.py` now includes `None: 1` entry so lore fragments can be distributed to bodies without a biome
 - `renderCodex()` now uses `textContent` instead of `innerHTML` for all user-facing data fields (biome names, descriptions, hints, star ratings, discovery tags), preventing potential XSS injection
 - Codex hint field now correctly shown for all biomes regardless of unlock status — hints use `tier1_hint` from `BIOME_CODEX_DATA` and are displayed whenever `scanner_level >= 0`
@@ -200,6 +204,16 @@
 - `_cleanup_stale_locks` iterates over a dict that may be modified concurrently: cleanup is now performed inside the `_lock_for_locks` mutex to prevent race conditions.
 - `api_post_message` returns inconsistent error format: error detection now checks `msg.get("success")` instead of `"id" not in msg`, ensuring all error paths return proper HTTP 400 responses.
 - `post_message` now returns a consistent `{"success": True, "message": ...}` dict instead of raw message dict, providing a uniform success indicator across all multiplayer endpoints.
+- `_state_from_dict` now defaults `shared_universe` to `False` (was `True`) for legacy saves that lack the field, preventing old single-player saves from being inadvertently treated as shared-universe games on load.
+- Ghost signatures are now recorded in the source system before the jump (not the destination system), so other players see the echo in the system the player departed from.
+- `initMultiplayerUI()` now filters out previously dismissed ripples using the `window._dismissedRipples` set, preventing dismissed ripple notifications from reappearing on every state update.
+- Ghost pagination validation inconsistency: `api_system_ghosts` now clamps `page` and `per_page` values (consistent with `get_system_ghosts` clamping) instead of rejecting invalid values with 422.
+- Crossroads messages pagination validation inconsistency: `api_crossroads_messages` now clamps `page` and `per_page` values instead of rejecting invalid values with 422.
+- `get_messages` in `crossroads.py` no longer redundantly clamps `page` and `per_page` before calling `get_recent_messages_paginated` — clamping is now delegated to the paginated function which returns the clamped values.
+- `get_system_ghosts` now correctly handles the edge case where `total_pages` is 0 (no ghosts exist) by setting `page` to 1 instead of clamping to 0.
+- `total_pages` in ghost and messages paginated responses now returns 0 instead of 1 when there are 0 entries (removed `max(1, ...)` wrapper), matching the behavior of the paginated log endpoint.
+- Test isolation: `get_recent_messages_paginated` tests now properly clean up messages from previous tests instead of asserting exact total counts without cleanup.
+- Weak test: `test_get_recent_messages_paginated_per_page_capped` now passes correctly with an empty database instead of passing vacuously.
 
 ### Removed
 - Unused `Optional` import from `backend/codex.py`

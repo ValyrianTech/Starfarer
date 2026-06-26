@@ -215,6 +215,13 @@ class TestMultiplayerModels:
 # ---------------------------------------------------------------------------
 
 class TestMultiplayerDatabase:
+    @pytest.fixture(autouse=True)
+    def cleanup_messages(self) -> None:
+        from backend.multiplayer.database import get_db_ctx
+        with get_db_ctx() as conn:
+            conn.execute("DELETE FROM crossroads_messages")
+        yield
+
     def test_save_and_get_ghost_signatures(self) -> None:
         from backend.multiplayer.database import save_ghost_signature, get_ghost_signatures
         gs = GhostSignature(
@@ -500,6 +507,140 @@ class TestMultiplayerDatabase:
         result = _load_json_column("[1, 2, 3]")
         assert result == [1, 2, 3]
 
+    def test_get_recent_messages_paginated_basic(self) -> None:
+        from backend.multiplayer.database import save_crossroads_message, get_recent_messages_paginated
+        for i in range(10):
+            cm = CrossroadsMessage(
+                id=f"msg-pag-{i}",
+                game_id="game-pag",
+                player_name="PaginationTester",
+                text=f"Paginated message {i}",
+                created_at=(datetime.now(timezone.utc) - timedelta(minutes=10 - i)).isoformat(),
+                expires_at=(datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
+            )
+            save_crossroads_message(cm)
+        msgs, total, _, _ = get_recent_messages_paginated(page=1, per_page=5)
+        assert len(msgs) == 5
+        assert total == 10
+
+    def test_get_recent_messages_paginated_page2(self) -> None:
+        from backend.multiplayer.database import save_crossroads_message, get_recent_messages_paginated
+        for i in range(10):
+            cm = CrossroadsMessage(
+                id=f"msg-pag2-{i}",
+                game_id="game-pag2",
+                player_name="PaginationTester",
+                text=f"Page 2 message {i}",
+                created_at=(datetime.now(timezone.utc) - timedelta(minutes=10 - i)).isoformat(),
+                expires_at=(datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
+            )
+            save_crossroads_message(cm)
+        page1_msgs, _, _, _ = get_recent_messages_paginated(page=1, per_page=5)
+        page2_msgs, _, _, _ = get_recent_messages_paginated(page=2, per_page=5)
+        page1_ids = {m.id for m in page1_msgs}
+        page2_ids = {m.id for m in page2_msgs}
+        assert len(page1_msgs) == 5
+        assert len(page2_msgs) == 5
+        assert page1_ids.isdisjoint(page2_ids)
+
+    def test_get_recent_messages_paginated_empty_page(self) -> None:
+        from backend.multiplayer.database import save_crossroads_message, get_recent_messages_paginated
+        for i in range(3):
+            cm = CrossroadsMessage(
+                id=f"msg-empty-{i}",
+                game_id="game-empty",
+                player_name="EmptyTester",
+                text=f"Empty page message {i}",
+                created_at=(datetime.now(timezone.utc) - timedelta(minutes=3 - i)).isoformat(),
+                expires_at=(datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
+            )
+            save_crossroads_message(cm)
+        msgs, total, _, _ = get_recent_messages_paginated(page=10, per_page=5)
+        assert len(msgs) == 0
+        assert total == 3
+
+    def test_get_recent_messages_paginated_expired_excluded(self) -> None:
+        from backend.multiplayer.database import save_crossroads_message, get_recent_messages_paginated
+        active = CrossroadsMessage(
+            id="msg-active",
+            game_id="game-x",
+            player_name="Tester",
+            text="I am active",
+            created_at=datetime.now(timezone.utc).isoformat(),
+            expires_at=(datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
+        )
+        expired = CrossroadsMessage(
+            id="msg-dead",
+            game_id="game-x",
+            player_name="Tester",
+            text="I am expired",
+            created_at=(datetime.now(timezone.utc) - timedelta(days=10)).isoformat(),
+            expires_at=(datetime.now(timezone.utc) - timedelta(days=3)).isoformat(),
+        )
+        save_crossroads_message(active)
+        save_crossroads_message(expired)
+        msgs, total, _, _ = get_recent_messages_paginated(page=1, per_page=10)
+        ids = {m.id for m in msgs}
+        assert "msg-active" in ids
+        assert "msg-dead" not in ids
+        assert total == 1
+
+    def test_get_recent_messages_paginated_total_count(self) -> None:
+        from backend.multiplayer.database import save_crossroads_message, get_recent_messages_paginated
+        import uuid
+        for i in range(7):
+            cm = CrossroadsMessage(
+                id=f"msg-count-{uuid.uuid4()}",
+                game_id="game-count",
+                player_name="CountTester",
+                text=f"Count message {i}",
+                created_at=datetime.now(timezone.utc).isoformat(),
+                expires_at=(datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
+            )
+            save_crossroads_message(cm)
+        _, total, _, _ = get_recent_messages_paginated(page=1, per_page=3)
+        assert total == 7
+
+    def test_get_recent_messages_paginated_per_page_capped(self) -> None:
+        from backend.multiplayer.database import save_crossroads_message
+        from backend.multiplayer.crossroads import get_messages
+        # Insert 60 messages to ensure the cap is exercised
+        for i in range(60):
+            cm = CrossroadsMessage(
+                id=f"msg-cap-{i}",
+                game_id="game-cap",
+                player_name="CapTester",
+                text=f"Cap test message {i}",
+                created_at=datetime.now(timezone.utc).isoformat(),
+                expires_at=(datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
+            )
+            save_crossroads_message(cm)
+        result = get_messages(page=1, per_page=100)
+        assert len(result['messages']) == 50  # capped at 50
+        assert result['per_page'] == 50
+
+    def test_get_recent_messages_paginated_page_clamped(self) -> None:
+        from backend.multiplayer.database import save_crossroads_message
+        from backend.multiplayer.crossroads import get_messages
+        # Insert 10 messages
+        for i in range(10):
+            cm = CrossroadsMessage(
+                id=f"msg-clamp-{i}",
+                game_id="game-clamp",
+                player_name="ClampTester",
+                text=f"Clamp test message {i}",
+                created_at=(datetime.now(timezone.utc) - timedelta(minutes=10 - i)).isoformat(),
+                expires_at=(datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
+            )
+            save_crossroads_message(cm)
+        result = get_messages(page=0, per_page=10)
+        result2 = get_messages(page=1, per_page=10)
+        assert result['page'] == 1  # clamped from 0 to 1
+        assert result['per_page'] == 10
+        assert result['total_messages'] == 10
+        # page=0 should be clamped to page=1, so results should be identical
+        assert [m['id'] for m in result['messages']] == [m['id'] for m in result2['messages']]
+
 
 # ---------------------------------------------------------------------------
 # TestMultiplayerGhosts
@@ -516,8 +657,8 @@ class TestMultiplayerGhosts:
         assert result["player_name"] == "GhostShip"
         assert result["system_id"] == system.id
 
-        ghosts = get_system_ghosts(system.id)
-        found = [g for g in ghosts if g["id"] == result["id"]]
+        ghosts_data = get_system_ghosts(system.id)
+        found = [g for g in ghosts_data["ghosts"] if g["id"] == result["id"]]
         assert len(found) == 1
         GAME_STORE.pop(state.id, None)
 
@@ -613,16 +754,68 @@ class TestMultiplayerGhosts:
         system = state.get_current_system()
         record_ghost(state, system.id, message="Ghost 1")
         record_ghost(state, system.id, message="Ghost 2")
-        ghosts = get_system_ghosts(system.id)
-        assert len(ghosts) >= 2
-        messages = [g["message"] for g in ghosts]
+        ghosts_data = get_system_ghosts(system.id)
+        assert len(ghosts_data["ghosts"]) >= 2
+        messages = [g["message"] for g in ghosts_data["ghosts"]]
         assert "Ghost 1" in messages
         assert "Ghost 2" in messages
         GAME_STORE.pop(state.id, None)
 
     def test_get_system_ghosts_empty(self) -> None:
-        ghosts = get_system_ghosts("nonexistent-system-id-xyz")
-        assert ghosts == []
+        ghosts_data = get_system_ghosts("nonexistent-system-id-xyz")
+        assert ghosts_data["ghosts"] == []
+        assert ghosts_data["total_ghosts"] == 0
+        assert ghosts_data["total_pages"] == 0
+
+    def test_get_system_ghosts_pagination_default(self) -> None:
+        state = new_game(42, "GhostShip", shared_universe=True)
+        GAME_STORE[state.id] = state
+        system = state.get_current_system()
+        for i in range(15):
+            record_ghost(state, system.id, message=f"Ghost {i}")
+        result = get_system_ghosts(system.id)
+        assert result["page"] == 1
+        assert result["per_page"] == 10
+        assert result["total_ghosts"] >= 15
+        assert result["total_pages"] >= 2
+        assert len(result["ghosts"]) == 10
+        GAME_STORE.pop(state.id, None)
+
+    def test_get_system_ghosts_pagination_explicit(self) -> None:
+        state = new_game(42, "GhostShip", shared_universe=True)
+        GAME_STORE[state.id] = state
+        system = state.get_current_system()
+        for i in range(15):
+            record_ghost(state, system.id, message=f"Ghost {i}")
+        result = get_system_ghosts(system.id, page=2, per_page=5)
+        assert result["page"] == 2
+        assert result["per_page"] == 5
+        assert result["total_ghosts"] >= 15
+        assert result["total_pages"] >= 3
+        assert len(result["ghosts"]) == 5
+        GAME_STORE.pop(state.id, None)
+
+    def test_get_system_ghosts_per_page_capped(self) -> None:
+        state = new_game(42, "GhostShip", shared_universe=True)
+        GAME_STORE[state.id] = state
+        system = state.get_current_system()
+        for i in range(5):
+            record_ghost(state, system.id, message=f"Ghost {i}")
+        result = get_system_ghosts(system.id, per_page=100)
+        assert result["per_page"] == 50
+        GAME_STORE.pop(state.id, None)
+
+    def test_get_system_ghosts_page_beyond_total(self) -> None:
+        state = new_game(42, "GhostShip", shared_universe=True)
+        GAME_STORE[state.id] = state
+        system = state.get_current_system()
+        for i in range(5):
+            record_ghost(state, system.id, message=f"Ghost {i}")
+        result = get_system_ghosts(system.id, page=10, per_page=10)
+        assert result["page"] == 1
+        assert len(result["ghosts"]) == 5
+        assert result["total_ghosts"] >= 5
+        GAME_STORE.pop(state.id, None)
 
 
 # ---------------------------------------------------------------------------
@@ -834,8 +1027,8 @@ class TestMultiplayerCrossroads:
         GAME_STORE[state.id] = state
         post_message(state, "Message A")
         post_message(state, "Message B")
-        msgs = get_messages()
-        assert len(msgs) >= 2
+        result = get_messages()
+        assert len(result["messages"]) >= 2
         GAME_STORE.pop(state.id, None)
 
     def test_post_message_empty_text_rejected(self) -> None:
@@ -1025,6 +1218,25 @@ class TestMultiplayerCrossroads:
         assert len(found) >= 1
         GAME_STORE.pop(state.id, None)
 
+    def test_get_messages_paginated(self) -> None:
+        state = new_game(42, "PosterPaginated", shared_universe=True)
+        GAME_STORE[state.id] = state
+        for i in range(12):
+            post_message(state, f"Paginated message {i}")
+        result = get_messages(page=1, per_page=5)
+        assert result["page"] == 1
+        assert result["per_page"] == 5
+        assert result["total_messages"] >= 12
+        assert result["total_pages"] >= 3
+        assert len(result["messages"]) == 5
+        result2 = get_messages(page=2, per_page=5)
+        assert result2["page"] == 2
+        assert len(result2["messages"]) == 5
+        page1_texts = {m["text"] for m in result["messages"]}
+        page2_texts = {m["text"] for m in result2["messages"]}
+        assert page1_texts.isdisjoint(page2_texts)
+        GAME_STORE.pop(state.id, None)
+
 
 # ---------------------------------------------------------------------------
 # TestMultiplayerRipples
@@ -1210,6 +1422,138 @@ class TestMultiplayerAPI:
         resp = client.get("/api/game/nonexistent/system/sys-1/ghosts")
         assert resp.status_code == 404
 
+    def test_api_system_ghosts_pagination_default(self) -> None:
+        resp = client.post("/api/game/new", json={"shared_universe": True})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        sys_id = resp.json()["state"]["ship"]["current_system_id"]
+
+        for i in range(15):
+            client.post(
+                f"/api/game/{game_id}/leave-ghost",
+                json={"message": f"Pagination ghost {i}"},
+            )
+
+        resp = client.get(f"/api/game/{game_id}/system/{sys_id}/ghosts")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "ghosts" in data
+        assert data["page"] == 1
+        assert data["per_page"] == 10
+        assert data["total_ghosts"] >= 15
+        assert data["total_pages"] >= 2
+        assert len(data["ghosts"]) == 10
+
+    def test_api_system_ghosts_pagination_explicit(self) -> None:
+        resp = client.post("/api/game/new", json={"shared_universe": True})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        sys_id = resp.json()["state"]["ship"]["current_system_id"]
+
+        for i in range(15):
+            client.post(
+                f"/api/game/{game_id}/leave-ghost",
+                json={"message": f"Explicit pag ghost {i}"},
+            )
+
+        resp = client.get(f"/api/game/{game_id}/system/{sys_id}/ghosts?page=2&per_page=5")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["page"] == 2
+        assert data["per_page"] == 5
+        assert data["total_ghosts"] >= 15
+        assert data["total_pages"] >= 3
+        assert len(data["ghosts"]) == 5
+
+    def test_api_system_ghosts_per_page_capped(self) -> None:
+        resp = client.post("/api/game/new", json={"shared_universe": True})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        sys_id = resp.json()["state"]["ship"]["current_system_id"]
+
+        for i in range(5):
+            client.post(
+                f"/api/game/{game_id}/leave-ghost",
+                json={"message": f"Capped ghost {i}"},
+            )
+
+        resp = client.get(f"/api/game/{game_id}/system/{sys_id}/ghosts?per_page=100")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["per_page"] == 50
+
+    def test_api_system_ghosts_page_out_of_range(self) -> None:
+        resp = client.post("/api/game/new", json={"shared_universe": True})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        sys_id = resp.json()["state"]["ship"]["current_system_id"]
+
+        for i in range(5):
+            client.post(
+                f"/api/game/{game_id}/leave-ghost",
+                json={"message": f"OOR ghost {i}"},
+            )
+
+        resp = client.get(f"/api/game/{game_id}/system/{sys_id}/ghosts?page=100")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["page"] == 1
+        assert len(data["ghosts"]) == 5
+
+    def test_api_system_ghosts_page_less_than_one(self) -> None:
+        resp = client.post("/api/game/new", json={"shared_universe": True})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        sys_id = resp.json()["state"]["ship"]["current_system_id"]
+
+        resp = client.get(f"/api/game/{game_id}/system/{sys_id}/ghosts?page=0")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["page"] == 1  # clamped from 0
+
+    def test_api_system_ghosts_per_page_less_than_one(self) -> None:
+        resp = client.post("/api/game/new", json={"shared_universe": True})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        sys_id = resp.json()["state"]["ship"]["current_system_id"]
+
+        resp = client.get(f"/api/game/{game_id}/system/{sys_id}/ghosts?per_page=0")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["per_page"] == 1  # clamped from 0
+
+    def test_api_system_ghosts_page_out_of_range_empty(self) -> None:
+        resp = client.post("/api/game/new", json={"shared_universe": True})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        sys_id = resp.json()["state"]["ship"]["current_system_id"]
+
+        resp = client.get(f"/api/game/{game_id}/system/{sys_id}/ghosts?page=2")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["ghosts"] == []
+        assert data["total_ghosts"] == 0
+        assert data["total_pages"] == 0
+
+    def test_api_system_ghosts_total_ghosts_and_pages(self) -> None:
+        resp = client.post("/api/game/new", json={"shared_universe": True})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        sys_id = resp.json()["state"]["ship"]["current_system_id"]
+
+        for i in range(7):
+            client.post(
+                f"/api/game/{game_id}/leave-ghost",
+                json={"message": f"Total ghost {i}"},
+            )
+
+        resp = client.get(f"/api/game/{game_id}/system/{sys_id}/ghosts?per_page=3")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total_ghosts"] >= 7
+        assert data["total_pages"] == 3
+        assert len(data["ghosts"]) == 3
+
     def test_api_crossroads_items(self) -> None:
         resp = client.get("/api/crossroads/items")
         assert resp.status_code == 200
@@ -1373,7 +1717,116 @@ class TestMultiplayerAPI:
     def test_api_crossroads_messages(self) -> None:
         resp = client.get("/api/crossroads/messages")
         assert resp.status_code == 200
-        assert "messages" in resp.json()
+        data = resp.json()
+        assert "messages" in data
+        assert "page" in data
+        assert "per_page" in data
+        assert "total_messages" in data
+        assert "total_pages" in data
+
+    def test_api_crossroads_messages_pagination(self) -> None:
+        resp = client.post("/api/game/new", json={"shared_universe": True})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+
+        for i in range(15):
+            client.post(
+                "/api/crossroads/post-message",
+                json={"game_id": game_id, "text": f"Pagination test message {i}"},
+            )
+
+        r1 = client.get("/api/crossroads/messages?page=1&per_page=5")
+        assert r1.status_code == 200
+        d1 = r1.json()
+        assert len(d1["messages"]) == 5
+        assert d1["page"] == 1
+        assert d1["per_page"] == 5
+        assert d1["total_messages"] >= 15
+        assert d1["total_pages"] >= 3
+
+        r2 = client.get("/api/crossroads/messages?page=2&per_page=5")
+        assert r2.status_code == 200
+        d2 = r2.json()
+        assert len(d2["messages"]) == 5
+
+        r3 = client.get("/api/crossroads/messages?page=3&per_page=5")
+        assert r3.status_code == 200
+        d3 = r3.json()
+        assert len(d3["messages"]) == 5
+
+        r4 = client.get("/api/crossroads/messages?page=4&per_page=5")
+        assert r4.status_code == 404
+
+        r_default = client.get("/api/crossroads/messages")
+        assert r_default.status_code == 200
+        d_default = r_default.json()
+        assert len(d_default["messages"]) >= 10
+        assert d_default["per_page"] == 10
+
+        r_capped = client.get("/api/crossroads/messages?per_page=100")
+        assert r_capped.status_code == 200
+        d_capped = r_capped.json()
+        assert d_capped["per_page"] == 50
+
+        for key in ("page", "per_page", "total_messages", "total_pages"):
+            assert key in d1
+            assert key in d2
+            assert key in d3
+
+    def test_api_crossroads_messages_page_less_than_one(self) -> None:
+        """api_crossroads_messages should clamp page < 1 to 1."""
+        resp = client.get("/api/crossroads/messages?page=0")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["page"] == 1
+        for key in ("messages", "page", "per_page", "total_messages", "total_pages"):
+            assert key in data
+
+
+    def test_api_crossroads_messages_per_page_less_than_one(self) -> None:
+        """api_crossroads_messages should clamp per_page < 1 to 1."""
+        resp = client.get("/api/crossroads/messages?per_page=0")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["per_page"] == 1
+        for key in ("messages", "page", "per_page", "total_messages", "total_pages"):
+            assert key in data
+
+    def test_api_crossroads_messages_page_out_of_range(self) -> None:
+        """api_crossroads_messages should return 404 for out-of-range pages with messages."""
+        resp = client.post("/api/game/new", json={"shared_universe": True})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+
+        # Post 5 messages (so with per_page=5, there's exactly 1 page)
+        for i in range(5):
+            client.post(
+                "/api/crossroads/post-message",
+                json={"game_id": game_id, "text": f"OOR test message {i}"},
+            )
+
+        # Page 1 should work fine
+        r1 = client.get("/api/crossroads/messages?page=1&per_page=5")
+        assert r1.status_code == 200
+        data = r1.json()
+        assert len(data["messages"]) == 5
+        assert data["total_pages"] == 1
+
+        # Page 2 should return 404 (out of range, and total_messages > 0)
+        r2 = client.get("/api/crossroads/messages?page=2&per_page=5")
+        assert r2.status_code == 404
+        assert r2.json()["detail"] == "Page out of range"
+
+    def test_api_crossroads_messages_page_out_of_range_empty_db(self) -> None:
+        """api_crossroads_messages should NOT return 404 for out-of-range pages when there are no messages."""
+        # No messages posted, so total_messages == 0
+        r = client.get("/api/crossroads/messages?page=2&per_page=5")
+        assert r.status_code == 200
+        data = r.json()
+        assert len(data["messages"]) == 0
+        assert data["total_messages"] == 0
+        assert data["total_pages"] == 0
+
 
     def test_api_post_message(self) -> None:
         resp = client.post("/api/game/new", json={"shared_universe": True})

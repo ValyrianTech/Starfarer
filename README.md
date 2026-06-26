@@ -29,6 +29,8 @@ All game actions are REST API calls. The browser UI is a reference client — yo
 
 Key features include a deterministic procedural galaxy with 50 systems, 40+ unique events (including phenomenon-specific events for nebula, pulsar, binary star, and black hole systems), a tiered faction mission system, ship upgrades, a biome discovery codex, fuel warning and contextual hint systems, salvage and emergency crafting mechanics, and an asynchronous multiplayer shared universe ("Ghosts in the Void") with ghost signatures, a shared crossroads trading post, and discovery ripples. See **[HOWTOPLAY.md](HOWTOPLAY.md)** for complete details.
 
+Both the ghost signatures and Crossroads messages endpoints accept `page` (default 1) and `per_page` (default 10, max 50) query parameters. Invalid values are clamped (not rejected with 422), making validation behavior consistent across endpoints. Responses include `page`, `per_page`, `total_ghosts`/`total_messages`, and `total_pages`. When there are no entries, `total_pages` returns 0 (not 1). The `api_ripples` endpoint reads ripple data directly from the database without acquiring the game lock.
+
 ## Configuration
 
 | Variable | Purpose |

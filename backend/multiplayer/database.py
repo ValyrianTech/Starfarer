@@ -172,6 +172,49 @@ def get_ghost_signatures(system_id: str) -> list[GhostSignature]:
     return result
 
 
+def get_ghost_signatures_paginated(system_id: str, page: int = 1, per_page: int = 10) -> tuple[list[GhostSignature], int, int, int]:
+    """Retrieve paginated ghost signatures for a given star system.
+
+    Returns a tuple of (paginated ghosts list, total count, clamped page,
+    clamped per_page). Results are ordered by timestamp descending (most
+    recent first), using SQL LIMIT/OFFSET for pagination.
+
+    :param system_id: The unique identifier of the star system.
+    :type system_id: str
+    :param page: The page number to retrieve (1-indexed, default 1).
+    :type page: int
+    :param per_page: Number of ghosts per page (max 50, default 10).
+    :type per_page: int
+    :returns: A tuple of (paginated ghosts, total_count, clamped_page, clamped_per_page).
+    :rtype: tuple[list[GhostSignature], int, int, int]
+    """
+    per_page = min(max(1, per_page), 50)
+    page = max(1, page)
+    offset = (page - 1) * per_page
+    with get_db_ctx() as conn:
+        total = conn.execute(
+            "SELECT COUNT(*) FROM ghost_signatures WHERE system_id = ?",
+            (system_id,),
+        ).fetchone()[0]
+        rows = conn.execute(
+            "SELECT * FROM ghost_signatures WHERE system_id = ? ORDER BY timestamp DESC LIMIT ? OFFSET ?",
+            (system_id, per_page, offset),
+        ).fetchall()
+    result: list[GhostSignature] = []
+    for row in rows:
+        result.append(GhostSignature(
+            id=row["id"],
+            game_id=row["game_id"],
+            player_name=row["player_name"],
+            system_id=row["system_id"],
+            timestamp=row["timestamp"],
+            discoveries=_load_json_column(row["discoveries"]),
+            message=row["message"],
+            body_visits=_load_json_column(row["body_visits"]),
+        ))
+    return result, total, page, per_page
+
+
 # ---------------------------------------------------------------------------
 # Crossroads Items
 # ---------------------------------------------------------------------------
@@ -426,6 +469,46 @@ def get_recent_messages(limit: int = 50) -> list[CrossroadsMessage]:
     return result
 
 
+def get_recent_messages_paginated(page: int = 1, per_page: int = 10) -> tuple[list[CrossroadsMessage], int, int, int]:
+    """Retrieve paginated recent crossroads messages, excluding expired ones.
+
+    Returns a tuple of (paginated messages list, total count, clamped page,
+    clamped per_page). Results are ordered by creation time descending
+    (most recent first), using SQL LIMIT/OFFSET for pagination.
+
+    :param page: The page number to retrieve (1-indexed, default 1).
+    :type page: int
+    :param per_page: Number of messages per page (max 50, default 10).
+    :type per_page: int
+    :returns: A tuple of (paginated messages, total_count, clamped_page, clamped_per_page).
+    :rtype: tuple[list[CrossroadsMessage], int, int, int]
+    """
+    per_page = min(max(1, per_page), 50)
+    page = max(1, page)
+    offset = (page - 1) * per_page
+    now = datetime.now(timezone.utc).isoformat()
+    with get_db_ctx() as conn:
+        total = conn.execute(
+            "SELECT COUNT(*) FROM crossroads_messages WHERE expires_at > ?",
+            (now,),
+        ).fetchone()[0]
+        rows = conn.execute(
+            "SELECT * FROM crossroads_messages WHERE expires_at > ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            (now, per_page, offset),
+        ).fetchall()
+    result: list[CrossroadsMessage] = []
+    for row in rows:
+        result.append(CrossroadsMessage(
+            id=row["id"],
+            game_id=row["game_id"],
+            player_name=row["player_name"],
+            text=row["text"],
+            created_at=row["created_at"],
+            expires_at=row["expires_at"],
+        ))
+    return result, total, page, per_page
+
+
 def cleanup_expired_messages() -> int:
     """Remove all crossroads messages that have passed their expiration time.
 
@@ -492,6 +575,44 @@ def get_pending_ripples(game_id: str) -> list[RippleEvent]:
         rows = conn.execute(
             "SELECT * FROM ripple_events WHERE created_at > ? ORDER BY created_at DESC",
             (cutoff,),
+        ).fetchall()
+    result: list[RippleEvent] = []
+    for row in rows:
+        acked = _load_json_column(row["acknowledged_by"])
+        if game_id not in acked:
+            result.append(RippleEvent(
+                id=row["id"],
+                source_game_id=row["source_game_id"],
+                source_player_name=row["source_player_name"],
+                source_system_id=row["source_system_id"],
+                target_system_id=row["target_system_id"],
+                discovery_type=row["discovery_type"],
+                discovery_name=row["discovery_name"],
+                created_at=row["created_at"],
+                acknowledged_by=acked,
+            ))
+    return result
+
+
+def get_pending_ripples_for_system(game_id: str, system_id: str) -> list[RippleEvent]:
+    """Retrieve ripple events for a specific target system that have not been acknowledged.
+
+    A ripple is pending if the given ``game_id`` is not yet in its
+    ``acknowledged_by`` list and the event was created within the
+    last 7 days.
+
+    :param game_id: The unique identifier of the game.
+    :type game_id: str
+    :param system_id: The unique identifier of the target star system.
+    :type system_id: str
+    :returns: A list of pending :class:`RippleEvent` instances.
+    :rtype: list[RippleEvent]
+    """
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    with get_db_ctx() as conn:
+        rows = conn.execute(
+            "SELECT * FROM ripple_events WHERE created_at > ? AND target_system_id = ? ORDER BY created_at DESC",
+            (cutoff, system_id),
         ).fetchall()
     result: list[RippleEvent] = []
     for row in rows:

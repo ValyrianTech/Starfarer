@@ -1,10 +1,13 @@
-function renderGhostsTab(ghosts) {
+window._dismissedRipples = window._dismissedRipples || new Set();
+
+function renderGhostsTab(ghosts, totalGhosts) {
   const countEl = $('#system-ghosts-count');
   const listEl = $('#system-ghosts-list');
   if (!listEl) return;
 
   if (countEl) {
-    countEl.textContent = ghosts.length + ' ' + (ghosts.length === 1 ? 'visitor' : 'visitors');
+    const count = totalGhosts !== undefined ? totalGhosts : ghosts.length;
+    countEl.textContent = count + ' ' + (count === 1 ? 'visitor' : 'visitors');
   }
 
   if (ghosts.length === 0) {
@@ -226,7 +229,10 @@ function initMultiplayerUI() {
 
   API.getRipples(GAME_ID).then(function(data) {
     if (data && data.ripples && data.ripples.length > 0) {
-      renderRippleNotification(data.ripples[0]);
+      var unshown = data.ripples.filter(function(r) { return !window._dismissedRipples.has(r.id); });
+      if (unshown.length > 0) {
+        renderRippleNotification(unshown[0]);
+      }
     }
   }).catch(function(e) {
     console.error('Failed to load ripples:', e);
@@ -304,6 +310,7 @@ async function handleMultiplayerAction(action, target) {
         var rippleId = target.dataset.rippleId;
         if (!rippleId) break;
         await API.acknowledgeRipple(GAME_ID, rippleId);
+        window._dismissedRipples.add(rippleId);
         var panel = $('#ripple-notification');
         if (panel) panel.style.display = 'none';
         break;

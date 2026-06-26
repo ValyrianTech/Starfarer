@@ -25,7 +25,7 @@ Content-Type: application/json
 {
   "seed": 42,                    // optional: universe seed (same seed = same universe)
   "ship_name": "MyShip",         // optional: name your ship (default: "Serendipity")
-  "shared_universe": true        // optional: enable multiplayer features (default: false)
+  "shared_universe": false       // optional: enable multiplayer features (default: false)
 }
 ```
 
@@ -93,7 +93,9 @@ Returns all systems sorted by distance. Each entry includes:
 POST /api/game/{game_id}/jump/{system_id}
 ```
 
-Costs fuel based on distance (3 fuel per LY, minimum 1). Morale decays by 2 per jump (less with life support upgrades). A procedural event may trigger after jumping.
+Costs fuel based on distance (3 fuel per LY, minimum 1). Morale decays by 2 per jump (less with life support upgrades). A procedural event may trigger after jumping. In shared universe mode, a ghost signature is recorded in the source system before you jump, leaving an echo for other players.
+
+**Shared universe notifications:** Ghost signatures, Crossroads messages, and discovery ripples are shown in the frontend UI. Dismissed ripple notifications are tracked via `window._dismissedRipples` and will not reappear on subsequent state updates.
 
 ### 3.4 Scan a System
 
@@ -721,7 +723,7 @@ The game persists all state to SQLite. Save frequently — especially before ris
 | POST | `/api/game/{id}/save` | Save game |
 | POST | `/api/game/{id}/load` | Load game |
 | GET | `/api/leaderboard` | Top players |
-| GET | `/api/game/{id}/system/{sys_id}/ghosts` | Get ghost signatures in a system |
+| GET | `/api/game/{id}/system/{sys_id}/ghosts?page={n}&per_page={n}` | Get ghost signatures in a system (paginated, returns total_ghosts, total_pages) |
 | POST | `/api/game/{id}/leave-ghost` | Leave a ghost signature |
 | GET | `/api/crossroads/items` | List available items at the Crossroads |
 | POST | `/api/crossroads/donate-item` | Donate an item to the Crossroads |
@@ -729,10 +731,36 @@ The game persists all state to SQLite. Save frequently — especially before ris
 | GET | `/api/crossroads/lore` | List available lore at the Crossroads |
 | POST | `/api/crossroads/donate-lore` | Donate a lore fragment to the Crossroads |
 | POST | `/api/crossroads/claim-lore/{donation_id}` | Claim a lore fragment from the Crossroads |
-| GET | `/api/crossroads/messages` | Get recent Crossroads messages |
+| GET | `/api/crossroads/messages?page={n}&per_page={n}` | Get recent Crossroads messages (paginated, returns total_messages, total_pages) |
 | POST | `/api/crossroads/post-message` | Post a message to the Crossroads |
 | GET | `/api/game/{id}/ripples` | Get pending discovery ripples |
 | POST | `/api/game/{id}/ripple/{ripple_id}/acknowledge` | Acknowledge a discovery ripple |
+
+
+### Pagination Details
+
+Both the ghost signatures and Crossroads messages endpoints support pagination with the same query parameters and response format:
+
+**Query parameters:**
+| Parameter | Type | Default | Max | Description |
+|-----------|------|---------|-----|-------------|
+| `page` | int | 1 | — | Page number (1-indexed) |
+| `per_page` | int | 10 | 50 | Items per page |
+
+**Response fields:**
+| Field | Type | Description |
+|-------|------|-------------|
+| `ghosts`/`messages` | array | Paginated items |
+| `page` | int | Current page number |
+| `per_page` | int | Items per page |
+| `total_ghosts`/`total_messages` | int | Total number of items |
+| `total_pages` | int | Total number of pages (0 if no items) |
+
+Returns 404 if the requested page exceeds the total number of pages with active items.
+
+Invalid `page` or `per_page` values (e.g., negative numbers, non-integer strings) are clamped to valid ranges rather than rejected with a 422 error. Both the ghost signatures and Crossroads messages endpoints use this consistent clamping behavior.
+
+The `api_ripples` endpoint (`GET /api/game/{id}/ripples`) reads ripple data directly from the database using database-level filtering and does not acquire the game lock.
 
 Full OpenAPI docs at `/docs` and `/redoc`.
 
