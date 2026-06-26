@@ -1186,6 +1186,67 @@ class TestMultiplayerAPI:
         resp = client.post(f"/api/game/{game_id}/ripple/nonexistent-ripple/acknowledge")
         assert resp.status_code == 400
 
+    def test_get_lock_returns_lock(self) -> None:
+        """Verify that _get_lock returns a threading.Lock instance."""
+        from backend.multiplayer.api import _get_lock, _game_locks
+        import threading
+        lock = _get_lock("test-get-lock-1")
+        assert type(lock) == type(threading.Lock())
+
+    def test_get_lock_same_game_id(self) -> None:
+        """Verify that _get_lock returns the same lock for the same game_id."""
+        from backend.multiplayer.api import _get_lock, _game_locks
+        lock1 = _get_lock("test-get-lock-2")
+        lock2 = _get_lock("test-get-lock-2")
+        assert lock1 is lock2
+
+    def test_get_lock_different_game_ids(self) -> None:
+        """Verify that _get_lock returns different locks for different game_ids."""
+        from backend.multiplayer.api import _get_lock, _game_locks
+        lock1 = _get_lock("test-get-lock-3a")
+        lock2 = _get_lock("test-get-lock-3b")
+        assert lock1 is not lock2
+
+    def test_lock_serializes_concurrent_requests(self) -> None:
+        """Verify that the lock serializes concurrent access to prevent state corruption."""
+        import threading
+        import concurrent.futures
+        import time
+        from backend.multiplayer.api import _get_lock, _game_locks
+
+        resp = client.post("/api/game/new", json={"shared_universe": True})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        sys_id = resp.json()["state"]["ship"]["current_system_id"]
+
+        _game_locks.pop(game_id, None)
+
+        ghost_count_before = len(client.get(
+            f"/api/game/{game_id}/system/{sys_id}/ghosts"
+        ).json()["ghosts"])
+
+        num_threads = 5
+        results = []
+
+        def leave_ghost():
+            r = client.post(
+                f"/api/game/{game_id}/leave-ghost",
+                json={"message": "Concurrent test"},
+            )
+            return r.status_code
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
+            futures = [executor.submit(leave_ghost) for _ in range(num_threads)]
+            for future in concurrent.futures.as_completed(futures):
+                results.append(future.result())
+
+        assert all(r == 200 for r in results)
+
+        ghost_count_after = len(client.get(
+            f"/api/game/{game_id}/system/{sys_id}/ghosts"
+        ).json()["ghosts"])
+        assert ghost_count_after == ghost_count_before + num_threads
+
 
 # ---------------------------------------------------------------------------
 # TestSharedUniverse
