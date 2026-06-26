@@ -594,6 +594,44 @@ def get_pending_ripples(game_id: str) -> list[RippleEvent]:
     return result
 
 
+def get_pending_ripples_for_system(game_id: str, system_id: str) -> list[RippleEvent]:
+    """Retrieve ripple events for a specific target system that have not been acknowledged.
+
+    A ripple is pending if the given ``game_id`` is not yet in its
+    ``acknowledged_by`` list and the event was created within the
+    last 7 days.
+
+    :param game_id: The unique identifier of the game.
+    :type game_id: str
+    :param system_id: The unique identifier of the target star system.
+    :type system_id: str
+    :returns: A list of pending :class:`RippleEvent` instances.
+    :rtype: list[RippleEvent]
+    """
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    with get_db_ctx() as conn:
+        rows = conn.execute(
+            "SELECT * FROM ripple_events WHERE created_at > ? AND target_system_id = ? ORDER BY created_at DESC",
+            (cutoff, system_id),
+        ).fetchall()
+    result: list[RippleEvent] = []
+    for row in rows:
+        acked = _load_json_column(row["acknowledged_by"])
+        if game_id not in acked:
+            result.append(RippleEvent(
+                id=row["id"],
+                source_game_id=row["source_game_id"],
+                source_player_name=row["source_player_name"],
+                source_system_id=row["source_system_id"],
+                target_system_id=row["target_system_id"],
+                discovery_type=row["discovery_type"],
+                discovery_name=row["discovery_name"],
+                created_at=row["created_at"],
+                acknowledged_by=acked,
+            ))
+    return result
+
+
 def acknowledge_ripple(ripple_id: str, game_id: str) -> bool:
     """Mark a ripple event as acknowledged by a game.
 
