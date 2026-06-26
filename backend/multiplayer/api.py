@@ -291,10 +291,6 @@ def api_crossroads_messages(page: int = 1, per_page: int = 10) -> dict:
         ``total_messages``, and ``total_pages``.
     :rtype: dict
     """
-    if page < 1:
-        raise HTTPException(status_code=422, detail="page must be >= 1")
-    if per_page < 1:
-        raise HTTPException(status_code=422, detail="per_page must be >= 1")
     return get_messages(page=page, per_page=per_page)
 
 
