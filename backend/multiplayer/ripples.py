@@ -26,6 +26,7 @@ _RIPPLE_RADIUS_LY = 5
 def create_ripple(
     source_game_state: GameState,
     discovery: Discovery,
+    all_systems: Optional[dict[str, StarSystem]] = None,
 ) -> dict:
     """Create ripple events for nearby systems when a discovery is made.
 
@@ -37,6 +38,12 @@ def create_ripple(
     :type source_game_state: GameState
     :param discovery: The discovery that triggered the ripple.
     :type discovery: Discovery
+    :param all_systems: Optional full universe systems dictionary.
+        When provided, ripples are propagated to all systems in this
+        dict within range, rather than only those the source player
+        has visited. Falls back to ``source_game_state.systems`` if
+        ``None``.
+    :type all_systems: Optional[dict[str, StarSystem]]
     :returns: A dictionary with ``ripples_created`` count and the list
         of created ripple event data.
     :rtype: dict
@@ -45,8 +52,10 @@ def create_ripple(
     if not source_system:
         return {"ripples_created": 0, "ripples": []}
 
+    systems_to_check = all_systems if all_systems is not None else source_game_state.systems
+
     ripples: list[dict] = []
-    for sys_id, sys_data in source_game_state.systems.items():
+    for sys_id, sys_data in systems_to_check.items():
         if sys_id == source_system.id:
             continue
         dist = distance_between(source_system, sys_data)
