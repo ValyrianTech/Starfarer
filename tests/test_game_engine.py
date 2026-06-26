@@ -3354,19 +3354,19 @@ class TestBlackHoleEvents:
 class TestNewBlackHoleEvents:
     """Tests for the 3 new black-hole-specific events with scanner_required support."""
 
-    NEW_BH_TITLES = {"Event Horizon Approach", "Hawking Radiation Harvest", "Time Dilation Echo"}
+    TRULY_NEW_BH_TITLES = {"Event Horizon Approach", "Hawking Radiation Harvest (Deep Scan)", "Time Dilation Echo"}
 
     def _get_new_bh_templates(self):
         """Return the 3 new black hole event templates (the ones with scanner_required or Event Horizon Approach)."""
         all_bh = [t for t in EVENT_TEMPLATES if t.get("trigger_conditions", {}).get("phenomenon") == "black_hole"]
-        return [t for t in all_bh if t["title"] in self.NEW_BH_TITLES]
+        return [t for t in all_bh if t["title"] in self.TRULY_NEW_BH_TITLES]
 
     def test_new_events_exist(self) -> None:
         """The 3 new events should exist in EVENT_TEMPLATES."""
         new_events = self._get_new_bh_templates()
         found_titles = {t["title"] for t in new_events}
-        assert found_titles == self.NEW_BH_TITLES, \
-            f"Expected {self.NEW_BH_TITLES}, got {found_titles}"
+        assert found_titles == self.TRULY_NEW_BH_TITLES, \
+            f"Expected {self.TRULY_NEW_BH_TITLES}, got {found_titles}"
 
     def test_new_events_have_correct_structure(self) -> None:
         """Each new event should have title, flavor, type, choices, and trigger_conditions."""
@@ -3493,16 +3493,17 @@ class TestNewBlackHoleEvents:
 
         # Put all non-new-BH events on cooldown so only the 3 new BH events are eligible
         from backend.generation.events import EVENT_TEMPLATES
+        old_bh_titles = {"Time Dilation Anomaly", "Hawking Radiation Harvest", "Spaghettification Near-Miss", "Accretion Disk Prospecting", "Gravitational Lens Observation"}
         for template in EVENT_TEMPLATES:
-            if template.get("trigger_conditions", {}).get("phenomenon") != "black_hole" or template["title"] not in self.NEW_BH_TITLES:
+            if template.get("trigger_conditions", {}).get("phenomenon") != "black_hole" or template["title"] not in self.TRULY_NEW_BH_TITLES:
                 state.event_cooldowns[template["title"]] = 999
 
         rng = rnd.Random(42)
         with patch.object(rng, "random", return_value=0.2):
             event = trigger_event(state, rng_override=rng)
         assert event is not None, "Expected an event to trigger with mocked RNG"
-        assert event.title in self.NEW_BH_TITLES, \
-            f"Expected one of {self.NEW_BH_TITLES}, got '{event.title}'"
+        assert event.title in self.TRULY_NEW_BH_TITLES, \
+            f"Expected one of {self.TRULY_NEW_BH_TITLES}, got '{event.title}'"
 
     def test_new_events_can_be_resolved(self) -> None:
         """Each new event should resolve correctly for all choices."""
