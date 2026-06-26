@@ -102,14 +102,9 @@ def api_system_ghosts(game_id: str, sys_id: str, page: int = 1, per_page: int = 
         ``total_ghosts``, and ``total_pages``.
     :rtype: dict
     :raises HTTPException: 404 if the game is not found.
-    :raises HTTPException: 422 if page or per_page is less than 1.
     :raises HTTPException: 404 if page exceeds total pages with active ghosts.
     """
     state = _check_game(game_id)
-    if page < 1:
-        raise HTTPException(status_code=422, detail="page must be >= 1")
-    if per_page < 1:
-        raise HTTPException(status_code=422, detail="per_page must be >= 1")
     result = get_system_ghosts(sys_id, page=page, per_page=per_page)
     if page > result["total_pages"] and result["total_ghosts"] > 0:
         raise HTTPException(status_code=404, detail="Page out of range")
