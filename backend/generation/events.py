@@ -366,6 +366,42 @@ EVENT_TEMPLATES: list[dict[str, Any]] = [
     {
         "type": "hazard",
         "rarity": "uncommon",
+        "title": "Event Horizon Approach",
+        "flavor": "Your ship drifts inexorably toward the event horizon. Spaghettification forces tug at the hull. Stars bend into impossible rings around the void.",
+        "choices": [
+            {"text": "Fire emergency thrusters to escape", "outcome": "fuel:-20; hull:-10; Close Call logged."},
+            {"text": "Deploy a probe into the event horizon", "outcome": "credits:300; cargo:-1; Gained Event Horizon Data."},
+            {"text": "Study the gravitational lensing", "outcome": "credits:175; morale:-5; Gained Gravitational Lens Data."},
+        ],
+        "trigger_conditions": {"phenomenon": "black_hole"},
+    },
+    {
+        "type": "discovery",
+        "rarity": "uncommon",
+        "title": "Hawking Radiation Harvest",
+        "flavor": "Your sensors detect faint Hawking radiation emanating from the black hole — a rare energy signature that could be harvested for profit or research.",
+        "choices": [
+            {"text": "Deploy energy collectors", "outcome": "credits:300; fuel:-10; Sold the harvested energy."},
+            {"text": "Record the radiation signature for research", "outcome": "credits:215; Gained Hawking Radiation Data."},
+            {"text": "Avoid the black hole entirely", "outcome": "A safe decision."},
+        ],
+        "trigger_conditions": {"phenomenon": "black_hole", "scanner_required": 2},
+    },
+    {
+        "type": "discovery",
+        "rarity": "rare",
+        "title": "Time Dilation Echo",
+        "flavor": "As you approach the black hole, time behaves strangely. You receive a faint, impossible transmission — a message from your own ship, but from a different point in time. It contains information you haven't discovered yet.",
+        "choices": [
+            {"text": "Analyze the temporal echo", "outcome": "morale:-10; Gained a temporal lore fragment."},
+            {"text": "Record the phenomenon for science", "outcome": "credits:400; Gained Temporal Anomaly Data."},
+            {"text": "Back away slowly", "outcome": "morale:-5; Disturbed by the experience."},
+        ],
+        "trigger_conditions": {"phenomenon": "black_hole", "scanner_required": 3},
+    },
+    {
+        "type": "hazard",
+        "rarity": "uncommon",
         "title": "Ion Storm",
         "flavor": "Electromagnetic interference disrupts your ship's systems. Screens flicker, navigation wavers as the ion storm engulfs your vessel.",
         "choices": [
@@ -539,9 +575,10 @@ EVENT_COOLDOWNS = {
     "Engine Fire": 8,
     "Food Contamination": 8,
     "Fuel Cache Locations": 10,
+    "Event Horizon Approach": 8,
     "Gravitational Lens Observation": 6,
     "Gravity Anomaly": 10,
-    "Hawking Radiation Harvest": 6,
+    "Hawking Radiation Harvest": 8,
     "Hull Breach": 8,
     "Ion Storm": 6,
     "Lagrange Point Discovery": 6,
@@ -564,6 +601,7 @@ EVENT_COOLDOWNS = {
     "Solar Flare": 3,
     "Spaghettification Near-Miss": 8,
     "Time Dilation Anomaly": 6,
+    "Time Dilation Echo": 10,
     "Trade Route Opportunity": 6,
     "Uncharted Ruins": 5,
     "Wormhole Anomaly": 6,
@@ -683,6 +721,10 @@ def _get_eligible_templates(state: GameState, templates: list[dict]) -> list[dic
             faction_id = rep_condition["faction_id"]
             required_rep = rep_condition["value"]
             if state.get_faction_reputation(faction_id) < required_rep:
+                continue
+
+        if "scanner_required" in conditions:
+            if state.ship.scanner < conditions["scanner_required"]:
                 continue
 
         eligible.append(t)

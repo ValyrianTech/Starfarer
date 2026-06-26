@@ -3226,9 +3226,9 @@ class TestBlackHoleEvents:
     """Tests for black hole system-specific events."""
 
     def test_black_hole_events_exist(self) -> None:
-        """There should be exactly 5 black hole events in EVENT_TEMPLATES."""
+        """There should be exactly 8 black hole events in EVENT_TEMPLATES."""
         black_hole_events = [t for t in EVENT_TEMPLATES if t.get("trigger_conditions", {}).get("phenomenon") == "black_hole"]
-        assert len(black_hole_events) == 5, f"Expected 5 black hole events, got {len(black_hole_events)}"
+        assert len(black_hole_events) == 8, f"Expected 8 black hole events, got {len(black_hole_events)}"
 
     def test_black_hole_events_have_correct_structure(self) -> None:
         """Each black hole event should have title, flavor, type, choices, and trigger_conditions."""
@@ -3239,7 +3239,7 @@ class TestBlackHoleEvents:
             assert "type" in event, f"Black hole event {event['title']} missing type"
             assert "choices" in event, f"Black hole event {event['title']} missing choices"
             assert len(event["choices"]) >= 2, f"Black hole event {event['title']} has fewer than 2 choices"
-            assert event["trigger_conditions"] == {"phenomenon": "black_hole"}, \
+            assert event["trigger_conditions"].get("phenomenon") == "black_hole", \
                 f"Black hole event {event['title']} has wrong trigger_conditions"
 
     def test_black_hole_events_have_valid_event_types(self) -> None:
@@ -3262,12 +3262,13 @@ class TestBlackHoleEvents:
         system = state.get_current_system()
         assert system is not None
         
-        # Set system to black hole
+        # Set system to black hole, scanner high enough to make all 8 eligible
         system.phenomenon = "black_hole"
+        state.ship.scanner = 3
         eligible = _get_eligible_templates(state, EVENT_TEMPLATES)
         black_hole_eligible = [t for t in eligible if t.get("trigger_conditions", {}).get("phenomenon") == "black_hole"]
-        assert len(black_hole_eligible) == 5, \
-            f"Expected 5 black hole events eligible in black hole system, got {len(black_hole_eligible)}"
+        assert len(black_hole_eligible) == 8, \
+            f"Expected 8 black hole events eligible in black hole system, got {len(black_hole_eligible)}"
 
     def test_black_hole_events_not_eligible_in_nebula_systems(self) -> None:
         """Black hole events should NOT be eligible in nebula systems."""
@@ -3348,6 +3349,185 @@ class TestBlackHoleEvents:
             assert extra["title"] == black_hole_template["title"]
             assert extra["chosen_text"] == event.choices[i].text
             assert isinstance(extra["effects"], dict)
+
+
+class TestNewBlackHoleEvents:
+    """Tests for the 3 new black-hole-specific events with scanner_required support."""
+
+    NEW_BH_TITLES = {"Event Horizon Approach", "Hawking Radiation Harvest", "Time Dilation Echo"}
+
+    def _get_new_bh_templates(self):
+        """Return the 3 new black hole event templates (the ones with scanner_required or Event Horizon Approach)."""
+        all_bh = [t for t in EVENT_TEMPLATES if t.get("trigger_conditions", {}).get("phenomenon") == "black_hole"]
+        return [t for t in all_bh if t["title"] in self.NEW_BH_TITLES]
+
+    def test_new_events_exist(self) -> None:
+        """The 3 new events should exist in EVENT_TEMPLATES."""
+        new_events = self._get_new_bh_templates()
+        found_titles = {t["title"] for t in new_events}
+        assert found_titles == self.NEW_BH_TITLES, \
+            f"Expected {self.NEW_BH_TITLES}, got {found_titles}"
+
+    def test_new_events_have_correct_structure(self) -> None:
+        """Each new event should have title, flavor, type, choices, and trigger_conditions."""
+        new_events = self._get_new_bh_templates()
+        for event in new_events:
+            assert "title" in event
+            assert "flavor" in event
+            assert "type" in event
+            assert "choices" in event
+            assert len(event["choices"]) == 3, f"Event {event['title']} should have 3 choices"
+            assert "trigger_conditions" in event
+            assert event["trigger_conditions"].get("phenomenon") == "black_hole"
+
+    def test_scanner_required_filtering_blocks_low_scanner(self) -> None:
+        """Events with scanner_required should be filtered out when scanner level is too low."""
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        system.phenomenon = "black_hole"
+        state.ship.scanner = 1
+
+        eligible = _get_eligible_templates(state, EVENT_TEMPLATES)
+        bh_eligible = [t for t in eligible if t.get("trigger_conditions", {}).get("phenomenon") == "black_hole"]
+        eligible_titles = {t["title"] for t in bh_eligible}
+
+        # Event Horizon Approach: no scanner_required, should be eligible
+        assert "Event Horizon Approach" in eligible_titles
+        # Hawking Radiation Harvest (new): scanner_required=2, scanner=1 -> NOT eligible
+        # Time Dilation Echo: scanner_required=3, scanner=1 -> NOT eligible
+        # But the OLD Hawking Radiation Harvest has no scanner_required and IS eligible
+        assert "Hawking Radiation Harvest" in eligible_titles, \
+            "Old Hawking Radiation Harvest (no scanner req) should still be eligible"
+        assert "Time Dilation Echo" not in eligible_titles
+
+    def test_scanner_required_allows_sufficient_scanner(self) -> None:
+        """Events with scanner_required should be eligible when scanner level meets threshold."""
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        system.phenomenon = "black_hole"
+        state.ship.scanner = 3
+
+        eligible = _get_eligible_templates(state, EVENT_TEMPLATES)
+        bh_eligible = [t for t in eligible if t.get("trigger_conditions", {}).get("phenomenon") == "black_hole"]
+        eligible_titles = {t["title"] for t in bh_eligible}
+
+        assert "Event Horizon Approach" in eligible_titles
+        assert "Hawking Radiation Harvest" in eligible_titles
+        assert "Time Dilation Echo" in eligible_titles
+
+    def test_scanner_required_at_exact_threshold(self) -> None:
+        """Event with scanner_required=3 should be eligible when scanner is exactly 3."""
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        system.phenomenon = "black_hole"
+        state.ship.scanner = 3
+
+        eligible = _get_eligible_templates(state, EVENT_TEMPLATES)
+        bh_eligible = [t for t in eligible if t.get("trigger_conditions", {}).get("phenomenon") == "black_hole"]
+        eligible_titles = {t["title"] for t in bh_eligible}
+
+        assert "Time Dilation Echo" in eligible_titles
+
+    def test_new_events_not_eligible_in_non_black_hole_systems(self) -> None:
+        """None of the new events should be eligible in a non-black-hole system."""
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        system.phenomenon = "none"
+        state.ship.scanner = 5
+
+        eligible = _get_eligible_templates(state, EVENT_TEMPLATES)
+        bh_eligible = [t for t in eligible if t.get("trigger_conditions", {}).get("phenomenon") == "black_hole"]
+        assert len(bh_eligible) == 0
+
+    def test_event_horizon_approach_no_scanner_required(self) -> None:
+        """Event Horizon Approach should NOT have scanner_required in its trigger_conditions."""
+        new_events = self._get_new_bh_templates()
+        eha = [t for t in new_events if t["title"] == "Event Horizon Approach"]
+        assert len(eha) == 1
+        assert "scanner_required" not in eha[0]["trigger_conditions"], \
+            "Event Horizon Approach should not require scanner"
+
+    def test_new_events_choice_outcomes_parseable(self) -> None:
+        """All choice outcomes in new events should be parseable by apply_choice_outcome."""
+        from backend.models.ship import Ship
+
+        new_events = self._get_new_bh_templates()
+        ship = Ship()
+        state = GameState(id="test-new-bh", seed=42, ship=ship)
+
+        for event in new_events:
+            for i, choice in enumerate(event["choices"]):
+                effects = state.apply_choice_outcome(choice["outcome"])
+                assert isinstance(effects, dict), f"Outcome for {event['title']} choice {i} should return a dict"
+
+    def test_new_events_have_cooldowns(self) -> None:
+        """All 3 new events should have entries in EVENT_COOLDOWNS."""
+        from backend.generation.events import EVENT_COOLDOWNS
+        new_events = self._get_new_bh_templates()
+        for event in new_events:
+            assert event["title"] in EVENT_COOLDOWNS, \
+                f"Missing cooldown for new event: {event['title']}"
+
+    def test_new_events_correct_cooldown_values(self) -> None:
+        """Check that the new events have the expected cooldown values."""
+        from backend.generation.events import EVENT_COOLDOWNS
+        assert EVENT_COOLDOWNS["Event Horizon Approach"] == 8
+        assert EVENT_COOLDOWNS["Hawking Radiation Harvest"] == 8
+        assert EVENT_COOLDOWNS["Time Dilation Echo"] == 10
+
+    def test_new_events_can_be_triggered_in_black_hole(self) -> None:
+        """The new events should be triggerable in a black hole system with sufficient scanner."""
+        from unittest.mock import patch
+        import random as rnd
+
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        system.phenomenon = "black_hole"
+        state.ship.scanner = 3
+        state.ship.morale = 80
+
+        rng = rnd.Random(42)
+        with patch.object(rng, "random", return_value=0.2):
+            event = trigger_event(state, rng_override=rng)
+        assert event is not None, "Expected an event to trigger with mocked RNG"
+
+    def test_new_events_can_be_resolved(self) -> None:
+        """Each new event should resolve correctly for all choices."""
+        from backend.generation.events import _create_event
+
+        new_templates = self._get_new_bh_templates()
+        for template in new_templates:
+            for i in range(len(template["choices"])):
+                state = new_game(seed=42)
+                event = _create_event(template, state.get_current_system().id)
+                state.events.append(event)
+
+                ok, msg, extra = resolve_event(state, event.id, i)
+                assert ok is True, f"Failed to resolve choice {i} of '{template['title']}': {msg}"
+                assert extra["title"] == template["title"]
+                assert extra["chosen_text"] == event.choices[i].text
+                assert isinstance(extra["effects"], dict)
+
+    def test_scanner_required_scanner_2_blocks_time_dilation(self) -> None:
+        """Scanner level 2 allows Hawking Radiation Harvest but NOT Time Dilation Echo."""
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        system.phenomenon = "black_hole"
+        state.ship.scanner = 2
+
+        eligible = _get_eligible_templates(state, EVENT_TEMPLATES)
+        bh_eligible = [t for t in eligible if t.get("trigger_conditions", {}).get("phenomenon") == "black_hole"]
+        eligible_titles = {t["title"] for t in bh_eligible}
+
+        assert "Event Horizon Approach" in eligible_titles
+        assert "Hawking Radiation Harvest" in eligible_titles
+        assert "Time Dilation Echo" not in eligible_titles
 
 
 class TestPhenomenonEvents:
