@@ -2011,7 +2011,7 @@ class TestNewHazardEvents:
         assert EVENT_COOLDOWNS["Quantum Fluctuation"] == 8
 
     def test_hazard_event_cooldown_scales_with_repeat_triggers(self) -> None:
-        """Hazard event cooldown should increase when the same event is triggered repeatedly."""
+        """Hazard event cooldown should increase when the same event is triggered repeatedly, but cap at 3x."""
         from backend.generation.events import apply_cooldown, EVENT_COOLDOWNS
         from backend.models.ship import Ship
 
@@ -2021,20 +2021,30 @@ class TestNewHazardEvents:
         title = "Micrometeorite Storm"
         base = EVENT_COOLDOWNS[title]
 
-        # First trigger
+        # First trigger: multiplier = min(1, 3) = 1
         apply_cooldown(state, title, "hazard")
         assert state.event_cooldowns[title] == base * 1
         assert state.hazard_event_counts[title] == 1
 
-        # Second trigger
+        # Second trigger: multiplier = min(2, 3) = 2
         apply_cooldown(state, title, "hazard")
         assert state.event_cooldowns[title] == base * 2
         assert state.hazard_event_counts[title] == 2
 
-        # Third trigger
+        # Third trigger: multiplier = min(3, 3) = 3
         apply_cooldown(state, title, "hazard")
         assert state.event_cooldowns[title] == base * 3
         assert state.hazard_event_counts[title] == 3
+
+        # Fourth trigger: multiplier = min(4, 3) = 3 (capped!)
+        apply_cooldown(state, title, "hazard")
+        assert state.event_cooldowns[title] == base * 3
+        assert state.hazard_event_counts[title] == 4
+
+        # Fifth trigger: multiplier = min(5, 3) = 3 (still capped)
+        apply_cooldown(state, title, "hazard")
+        assert state.event_cooldowns[title] == base * 3
+        assert state.hazard_event_counts[title] == 5
 
     def test_non_hazard_events_do_not_scale_cooldown(self) -> None:
         """Non-hazard events should not have scaled cooldowns and should not increment hazard_event_counts."""
