@@ -834,8 +834,8 @@ class TestMultiplayerCrossroads:
         GAME_STORE[state.id] = state
         post_message(state, "Message A")
         post_message(state, "Message B")
-        msgs = get_messages()
-        assert len(msgs) >= 2
+        result = get_messages()
+        assert len(result["messages"]) >= 2
         GAME_STORE.pop(state.id, None)
 
     def test_post_message_empty_text_rejected(self) -> None:
@@ -1373,7 +1373,64 @@ class TestMultiplayerAPI:
     def test_api_crossroads_messages(self) -> None:
         resp = client.get("/api/crossroads/messages")
         assert resp.status_code == 200
-        assert "messages" in resp.json()
+        data = resp.json()
+        assert "messages" in data
+        assert "page" in data
+        assert "per_page" in data
+        assert "total_messages" in data
+        assert "total_pages" in data
+
+    def test_api_crossroads_messages_pagination(self) -> None:
+        resp = client.post("/api/game/new", json={"shared_universe": True})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+
+        for i in range(15):
+            client.post(
+                "/api/crossroads/post-message",
+                json={"game_id": game_id, "text": f"Pagination test message {i}"},
+            )
+
+        r1 = client.get("/api/crossroads/messages?page=1&per_page=5")
+        assert r1.status_code == 200
+        d1 = r1.json()
+        assert len(d1["messages"]) == 5
+        assert d1["page"] == 1
+        assert d1["per_page"] == 5
+        assert d1["total_messages"] >= 15
+        assert d1["total_pages"] >= 3
+
+        r2 = client.get("/api/crossroads/messages?page=2&per_page=5")
+        assert r2.status_code == 200
+        d2 = r2.json()
+        assert len(d2["messages"]) == 5
+
+        r3 = client.get("/api/crossroads/messages?page=3&per_page=5")
+        assert r3.status_code == 200
+        d3 = r3.json()
+        assert len(d3["messages"]) == 5
+
+        r4 = client.get("/api/crossroads/messages?page=4&per_page=5")
+        assert r4.status_code == 200
+        d4 = r4.json()
+        assert len(d4["messages"]) == 0
+
+        r_default = client.get("/api/crossroads/messages")
+        assert r_default.status_code == 200
+        d_default = r_default.json()
+        assert len(d_default["messages"]) >= 10
+        assert d_default["per_page"] == 10
+
+        r_capped = client.get("/api/crossroads/messages?per_page=100")
+        assert r_capped.status_code == 200
+        d_capped = r_capped.json()
+        assert d_capped["per_page"] == 50
+
+        for key in ("page", "per_page", "total_messages", "total_pages"):
+            assert key in d1
+            assert key in d2
+            assert key in d3
+            assert key in d4
 
     def test_api_post_message(self) -> None:
         resp = client.post("/api/game/new", json={"shared_universe": True})

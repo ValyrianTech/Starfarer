@@ -268,16 +268,21 @@ def api_claim_lore(donation_id: str, req: ClaimLoreRequest) -> dict:
 
 
 @router.get("/crossroads/messages")
-def api_crossroads_messages() -> dict:
+def api_crossroads_messages(page: int = 1, per_page: int = 10) -> dict:
     """Retrieve recent messages posted at the Crossroads.
 
-    Messages older than 7 days are automatically excluded.
+    Messages older than 7 days are automatically excluded. Supports
+    pagination via optional ``page`` and ``per_page`` query parameters.
 
-    :returns: A dictionary with ``messages`` list of message dicts.
+    :param page: The page number to retrieve (1-indexed, default 1).
+    :type page: int
+    :param per_page: Number of messages per page (max 50, default 10).
+    :type per_page: int
+    :returns: A dictionary with ``messages`` list, ``page``, ``per_page``,
+        ``total_messages``, and ``total_pages``.
     :rtype: dict
     """
-    msgs = get_messages()
-    return {"messages": msgs}
+    return get_messages(page=page, per_page=per_page)
 
 
 @router.post("/crossroads/post-message")
