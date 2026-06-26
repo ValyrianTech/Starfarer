@@ -81,6 +81,8 @@ def perform_jump(state: GameState, target_system: StarSystem, fuel_cost: int) ->
     life_support_level = state.ship.morale_decay_reduction
     morale_decay = max(1, MORALE_DECAY_PER_JUMP - life_support_level)
     state.ship.morale = max(0, state.ship.morale - morale_decay)
+    if state.shared_universe and current:
+        record_ghost(state, current.id)
     state.ship.current_system_id = target_system.id
     state.ship.current_body_id = None
     target_system.visited = True
@@ -96,9 +98,6 @@ def perform_jump(state: GameState, target_system: StarSystem, fuel_cost: int) ->
         state.add_log("discovery", f"Detected phenomenon: {target_system.phenomenon_desc}", category="discovery", title="Phenomenon Detected", system=target_system.name)
 
     state.update_stranded_state()
-
-    if state.shared_universe:
-        record_ghost(state, state.ship.current_system_id)
 
     state.jumps_since_rep_decay += 1
     if state.jumps_since_rep_decay >= 10:
