@@ -598,14 +598,23 @@ def apply_cooldown(state: GameState, event_title: str, event_type: str = "") -> 
 
 
 def decrement_cooldowns(state: GameState) -> None:
-    """Decrement all active cooldowns by 1 and decay hazard event counts."""
+    """Decrement all active cooldowns by 1 and decay hazard event counts.
+
+    Hazard event counts decay only when the event has been off cooldown
+    for at least one full tick. If a cooldown expires on this tick, the
+    count is preserved and will decay on the next tick instead.
+    """
+    # Collect events whose cooldown will expire this tick (currently at 1)
+    expiring_events = {e for e, cd in state.event_cooldowns.items() if cd == 1}
+
     for event_id in list(state.event_cooldowns):
         state.event_cooldowns[event_id] -= 1
         if state.event_cooldowns[event_id] <= 0:
             del state.event_cooldowns[event_id]
 
     for event_title in list(state.hazard_event_counts):
-        if event_title not in state.event_cooldowns:
+        # Skip decay for events whose cooldown just expired this tick
+        if event_title not in state.event_cooldowns and event_title not in expiring_events:
             state.hazard_event_counts[event_title] = max(0, state.hazard_event_counts[event_title] - 1)
             if state.hazard_event_counts[event_title] == 0:
                 del state.hazard_event_counts[event_title]
