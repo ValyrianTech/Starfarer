@@ -765,7 +765,7 @@ class TestMultiplayerGhosts:
         ghosts_data = get_system_ghosts("nonexistent-system-id-xyz")
         assert ghosts_data["ghosts"] == []
         assert ghosts_data["total_ghosts"] == 0
-        assert ghosts_data["total_pages"] == 1
+        assert ghosts_data["total_pages"] == 0
 
     def test_get_system_ghosts_pagination_default(self) -> None:
         state = new_game(42, "GhostShip", shared_universe=True)
@@ -1533,7 +1533,7 @@ class TestMultiplayerAPI:
         data = resp.json()
         assert data["ghosts"] == []
         assert data["total_ghosts"] == 0
-        assert data["total_pages"] == 1
+        assert data["total_pages"] == 0
 
     def test_api_system_ghosts_total_ghosts_and_pages(self) -> None:
         resp = client.post("/api/game/new", json={"shared_universe": True})
@@ -1825,7 +1825,7 @@ class TestMultiplayerAPI:
         data = r.json()
         assert len(data["messages"]) == 0
         assert data["total_messages"] == 0
-        assert data["total_pages"] == 1
+        assert data["total_pages"] == 0
 
 
     def test_api_post_message(self) -> None:
