@@ -818,6 +818,15 @@ class TestMultiplayerCrossroads:
         assert "cannot be empty" in result["detail"].lower()
         GAME_STORE.pop(state.id, None)
 
+    def test_post_message_too_long_rejected(self) -> None:
+        """post_message should reject text longer than 500 characters."""
+        state = new_game(42, "Poster", shared_universe=True)
+        GAME_STORE[state.id] = state
+        result = post_message(state, "x" * 501)
+        assert result["success"] is False
+        assert "exceeds" in result["detail"].lower()
+        GAME_STORE.pop(state.id, None)
+
     def test_post_message_pydantic_rejects_empty(self) -> None:
         """PostMessageRequest schema should reject empty text."""
         from pydantic import ValidationError
