@@ -273,7 +273,7 @@ def get_messages(page: int = 1, per_page: int = 10) -> dict:
     :rtype: dict
     """
     page_msgs, total, page, per_page = get_recent_messages_paginated(page=page, per_page=per_page)
-    total_pages = max(1, math.ceil(total / per_page))
+    total_pages = math.ceil(total / per_page)
     return {
         "messages": [m.to_dict() for m in page_msgs],
         "page": page,
