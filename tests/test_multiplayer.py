@@ -1752,9 +1752,7 @@ class TestMultiplayerAPI:
         assert len(d3["messages"]) == 5
 
         r4 = client.get("/api/crossroads/messages?page=4&per_page=5")
-        assert r4.status_code == 200
-        d4 = r4.json()
-        assert len(d4["messages"]) == 0
+        assert r4.status_code == 404
 
         r_default = client.get("/api/crossroads/messages")
         assert r_default.status_code == 200
@@ -1771,7 +1769,6 @@ class TestMultiplayerAPI:
             assert key in d1
             assert key in d2
             assert key in d3
-            assert key in d4
 
     def test_api_crossroads_messages_page_less_than_one(self) -> None:
         """api_crossroads_messages should clamp page < 1 to 1."""
@@ -1791,6 +1788,41 @@ class TestMultiplayerAPI:
         assert data["per_page"] == 1
         for key in ("messages", "page", "per_page", "total_messages", "total_pages"):
             assert key in data
+
+    def test_api_crossroads_messages_page_out_of_range(self) -> None:
+        """api_crossroads_messages should return 404 for out-of-range pages with messages."""
+        resp = client.post("/api/game/new", json={"shared_universe": True})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+
+        # Post 5 messages (so with per_page=5, there's exactly 1 page)
+        for i in range(5):
+            client.post(
+                "/api/crossroads/post-message",
+                json={"game_id": game_id, "text": f"OOR test message {i}"},
+            )
+
+        # Page 1 should work fine
+        r1 = client.get("/api/crossroads/messages?page=1&per_page=5")
+        assert r1.status_code == 200
+        data = r1.json()
+        assert len(data["messages"]) == 5
+        assert data["total_pages"] == 1
+
+        # Page 2 should return 404 (out of range, and total_messages > 0)
+        r2 = client.get("/api/crossroads/messages?page=2&per_page=5")
+        assert r2.status_code == 404
+        assert r2.json()["detail"] == "Page out of range"
+
+    def test_api_crossroads_messages_page_out_of_range_empty_db(self) -> None:
+        """api_crossroads_messages should NOT return 404 for out-of-range pages when there are no messages."""
+        # No messages posted, so total_messages == 0
+        r = client.get("/api/crossroads/messages?page=2&per_page=5")
+        assert r.status_code == 200
+        data = r.json()
+        assert len(data["messages"]) == 0
+        assert data["total_messages"] == 0
+        assert data["total_pages"] == 1
 
 
     def test_api_post_message(self) -> None:

@@ -290,8 +290,12 @@ def api_crossroads_messages(page: int = 1, per_page: int = 10) -> dict:
     :returns: A dictionary with ``messages`` list, ``page``, ``per_page``,
         ``total_messages``, and ``total_pages``.
     :rtype: dict
+    :raises HTTPException: 404 if page exceeds total pages with active messages.
     """
-    return get_messages(page=page, per_page=per_page)
+    result = get_messages(page=page, per_page=per_page)
+    if page > result["total_pages"] and result["total_messages"] > 0:
+        raise HTTPException(status_code=404, detail="Page out of range")
+    return result
 
 
 @router.post("/crossroads/post-message")
