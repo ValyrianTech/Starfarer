@@ -295,10 +295,10 @@ def api_post_message(req: PostMessageRequest) -> dict:
     state = _check_game(req.game_id)
     with _get_lock(req.game_id):
         msg = post_message(state, req.text)
-        if isinstance(msg, dict) and "id" not in msg:
+        if isinstance(msg, dict) and not msg.get("success"):
             raise HTTPException(status_code=400, detail=msg.get("detail", "Failed to post message"))
         _save_state(req.game_id)
-    return {"message": msg}
+    return {"message": msg["message"]}
 
 
 # ---------------------------------------------------------------------------
