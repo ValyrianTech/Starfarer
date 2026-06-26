@@ -2343,6 +2343,123 @@ class TestNewHazardEvents:
         # Ancient Signal cooldown should decrement from 1 to 0 and be removed
         assert "Ancient Signal" not in state.event_cooldowns
 
+    def test_hazard_event_count_does_not_decay_on_cooldown_expiry_tick(self) -> None:
+        """When a cooldown expires (reaches 0), the hazard_event_count should NOT decay on the same tick.
+        
+        This tests the fix for PR #58 change request 2: if an event had cooldown=1 and count=3,
+        after decrement: cooldown expires (removed), but count should stay at 3 (not decay to 2).
+        """
+        from backend.generation.events import decrement_cooldowns
+        from backend.models.ship import Ship
+
+        ship = Ship()
+        state = GameState(id="test-no-decay-on-expiry", seed=42, ship=ship)
+
+        # Set up: cooldown=1 (will expire this tick), count=3
+        state.event_cooldowns["Solar Flare"] = 1
+        state.hazard_event_counts["Solar Flare"] = 3
+
+        decrement_cooldowns(state)
+
+        # Cooldown should have expired (removed)
+        assert "Solar Flare" not in state.event_cooldowns
+        # Count should NOT have decayed (stays at 3, not 2)
+        assert state.hazard_event_counts["Solar Flare"] == 3, \
+            f"Expected count to stay at 3, got {state.hazard_event_counts['Solar Flare']}"
+
+    def test_hazard_event_count_decays_on_next_tick_after_cooldown_expiry(self) -> None:
+        """After a cooldown expires, the count should decay on the NEXT tick, not the same tick."""
+        from backend.generation.events import decrement_cooldowns
+        from backend.models.ship import Ship
+
+        ship = Ship()
+        state = GameState(id="test-decay-next-tick", seed=42, ship=ship)
+
+        # Set up: cooldown=1 (will expire this tick), count=3
+        state.event_cooldowns["Solar Flare"] = 1
+        state.hazard_event_counts["Solar Flare"] = 3
+
+        # Tick 1: cooldown expires, count should NOT decay
+        decrement_cooldowns(state)
+        assert "Solar Flare" not in state.event_cooldowns
+        assert state.hazard_event_counts["Solar Flare"] == 3
+
+        # Tick 2: no cooldown, count SHOULD decay
+        decrement_cooldowns(state)
+        assert state.hazard_event_counts["Solar Flare"] == 2
+
+    def test_hazard_event_count_preserved_when_cooldown_expires_and_still_on_cooldown(self) -> None:
+        """Events on cooldown should still not have their count decay, even after the cooldown was just applied."""
+        from backend.generation.events import decrement_cooldowns
+        from backend.models.ship import Ship
+
+        ship = Ship()
+        state = GameState(id="test-preserved-on-cooldown", seed=42, ship=ship)
+
+        # Set up: cooldown=3 (not expiring), count=5
+        state.event_cooldowns["Solar Flare"] = 3
+        state.hazard_event_counts["Solar Flare"] = 5
+
+        decrement_cooldowns(state)
+
+        # Cooldown should decrement to 2
+        assert state.event_cooldowns["Solar Flare"] == 2
+        # Count should NOT decay (event is on cooldown)
+        assert state.hazard_event_counts["Solar Flare"] == 5
+
+    def test_hazard_event_count_decay_multiple_ticks_with_mixed_cooldowns(self) -> None:
+        """Multiple events with different cooldown states should all decay correctly."""
+        from backend.generation.events import decrement_cooldowns
+        from backend.models.ship import Ship
+
+        ship = Ship()
+        state = GameState(id="test-mixed-ticks", seed=42, ship=ship)
+
+        # Event A: cooldown=1 (expiring this tick), count=3
+        # Event B: cooldown=3 (not expiring), count=5
+        # Event C: no cooldown, count=2
+        state.event_cooldowns["Solar Flare"] = 1
+        state.event_cooldowns["Asteroid Swarm"] = 3
+        state.hazard_event_counts["Solar Flare"] = 3
+        state.hazard_event_counts["Asteroid Swarm"] = 5
+        state.hazard_event_counts["Micrometeorite Storm"] = 2
+
+        # Tick 1
+        decrement_cooldowns(state)
+        # Solar Flare: cooldown expired, count stays at 3
+        assert "Solar Flare" not in state.event_cooldowns
+        assert state.hazard_event_counts["Solar Flare"] == 3
+        # Asteroid Swarm: cooldown 3->2, count stays at 5
+        assert state.event_cooldowns["Asteroid Swarm"] == 2
+        assert state.hazard_event_counts["Asteroid Swarm"] == 5
+        # Micrometeorite Storm: no cooldown, count 2->1
+        assert state.hazard_event_counts["Micrometeorite Storm"] == 1
+
+        # Tick 2
+        decrement_cooldowns(state)
+        # Solar Flare: no cooldown, count 3->2
+        assert state.hazard_event_counts["Solar Flare"] == 2
+        # Asteroid Swarm: cooldown 2->1, count stays at 5
+        assert state.event_cooldowns["Asteroid Swarm"] == 1
+        assert state.hazard_event_counts["Asteroid Swarm"] == 5
+        # Micrometeorite Storm: no cooldown, count 1->0 and removed
+        assert "Micrometeorite Storm" not in state.hazard_event_counts
+
+        # Tick 3
+        decrement_cooldowns(state)
+        # Solar Flare: no cooldown, count 2->1
+        assert state.hazard_event_counts["Solar Flare"] == 1
+        # Asteroid Swarm: cooldown expired, count stays at 5
+        assert "Asteroid Swarm" not in state.event_cooldowns
+        assert state.hazard_event_counts["Asteroid Swarm"] == 5
+
+        # Tick 4
+        decrement_cooldowns(state)
+        # Solar Flare: no cooldown, count 1->0 and removed
+        assert "Solar Flare" not in state.hazard_event_counts
+        # Asteroid Swarm: no cooldown, count 5->4
+        assert state.hazard_event_counts["Asteroid Swarm"] == 4
+
 
 class TestEventCooldowns:
     """Validation tests for EVENT_COOLDOWNS coverage."""
