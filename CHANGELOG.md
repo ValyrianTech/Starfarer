@@ -33,6 +33,7 @@
 - Lore discovery notification toast: In-app notification when a lore fragment is discovered
 - Lore button pulse animation: Lore button glows when new fragments are unread
 - Safe fallback for unknown systems in lore discovery location (when system not found in state)
+- `escapeHtml()` utility function in `frontend/js/utils.js` for safe rendering of user-facing text content
 - Event cooldown system: per-event cooldowns prevent event repetition within a session
 - `EVENT_COOLDOWNS` dictionary with configurable cooldown values per event title (3, 5, 6, 8, or 10 turns)
 - `apply_cooldown()` and `decrement_cooldowns()` functions for cooldown lifecycle management
@@ -85,9 +86,11 @@
 - Hawking Radiation Harvest cooldown changed from 6 to 8 (to disambiguate from the new 'Hawking Radiation Harvest (Deep Scan)' event)
 
 ### Fixed
+- `BIOME_WEIGHTS` in `backend/generation/lore.py` now includes `None: 1` entry so lore fragments can be distributed to bodies without a biome
 - `renderCodex()` now uses `textContent` instead of `innerHTML` for all user-facing data fields (biome names, descriptions, hints, star ratings, discovery tags), preventing potential XSS injection
 - Codex hint field now correctly shown for all biomes regardless of unlock status — hints use `tier1_hint` from `BIOME_CODEX_DATA` and are displayed whenever `scanner_level >= 0`
 - `.unlocked` CSS class now has corresponding styles in `ui.css` (cyan border, full opacity), fixing the visual distinction between unlocked and locked codex entries
+- Event modals (`events.js`), galaxy info panel (`galaxy.js`), ship status (`ship.js`), and system view (`system.js`) now use `escapeHtml()` for all user-facing data, preventing XSS injection
 - `test_new_events_correct_cooldown_values` now asserts the correct cooldown for 'Hawking Radiation Harvest (Deep Scan)' instead of the old 'Hawking Radiation Harvest' event (was checking the wrong event's cooldown)
 - `NEW_BH_TITLES` test set now includes 'Hawking Radiation Harvest (Deep Scan)' instead of the old 'Hawking Radiation Harvest' title, ensuring the new event is properly tested
 - `test_new_events_can_be_triggered_in_black_hole` now verifies that the triggered event is actually one of the 3 new black hole events (was only checking that *any* event triggered, not that it was a new event)

@@ -757,7 +757,7 @@ For AI agents using browser tools:
 2. **Find actions:** `document.querySelectorAll('[data-action]')` — all interactive elements
 3. **Click actions:** Elements have `data-action` values like `"jump-to"`, `"scan"`, `"land"`, `"explore"`, `"resolve-event"`
 4. **Click with params:** Some elements carry extra data like `data-system-id`, `data-body-id`, `data-event-id`, `data-choice-idx`
-5. **Screen navigation:** Click `data-action="show-galaxy"` for map, `data-action="show-log"` for log
+5. **Screen navigation:** Click `data-action="show-galaxy"` for map, `data-action="show-log"` for log, `data-action="show-codex"` for the biome discovery codex
 6. **Canvas interaction:** The galaxy map is a Canvas element. Click on stars to select them, then use the "Jump" button. Pan by dragging, zoom with scroll wheel.
 
 ---
