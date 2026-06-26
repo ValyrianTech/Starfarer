@@ -53,7 +53,7 @@ def donate_item(
         return {"success": False, "detail": f"No discovery named '{item_name}' in cargo."}
 
     actual_quantity = min(quantity, len(matching))
-    indices_to_remove = []
+    indices_to_remove: list[int] = []
     for i, d in enumerate(game_state.discoveries):
         if d.name == item_name and len(indices_to_remove) < actual_quantity:
             indices_to_remove.append(i)

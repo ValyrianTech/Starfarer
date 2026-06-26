@@ -12,6 +12,7 @@ from threading import Lock
 from fastapi import APIRouter, HTTPException
 
 from backend.api.routes import _get_state, _save_state
+from backend.models.game_state import GameState
 from backend.game.manager import GAME_STORE
 from backend.multiplayer.schemas import (
     LeaveGhostRequest, DonateItemRequest, DonateLoreRequest,
@@ -88,7 +89,7 @@ def _cleanup_stale_locks() -> None:
                 del _game_locks[gid]
 
 
-def _check_game(game_id: str):
+def _check_game(game_id: str) -> GameState:
     """Validate that a game exists and return its state.
 
     :param game_id: The unique identifier of the game.
