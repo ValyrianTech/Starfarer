@@ -31,6 +31,8 @@ Phenomenon-specific events (Ion Storm, Radiation Pulse, Lagrange Point Discovery
 
 The cargo API (`GET /api/game/{id}/cargo`) supports sortable queries by value or name in ascending or descending order, and returns a `total_value` field summing all cargo item credit values. The full game state endpoint (`GET /api/game/{id}`) also accepts optional `sort` and `order` query parameters for cargo items and includes `total_value` and `top3_ids` in its response. The browser UI features a floating cargo panel with a sort-by dropdown, total value display, and top-3 most valuable items highlighted with a star icon and orange border.
 
+A biome discovery codex (`GET /api/game/{id}/codex`) tracks which of the 8 planetary biomes (ocean, jungle, crystal, volcanic, desert, tundra, barren, gas_giant) the player has visited and progressively reveals knowledge in 3 tiers based on scanner level: biome names and hints at scanner level 0+, value ratings at level 1+, and specific discovery types at level 2+ (only for visited biomes). Biomes are recorded when landing on a body and when exploring the surface, tracked via the `biomes_visited` set on game state.
+
 ## Configuration
 
 | Variable | Purpose |
