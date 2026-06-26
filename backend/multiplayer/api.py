@@ -335,6 +335,8 @@ def api_ripples(game_id: str) -> dict:
     :raises HTTPException: 404 if the game is not found.
     """
     state = _check_game(game_id)
+    # No lock needed: ripple data is read from the database, not from in-memory game state.
+    # The game state is only used to determine the player's current system for filtering.
     ripples = get_pending_ripples(state)
     return {"ripples": ripples}
 
