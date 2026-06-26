@@ -196,6 +196,10 @@
 - `api_post_message` has inconsistent error handling: some error paths (empty text, length exceeded) returned HTTP 200 with error payloads instead of proper HTTP 400 errors; fixed by raising `HTTPException` with appropriate status codes.
 - Memory leak in `_game_locks` — cleanup functions are never called: the `_cleanup_game_lock()` and `_cleanup_stale_locks()` functions were defined but never invoked, causing lock objects to accumulate indefinitely; fixed by hooking cleanup into game deletion and periodic maintenance.
 - Race condition in `_get_lock` — lock creation is not fully atomic: a gap between checking and creating a per-game lock could result in two threads creating separate lock objects for the same game; fixed by making lock creation fully atomic with a dedicated mutex.
+- `_lock_access_count` counter has no thread safety: changed from mutable `int` to `itertools.count()` to eliminate race conditions in the periodic cleanup trigger.
+- `_cleanup_stale_locks` iterates over a dict that may be modified concurrently: cleanup is now performed inside the `_lock_for_locks` mutex to prevent race conditions.
+- `api_post_message` returns inconsistent error format: error detection now checks `msg.get("success")` instead of `"id" not in msg`, ensuring all error paths return proper HTTP 400 responses.
+- `post_message` now returns a consistent `{"success": True, "message": ...}` dict instead of raw message dict, providing a uniform success indicator across all multiplayer endpoints.
 
 ### Removed
 - Unused `Optional` import from `backend/codex.py`
