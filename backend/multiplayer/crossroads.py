@@ -238,6 +238,8 @@ def post_message(game_state: GameState, text: str) -> dict:
     :returns: A dictionary representation of the posted message.
     :rtype: dict
     """
+    if not text or not text.strip():
+        return {"success": False, "detail": "Message text cannot be empty."}
     msg = CrossroadsMessage(
         id=str(uuid.uuid4()),
         game_id=game_state.id,
