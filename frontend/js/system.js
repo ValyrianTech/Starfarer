@@ -73,10 +73,10 @@ function renderSurfaceView(bodyData, discoveries, gameId) {
     for (const d of discoveries) {
       discHTML += `
         <div class="discovery-item fade-in">
-          <div class="disc-category">${d.category}</div>
-          <div class="disc-name">${d.name}</div>
-          <div class="disc-desc">${d.description}</div>
-          <div class="disc-value">Value: ${d.value} credits</div>
+          <div class="disc-category">${escapeHtml(d.category)}</div>
+          <div class="disc-name">${escapeHtml(d.name)}</div>
+          <div class="disc-desc">${escapeHtml(d.description)}</div>
+          <div class="disc-value">Value: ${escapeHtml(d.value)} credits</div>
         </div>`;
     }
     discHTML += '</div>';
