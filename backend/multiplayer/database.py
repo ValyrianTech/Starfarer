@@ -172,6 +172,49 @@ def get_ghost_signatures(system_id: str) -> list[GhostSignature]:
     return result
 
 
+def get_ghost_signatures_paginated(system_id: str, page: int = 1, per_page: int = 10) -> tuple[list[GhostSignature], int]:
+    """Retrieve paginated ghost signatures for a given star system.
+
+    Returns a tuple of (paginated ghosts list, total count). Results
+    are ordered by timestamp descending (most recent first), using
+    SQL LIMIT/OFFSET for pagination.
+
+    :param system_id: The unique identifier of the star system.
+    :type system_id: str
+    :param page: The page number to retrieve (1-indexed, default 1).
+    :type page: int
+    :param per_page: Number of ghosts per page (max 50, default 10).
+    :type per_page: int
+    :returns: A tuple of (paginated ghosts, total_count).
+    :rtype: tuple[list[GhostSignature], int]
+    """
+    per_page = min(max(1, per_page), 50)
+    page = max(1, page)
+    offset = (page - 1) * per_page
+    with get_db_ctx() as conn:
+        total = conn.execute(
+            "SELECT COUNT(*) FROM ghost_signatures WHERE system_id = ?",
+            (system_id,),
+        ).fetchone()[0]
+        rows = conn.execute(
+            "SELECT * FROM ghost_signatures WHERE system_id = ? ORDER BY timestamp DESC LIMIT ? OFFSET ?",
+            (system_id, per_page, offset),
+        ).fetchall()
+    result: list[GhostSignature] = []
+    for row in rows:
+        result.append(GhostSignature(
+            id=row["id"],
+            game_id=row["game_id"],
+            player_name=row["player_name"],
+            system_id=row["system_id"],
+            timestamp=row["timestamp"],
+            discoveries=_load_json_column(row["discoveries"]),
+            message=row["message"],
+            body_visits=_load_json_column(row["body_visits"]),
+        ))
+    return result, total
+
+
 # ---------------------------------------------------------------------------
 # Crossroads Items
 # ---------------------------------------------------------------------------

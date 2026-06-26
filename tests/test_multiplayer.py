@@ -516,8 +516,8 @@ class TestMultiplayerGhosts:
         assert result["player_name"] == "GhostShip"
         assert result["system_id"] == system.id
 
-        ghosts = get_system_ghosts(system.id)
-        found = [g for g in ghosts if g["id"] == result["id"]]
+        ghosts_data = get_system_ghosts(system.id)
+        found = [g for g in ghosts_data["ghosts"] if g["id"] == result["id"]]
         assert len(found) == 1
         GAME_STORE.pop(state.id, None)
 
@@ -613,16 +613,68 @@ class TestMultiplayerGhosts:
         system = state.get_current_system()
         record_ghost(state, system.id, message="Ghost 1")
         record_ghost(state, system.id, message="Ghost 2")
-        ghosts = get_system_ghosts(system.id)
-        assert len(ghosts) >= 2
-        messages = [g["message"] for g in ghosts]
+        ghosts_data = get_system_ghosts(system.id)
+        assert len(ghosts_data["ghosts"]) >= 2
+        messages = [g["message"] for g in ghosts_data["ghosts"]]
         assert "Ghost 1" in messages
         assert "Ghost 2" in messages
         GAME_STORE.pop(state.id, None)
 
     def test_get_system_ghosts_empty(self) -> None:
-        ghosts = get_system_ghosts("nonexistent-system-id-xyz")
-        assert ghosts == []
+        ghosts_data = get_system_ghosts("nonexistent-system-id-xyz")
+        assert ghosts_data["ghosts"] == []
+        assert ghosts_data["total_ghosts"] == 0
+        assert ghosts_data["total_pages"] == 1
+
+    def test_get_system_ghosts_pagination_default(self) -> None:
+        state = new_game(42, "GhostShip", shared_universe=True)
+        GAME_STORE[state.id] = state
+        system = state.get_current_system()
+        for i in range(15):
+            record_ghost(state, system.id, message=f"Ghost {i}")
+        result = get_system_ghosts(system.id)
+        assert result["page"] == 1
+        assert result["per_page"] == 10
+        assert result["total_ghosts"] >= 15
+        assert result["total_pages"] >= 2
+        assert len(result["ghosts"]) == 10
+        GAME_STORE.pop(state.id, None)
+
+    def test_get_system_ghosts_pagination_explicit(self) -> None:
+        state = new_game(42, "GhostShip", shared_universe=True)
+        GAME_STORE[state.id] = state
+        system = state.get_current_system()
+        for i in range(15):
+            record_ghost(state, system.id, message=f"Ghost {i}")
+        result = get_system_ghosts(system.id, page=2, per_page=5)
+        assert result["page"] == 2
+        assert result["per_page"] == 5
+        assert result["total_ghosts"] >= 15
+        assert result["total_pages"] >= 3
+        assert len(result["ghosts"]) == 5
+        GAME_STORE.pop(state.id, None)
+
+    def test_get_system_ghosts_per_page_capped(self) -> None:
+        state = new_game(42, "GhostShip", shared_universe=True)
+        GAME_STORE[state.id] = state
+        system = state.get_current_system()
+        for i in range(5):
+            record_ghost(state, system.id, message=f"Ghost {i}")
+        result = get_system_ghosts(system.id, per_page=100)
+        assert result["per_page"] == 50
+        GAME_STORE.pop(state.id, None)
+
+    def test_get_system_ghosts_page_beyond_total(self) -> None:
+        state = new_game(42, "GhostShip", shared_universe=True)
+        GAME_STORE[state.id] = state
+        system = state.get_current_system()
+        for i in range(5):
+            record_ghost(state, system.id, message=f"Ghost {i}")
+        result = get_system_ghosts(system.id, page=10, per_page=10)
+        assert result["ghosts"] == []
+        assert result["page"] == 10
+        assert result["total_ghosts"] >= 5
+        GAME_STORE.pop(state.id, None)
 
 
 # ---------------------------------------------------------------------------
@@ -1209,6 +1261,131 @@ class TestMultiplayerAPI:
     def test_api_system_ghosts_game_not_found(self) -> None:
         resp = client.get("/api/game/nonexistent/system/sys-1/ghosts")
         assert resp.status_code == 404
+
+    def test_api_system_ghosts_pagination_default(self) -> None:
+        resp = client.post("/api/game/new", json={"shared_universe": True})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        sys_id = resp.json()["state"]["ship"]["current_system_id"]
+
+        for i in range(15):
+            client.post(
+                f"/api/game/{game_id}/leave-ghost",
+                json={"message": f"Pagination ghost {i}"},
+            )
+
+        resp = client.get(f"/api/game/{game_id}/system/{sys_id}/ghosts")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "ghosts" in data
+        assert data["page"] == 1
+        assert data["per_page"] == 10
+        assert data["total_ghosts"] >= 15
+        assert data["total_pages"] >= 2
+        assert len(data["ghosts"]) == 10
+
+    def test_api_system_ghosts_pagination_explicit(self) -> None:
+        resp = client.post("/api/game/new", json={"shared_universe": True})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        sys_id = resp.json()["state"]["ship"]["current_system_id"]
+
+        for i in range(15):
+            client.post(
+                f"/api/game/{game_id}/leave-ghost",
+                json={"message": f"Explicit pag ghost {i}"},
+            )
+
+        resp = client.get(f"/api/game/{game_id}/system/{sys_id}/ghosts?page=2&per_page=5")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["page"] == 2
+        assert data["per_page"] == 5
+        assert data["total_ghosts"] >= 15
+        assert data["total_pages"] >= 3
+        assert len(data["ghosts"]) == 5
+
+    def test_api_system_ghosts_per_page_capped(self) -> None:
+        resp = client.post("/api/game/new", json={"shared_universe": True})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        sys_id = resp.json()["state"]["ship"]["current_system_id"]
+
+        for i in range(5):
+            client.post(
+                f"/api/game/{game_id}/leave-ghost",
+                json={"message": f"Capped ghost {i}"},
+            )
+
+        resp = client.get(f"/api/game/{game_id}/system/{sys_id}/ghosts?per_page=100")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["per_page"] == 50
+
+    def test_api_system_ghosts_page_out_of_range(self) -> None:
+        resp = client.post("/api/game/new", json={"shared_universe": True})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        sys_id = resp.json()["state"]["ship"]["current_system_id"]
+
+        for i in range(5):
+            client.post(
+                f"/api/game/{game_id}/leave-ghost",
+                json={"message": f"OOR ghost {i}"},
+            )
+
+        resp = client.get(f"/api/game/{game_id}/system/{sys_id}/ghosts?page=100")
+        assert resp.status_code == 404
+
+    def test_api_system_ghosts_page_less_than_one(self) -> None:
+        resp = client.post("/api/game/new", json={"shared_universe": True})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        sys_id = resp.json()["state"]["ship"]["current_system_id"]
+
+        resp = client.get(f"/api/game/{game_id}/system/{sys_id}/ghosts?page=0")
+        assert resp.status_code == 422
+
+    def test_api_system_ghosts_per_page_less_than_one(self) -> None:
+        resp = client.post("/api/game/new", json={"shared_universe": True})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        sys_id = resp.json()["state"]["ship"]["current_system_id"]
+
+        resp = client.get(f"/api/game/{game_id}/system/{sys_id}/ghosts?per_page=0")
+        assert resp.status_code == 422
+
+    def test_api_system_ghosts_page_out_of_range_empty(self) -> None:
+        resp = client.post("/api/game/new", json={"shared_universe": True})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        sys_id = resp.json()["state"]["ship"]["current_system_id"]
+
+        resp = client.get(f"/api/game/{game_id}/system/{sys_id}/ghosts?page=2")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["ghosts"] == []
+        assert data["total_ghosts"] == 0
+        assert data["total_pages"] == 1
+
+    def test_api_system_ghosts_total_ghosts_and_pages(self) -> None:
+        resp = client.post("/api/game/new", json={"shared_universe": True})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        sys_id = resp.json()["state"]["ship"]["current_system_id"]
+
+        for i in range(7):
+            client.post(
+                f"/api/game/{game_id}/leave-ghost",
+                json={"message": f"Total ghost {i}"},
+            )
+
+        resp = client.get(f"/api/game/{game_id}/system/{sys_id}/ghosts?per_page=3")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total_ghosts"] >= 7
+        assert data["total_pages"] == 3
+        assert len(data["ghosts"]) == 3
 
     def test_api_crossroads_items(self) -> None:
         resp = client.get("/api/crossroads/items")
