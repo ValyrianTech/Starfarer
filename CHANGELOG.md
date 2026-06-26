@@ -188,6 +188,14 @@
 - `create_ripple` only propagated to systems the source player had visited: Fixed by accepting an optional `all_systems` parameter. When provided, ripples propagate to all systems in the universe within range, not just those the source player has visited.
 - Concurrent API requests to multiplayer endpoints could cause state corruption: All multiplayer endpoints now use per-game locks (`_get_lock(game_id)`) for state modifications, preventing race conditions.
 - `claim_item` appended the same Discovery object multiple times instead of creating distinct objects: Fixed by creating a new `Discovery` instance for each claimed quantity, each with a unique UUID.
+- `escapeHtml()` used inconsistently in `renderSurfaceView`: surface discovery text was rendered via `innerHTML` while all other views used `escapeHtml()`; fixed by applying `escapeHtml()` to all user-facing text in surface rendering.
+- `_cleanup_stale_locks()` has potential race with game state loading: stale lock cleanup could remove locks for games currently being loaded from the database; fixed by adding a guard that skips cleanup when a game load is in progress.
+- Test isolation issue — tests share database state: module-level database state in tests could persist across test cases within the same class; fixed by resetting shared state between test runs.
+- Ghost signature `body_visits` may include duplicates: repeated landings on the same body could result in duplicate entries in ghost signature body visits; fixed by deduplicating body visits before recording ghost signatures.
+- `claim_item` creates Discovery objects with empty `system_id`: claimed items from the Crossroads lacked system attribution; fixed by injecting the claiming player's current system as the discovery origin.
+- `api_post_message` has inconsistent error handling: some error paths (empty text, length exceeded) returned HTTP 200 with error payloads instead of proper HTTP 400 errors; fixed by raising `HTTPException` with appropriate status codes.
+- Memory leak in `_game_locks` — cleanup functions are never called: the `_cleanup_game_lock()` and `_cleanup_stale_locks()` functions were defined but never invoked, causing lock objects to accumulate indefinitely; fixed by hooking cleanup into game deletion and periodic maintenance.
+- Race condition in `_get_lock` — lock creation is not fully atomic: a gap between checking and creating a per-game lock could result in two threads creating separate lock objects for the same game; fixed by making lock creation fully atomic with a dedicated mutex.
 
 ### Removed
 - Unused `Optional` import from `backend/codex.py`
