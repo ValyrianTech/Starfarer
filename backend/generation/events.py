@@ -373,6 +373,7 @@ EVENT_TEMPLATES: list[dict[str, Any]] = [
             {"text": "Push through with emergency power", "outcome": "fuel:-15; hull:-5; Emergency power pushed through the storm with electrical damage."},
             {"text": "Wait it out", "outcome": "fuel:-5; morale:-5; Waited out the storm safely, but morale dipped from the delay."},
         ],
+        "trigger_conditions": {"phenomenon": "nebula"},
     },
     {
         "type": "discovery",
