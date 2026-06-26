@@ -99,15 +99,15 @@ def claim_item(item_id: str, game_state: GameState) -> dict:
     if not ok:
         return {"success": False, "detail": "Item could not be claimed (may have been claimed already)."}
 
-    disc = Discovery(
-        id=str(uuid.uuid4()),
-        category="artifact",
-        name=target.item_name,
-        description=f"A gift from {target.donor_name} via the Crossroads.",
-        value=0,
-        system_id=game_state.ship.current_system_id or "",
-    )
     for _ in range(target.quantity):
+        disc = Discovery(
+            id=str(uuid.uuid4()),
+            category="artifact",
+            name=target.item_name,
+            description=f"A gift from {target.donor_name} via the Crossroads.",
+            value=0,
+            system_id=game_state.ship.current_system_id or "",
+        )
         game_state.discoveries.append(disc)
 
     game_state.add_log(
