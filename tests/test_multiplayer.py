@@ -564,6 +564,31 @@ class TestMultiplayerGhosts:
         assert len(result["body_visits"]) == 1
         GAME_STORE.pop(state.id, None)
 
+    def test_record_ghost_deduplicates_body_visits(self) -> None:
+        state = new_game(42, "GhostShip", shared_universe=True)
+        GAME_STORE[state.id] = state
+        system = state.get_current_system()
+
+        disc1 = _make_discovery(name="Artifact Alpha", system_id=system.id)
+        disc1.body_id = "body-shared"
+        state.discoveries.append(disc1)
+
+        disc2 = _make_discovery(name="Artifact Beta", system_id=system.id)
+        disc2.body_id = "body-shared"
+        state.discoveries.append(disc2)
+
+        disc3 = _make_discovery(name="Artifact Gamma", system_id=system.id)
+        disc3.body_id = "body-shared"
+        state.discoveries.append(disc3)
+
+        result = record_ghost(state, system.id)
+
+        assert "body-shared" in result["body_visits"]
+        disambiguate = [b for b in result["body_visits"] if b == "body-shared"]
+        assert len(disambiguate) == 1
+
+        GAME_STORE.pop(state.id, None)
+
     def test_record_ghost_with_message(self) -> None:
         state = new_game(42, "GhostShip", shared_universe=True)
         GAME_STORE[state.id] = state
