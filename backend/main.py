@@ -15,7 +15,9 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 import os
 
 from backend.api.routes import router
+from backend.multiplayer.api import router as multiplayer_router
 from backend.database import init_db, run_migrations
+from backend.multiplayer.database import init_multiplayer_db
 from backend.config import DATA_DIR
 
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend")
@@ -36,6 +38,7 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
     """
     init_db()
     run_migrations()
+    init_multiplayer_db()
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     (DATA_DIR / "save").mkdir(parents=True, exist_ok=True)
     yield
@@ -59,6 +62,7 @@ app.add_middleware(
 )
 
 app.include_router(router)
+app.include_router(multiplayer_router)
 
 
 if os.path.isdir(FRONTEND_DIR):

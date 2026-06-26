@@ -43,4 +43,19 @@ const API = {
   lore: (gameId) => apiCall('GET', `/game/${gameId}/lore`),
   cargo: (gameId, sort = 'value', order = 'desc') => apiCall('GET', `/game/${gameId}/cargo?sort=${encodeURIComponent(sort)}&order=${encodeURIComponent(order)}`),
   codex: (gameId) => apiCall('GET', `/game/${gameId}/codex`),
+
+  getSystemGhosts: (gameId, sysId) => apiCall('GET', `/game/${gameId}/system/${sysId}/ghosts`),
+  leaveGhost: (gameId, message) => apiCall('POST', `/game/${gameId}/leave-ghost`, { message }),
+  getCrossroadsItems: () => apiCall('GET', '/crossroads/items'),
+  donateItem: (gameId, itemName, quantity, message) =>
+    apiCall('POST', '/crossroads/donate-item', { game_id: gameId, item_name: itemName, quantity, message }),
+  claimItem: (itemId, gameId) => apiCall('POST', `/crossroads/claim-item/${itemId}`, { game_id: gameId }),
+  getCrossroadsLore: () => apiCall('GET', '/crossroads/lore'),
+  donateLore: (gameId, fragmentId, message) =>
+    apiCall('POST', '/crossroads/donate-lore', { game_id: gameId, fragment_id: fragmentId, message }),
+  claimLore: (donationId, gameId) => apiCall('POST', `/crossroads/claim-lore/${donationId}`, { game_id: gameId }),
+  getCrossroadsMessages: () => apiCall('GET', '/crossroads/messages'),
+  postMessage: (gameId, text) => apiCall('POST', '/crossroads/post-message', { game_id: gameId, text }),
+  getRipples: (gameId) => apiCall('GET', `/game/${gameId}/ripples`),
+  acknowledgeRipple: (gameId, rippleId) => apiCall('POST', `/game/${gameId}/ripple/${rippleId}/acknowledge`),
 };

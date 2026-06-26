@@ -19,6 +19,7 @@ class NewGameRequest(BaseModel):
     seed: Optional[int] = None
     ship_name: Optional[str] = None
     game_id: Optional[str] = None
+    shared_universe: Optional[bool] = None
 
 
 class JumpRequest(BaseModel):

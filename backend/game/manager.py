@@ -26,23 +26,33 @@ from backend.game.engine import (
 logger = logging.getLogger(__name__)
 
 
-def new_game(seed: int | None = None, ship_name: str | None = None) -> GameState:
+def new_game(seed: int | None = None, ship_name: str | None = None, shared_universe: bool = True) -> GameState:
     """Create a new game session with a procedurally generated universe.
 
     Generates a UUID for the game, creates the galaxy using the given
     (or default) seed, initializes the ship with default stats, and
     places the player in the first generated star system.
 
+    When ``shared_universe`` is True (the default), the canonical
+    shared universe seed (42) is always used, enabling multiplayer
+    features like ghost signatures, crossroads, and ripples.
+
     :param seed: The universe generation seed. Uses ``DEFAULT_SEED`` (42)
-        if ``None``.
+        if ``None``. Ignored when ``shared_universe`` is True.
     :type seed: int | None
     :param ship_name: The name of the player's ship. Uses
         ``DEFAULT_SHIP_NAME`` ("Serendipity") if ``None``.
     :type ship_name: str | None
+    :param shared_universe: Whether to use the canonical shared universe
+        seed for multiplayer features.
+    :type shared_universe: bool
     :returns: A fully initialized :class:`GameState`.
     :rtype: GameState
     """
-    s = seed if seed is not None else DEFAULT_SEED
+    if shared_universe:
+        s = DEFAULT_SEED
+    else:
+        s = seed if seed is not None else DEFAULT_SEED
     name = ship_name if ship_name else DEFAULT_SHIP_NAME
     game_id = str(uuid.uuid4())
 
@@ -64,6 +74,7 @@ def new_game(seed: int | None = None, ship_name: str | None = None) -> GameState
     state = GameState(
         id=game_id, seed=s, ship=ship, systems=systems,
         lore_fragments=lore_fragments, faction_relations=faction_relations,
+        shared_universe=shared_universe,
     )
     first_sys = state.get_current_system()
     if first_sys:
@@ -240,6 +251,7 @@ def _state_to_dict(state: GameState) -> dict:
         "dismissed_hints": list(state.dismissed_hints),
         "hazard_event_counts": state.hazard_event_counts,
         "biomes_visited": list(state.biomes_visited),
+        "shared_universe": state.shared_universe,
         "_next_log_id": state._next_log_id,
     }
 
@@ -346,6 +358,7 @@ def _state_from_dict(d: dict) -> GameState:
         dismissed_hints=set(d.get("dismissed_hints", [])),
         hazard_event_counts=d.get("hazard_event_counts", {}),
         biomes_visited=set(d.get("biomes_visited", [])),
+        shared_universe=d.get("shared_universe", True),
         _next_log_id=_next_log_id,
     )
 

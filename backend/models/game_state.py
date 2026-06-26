@@ -75,6 +75,7 @@ class GameState:
     dismissed_hints: set[str] = field(default_factory=set)
     hazard_event_counts: dict[str, int] = field(default_factory=dict)
     biomes_visited: set[str] = field(default_factory=set)
+    shared_universe: bool = True
     _next_log_id: int = 1
 
     def __post_init__(self) -> None:
@@ -229,6 +230,7 @@ class GameState:
             "reputation_summary": self.build_reputation_summary(),
             "biomes_visited_count": len(self.biomes_visited),
             "biomes_visited": list(self.biomes_visited),
+            "shared_universe": self.shared_universe,
         }
 
     def get_faction_reputation(self, faction_id: str) -> int:
