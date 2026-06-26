@@ -602,7 +602,8 @@ class TestMultiplayerDatabase:
         assert total == 7
 
     def test_get_recent_messages_paginated_per_page_capped(self) -> None:
-        from backend.multiplayer.database import save_crossroads_message, get_recent_messages_paginated
+        from backend.multiplayer.database import save_crossroads_message
+        from backend.multiplayer.crossroads import get_messages
         # Insert 60 messages to ensure the cap is exercised
         for i in range(60):
             cm = CrossroadsMessage(
@@ -614,12 +615,13 @@ class TestMultiplayerDatabase:
                 expires_at=(datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
             )
             save_crossroads_message(cm)
-        msgs, total = get_recent_messages_paginated(page=1, per_page=100)
-        assert len(msgs) == 50  # capped at 50
-        assert total == 60
+        result = get_messages(page=1, per_page=100)
+        assert len(result['messages']) == 50  # capped at 50
+        assert result['per_page'] == 50
 
     def test_get_recent_messages_paginated_page_clamped(self) -> None:
-        from backend.multiplayer.database import save_crossroads_message, get_recent_messages_paginated
+        from backend.multiplayer.database import save_crossroads_message
+        from backend.multiplayer.crossroads import get_messages
         # Insert 10 messages
         for i in range(10):
             cm = CrossroadsMessage(
@@ -631,12 +633,13 @@ class TestMultiplayerDatabase:
                 expires_at=(datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
             )
             save_crossroads_message(cm)
-        msgs_page0, total0 = get_recent_messages_paginated(page=0, per_page=10)
-        msgs_page1, total1 = get_recent_messages_paginated(page=1, per_page=10)
-        assert len(msgs_page0) == 10
-        assert total0 == 10
+        result = get_messages(page=0, per_page=10)
+        result2 = get_messages(page=1, per_page=10)
+        assert result['page'] == 1  # clamped from 0 to 1
+        assert result['per_page'] == 10
+        assert result['total_messages'] == 10
         # page=0 should be clamped to page=1, so results should be identical
-        assert [m.id for m in msgs_page0] == [m.id for m in msgs_page1]
+        assert [m['id'] for m in result['messages']] == [m['id'] for m in result2['messages']]
 
 
 # ---------------------------------------------------------------------------
