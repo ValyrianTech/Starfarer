@@ -21,6 +21,8 @@ from backend.multiplayer.database import (
     save_crossroads_message, get_recent_messages,
 )
 
+MAX_MESSAGE_LENGTH = 500
+
 
 def donate_item(
     game_state: GameState,
@@ -233,6 +235,8 @@ def post_message(game_state: GameState, text: str) -> dict:
     """
     if not text or not text.strip():
         return {"success": False, "detail": "Message text cannot be empty."}
+    if len(text) > MAX_MESSAGE_LENGTH:
+        return {"success": False, "detail": f"Message text exceeds {MAX_MESSAGE_LENGTH} characters."}
     msg = CrossroadsMessage(
         id=str(uuid.uuid4()),
         game_id=game_state.id,
