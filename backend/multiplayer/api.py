@@ -30,12 +30,14 @@ from backend.multiplayer.ripples import (
 router = APIRouter(prefix="/api")
 
 _game_locks: dict[str, Lock] = {}
+_lock_for_locks: Lock = Lock()
 
 
 def _get_lock(game_id: str) -> Lock:
-    if game_id not in _game_locks:
-        _game_locks[game_id] = Lock()
-    return _game_locks[game_id]
+    with _lock_for_locks:
+        if game_id not in _game_locks:
+            _game_locks[game_id] = Lock()
+        return _game_locks[game_id]
 
 
 def _cleanup_game_lock(game_id: str) -> None:
