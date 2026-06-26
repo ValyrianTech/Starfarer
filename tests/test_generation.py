@@ -2169,3 +2169,16 @@ class TestNewHazardEvents:
         total_counts = sum(state.hazard_event_counts.values())
         assert total_counts == hazard_triggers, \
             f"hazard_event_counts sum ({total_counts}) should equal hazard triggers ({hazard_triggers})"
+
+
+class TestEventCooldowns:
+    """Validation tests for EVENT_COOLDOWNS coverage."""
+
+    def test_all_event_templates_have_cooldowns(self) -> None:
+        """Every event title in EVENT_TEMPLATES must have a corresponding entry in EVENT_COOLDOWNS."""
+        from backend.generation.events import EVENT_TEMPLATES, EVENT_COOLDOWNS
+
+        for template in EVENT_TEMPLATES:
+            title = template["title"]
+            assert title in EVENT_COOLDOWNS, \
+                f"Event template '{title}' is missing from EVENT_COOLDOWNS"
