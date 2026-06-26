@@ -107,7 +107,6 @@
 - `explore_surface` now correctly handles the `lore_linked` flag when `num_finds` is 0
 - Lore fragment discovery date extraction now uses regex instead of fragile substring matching on log messages
 - Lore fragment discovery now stores `discovery_timestamp` as ISO format datetime
-- Cooldown fallback in `trigger_event` no longer bypasses last_event_title dedup when all eligible events share the same cooldown value
 - Duplicated cooldown fallback logic in `trigger_event` consolidated into `_apply_cooldown_fallback()`
 - Resolved inconsistent cooldown decrement timing: `resolve_event` route now ticks cooldowns after resolution instead of before
 - In-place mutation of eligible list in `_apply_cooldown_fallback` fixed by using a copy of the list before sorting
