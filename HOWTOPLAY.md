@@ -720,6 +720,18 @@ The game persists all state to SQLite. Save frequently — especially before ris
 | POST | `/api/game/{id}/save` | Save game |
 | POST | `/api/game/{id}/load` | Load game |
 | GET | `/api/leaderboard` | Top players |
+| GET | `/api/game/{id}/system/{sys_id}/ghosts` | Get ghost signatures in a system |
+| POST | `/api/game/{id}/leave-ghost` | Leave a ghost signature |
+| GET | `/api/crossroads/items` | List available items at the Crossroads |
+| POST | `/api/crossroads/donate-item` | Donate an item to the Crossroads |
+| POST | `/api/crossroads/claim-item/{item_id}` | Claim an item from the Crossroads |
+| GET | `/api/crossroads/lore` | List available lore at the Crossroads |
+| POST | `/api/crossroads/donate-lore` | Donate a lore fragment to the Crossroads |
+| POST | `/api/crossroads/claim-lore/{donation_id}` | Claim a lore fragment from the Crossroads |
+| GET | `/api/crossroads/messages` | Get recent Crossroads messages |
+| POST | `/api/crossroads/post-message` | Post a message to the Crossroads |
+| GET | `/api/game/{id}/ripples` | Get pending discovery ripples |
+| POST | `/api/game/{id}/ripple/{ripple_id}/acknowledge` | Acknowledge a discovery ripple |
 
 Full OpenAPI docs at `/docs` and `/redoc`.
 

@@ -33,6 +33,35 @@ The cargo API (`GET /api/game/{id}/cargo`) supports sortable queries by value or
 
 A biome discovery codex (`GET /api/game/{id}/codex`) tracks which of the 8 planetary biomes (ocean, jungle, crystal, volcanic, desert, tundra, barren, gas_giant) the player has visited and progressively reveals knowledge in 3 tiers based on scanner level: biome names and hints at scanner level 0+, value ratings at level 1+, and specific discovery types at level 2+ (only for visited biomes). Biomes are recorded when landing on a body and when exploring the surface, tracked via the `biomes_visited` set on game state and returned in state responses as `biomes_visited` (list) and `biomes_visited_count` (int).
 
+### Multiplayer: Ghosts in the Void
+
+Starfarer features an asynchronous shared universe system called **Ghosts in the Void**. All game sessions share the same canonical universe (seed 42) by default, enabling cross-session player interactions:
+
+- **Ghost Signatures**: When you jump, scan, or explore, your ship leaves a ghost signature in the system. Other players visiting the same system can see echoes of your passage — your discoveries, body visits, and an optional message.
+- **The Crossroads**: A shared trading post where players can donate items and lore fragments for others to claim. You can also post messages visible to all travellers (messages expire after 7 days).
+- **Discovery Ripples**: When you discover a lore fragment, a ripple event propagates to nearby systems (within 5 LY). Other players in those systems receive a notification and can acknowledge the ripple.
+
+To disable the shared universe (for a single-player experience with a custom seed), set `shared_universe: false` in the `POST /api/game/new` request body.
+
+#### New API Endpoints
+
+The following multiplayer endpoints are available:
+
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| GET | `/api/game/{id}/system/{sys_id}/ghosts` | Get ghost signatures in a system |
+| POST | `/api/game/{id}/leave-ghost` | Leave a ghost signature |
+| GET | `/api/crossroads/items` | List available items |
+| POST | `/api/crossroads/donate-item` | Donate an item |
+| POST | `/api/crossroads/claim-item/{item_id}` | Claim an item |
+| GET | `/api/crossroads/lore` | List available lore |
+| POST | `/api/crossroads/donate-lore` | Donate a lore fragment |
+| POST | `/api/crossroads/claim-lore/{donation_id}` | Claim a lore fragment |
+| GET | `/api/crossroads/messages` | Get recent messages |
+| POST | `/api/crossroads/post-message` | Post a message |
+| GET | `/api/game/{id}/ripples` | Get pending ripples |
+| POST | `/api/game/{id}/ripple/{ripple_id}/acknowledge` | Acknowledge a ripple |
+
 ## Configuration
 
 | Variable | Purpose |

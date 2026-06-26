@@ -3,6 +3,20 @@
 ## [Unreleased]
 
 ### Added
+- **Multiplayer Foundation — Ghosts in the Void**: Asynchronous shared universe system (`backend/multiplayer/`) enabling cross-session player interactions:
+  - **Ghost Signatures** (`backend/multiplayer/ghosts.py`): Automatic traces left by players on jump, scan, and explore actions. Other players visiting the same system can see these echoes of past travellers via `GET /api/game/{id}/system/{sys_id}/ghosts`.
+  - **Crossroads Trading Post** (`backend/multiplayer/crossroads.py`): Shared item/lore donation and claiming system. Players can donate items (`POST /crossroads/donate-item`) and lore fragments (`POST /crossroads/donate-lore`) for others to claim (`POST /crossroads/claim-item/{id}`, `POST /crossroads/claim-lore/{id}`). Available donations listed at `GET /crossroads/items` and `GET /crossroads/lore`.
+  - **Crossroads Messages** (`backend/multiplayer/crossroads.py`): Player-posted messages visible to all travellers (`POST /crossroads/post-message`, `GET /crossroads/messages`). Messages expire after 7 days. Server-side length validation (max 500 characters) and empty-message rejection.
+  - **Discovery Ripples** (`backend/multiplayer/ripples.py`): When a player discovers a lore fragment in a shared universe, ripple events propagate to nearby systems (within 5 LY) for other players to discover (`GET /api/game/{id}/ripples`, `POST /api/game/{id}/ripple/{id}/acknowledge`).
+  - **Multiplayer Database** (`backend/multiplayer/database.py`): 5 new SQLite tables (`ghost_signatures`, `crossroads_items`, `crossroads_lore`, `crossroads_messages`, `ripple_events`) with indexes and atomic claim operations to prevent TOCTOU race conditions.
+  - **Multiplayer API** (`backend/multiplayer/api.py`): 11 new REST API endpoints under `/api` with per-game locking via `_get_lock()`.
+  - **Multiplayer Schemas** (`backend/multiplayer/schemas.py`): Pydantic models for all multiplayer request bodies.
+  - **Multiplayer Models** (`backend/multiplayer/models.py`): Dataclasses for `GhostSignature`, `CrossroadsItem`, `CrossroadsLore`, `CrossroadsMessage`, and `RippleEvent`.
+  - **Frontend Multiplayer UI** (`frontend/js/multiplayer.js`): Crossroads screen with Items/Lore/Messages tabs, ghost signatures in system view, and ripple notification popup.
+  - **Frontend API client** (`frontend/js/api.js`): 10 new API methods for multiplayer endpoints.
+  - **Frontend integration** (`frontend/js/main.js`, `frontend/js/ship.js`, `frontend/js/system.js`, `frontend/index.html`): Crossroads button in ship panel, ghost signatures in system view, ripple notification on state update.
+- `shared_universe` flag: Added to `GameState` (default `True`), `NewGameRequest` schema, and full game state response. When enabled, the canonical seed 42 is always used and multiplayer features activate automatically. Ghost signatures are recorded on jump, scan, and explore; lore fragment discoveries trigger ripple propagation.
+- Leaderboard enhancements (`backend/database.py`): `GET /api/leaderboard` now returns `ghost_signatures_left`, `items_donated`, and `lore_donated` fields per game session.
 - Biome Codex system (`backend/codex.py`) providing progressive biome knowledge across 3 scanner tiers: Tier 1 (biome names, descriptions, general hints), Tier 2 (value ratings), Tier 3 (specific discovery types per biome). Knowledge is gated by biome visit status (tracked via `biomes_visited`) and scanner level.
 - `GET /api/game/{id}/codex` endpoint returning the player's codex — a list of 8 biome entries (ocean, jungle, crystal, volcanic, desert, tundra, barren, gas_giant) with progressive knowledge fields
 - Frontend codex screen with HTML container, CSS styling (`.codex-entry`, `.codex-entry-header`, `.codex-biome-name`, `.codex-stars`, `.codex-disc-tag`, `.codex-entry.locked`/`.unlocked` states), and JS rendering via `renderCodex()` in `main.js`
@@ -162,6 +176,18 @@
 - `perform_jump` fuel cost type inconsistency resolved: `can_jump` now correctly returns `int` (not `float`), and `perform_jump` accepts `int` instead of `int | float`
 - Redundant `int()` casts removed from `can_jump` return and `perform_jump` log call
 - `round()` in `perform_trade` now uses round-half-up (`int(x + 0.5)`) instead of banker's rounding to prevent unexpected results from fractional credit truncation
+- Race condition in `_get_lock()` allowing concurrent access to game state: `_get_lock()` now uses a dedicated `_lock_for_locks` mutex when creating new per-game locks, preventing two threads from simultaneously creating separate lock objects for the same game_id.
+- Memory leak in `_game_locks` dict: Added `_cleanup_game_lock()` and `_cleanup_stale_locks()` functions. Locks are now cleaned up when games are deleted or when stale (game state no longer in memory).
+- `api_post_message` now checks the return value of `post_message()` for errors (empty message, length exceeded) and raises HTTP 400 instead of returning a success response with an error payload.
+- Server-side length validation on Crossroads message text: `PostMessageRequest` schema now enforces `max_length=500` via Pydantic, and `post_message()` validates text length before saving.
+- TOCTOU race condition in `claim_item` and `claim_lore`: Database claim operations now use a single atomic `UPDATE ... WHERE claimed=0` query instead of a separate check-then-claim pattern, eliminating the race window.
+- Ghost signature `body_visits` filtering inconsistent with discoveries: `record_ghost` now correctly derives `body_visits` from the same discoveries list used for the `discoveries` field, ensuring consistency.
+- `donate_lore` allowed donating the same lore fragment multiple times: Fixed by removing the lore fragment from the player's `lore_fragments` list after donation, preventing re-donation.
+- `donate_item` removed items from list using fragile index-based removal: Fixed by collecting indices first, then removing in reverse order, ensuring correct removal when multiple items share the same name.
+- Crossroads message posting allowed empty messages via API bypass: Added `@field_validator('text')` in `PostMessageRequest` that rejects blank/whitespace-only text, and `post_message()` now returns an error for empty text.
+- `create_ripple` only propagated to systems the source player had visited: Fixed by accepting an optional `all_systems` parameter. When provided, ripples propagate to all systems in the universe within range, not just those the source player has visited.
+- Concurrent API requests to multiplayer endpoints could cause state corruption: All multiplayer endpoints now use per-game locks (`_get_lock(game_id)`) for state modifications, preventing race conditions.
+- `claim_item` appended the same Discovery object multiple times instead of creating distinct objects: Fixed by creating a new `Discovery` instance for each claimed quantity, each with a unique UUID.
 
 ### Removed
 - Unused `Optional` import from `backend/codex.py`
