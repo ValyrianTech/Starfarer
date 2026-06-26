@@ -3477,6 +3477,7 @@ class TestNewBlackHoleEvents:
         from backend.generation.events import EVENT_COOLDOWNS
         assert EVENT_COOLDOWNS["Event Horizon Approach"] == 8
         assert EVENT_COOLDOWNS["Hawking Radiation Harvest"] == 8
+        assert EVENT_COOLDOWNS["Hawking Radiation Harvest (Deep Scan)"] == 8
         assert EVENT_COOLDOWNS["Time Dilation Echo"] == 10
 
     def test_new_events_can_be_triggered_in_black_hole(self) -> None:
