@@ -575,15 +575,24 @@ def apply_cooldown(state: GameState, event_title: str, event_type: str = "") -> 
 
     For hazard events, the cooldown scales with how many times the
     event has been triggered in the current session, making repeat
-    hazard events less frequent.
+    hazard events less frequent. Hazard events with trigger_conditions
+    (phenomenon-gated events like Ion Storm) are excluded from scaling
+    since they already have natural rarity due to their trigger conditions.
     """
     base = EVENT_COOLDOWNS.get(event_title, 5)
     if event_type == "hazard":
-        count = state.hazard_event_counts.get(event_title, 0)
-        state.hazard_event_counts[event_title] = count + 1
-        # Cap the multiplier at 3x to prevent excessively long cooldowns
-        multiplier = min(count + 1, 3)
-        state.event_cooldowns[event_title] = base * multiplier
+        # Check if this hazard event has trigger_conditions (phenomenon-gated)
+        template = next((t for t in EVENT_TEMPLATES if t["title"] == event_title), None)
+        has_trigger_conditions = bool(template and template.get("trigger_conditions"))
+        if has_trigger_conditions:
+            # Phenomenon-gated hazard events don't scale cooldown
+            state.event_cooldowns[event_title] = base
+        else:
+            count = state.hazard_event_counts.get(event_title, 0)
+            state.hazard_event_counts[event_title] = count + 1
+            # Cap the multiplier at 3x to prevent excessively long cooldowns
+            multiplier = min(count + 1, 3)
+            state.event_cooldowns[event_title] = base * multiplier
     else:
         state.event_cooldowns[event_title] = base
 

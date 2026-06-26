@@ -2046,6 +2046,75 @@ class TestNewHazardEvents:
         assert state.event_cooldowns[title] == base * 3
         assert state.hazard_event_counts[title] == 5
 
+    def test_phenomenon_gated_hazard_events_do_not_scale_cooldown(self) -> None:
+        """Phenomenon-gated hazard events should NOT scale cooldown when triggered repeatedly."""
+        from backend.generation.events import apply_cooldown, EVENT_COOLDOWNS
+        from backend.models.ship import Ship
+
+        ship = Ship()
+        state = GameState(id="test-gated-scale", seed=42, ship=ship)
+
+        # Ion Storm has trigger_conditions: {phenomenon: nebula}
+        title = "Ion Storm"
+        base = EVENT_COOLDOWNS[title]
+
+        # First trigger: should use base cooldown (no scaling)
+        apply_cooldown(state, title, "hazard")
+        assert state.event_cooldowns[title] == base, f"Expected {base}, got {state.event_cooldowns[title]}"
+        # hazard_event_counts should NOT be incremented for gated events
+        assert title not in state.hazard_event_counts, f"Expected no hazard_event_counts entry for {title}"
+
+        # Second trigger: still base cooldown (no scaling)
+        apply_cooldown(state, title, "hazard")
+        assert state.event_cooldowns[title] == base, f"Expected {base}, got {state.event_cooldowns[title]}"
+        assert title not in state.hazard_event_counts
+
+        # Third trigger: still base cooldown (no scaling)
+        apply_cooldown(state, title, "hazard")
+        assert state.event_cooldowns[title] == base, f"Expected {base}, got {state.event_cooldowns[title]}"
+        assert title not in state.hazard_event_counts
+
+    def test_mixed_hazard_events_scaling_and_non_scaling(self) -> None:
+        """Non-gated hazard events should scale while gated ones don't, even in the same state."""
+        from backend.generation.events import apply_cooldown, EVENT_COOLDOWNS
+        from backend.models.ship import Ship
+
+        ship = Ship()
+        state = GameState(id="test-mixed-scale", seed=42, ship=ship)
+
+        # Solar Flare has NO trigger_conditions - should scale
+        solar_title = "Solar Flare"
+        solar_base = EVENT_COOLDOWNS[solar_title]
+
+        # Ion Storm has trigger_conditions - should NOT scale
+        ion_title = "Ion Storm"
+        ion_base = EVENT_COOLDOWNS[ion_title]
+
+        # First trigger of Solar Flare: multiplier = min(1, 3) = 1
+        apply_cooldown(state, solar_title, "hazard")
+        assert state.event_cooldowns[solar_title] == solar_base * 1
+        assert state.hazard_event_counts[solar_title] == 1
+
+        # First trigger of Ion Storm: base cooldown (no scaling)
+        apply_cooldown(state, ion_title, "hazard")
+        assert state.event_cooldowns[ion_title] == ion_base
+        assert ion_title not in state.hazard_event_counts
+
+        # Second trigger of Solar Flare: multiplier = min(2, 3) = 2
+        apply_cooldown(state, solar_title, "hazard")
+        assert state.event_cooldowns[solar_title] == solar_base * 2
+        assert state.hazard_event_counts[solar_title] == 2
+
+        # Second trigger of Ion Storm: still base cooldown
+        apply_cooldown(state, ion_title, "hazard")
+        assert state.event_cooldowns[ion_title] == ion_base
+        assert ion_title not in state.hazard_event_counts
+
+        # Third trigger of Solar Flare: multiplier = min(3, 3) = 3
+        apply_cooldown(state, solar_title, "hazard")
+        assert state.event_cooldowns[solar_title] == solar_base * 3
+        assert state.hazard_event_counts[solar_title] == 3
+
     def test_non_hazard_events_do_not_scale_cooldown(self) -> None:
         """Non-hazard events should not have scaled cooldowns and should not increment hazard_event_counts."""
         from backend.generation.events import apply_cooldown, EVENT_COOLDOWNS
