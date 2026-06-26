@@ -19,7 +19,7 @@ from backend.multiplayer.crossroads import (
     post_message, get_messages,
 )
 from backend.multiplayer.ripples import create_ripple, get_pending_ripples, acknowledge_ripple
-from backend.multiplayer.api import _game_locks, _get_lock, _cleanup_game_lock, _cleanup_stale_locks
+from backend.multiplayer.api import _game_locks, _get_lock, _cleanup_game_lock, _cleanup_stale_locks, _lock_access_count
 from backend.models.discovery import Discovery, LoreFragment
 from backend.models.game_state import GameState
 
@@ -1527,6 +1527,19 @@ class TestMultiplayerAPI:
             f"/api/game/{game_id}/system/{sys_id}/ghosts"
         ).json()["ghosts"])
         assert ghost_count_after == ghost_count_before + num_threads
+
+    def test_get_lock_periodic_cleanup_triggers(self) -> None:
+        """Verify that periodic stale lock cleanup triggers without deadlock after 100 calls."""
+        import backend.multiplayer.api as mp_api
+        
+        initial_count = mp_api._lock_access_count
+        
+        calls_needed = 100 - (initial_count % 100)
+        for i in range(calls_needed):
+            lock = mp_api._get_lock(f"dummy-periodic-{i}")
+            assert lock is not None
+        
+        assert mp_api._lock_access_count == initial_count + calls_needed
 
 
 # ---------------------------------------------------------------------------
