@@ -11,6 +11,7 @@ from threading import Lock
 from fastapi import APIRouter, HTTPException
 
 from backend.api.routes import _get_state, _save_state
+from backend.game.manager import GAME_STORE
 from backend.multiplayer.schemas import (
     LeaveGhostRequest, DonateItemRequest, DonateLoreRequest,
     PostMessageRequest, ClaimItemRequest, ClaimLoreRequest,
@@ -54,7 +55,7 @@ def _cleanup_game_lock(game_id: str) -> None:
 def _cleanup_stale_locks() -> None:
     with _lock_for_locks:
         for gid in list(_game_locks.keys()):
-            if _get_state(gid) is None:
+            if gid not in GAME_STORE:
                 del _game_locks[gid]
 
 
