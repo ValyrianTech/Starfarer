@@ -215,6 +215,13 @@ class TestMultiplayerModels:
 # ---------------------------------------------------------------------------
 
 class TestMultiplayerDatabase:
+    @pytest.fixture(autouse=True)
+    def cleanup_messages(self) -> None:
+        from backend.multiplayer.database import get_db_ctx
+        with get_db_ctx() as conn:
+            conn.execute("DELETE FROM crossroads_messages")
+        yield
+
     def test_save_and_get_ghost_signatures(self) -> None:
         from backend.multiplayer.database import save_ghost_signature, get_ghost_signatures
         gs = GhostSignature(
