@@ -6,7 +6,7 @@ for the Ghosts in the Void multiplayer layer.
 """
 
 from typing import Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 
 class LeaveGhostRequest(BaseModel):
@@ -48,5 +48,12 @@ class PostMessageRequest(BaseModel):
     """Request body for posting a message at the Crossroads."""
 
     game_id: str
-    text: str
+    text: str = Field(..., min_length=1, max_length=500)
     player_name: Optional[str] = None
+
+    @field_validator('text')
+    @classmethod
+    def text_not_blank(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError('Message text cannot be blank')
+        return v.strip()

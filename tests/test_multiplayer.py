@@ -690,6 +690,58 @@ class TestMultiplayerCrossroads:
         assert len(msgs) >= 2
         GAME_STORE.pop(state.id, None)
 
+    def test_post_message_empty_text_rejected(self) -> None:
+        """post_message should reject empty text."""
+        state = new_game(42, "Poster", shared_universe=True)
+        GAME_STORE[state.id] = state
+        result = post_message(state, "")
+        assert result["success"] is False
+        assert "cannot be empty" in result["detail"].lower()
+        GAME_STORE.pop(state.id, None)
+
+    def test_post_message_whitespace_text_rejected(self) -> None:
+        """post_message should reject whitespace-only text."""
+        state = new_game(42, "Poster", shared_universe=True)
+        GAME_STORE[state.id] = state
+        result = post_message(state, "   ")
+        assert result["success"] is False
+        assert "cannot be empty" in result["detail"].lower()
+        GAME_STORE.pop(state.id, None)
+
+    def test_post_message_pydantic_rejects_empty(self) -> None:
+        """PostMessageRequest schema should reject empty text."""
+        from pydantic import ValidationError
+        from backend.multiplayer.schemas import PostMessageRequest
+        with pytest.raises(ValidationError):
+            PostMessageRequest(game_id="game-1", text="")
+
+    def test_post_message_pydantic_rejects_whitespace(self) -> None:
+        """PostMessageRequest schema should reject whitespace-only text."""
+        from pydantic import ValidationError
+        from backend.multiplayer.schemas import PostMessageRequest
+        with pytest.raises(ValidationError):
+            PostMessageRequest(game_id="game-1", text="   ")
+
+    def test_post_message_pydantic_rejects_too_long(self) -> None:
+        """PostMessageRequest schema should reject text longer than 500 chars."""
+        from pydantic import ValidationError
+        from backend.multiplayer.schemas import PostMessageRequest
+        with pytest.raises(ValidationError):
+            PostMessageRequest(game_id="game-1", text="x" * 501)
+
+    def test_post_message_pydantic_accepts_valid(self) -> None:
+        """PostMessageRequest schema should accept valid text."""
+        from backend.multiplayer.schemas import PostMessageRequest
+        req = PostMessageRequest(game_id="game-1", text="Hello!")
+        assert req.text == "Hello!"
+        assert req.game_id == "game-1"
+
+    def test_post_message_pydantic_strips_whitespace(self) -> None:
+        """PostMessageRequest schema should strip leading/trailing whitespace."""
+        from backend.multiplayer.schemas import PostMessageRequest
+        req = PostMessageRequest(game_id="game-1", text="  Hello!  ")
+        assert req.text == "Hello!"
+
     def test_claim_item_already_claimed_by_other(self) -> None:
         # Test that claiming an already-claimed item fails at the DB level
         donor = new_game(42, "DonorShip", shared_universe=True)
