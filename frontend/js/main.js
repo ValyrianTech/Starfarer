@@ -228,6 +228,12 @@ async function handleAction(action, target) {
         break;
       }
 
+      case 'show-codex': {
+        await loadCodex(GAME_ID);
+        showScreen('codex');
+        break;
+      }
+
       case 'save-game': {
         await API.save(GAME_ID);
         break;
@@ -257,5 +263,44 @@ document.addEventListener('keydown', (e) => {
     closeEventModal();
   }
 });
+
+async function loadCodex(gameId) {
+  try {
+    const data = await API.codex(gameId);
+    renderCodex(data.codex);
+  } catch (e) {
+    console.error('Load codex error:', e);
+  }
+}
+
+function renderCodex(codexEntries) {
+  const container = $('#codex-content');
+  if (!container) return;
+
+  let html = '<div class="codex-header fade-in"><h2>Biome Discovery Codex</h2><p>Progressive knowledge of planetary biomes.</p></div>';
+
+  for (const entry of codexEntries) {
+    const stars = entry.value_rating !== null
+      ? '<span class="codex-stars">' + '\u2605'.repeat(entry.value_rating) + '\u2606'.repeat(5 - entry.value_rating) + '</span>'
+      : '<span class="codex-stars">Upgrade scanner for ratings</span>';
+
+    const discList = entry.common_discoveries && entry.common_discoveries.length > 0
+      ? '<div class="codex-disc-list">' + entry.common_discoveries.map(d => '<span class="codex-disc-tag">' + d + '</span>').join('') + '</div>'
+      : '';
+
+    html += `
+      <div class="codex-entry fade-in ${entry.unlocked ? 'unlocked' : 'locked'}">
+        <div class="codex-entry-header">
+          <span class="codex-biome-name">${entry.name}</span>
+          ${stars}
+        </div>
+        <div class="codex-entry-desc">${entry.description}</div>
+        ${entry.hint ? '<div class="codex-entry-hint">' + entry.hint + '</div>' : ''}
+        ${discList}
+      </div>`;
+  }
+
+  container.innerHTML = html;
+}
 
 initApp();

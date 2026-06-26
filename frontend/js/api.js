@@ -42,4 +42,5 @@ const API = {
   leaderboard: () => apiCall('GET', '/leaderboard'),
   lore: (gameId) => apiCall('GET', `/game/${gameId}/lore`),
   cargo: (gameId, sort = 'value', order = 'desc') => apiCall('GET', `/game/${gameId}/cargo?sort=${encodeURIComponent(sort)}&order=${encodeURIComponent(order)}`),
+  codex: (gameId) => apiCall('GET', `/game/${gameId}/codex`),
 };
