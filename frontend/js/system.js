@@ -56,7 +56,7 @@ function renderSystemView(systemData, gameId) {
 
   API.getSystemGhosts(gameId, sys.id).then((data) => {
     if (data && data.ghosts) {
-      renderGhostsTab(data.ghosts);
+      renderGhostsTab(data.ghosts, data.total_ghosts);
     }
   }).catch((e) => {
     console.error('Failed to load ghost signatures:', e);
