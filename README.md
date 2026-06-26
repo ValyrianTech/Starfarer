@@ -47,7 +47,7 @@ The following multiplayer endpoints are available:
 
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
-| GET | `/api/game/{id}/system/{sys_id}/ghosts` | Get ghost signatures in a system (paginated, max 50/page) |
+| GET | `/api/game/{id}/system/{sys_id}/ghosts` | Get ghost signatures in a system (paginated via `?page=&per_page=`, max 50/page) |
 | POST | `/api/game/{id}/leave-ghost` | Leave a ghost signature |
 | GET | `/api/crossroads/items` | List available items |
 | POST | `/api/crossroads/donate-item` | Donate an item |
@@ -55,10 +55,12 @@ The following multiplayer endpoints are available:
 | GET | `/api/crossroads/lore` | List available lore |
 | POST | `/api/crossroads/donate-lore` | Donate a lore fragment |
 | POST | `/api/crossroads/claim-lore/{donation_id}` | Claim a lore fragment |
-| GET | `/api/crossroads/messages` | Get recent messages (paginated, max 50/page) |
+| GET | `/api/crossroads/messages` | Get recent messages (paginated via `?page=&per_page=`, max 50/page) |
 | POST | `/api/crossroads/post-message` | Post a message |
 | GET | `/api/game/{id}/ripples` | Get pending ripples |
 | POST | `/api/game/{id}/ripple/{ripple_id}/acknowledge` | Acknowledge a ripple |
+
+Both the ghost signatures and Crossroads messages endpoints accept `page` (default 1) and `per_page` (default 10, max 50) query parameters. Invalid values are clamped (not rejected with 422), making validation behavior consistent across endpoints. Responses include `page`, `per_page`, `total_ghosts`/`total_messages`, and `total_pages`. When there are no entries, `total_pages` returns 0 (not 1). The `api_ripples` endpoint reads ripple data directly from the database without acquiring the game lock.
 
 ## Configuration
 

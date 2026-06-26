@@ -758,6 +758,10 @@ Both the ghost signatures and Crossroads messages endpoints support pagination w
 
 Returns 404 if the requested page exceeds the total number of pages with active items.
 
+Invalid `page` or `per_page` values (e.g., negative numbers, non-integer strings) are clamped to valid ranges rather than rejected with a 422 error. Both the ghost signatures and Crossroads messages endpoints use this consistent clamping behavior.
+
+The `api_ripples` endpoint (`GET /api/game/{id}/ripples`) reads ripple data directly from the database using database-level filtering and does not acquire the game lock.
+
 Full OpenAPI docs at `/docs` and `/redoc`.
 
 Events may be phenomenon-specific, triggering only in systems with matching phenomena (e.g., black hole events only appear near black holes).

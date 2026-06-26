@@ -100,11 +100,10 @@
 - Added type annotations across multiple modules to fix mypy errors
 - Black hole event count raised from 5 to 8 (from the original 5 plus the 3 new events above)
 - Hawking Radiation Harvest cooldown changed from 6 to 8 (to disambiguate from the new 'Hawking Radiation Harvest (Deep Scan)' event)
-- `get_pending_ripples` now uses database-level filtering (`get_pending_ripples_for_system`) instead of loading all ripples from the database and filtering in Python, improving performance.
-- `renderGhostsTab` frontend function now accepts a `totalGhosts` parameter and displays the total ghost count instead of the page count.
-- `api_ripples` endpoint no longer acquires the game lock since ripple data is read from the database, not from in-memory game state.
-
 ### Fixed
+- `get_pending_ripples` performance: now uses database-level filtering (`get_pending_ripples_for_system`) instead of loading all ripples from the database and filtering in Python.
+- `api_ripples` no longer acquires the game lock since ripple data is read from the database, not from in-memory game state.
+- Frontend `renderGhostsTab` now accepts a `totalGhosts` parameter and displays the total ghost count instead of the page count.
 - `BIOME_WEIGHTS` in `backend/generation/lore.py` now includes `None: 1` entry so lore fragments can be distributed to bodies without a biome
 - `renderCodex()` now uses `textContent` instead of `innerHTML` for all user-facing data fields (biome names, descriptions, hints, star ratings, discovery tags), preventing potential XSS injection
 - Codex hint field now correctly shown for all biomes regardless of unlock status — hints use `tier1_hint` from `BIOME_CODEX_DATA` and are displayed whenever `scanner_level >= 0`
