@@ -79,6 +79,9 @@
 - Hawking Radiation Harvest cooldown changed from 6 to 8 (to disambiguate from the new 'Hawking Radiation Harvest (Deep Scan)' event)
 
 ### Fixed
+- `test_new_events_correct_cooldown_values` now asserts the correct cooldown for 'Hawking Radiation Harvest (Deep Scan)' instead of the old 'Hawking Radiation Harvest' event (was checking the wrong event's cooldown)
+- `NEW_BH_TITLES` test set now includes 'Hawking Radiation Harvest (Deep Scan)' instead of the old 'Hawking Radiation Harvest' title, ensuring the new event is properly tested
+- `test_new_events_can_be_triggered_in_black_hole` now verifies that the triggered event is actually one of the 3 new black hole events (was only checking that *any* event triggered, not that it was a new event)
 - `_apply_cooldown_fallback` no longer returns a single event when multiple eligible events share the same lowest cooldown — now returns all eligible events with the minimum cooldown before applying `last_event_title` deduplication
 - `_next_log_id` regression on save/load cycles: `_state_from_dict` now warns and clamps `_next_log_id` to `max_id + 1` when the saved value is lower, preventing log entry ID collisions
 - Old-format `accepted_missions` migration: `_state_from_dict` now converts legacy string-format mission values (faction_id only) to full dict format with default costs/rewards, preventing crashes on mission completion from migrated saves
