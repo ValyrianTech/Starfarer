@@ -83,6 +83,9 @@ def claim_item(item_id: str, game_state: GameState) -> dict:
     The claimed item is added to the player's discoveries as a new
     :class:`Discovery` record.
 
+    Uses an atomic database claim operation to eliminate the TOCTOU
+    race condition between checking availability and claiming.
+
     :param item_id: The unique identifier of the item to claim.
     :type item_id: str
     :param game_state: The current game state.
@@ -90,25 +93,16 @@ def claim_item(item_id: str, game_state: GameState) -> dict:
     :returns: A dictionary with ``success`` flag and item data or error detail.
     :rtype: dict
     """
-    items = get_available_items()
-    target = None
-    for it in items:
-        if it.id == item_id:
-            target = it
-            break
-    if not target:
+    item_data = db_claim_item(item_id, game_state.id)
+    if not item_data:
         return {"success": False, "detail": "Item not found or already claimed."}
 
-    ok = db_claim_item(item_id, game_state.id)
-    if not ok:
-        return {"success": False, "detail": "Item could not be claimed (may have been claimed already)."}
-
-    for _ in range(target.quantity):
+    for _ in range(item_data["quantity"]):
         disc = Discovery(
             id=str(uuid.uuid4()),
             category="artifact",
-            name=target.item_name,
-            description=f"A gift from {target.donor_name} via the Crossroads.",
+            name=item_data["item_name"],
+            description=f"A gift from {item_data['donor_name']} via the Crossroads.",
             value=0,
             system_id=game_state.ship.current_system_id or "",
         )
@@ -116,12 +110,12 @@ def claim_item(item_id: str, game_state: GameState) -> dict:
 
     game_state.add_log(
         "multiplayer",
-        f"Claimed {target.quantity}x {target.item_name} from the Crossroads (donated by {target.donor_name}).",
+        f"Claimed {item_data['quantity']}x {item_data['item_name']} from the Crossroads (donated by {item_data['donor_name']}).",
         category="multiplayer",
         title="Item Claimed",
-        cargo_change=target.quantity,
+        cargo_change=item_data["quantity"],
     )
-    return {"success": True, "item": target.to_dict()}
+    return {"success": True, "item": item_data}
 
 
 def get_available_items_list() -> list[dict]:
@@ -186,6 +180,9 @@ def claim_lore(donation_id: str, game_state: GameState) -> dict:
     The claimed lore fragment is marked as discovered in the player's
     game state, unlocking its narrative text.
 
+    Uses an atomic database claim operation to eliminate the TOCTOU
+    race condition between checking availability and claiming.
+
     :param donation_id: The unique identifier of the lore donation.
     :type donation_id: str
     :param game_state: The current game state.
@@ -193,32 +190,23 @@ def claim_lore(donation_id: str, game_state: GameState) -> dict:
     :returns: A dictionary with ``success`` flag and lore data or error detail.
     :rtype: dict
     """
-    available = get_available_lore()
-    target = None
-    for l in available:
-        if l.id == donation_id:
-            target = l
-            break
-    if not target:
+    lore_data = db_claim_lore(donation_id, game_state.id)
+    if not lore_data:
         return {"success": False, "detail": "Lore donation not found or already claimed."}
 
-    ok = db_claim_lore(donation_id, game_state.id)
-    if not ok:
-        return {"success": False, "detail": "Lore could not be claimed (may have been claimed already)."}
-
     for lf in game_state.lore_fragments:
-        if lf.id == target.fragment_id:
+        if lf.id == lore_data["fragment_id"]:
             lf.discovered = True
             lf.discovery_timestamp = datetime.now(timezone.utc).isoformat()
             break
 
     game_state.add_log(
         "multiplayer",
-        f"Claimed lore fragment '{target.fragment_id}' from the Crossroads (donated by {target.donor_name}).",
+        f"Claimed lore fragment '{lore_data['fragment_id']}' from the Crossroads (donated by {lore_data['donor_name']}).",
         category="multiplayer",
         title="Lore Claimed",
     )
-    return {"success": True, "lore": target.to_dict()}
+    return {"success": True, "lore": lore_data}
 
 
 def get_available_lore_list() -> list[dict]:
