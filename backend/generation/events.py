@@ -580,7 +580,9 @@ def apply_cooldown(state: GameState, event_title: str, event_type: str = "") -> 
     if event_type == "hazard":
         count = state.hazard_event_counts.get(event_title, 0)
         state.hazard_event_counts[event_title] = count + 1
-        state.event_cooldowns[event_title] = base * (count + 1)
+        # Cap the multiplier at 3x to prevent excessively long cooldowns
+        multiplier = min(count + 1, 3)
+        state.event_cooldowns[event_title] = base * multiplier
     else:
         state.event_cooldowns[event_title] = base
 
