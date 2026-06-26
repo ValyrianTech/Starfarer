@@ -68,7 +68,7 @@ class TestGetCodex:
         for entry in entries:
             assert entry["unlocked"] is False
             assert entry["description"] == "???"
-            assert entry["hint"] is None
+            assert entry["hint"] is not None
 
     def test_visited_biome_is_unlocked(self) -> None:
         state = _make_game()
@@ -86,7 +86,7 @@ class TestGetCodex:
         ocean = [e for e in entries if e["biome_id"] == "ocean"][0]
         assert ocean["unlocked"] is False
         assert ocean["description"] == "???"
-        assert ocean["hint"] is None
+        assert ocean["hint"] is not None
 
     def test_tier1_scanner_0_or_above(self) -> None:
         state = _make_game()

@@ -95,7 +95,7 @@ def get_codex(state: GameState) -> list[dict]:
             "name": biome["name"],
             "description": biome["description"] if unlocked else "???",
             "value_rating": biome["value_rating"] if scanner_level >= 1 else None,
-            "hint": biome["tier1_hint"] if unlocked else None,
+            "hint": biome["tier1_hint"] if scanner_level >= 0 else None,
             "common_discoveries": biome["common_discoveries"] if scanner_level >= 2 and unlocked else [],
             "unlocked": unlocked,
         }
