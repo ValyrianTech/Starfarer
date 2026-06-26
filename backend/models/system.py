@@ -83,7 +83,7 @@ class Body:
             id=d["id"],
             name=d["name"],
             body_type=d["body_type"],
-            biome=d.get("biome") or "",
+            biome=d.get("biome"),
             size=d["size"],
             distance_from_star=d["distance_from_star"],
             description=d.get("description", ""),
