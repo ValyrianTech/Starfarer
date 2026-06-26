@@ -3670,7 +3670,7 @@ class TestEventCooldowns:
         eligible = _get_eligible_templates(state, EVENT_TEMPLATES)
         result = _apply_cooldown_fallback(eligible, state)
         assert len(result) > 0
-        assert result == eligible  # all events pass the cooldown check
+        assert list(result) == list(eligible)  # all events pass the cooldown check
 
         # When eligible is empty, result should be empty
         result_empty = _apply_cooldown_fallback([], state)
