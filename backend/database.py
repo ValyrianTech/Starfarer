@@ -195,7 +195,8 @@ def get_leaderboard(limit: int = 10) -> list[dict]:
     :type limit: int
     :returns: A list of leaderboard entry dictionaries containing
         game_id, ship_name, seed, last_played, discoveries count,
-        systems_visited, and credits.
+        systems_visited, credits, ghost_signatures_left,
+        items_donated, and lore_donated.
     :rtype: list[dict]
     """
     with get_db_ctx() as conn:
@@ -203,23 +204,53 @@ def get_leaderboard(limit: int = 10) -> list[dict]:
             "SELECT id, ship_name, seed, updated_at, state_json FROM games ORDER BY updated_at DESC LIMIT ?",
             (limit,),
         ).fetchall()
-    results = []
-    for row in rows:
-        try:
-            state = json.loads(row["state_json"])
-            if not isinstance(state, dict):
+        results = []
+        for row in rows:
+            try:
+                state = json.loads(row["state_json"])
+                if not isinstance(state, dict):
+                    continue  # Skip malformed entries
+            except (json.JSONDecodeError, TypeError):
                 continue  # Skip malformed entries
-        except (json.JSONDecodeError, TypeError):
-            continue  # Skip malformed entries
-        results.append({
-            "game_id": row["id"],
-            "ship_name": row["ship_name"],
-            "seed": row["seed"],
-            "last_played": row["updated_at"],
-            "discoveries": len(state.get("discoveries", [])),
-            "systems_visited": state.get("systems_visited", 0),
-            "credits": state.get("ship", {}).get("credits", 0),
-        })
+
+            game_id = row["id"]
+
+            try:
+                ghost_count = conn.execute(
+                    "SELECT COUNT(*) FROM ghost_signatures WHERE game_id = ?",
+                    (game_id,),
+                ).fetchone()[0]
+            except sqlite3.OperationalError:
+                ghost_count = 0
+
+            try:
+                items_donated = conn.execute(
+                    "SELECT COUNT(*) FROM crossroads_items WHERE donor_game_id = ?",
+                    (game_id,),
+                ).fetchone()[0]
+            except sqlite3.OperationalError:
+                items_donated = 0
+
+            try:
+                lore_donated = conn.execute(
+                    "SELECT COUNT(*) FROM crossroads_lore WHERE donor_game_id = ?",
+                    (game_id,),
+                ).fetchone()[0]
+            except sqlite3.OperationalError:
+                lore_donated = 0
+
+            results.append({
+                "game_id": game_id,
+                "ship_name": row["ship_name"],
+                "seed": row["seed"],
+                "last_played": row["updated_at"],
+                "discoveries": len(state.get("discoveries", [])),
+                "systems_visited": state.get("systems_visited", 0),
+                "credits": state.get("ship", {}).get("credits", 0),
+                "ghost_signatures_left": ghost_count,
+                "items_donated": items_donated,
+                "lore_donated": lore_donated,
+            })
     return results
 
 

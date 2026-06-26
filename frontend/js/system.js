@@ -42,10 +42,25 @@ function renderSystemView(systemData, gameId) {
     <div class="system-actions">
       <button data-action="scan" class="ui-button">Scan System</button>
     </div>
+    <div id="system-ghosts" class="system-ghosts fade-in">
+      <div class="system-ghosts-header" data-action="toggle-ghosts" style="cursor:pointer;">
+        <span>Ghosts in the Void</span>
+        <span id="system-ghosts-count" class="ghosts-count">0 visitors</span>
+      </div>
+      <div id="system-ghosts-list" class="ghosts-list" style="display:none;"></div>
+    </div>
     ${nearbyHTML}
   `;
 
   window._currentSystemId = sys.id;
+
+  API.getSystemGhosts(gameId, sys.id).then((data) => {
+    if (data && data.ghosts) {
+      renderGhostsTab(data.ghosts);
+    }
+  }).catch((e) => {
+    console.error('Failed to load ghost signatures:', e);
+  });
 }
 
 function renderSurfaceView(bodyData, discoveries, gameId) {
@@ -58,10 +73,10 @@ function renderSurfaceView(bodyData, discoveries, gameId) {
     for (const d of discoveries) {
       discHTML += `
         <div class="discovery-item fade-in">
-          <div class="disc-category">${d.category}</div>
-          <div class="disc-name">${d.name}</div>
-          <div class="disc-desc">${d.description}</div>
-          <div class="disc-value">Value: ${d.value} credits</div>
+          <div class="disc-category">${escapeHtml(d.category)}</div>
+          <div class="disc-name">${escapeHtml(d.name)}</div>
+          <div class="disc-desc">${escapeHtml(d.description)}</div>
+          <div class="disc-value">Value: ${escapeHtml(d.value)} credits</div>
         </div>`;
     }
     discHTML += '</div>';

@@ -28,9 +28,14 @@ function updateGameState(data) {
   if (!data || !data.ship) return;
 
   window._currentSystemId = data.current_system ? data.current_system.id : null;
+  window._sharedUniverse = data.shared_universe !== undefined ? data.shared_universe : true;
   updateShipStatus(data.ship);
   updateJSONLD(data);
   updateLoreButtonGlow();
+
+  if (window._sharedUniverse && GAME_ID) {
+    initMultiplayerUI();
+  }
 }
 
 function updateJSONLD(data) {
@@ -231,6 +236,20 @@ async function handleAction(action, target) {
       case 'show-codex': {
         await loadCodex(GAME_ID);
         showScreen('codex');
+        break;
+      }
+
+      case 'show-crossroads': {
+        showScreen('crossroads');
+        await renderCrossroadsView();
+        break;
+      }
+
+      case 'toggle-ghosts': {
+        const listEl = $('#system-ghosts-list');
+        if (listEl) {
+          listEl.style.display = listEl.style.display === 'none' ? 'block' : 'none';
+        }
         break;
       }
 

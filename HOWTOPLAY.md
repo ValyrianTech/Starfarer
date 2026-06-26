@@ -23,8 +23,9 @@ POST /api/game/new
 Content-Type: application/json
 
 {
-  "seed": 42,           // optional: universe seed (same seed = same universe)
-  "ship_name": "MyShip" // optional: name your ship (default: "Serendipity")
+  "seed": 42,                    // optional: universe seed (same seed = same universe)
+  "ship_name": "MyShip",         // optional: name your ship (default: "Serendipity")
+  "shared_universe": true        // optional: enable multiplayer features (default: false)
 }
 ```
 
@@ -688,7 +689,7 @@ The game persists all state to SQLite. Save frequently — especially before ris
 |--------|----------|-------------|
 | GET | `/api/health` | Server health check |
 | POST | `/api/game/new` | Create new game |
-| GET | `/api/game/{id}?sort={value\|name}&order={asc\|desc}` | Full game state (ship, system, events, log, fuel_status, hints, reputation, total_value, top3_ids) |
+| GET | `/api/game/{id}?sort={value\|name}&order={asc\|desc}` | Full game state (ship, system, events, log, fuel_status, hints, reputation, shared_universe, total_value, top3_ids) |
 | GET | `/api/game/{id}/galaxy` | Galaxy map data |
 | GET | `/api/game/{id}/system/{sid}` | System details |
 | POST | `/api/game/{id}/jump/{sid}` | Jump to system |
@@ -720,6 +721,18 @@ The game persists all state to SQLite. Save frequently — especially before ris
 | POST | `/api/game/{id}/save` | Save game |
 | POST | `/api/game/{id}/load` | Load game |
 | GET | `/api/leaderboard` | Top players |
+| GET | `/api/game/{id}/system/{sys_id}/ghosts` | Get ghost signatures in a system |
+| POST | `/api/game/{id}/leave-ghost` | Leave a ghost signature |
+| GET | `/api/crossroads/items` | List available items at the Crossroads |
+| POST | `/api/crossroads/donate-item` | Donate an item to the Crossroads |
+| POST | `/api/crossroads/claim-item/{item_id}` | Claim an item from the Crossroads |
+| GET | `/api/crossroads/lore` | List available lore at the Crossroads |
+| POST | `/api/crossroads/donate-lore` | Donate a lore fragment to the Crossroads |
+| POST | `/api/crossroads/claim-lore/{donation_id}` | Claim a lore fragment from the Crossroads |
+| GET | `/api/crossroads/messages` | Get recent Crossroads messages |
+| POST | `/api/crossroads/post-message` | Post a message to the Crossroads |
+| GET | `/api/game/{id}/ripples` | Get pending discovery ripples |
+| POST | `/api/game/{id}/ripple/{ripple_id}/acknowledge` | Acknowledge a discovery ripple |
 
 Full OpenAPI docs at `/docs` and `/redoc`.
 
