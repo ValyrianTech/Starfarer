@@ -3491,10 +3491,18 @@ class TestNewBlackHoleEvents:
         state.ship.scanner = 3
         state.ship.morale = 80
 
+        # Put all non-new-BH events on cooldown so only the 3 new BH events are eligible
+        from backend.generation.events import EVENT_TEMPLATES
+        for template in EVENT_TEMPLATES:
+            if template.get("trigger_conditions", {}).get("phenomenon") != "black_hole" or template["title"] not in self.NEW_BH_TITLES:
+                state.event_cooldowns[template["title"]] = 999
+
         rng = rnd.Random(42)
         with patch.object(rng, "random", return_value=0.2):
             event = trigger_event(state, rng_override=rng)
         assert event is not None, "Expected an event to trigger with mocked RNG"
+        assert event.title in self.NEW_BH_TITLES, \
+            f"Expected one of {self.NEW_BH_TITLES}, got '{event.title}'"
 
     def test_new_events_can_be_resolved(self) -> None:
         """Each new event should resolve correctly for all choices."""
