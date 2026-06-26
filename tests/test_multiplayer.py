@@ -580,6 +580,42 @@ class TestMultiplayerCrossroads:
         GAME_STORE.pop(donor.id, None)
         GAME_STORE.pop(claimer.id, None)
 
+    def test_claim_item_creates_distinct_discovery_objects(self) -> None:
+        """Verify that claiming an item with quantity > 1 creates distinct Discovery objects."""
+        donor = new_game(42, "DonorShip", shared_universe=True)
+        GAME_STORE[donor.id] = donor
+        disc1 = _make_discovery(name="Distinct Crystal")
+        disc2 = _make_discovery(name="Distinct Crystal")
+        disc3 = _make_discovery(name="Distinct Crystal")
+        donor.discoveries.append(disc1)
+        donor.discoveries.append(disc2)
+        donor.discoveries.append(disc3)
+        don_result = donate_item(donor, "Distinct Crystal", 3)
+
+        claimer = new_game(43, "ClaimerShip", shared_universe=True)
+        GAME_STORE[claimer.id] = claimer
+        initial_count = len(claimer.discoveries)
+        claim_item(don_result["donation"]["id"], claimer)
+
+        # Check count
+        assert len(claimer.discoveries) == initial_count + 3
+
+        # Get the newly added discoveries
+        new_discs = [d for d in claimer.discoveries if d.name == "Distinct Crystal"]
+        assert len(new_discs) == 3
+
+        # Check all ids are unique
+        ids = {d.id for d in new_discs}
+        assert len(ids) == 3, f"Expected 3 unique ids, got {len(ids)}"
+
+        # Check all objects are distinct (different memory references)
+        assert new_discs[0] is not new_discs[1]
+        assert new_discs[0] is not new_discs[2]
+        assert new_discs[1] is not new_discs[2]
+
+        GAME_STORE.pop(donor.id, None)
+        GAME_STORE.pop(claimer.id, None)
+
     def test_donate_lore_success(self) -> None:
         state = new_game(42, "LoreDonor", shared_universe=True)
         GAME_STORE[state.id] = state
