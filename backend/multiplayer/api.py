@@ -39,7 +39,7 @@ def _get_lock(game_id: str) -> Lock:
     global _lock_access_count
     _lock_access_count += 1
     # Periodic cleanup of stale locks every 100 accesses
-    # (called outside the lock to avoid deadlock with _cleanup_stale_locks)
+    # (cleanup acquires _lock_for_locks internally, so we call it outside the lock)
     if _lock_access_count % 100 == 0:
         _cleanup_stale_locks()
     with _lock_for_locks:

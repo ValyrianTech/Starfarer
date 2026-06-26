@@ -1594,6 +1594,64 @@ class TestMultiplayerAPI:
         
         assert mp_api._lock_access_count == initial_count + calls_needed
 
+    def test_cleanup_stale_locks_concurrent_safety(self) -> None:
+        """Verify _cleanup_stale_locks is safe when called concurrently with _get_lock."""
+        import concurrent.futures
+        
+        # Create several game states
+        states = {}
+        for i in range(10):
+            state = new_game(42 + i, f"ConcurrentTest-{i}", shared_universe=True)
+            states[f"concurrent-game-{i}"] = state
+            GAME_STORE[f"concurrent-game-{i}"] = state
+        
+        # Create locks for all games
+        for gid in states:
+            _get_lock(gid)
+        
+        # Remove some games from GAME_STORE to make them stale
+        stale_ids = [f"concurrent-game-{i}" for i in range(5)]
+        for gid in stale_ids:
+            del GAME_STORE[gid]
+        
+        active_ids = [f"concurrent-game-{i}" for i in range(5, 10)]
+        
+        # Run cleanup and lock creation concurrently
+        def run_cleanup():
+            _cleanup_stale_locks()
+        
+        def create_new_lock():
+            # Create a lock for a new game (simulating concurrent access)
+            state = new_game(99, "NewConcurrent", shared_universe=True)
+            gid = state.id
+            GAME_STORE[gid] = state
+            _get_lock(gid)
+            # Also try to get locks for existing games
+            for gid in active_ids:
+                _get_lock(gid)
+        
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+            futures = []
+            for _ in range(5):
+                futures.append(executor.submit(run_cleanup))
+                futures.append(executor.submit(create_new_lock))
+            concurrent.futures.wait(futures)
+        
+        # Check stale locks are removed
+        for gid in stale_ids:
+            assert gid not in _game_locks, f"Stale lock {gid} was not removed"
+        
+        # Check active locks are preserved
+        for gid in active_ids:
+            assert gid in _game_locks, f"Active lock {gid} was removed"
+        
+        # Clean up
+        for gid in list(states.keys()):
+            GAME_STORE.pop(gid, None)
+        for gid in list(_game_locks.keys()):
+            if gid not in active_ids:
+                _game_locks.pop(gid, None)
+
 
 # ---------------------------------------------------------------------------
 # TestSharedUniverse
