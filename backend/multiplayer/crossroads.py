@@ -99,6 +99,9 @@ def claim_item(item_id: str, game_state: GameState) -> dict:
     if not item_data:
         return {"success": False, "detail": "Item not found or already claimed."}
 
+    if not game_state.ship.current_system_id:
+        return {"success": False, "detail": "Cannot claim item: ship has no current system."}
+
     for _ in range(item_data["quantity"]):
         disc = Discovery(
             id=str(uuid.uuid4()),
