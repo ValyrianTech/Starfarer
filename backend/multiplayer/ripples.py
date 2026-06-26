@@ -17,6 +17,7 @@ from backend.generation.universe import distance_between
 from backend.multiplayer.models import RippleEvent
 from backend.multiplayer.database import (
     save_ripple_event, get_pending_ripples as db_get_pending_ripples,
+    get_pending_ripples_for_system as db_get_pending_ripples_for_system,
     acknowledge_ripple as db_acknowledge_ripple,
 )
 
@@ -98,12 +99,11 @@ def get_pending_ripples(game_state: GameState) -> list[dict]:
     :returns: A list of pending ripple event dictionaries.
     :rtype: list[dict]
     """
-    ripples = db_get_pending_ripples(game_state.id)
     current_sys = game_state.get_current_system()
     if not current_sys:
         return []
-    matching = [r for r in ripples if r.target_system_id == current_sys.id]
-    return [r.to_dict() for r in matching]
+    ripples = db_get_pending_ripples_for_system(game_state.id, current_sys.id)
+    return [r.to_dict() for r in ripples]
 
 
 def acknowledge_ripple(ripple_id: str, game_state: GameState) -> dict:
