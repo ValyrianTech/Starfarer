@@ -295,7 +295,7 @@ class TestExploreRecordsBiome:
 
         explore_surface(state)
 
-        assert state.biomes_visited == {""}
+        assert state.biomes_visited == set()
 
     def test_get_or_create_body_creates_when_no_poi(self) -> None:
         state = _make_game()
