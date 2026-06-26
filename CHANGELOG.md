@@ -210,6 +210,9 @@
 - `initMultiplayerUI()` now filters out previously dismissed ripples using the `window._dismissedRipples` set, preventing dismissed ripple notifications from reappearing on every state update.
 - Ghost pagination validation inconsistency: `api_system_ghosts` now clamps `page` and `per_page` values (consistent with `get_system_ghosts` clamping) instead of rejecting invalid values with 422.
 - Crossroads messages pagination validation inconsistency: `api_crossroads_messages` now clamps `page` and `per_page` values instead of rejecting invalid values with 422.
+- `get_messages` in `crossroads.py` no longer redundantly clamps `page` and `per_page` before calling `get_recent_messages_paginated` — clamping is now delegated to the paginated function which returns the clamped values.
+- `get_system_ghosts` now correctly handles the edge case where `total_pages` is 0 (no ghosts exist) by setting `page` to 1 instead of clamping to 0.
+- `total_pages` in ghost and messages paginated responses now returns 0 instead of 1 when there are 0 entries (removed `max(1, ...)` wrapper), matching the behavior of the paginated log endpoint.
 - Test isolation: `get_recent_messages_paginated` tests now properly clean up messages from previous tests instead of asserting exact total counts without cleanup.
 - Weak test: `test_get_recent_messages_paginated_per_page_capped` now passes correctly with an empty database instead of passing vacuously.
 

@@ -723,7 +723,7 @@ The game persists all state to SQLite. Save frequently — especially before ris
 | POST | `/api/game/{id}/save` | Save game |
 | POST | `/api/game/{id}/load` | Load game |
 | GET | `/api/leaderboard` | Top players |
-| GET | `/api/game/{id}/system/{sys_id}/ghosts?page={n}&per_page={n}` | Get ghost signatures in a system (paginated) |
+| GET | `/api/game/{id}/system/{sys_id}/ghosts?page={n}&per_page={n}` | Get ghost signatures in a system (paginated, returns total_ghosts, total_pages) |
 | POST | `/api/game/{id}/leave-ghost` | Leave a ghost signature |
 | GET | `/api/crossroads/items` | List available items at the Crossroads |
 | POST | `/api/crossroads/donate-item` | Donate an item to the Crossroads |
@@ -731,10 +731,32 @@ The game persists all state to SQLite. Save frequently — especially before ris
 | GET | `/api/crossroads/lore` | List available lore at the Crossroads |
 | POST | `/api/crossroads/donate-lore` | Donate a lore fragment to the Crossroads |
 | POST | `/api/crossroads/claim-lore/{donation_id}` | Claim a lore fragment from the Crossroads |
-| GET | `/api/crossroads/messages?page={n}&per_page={n}` | Get recent Crossroads messages (paginated) |
+| GET | `/api/crossroads/messages?page={n}&per_page={n}` | Get recent Crossroads messages (paginated, returns total_messages, total_pages) |
 | POST | `/api/crossroads/post-message` | Post a message to the Crossroads |
 | GET | `/api/game/{id}/ripples` | Get pending discovery ripples |
 | POST | `/api/game/{id}/ripple/{ripple_id}/acknowledge` | Acknowledge a discovery ripple |
+
+
+### Pagination Details
+
+Both the ghost signatures and Crossroads messages endpoints support pagination with the same query parameters and response format:
+
+**Query parameters:**
+| Parameter | Type | Default | Max | Description |
+|-----------|------|---------|-----|-------------|
+| `page` | int | 1 | — | Page number (1-indexed) |
+| `per_page` | int | 10 | 50 | Items per page |
+
+**Response fields:**
+| Field | Type | Description |
+|-------|------|-------------|
+| `ghosts`/`messages` | array | Paginated items |
+| `page` | int | Current page number |
+| `per_page` | int | Items per page |
+| `total_ghosts`/`total_messages` | int | Total number of items |
+| `total_pages` | int | Total number of pages (0 if no items) |
+
+Returns 404 if the requested page exceeds the total number of pages with active items.
 
 Full OpenAPI docs at `/docs` and `/redoc`.
 
