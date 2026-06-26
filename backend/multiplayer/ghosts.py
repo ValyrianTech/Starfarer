@@ -43,7 +43,7 @@ def record_ghost(
         timestamp=datetime.now(timezone.utc).isoformat(),
         discoveries=[d.name for d in system_discoveries],
         message=message,
-        body_visits=[d.body_id for d in system_discoveries if d.body_id is not None],
+        body_visits=list(set(d.body_id for d in system_discoveries if d.body_id is not None)),
     )
     save_ghost_signature(ghost)
     game_state.add_log(
