@@ -6,13 +6,14 @@ traces left by players in star systems that other travellers can
 discover.
 """
 
+import math
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
 from backend.models.game_state import GameState
 from backend.multiplayer.models import GhostSignature
-from backend.multiplayer.database import save_ghost_signature, get_ghost_signatures
+from backend.multiplayer.database import save_ghost_signature, get_ghost_signatures, get_ghost_signatures_paginated
 
 
 def record_ghost(
@@ -56,13 +57,26 @@ def record_ghost(
     return ghost.to_dict()
 
 
-def get_system_ghosts(system_id: str) -> list[dict]:
-    """Retrieve all ghost signatures for a given star system.
+def get_system_ghosts(system_id: str, page: int = 1, per_page: int = 10) -> dict:
+    """Retrieve paginated ghost signatures for a given star system.
 
     :param system_id: The unique identifier of the star system.
     :type system_id: str
-    :returns: A list of ghost signature dictionaries.
-    :rtype: list[dict]
+    :param page: The page number to retrieve (1-indexed, default 1).
+    :type page: int
+    :param per_page: Number of ghosts per page (max 50, default 10).
+    :type per_page: int
+    :returns: A dict with ``ghosts``, ``page``, ``per_page``,
+        ``total_ghosts``, and ``total_pages``.
+    :rtype: dict
     """
-    ghosts = get_ghost_signatures(system_id)
-    return [g.to_dict() for g in ghosts]
+    per_page = min(max(1, per_page), 50)
+    ghosts, total = get_ghost_signatures_paginated(system_id, page=page, per_page=per_page)
+    total_pages = max(1, math.ceil(total / per_page))
+    return {
+        "ghosts": [g.to_dict() for g in ghosts],
+        "page": page,
+        "per_page": per_page,
+        "total_ghosts": total,
+        "total_pages": total_pages,
+    }

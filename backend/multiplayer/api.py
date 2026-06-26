@@ -82,24 +82,38 @@ def _check_game(game_id: str):
 
 
 @router.get("/game/{game_id}/system/{sys_id}/ghosts")
-def api_system_ghosts(game_id: str, sys_id: str) -> dict:
+def api_system_ghosts(game_id: str, sys_id: str, page: int = 1, per_page: int = 10) -> dict:
     """Retrieve ghost signatures left by other players in a star system.
 
     Ghost signatures are automatically recorded on jump, scan, and
     explore actions. They provide a trace of other travellers who
-    have passed through the system.
+    have passed through the system. Supports pagination via optional
+    ``page`` and ``per_page`` query parameters.
 
     :param game_id: The unique identifier of the game.
     :type game_id: str
     :param sys_id: The unique identifier of the star system.
     :type sys_id: str
-    :returns: A dictionary with ``ghosts`` list of ghost signature dicts.
+    :param page: The page number to retrieve (1-indexed, default 1).
+    :type page: int
+    :param per_page: Number of ghosts per page (max 50, default 10).
+    :type per_page: int
+    :returns: A dictionary with ``ghosts``, ``page``, ``per_page``,
+        ``total_ghosts``, and ``total_pages``.
     :rtype: dict
     :raises HTTPException: 404 if the game is not found.
+    :raises HTTPException: 422 if page or per_page is less than 1.
+    :raises HTTPException: 404 if page exceeds total pages with active ghosts.
     """
     state = _check_game(game_id)
-    ghosts = get_system_ghosts(sys_id)
-    return {"ghosts": ghosts}
+    if page < 1:
+        raise HTTPException(status_code=422, detail="page must be >= 1")
+    if per_page < 1:
+        raise HTTPException(status_code=422, detail="per_page must be >= 1")
+    result = get_system_ghosts(sys_id, page=page, per_page=per_page)
+    if page > result["total_pages"] and result["total_ghosts"] > 0:
+        raise HTTPException(status_code=404, detail="Page out of range")
+    return result
 
 
 @router.post("/game/{game_id}/leave-ghost")
