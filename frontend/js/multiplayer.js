@@ -1,12 +1,13 @@
 window._dismissedRipples = window._dismissedRipples || new Set();
 
-function renderGhostsTab(ghosts) {
+function renderGhostsTab(ghosts, totalGhosts) {
   const countEl = $('#system-ghosts-count');
   const listEl = $('#system-ghosts-list');
   if (!listEl) return;
 
   if (countEl) {
-    countEl.textContent = ghosts.length + ' ' + (ghosts.length === 1 ? 'visitor' : 'visitors');
+    const count = totalGhosts !== undefined ? totalGhosts : ghosts.length;
+    countEl.textContent = count + ' ' + (count === 1 ? 'visitor' : 'visitors');
   }
 
   if (ghosts.length === 0) {
