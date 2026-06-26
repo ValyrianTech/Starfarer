@@ -358,7 +358,7 @@ def _state_from_dict(d: dict) -> GameState:
         dismissed_hints=set(d.get("dismissed_hints", [])),
         hazard_event_counts=d.get("hazard_event_counts", {}),
         biomes_visited=set(d.get("biomes_visited", [])),
-        shared_universe=d.get("shared_universe", True),
+        shared_universe=d.get("shared_universe", False),
         _next_log_id=_next_log_id,
     )
 
