@@ -2,6 +2,9 @@ import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
+import tempfile
+from pathlib import Path
+
 import pytest
 from datetime import datetime, timezone, timedelta
 from fastapi.testclient import TestClient
@@ -28,8 +31,15 @@ client = TestClient(app)
 
 @pytest.fixture(autouse=True)
 def setup_db() -> None:
-    init_db()
-    init_multiplayer_db()
+    with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as tf:
+        temp_db_path = tf.name
+    try:
+        with patch('backend.database.DB_PATH', Path(temp_db_path)):
+            init_db()
+            init_multiplayer_db()
+            yield
+    finally:
+        os.unlink(temp_db_path)
 
 
 # ---------------------------------------------------------------------------
