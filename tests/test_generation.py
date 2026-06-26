@@ -2180,6 +2180,100 @@ class TestNewHazardEvents:
         assert total_counts == hazard_triggers, \
             f"hazard_event_counts sum ({total_counts}) should equal hazard triggers ({hazard_triggers})"
 
+    def test_hazard_event_counts_decay_when_not_on_cooldown(self) -> None:
+        """hazard_event_counts should decay by 1 when the event is not on cooldown."""
+        from backend.generation.events import decrement_cooldowns
+        from backend.models.ship import Ship
+
+        ship = Ship()
+        state = GameState(id="test-decay", seed=42, ship=ship)
+
+        # Set up a hazard event count
+        state.hazard_event_counts["Solar Flare"] = 5
+
+        # No cooldown for Solar Flare, so it should decay
+        decrement_cooldowns(state)
+
+        assert state.hazard_event_counts["Solar Flare"] == 4
+
+    def test_hazard_event_counts_do_not_decay_when_on_cooldown(self) -> None:
+        """hazard_event_counts should NOT decay when the event is on cooldown."""
+        from backend.generation.events import decrement_cooldowns
+        from backend.models.ship import Ship
+
+        ship = Ship()
+        state = GameState(id="test-no-decay", seed=42, ship=ship)
+
+        # Set up a hazard event count AND a cooldown for the same event
+        state.hazard_event_counts["Solar Flare"] = 5
+        state.event_cooldowns["Solar Flare"] = 3
+
+        # Event is on cooldown, so count should NOT decay
+        decrement_cooldowns(state)
+
+        assert state.hazard_event_counts["Solar Flare"] == 5
+
+    def test_hazard_event_counts_decay_to_zero_removes_entry(self) -> None:
+        """When hazard_event_counts decays to 0, the entry should be removed."""
+        from backend.generation.events import decrement_cooldowns
+        from backend.models.ship import Ship
+
+        ship = Ship()
+        state = GameState(id="test-decay-zero", seed=42, ship=ship)
+
+        # Set up a hazard event count of 1
+        state.hazard_event_counts["Solar Flare"] = 1
+
+        # Decay it to 0 - should remove the entry
+        decrement_cooldowns(state)
+
+        assert "Solar Flare" not in state.hazard_event_counts
+        assert state.hazard_event_counts == {}
+
+    def test_hazard_event_counts_decay_multiple_events(self) -> None:
+        """Multiple hazard events should all decay independently."""
+        from backend.generation.events import decrement_cooldowns
+        from backend.models.ship import Ship
+
+        ship = Ship()
+        state = GameState(id="test-decay-multi", seed=42, ship=ship)
+
+        # Set up multiple hazard event counts
+        state.hazard_event_counts["Solar Flare"] = 5
+        state.hazard_event_counts["Asteroid Swarm"] = 3
+        state.hazard_event_counts["Micrometeorite Storm"] = 1
+
+        # Put one event on cooldown to test it doesn't decay
+        state.event_cooldowns["Asteroid Swarm"] = 2
+
+        decrement_cooldowns(state)
+
+        # Solar Flare (not on cooldown) should decay
+        assert state.hazard_event_counts["Solar Flare"] == 4
+        # Asteroid Swarm (on cooldown) should NOT decay
+        assert state.hazard_event_counts["Asteroid Swarm"] == 3
+        # Micrometeorite Storm (not on cooldown, count=1) should be removed
+        assert "Micrometeorite Storm" not in state.hazard_event_counts
+
+    def test_decrement_cooldowns_still_decrements_cooldowns(self) -> None:
+        """The original cooldown decrement behavior should still work."""
+        from backend.generation.events import decrement_cooldowns
+        from backend.models.ship import Ship
+
+        ship = Ship()
+        state = GameState(id="test-original", seed=42, ship=ship)
+
+        # Set up cooldowns
+        state.event_cooldowns["Solar Flare"] = 3
+        state.event_cooldowns["Ancient Signal"] = 1
+
+        decrement_cooldowns(state)
+
+        # Solar Flare cooldown should decrement from 3 to 2
+        assert state.event_cooldowns["Solar Flare"] == 2
+        # Ancient Signal cooldown should decrement from 1 to 0 and be removed
+        assert "Ancient Signal" not in state.event_cooldowns
+
 
 class TestEventCooldowns:
     """Validation tests for EVENT_COOLDOWNS coverage."""
