@@ -38,6 +38,16 @@ def _get_lock(game_id: str) -> Lock:
     return _game_locks[game_id]
 
 
+def _cleanup_game_lock(game_id: str) -> None:
+    _game_locks.pop(game_id, None)
+
+
+def _cleanup_stale_locks() -> None:
+    for gid in list(_game_locks.keys()):
+        if _get_state(gid) is None:
+            del _game_locks[gid]
+
+
 def _check_game(game_id: str):
     """Validate that a game exists and return its state.
 

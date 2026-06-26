@@ -19,6 +19,7 @@ from backend.multiplayer.crossroads import (
     post_message, get_messages,
 )
 from backend.multiplayer.ripples import create_ripple, get_pending_ripples, acknowledge_ripple
+from backend.multiplayer.api import _game_locks, _get_lock, _cleanup_game_lock, _cleanup_stale_locks
 from backend.models.discovery import Discovery, LoreFragment
 from backend.models.game_state import GameState
 
@@ -1438,6 +1439,54 @@ class TestMultiplayerAPI:
         lock1 = _get_lock("test-get-lock-3a")
         lock2 = _get_lock("test-get-lock-3b")
         assert lock1 is not lock2
+
+    def test_cleanup_game_lock_removes_lock(self) -> None:
+        resp = client.post("/api/game/new", json={"shared_universe": True})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+
+        _get_lock(game_id)
+        assert game_id in _game_locks
+
+        _cleanup_game_lock(game_id)
+        assert game_id not in _game_locks
+
+    def test_cleanup_game_lock_nonexistent(self) -> None:
+        _cleanup_game_lock("nonexistent-game-id")
+
+    def test_cleanup_stale_locks_removes_stale(self) -> None:
+        state = new_game(42, "StaleTest", shared_universe=True)
+        game_id = state.id
+        GAME_STORE[game_id] = state
+
+        _get_lock(game_id)
+        assert game_id in _game_locks
+
+        del GAME_STORE[game_id]
+        _cleanup_stale_locks()
+        assert game_id not in _game_locks
+
+    def test_cleanup_stale_locks_preserves_active(self) -> None:
+        state = new_game(42, "ActiveTest", shared_universe=True)
+        game_id = state.id
+        GAME_STORE[game_id] = state
+
+        _get_lock(game_id)
+        assert game_id in _game_locks
+
+        _cleanup_stale_locks()
+        assert game_id in _game_locks
+
+        del GAME_STORE[game_id]
+
+    def test_get_lock_returns_same_lock_for_existing_game(self) -> None:
+        resp = client.post("/api/game/new", json={"shared_universe": True})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+
+        lock1 = _get_lock(game_id)
+        lock2 = _get_lock(game_id)
+        assert lock1 is lock2
 
     def test_lock_serializes_concurrent_requests(self) -> None:
         """Verify that the lock serializes concurrent access to prevent state corruption."""
