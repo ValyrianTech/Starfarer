@@ -26,7 +26,7 @@ from backend.multiplayer.crossroads import (
     post_message, get_messages,
 )
 from backend.multiplayer.ripples import (
-    create_ripple, get_pending_ripples, acknowledge_ripple,
+    get_pending_ripples, acknowledge_ripple,
 )
 
 router = APIRouter(prefix="/api")

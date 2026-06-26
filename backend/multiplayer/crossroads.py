@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from backend.models.game_state import GameState
-from backend.models.discovery import Discovery, LoreFragment
+from backend.models.discovery import Discovery
 from backend.multiplayer.models import (
     CrossroadsItem, CrossroadsLore, CrossroadsMessage,
 )

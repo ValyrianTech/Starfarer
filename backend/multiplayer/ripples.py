@@ -16,8 +16,7 @@ from backend.models.system import StarSystem
 from backend.generation.universe import distance_between
 from backend.multiplayer.models import RippleEvent
 from backend.multiplayer.database import (
-    save_ripple_event, get_pending_ripples as db_get_pending_ripples,
-    get_pending_ripples_for_system as db_get_pending_ripples_for_system,
+    save_ripple_event, get_pending_ripples_for_system as db_get_pending_ripples_for_system,
     acknowledge_ripple as db_acknowledge_ripple,
 )
 
@@ -126,7 +125,7 @@ def acknowledge_ripple(ripple_id: str, game_state: GameState) -> dict:
 
     game_state.add_log(
         "multiplayer",
-        f"Acknowledged a discovery ripple.",
+        "Acknowledged a discovery ripple.",
         category="multiplayer",
         title="Ripple Acknowledged",
     )

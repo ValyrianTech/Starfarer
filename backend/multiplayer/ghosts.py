@@ -13,7 +13,7 @@ from typing import Optional
 
 from backend.models.game_state import GameState
 from backend.multiplayer.models import GhostSignature
-from backend.multiplayer.database import save_ghost_signature, get_ghost_signatures, get_ghost_signatures_paginated
+from backend.multiplayer.database import save_ghost_signature, get_ghost_signatures_paginated
 
 
 def record_ghost(
@@ -49,7 +49,7 @@ def record_ghost(
     save_ghost_signature(ghost)
     game_state.add_log(
         "multiplayer",
-        f"Left a ghost signature in the system.",
+        "Left a ghost signature in the system.",
         category="multiplayer",
         title="Ghost Signature Recorded",
         system=system_id,

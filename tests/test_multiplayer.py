@@ -22,9 +22,8 @@ from backend.multiplayer.crossroads import (
     post_message, get_messages,
 )
 from backend.multiplayer.ripples import create_ripple, get_pending_ripples, acknowledge_ripple
-from backend.multiplayer.api import _game_locks, _get_lock, _cleanup_game_lock, _cleanup_stale_locks, _lock_access_count
+from backend.multiplayer.api import _game_locks, _get_lock, _cleanup_game_lock, _cleanup_stale_locks
 from backend.models.discovery import Discovery, LoreFragment
-from backend.models.game_state import GameState
 
 client = TestClient(app)
 
@@ -1244,7 +1243,6 @@ class TestMultiplayerCrossroads:
 
 class TestMultiplayerRipples:
     def test_create_ripple_within_radius(self) -> None:
-        from backend.generation.universe import distance_between
         state = new_game(42, "RippleShip", shared_universe=True)
         GAME_STORE[state.id] = state
         system = state.get_current_system()
@@ -1929,21 +1927,21 @@ class TestMultiplayerAPI:
 
     def test_get_lock_returns_lock(self) -> None:
         """Verify that _get_lock returns a threading.Lock instance."""
-        from backend.multiplayer.api import _get_lock, _game_locks
+        from backend.multiplayer.api import _get_lock
         import threading
         lock = _get_lock("test-get-lock-1")
         assert type(lock) == type(threading.Lock())
 
     def test_get_lock_same_game_id(self) -> None:
         """Verify that _get_lock returns the same lock for the same game_id."""
-        from backend.multiplayer.api import _get_lock, _game_locks
+        from backend.multiplayer.api import _get_lock
         lock1 = _get_lock("test-get-lock-2")
         lock2 = _get_lock("test-get-lock-2")
         assert lock1 is lock2
 
     def test_get_lock_different_game_ids(self) -> None:
         """Verify that _get_lock returns different locks for different game_ids."""
-        from backend.multiplayer.api import _get_lock, _game_locks
+        from backend.multiplayer.api import _get_lock
         lock1 = _get_lock("test-get-lock-3a")
         lock2 = _get_lock("test-get-lock-3b")
         assert lock1 is not lock2
@@ -1998,10 +1996,8 @@ class TestMultiplayerAPI:
 
     def test_lock_serializes_concurrent_requests(self) -> None:
         """Verify that the lock serializes concurrent access to prevent state corruption."""
-        import threading
         import concurrent.futures
-        import time
-        from backend.multiplayer.api import _get_lock, _game_locks
+        from backend.multiplayer.api import _game_locks
 
         resp = client.post("/api/game/new", json={"shared_universe": True})
         assert resp.status_code == 200
