@@ -607,6 +607,30 @@ def api_lore(game_id: str) -> dict:
     }
 
 
+@router.get("/game/{game_id}/codex")
+def api_codex(game_id: str) -> dict:
+    """Retrieve the player's current biome codex.
+
+    The codex tracks which biomes the player has encountered and
+    progressively reveals information based on scanner level.
+
+    :param game_id: The unique identifier of the game.
+    :type game_id: str
+    :returns: A dictionary with ``game_id`` and ``codex`` (list of
+        biome entry dicts).
+    :rtype: dict
+    :raises HTTPException: 404 if the game is not found.
+    """
+    state = _get_state(game_id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Game not found")
+    from backend.codex import get_codex
+    return {
+        "game_id": game_id,
+        "codex": get_codex(state),
+    }
+
+
 @router.post("/game/{game_id}/trade")
 def api_trade(game_id: str, req: TradeRequest) -> dict:
     """Perform a buy or sell trade action.

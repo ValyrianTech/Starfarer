@@ -270,6 +270,8 @@ def explore_surface(state: GameState) -> list[Discovery]:
 
     state.add_log("exploration", f"Explored {body.name}. Found {len(discoveries)} points of interest.", category="exploration", title="Surface Exploration", system=system.name, body=body.name, fuel_change=-EXPLORE_FUEL_COST)
     body.poi_count = max(0, body.poi_count - num_finds)
+    if body.biome:
+        state.record_biome_visit(body.biome)
     return discoveries
 
 
