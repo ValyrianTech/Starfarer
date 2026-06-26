@@ -469,6 +469,46 @@ def get_recent_messages(limit: int = 50) -> list[CrossroadsMessage]:
     return result
 
 
+def get_recent_messages_paginated(page: int = 1, per_page: int = 10) -> tuple[list[CrossroadsMessage], int]:
+    """Retrieve paginated recent crossroads messages, excluding expired ones.
+
+    Returns a tuple of (paginated messages list, total count). Results
+    are ordered by creation time descending (most recent first), using
+    SQL LIMIT/OFFSET for pagination.
+
+    :param page: The page number to retrieve (1-indexed, default 1).
+    :type page: int
+    :param per_page: Number of messages per page (max 50, default 10).
+    :type per_page: int
+    :returns: A tuple of (paginated messages, total_count).
+    :rtype: tuple[list[CrossroadsMessage], int]
+    """
+    per_page = min(max(1, per_page), 50)
+    page = max(1, page)
+    offset = (page - 1) * per_page
+    now = datetime.now(timezone.utc).isoformat()
+    with get_db_ctx() as conn:
+        total = conn.execute(
+            "SELECT COUNT(*) FROM crossroads_messages WHERE expires_at > ?",
+            (now,),
+        ).fetchone()[0]
+        rows = conn.execute(
+            "SELECT * FROM crossroads_messages WHERE expires_at > ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            (now, per_page, offset),
+        ).fetchall()
+    result: list[CrossroadsMessage] = []
+    for row in rows:
+        result.append(CrossroadsMessage(
+            id=row["id"],
+            game_id=row["game_id"],
+            player_name=row["player_name"],
+            text=row["text"],
+            created_at=row["created_at"],
+            expires_at=row["expires_at"],
+        ))
+    return result, total
+
+
 def cleanup_expired_messages() -> int:
     """Remove all crossroads messages that have passed their expiration time.
 

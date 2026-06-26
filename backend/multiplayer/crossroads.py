@@ -19,7 +19,7 @@ from backend.multiplayer.models import (
 from backend.multiplayer.database import (
     save_crossroads_item, get_available_items, claim_item as db_claim_item,
     save_crossroads_lore, get_available_lore, claim_lore as db_claim_lore,
-    save_crossroads_message, get_recent_messages,
+    save_crossroads_message, get_recent_messages_paginated,
 )
 
 MAX_MESSAGE_LENGTH = 500
@@ -272,18 +272,14 @@ def get_messages(page: int = 1, per_page: int = 10) -> dict:
         ``total_messages``, and ``total_pages``.
     :rtype: dict
     """
-    per_page = min(max(1, per_page), 50)
-    page = max(1, page)
-    all_msgs = get_recent_messages(limit=100000)
-    total_messages = len(all_msgs)
-    total_pages = max(1, math.ceil(total_messages / per_page))
-    start = (page - 1) * per_page
-    end = start + per_page
-    page_msgs = all_msgs[start:end]
+    page_msgs, total = get_recent_messages_paginated(page=page, per_page=per_page)
+    per_page_clamped = min(max(1, per_page), 50)
+    page_clamped = max(1, page)
+    total_pages = max(1, math.ceil(total / per_page_clamped))
     return {
         "messages": [m.to_dict() for m in page_msgs],
-        "page": page,
-        "per_page": per_page,
-        "total_messages": total_messages,
+        "page": page_clamped,
+        "per_page": per_page_clamped,
+        "total_messages": total,
         "total_pages": total_pages,
     }

@@ -500,6 +500,110 @@ class TestMultiplayerDatabase:
         result = _load_json_column("[1, 2, 3]")
         assert result == [1, 2, 3]
 
+    def test_get_recent_messages_paginated_basic(self) -> None:
+        from backend.multiplayer.database import save_crossroads_message, get_recent_messages_paginated
+        for i in range(10):
+            cm = CrossroadsMessage(
+                id=f"msg-pag-{i}",
+                game_id="game-pag",
+                player_name="PaginationTester",
+                text=f"Paginated message {i}",
+                created_at=(datetime.now(timezone.utc) - timedelta(minutes=10 - i)).isoformat(),
+                expires_at=(datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
+            )
+            save_crossroads_message(cm)
+        msgs, total = get_recent_messages_paginated(page=1, per_page=5)
+        assert len(msgs) == 5
+        assert total == 10
+
+    def test_get_recent_messages_paginated_page2(self) -> None:
+        from backend.multiplayer.database import save_crossroads_message, get_recent_messages_paginated
+        for i in range(10):
+            cm = CrossroadsMessage(
+                id=f"msg-pag2-{i}",
+                game_id="game-pag2",
+                player_name="PaginationTester",
+                text=f"Page 2 message {i}",
+                created_at=(datetime.now(timezone.utc) - timedelta(minutes=10 - i)).isoformat(),
+                expires_at=(datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
+            )
+            save_crossroads_message(cm)
+        page1_msgs, _ = get_recent_messages_paginated(page=1, per_page=5)
+        page2_msgs, _ = get_recent_messages_paginated(page=2, per_page=5)
+        page1_ids = {m.id for m in page1_msgs}
+        page2_ids = {m.id for m in page2_msgs}
+        assert len(page1_msgs) == 5
+        assert len(page2_msgs) == 5
+        assert page1_ids.isdisjoint(page2_ids)
+
+    def test_get_recent_messages_paginated_empty_page(self) -> None:
+        from backend.multiplayer.database import save_crossroads_message, get_recent_messages_paginated
+        for i in range(3):
+            cm = CrossroadsMessage(
+                id=f"msg-empty-{i}",
+                game_id="game-empty",
+                player_name="EmptyTester",
+                text=f"Empty page message {i}",
+                created_at=(datetime.now(timezone.utc) - timedelta(minutes=3 - i)).isoformat(),
+                expires_at=(datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
+            )
+            save_crossroads_message(cm)
+        msgs, total = get_recent_messages_paginated(page=10, per_page=5)
+        assert len(msgs) == 0
+        assert total == 3
+
+    def test_get_recent_messages_paginated_expired_excluded(self) -> None:
+        from backend.multiplayer.database import save_crossroads_message, get_recent_messages_paginated
+        active = CrossroadsMessage(
+            id="msg-active",
+            game_id="game-x",
+            player_name="Tester",
+            text="I am active",
+            created_at=datetime.now(timezone.utc).isoformat(),
+            expires_at=(datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
+        )
+        expired = CrossroadsMessage(
+            id="msg-dead",
+            game_id="game-x",
+            player_name="Tester",
+            text="I am expired",
+            created_at=(datetime.now(timezone.utc) - timedelta(days=10)).isoformat(),
+            expires_at=(datetime.now(timezone.utc) - timedelta(days=3)).isoformat(),
+        )
+        save_crossroads_message(active)
+        save_crossroads_message(expired)
+        msgs, total = get_recent_messages_paginated(page=1, per_page=10)
+        ids = {m.id for m in msgs}
+        assert "msg-active" in ids
+        assert "msg-dead" not in ids
+        assert total == 1
+
+    def test_get_recent_messages_paginated_total_count(self) -> None:
+        from backend.multiplayer.database import save_crossroads_message, get_recent_messages_paginated
+        import uuid
+        for i in range(7):
+            cm = CrossroadsMessage(
+                id=f"msg-count-{uuid.uuid4()}",
+                game_id="game-count",
+                player_name="CountTester",
+                text=f"Count message {i}",
+                created_at=datetime.now(timezone.utc).isoformat(),
+                expires_at=(datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
+            )
+            save_crossroads_message(cm)
+        _, total = get_recent_messages_paginated(page=1, per_page=3)
+        assert total == 7
+
+    def test_get_recent_messages_paginated_per_page_capped(self) -> None:
+        from backend.multiplayer.database import get_recent_messages_paginated
+        msgs, _ = get_recent_messages_paginated(page=1, per_page=100)
+        assert len(msgs) <= 50
+
+    def test_get_recent_messages_paginated_page_clamped(self) -> None:
+        from backend.multiplayer.database import get_recent_messages_paginated
+        msgs, total = get_recent_messages_paginated(page=0, per_page=10)
+        assert len(msgs) <= 10
+
 
 # ---------------------------------------------------------------------------
 # TestMultiplayerGhosts
@@ -1075,6 +1179,25 @@ class TestMultiplayerCrossroads:
         lore_list = get_available_lore_list()
         found = [l for l in lore_list if l["fragment_id"] == "lore_list_test"]
         assert len(found) >= 1
+        GAME_STORE.pop(state.id, None)
+
+    def test_get_messages_paginated(self) -> None:
+        state = new_game(42, "PosterPaginated", shared_universe=True)
+        GAME_STORE[state.id] = state
+        for i in range(12):
+            post_message(state, f"Paginated message {i}")
+        result = get_messages(page=1, per_page=5)
+        assert result["page"] == 1
+        assert result["per_page"] == 5
+        assert result["total_messages"] >= 12
+        assert result["total_pages"] >= 3
+        assert len(result["messages"]) == 5
+        result2 = get_messages(page=2, per_page=5)
+        assert result2["page"] == 2
+        assert len(result2["messages"]) == 5
+        page1_texts = {m["text"] for m in result["messages"]}
+        page2_texts = {m["text"] for m in result2["messages"]}
+        assert page1_texts.isdisjoint(page2_texts)
         GAME_STORE.pop(state.id, None)
 
 
