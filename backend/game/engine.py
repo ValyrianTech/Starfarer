@@ -201,7 +201,7 @@ def land_on_body(state: GameState, body_id: str) -> tuple[bool, str]:
         return False, f"Body {body_id} not found in this system."
     state.ship.current_body_id = body_id
     target.explored = True
-    if target.biome:
+    if target.biome is not None:
         state.record_biome_visit(target.biome)
     state.add_log("exploration", f"Landed on {target.name}, a {target.biome or 'unknown'} {target.body_type}.", category="exploration", title="Surface Landing", system=system.name, body=target.name)
     return True, f"Landed on {target.name}."
@@ -272,7 +272,7 @@ def explore_surface(state: GameState) -> list[Discovery]:
 
     state.add_log("exploration", f"Explored {body.name}. Found {len(discoveries)} points of interest.", category="exploration", title="Surface Exploration", system=system.name, body=body.name, fuel_change=-EXPLORE_FUEL_COST)
     body.poi_count = max(0, body.poi_count - num_finds)
-    if body.biome:
+    if body.biome is not None:
         state.record_biome_visit(body.biome)
     return discoveries
 
