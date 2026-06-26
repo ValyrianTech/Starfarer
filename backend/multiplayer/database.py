@@ -188,8 +188,6 @@ def get_ghost_signatures_paginated(system_id: str, page: int = 1, per_page: int 
     :returns: A tuple of (paginated ghosts, total_count).
     :rtype: tuple[list[GhostSignature], int]
     """
-    per_page = min(max(1, per_page), 50)
-    page = max(1, page)
     offset = (page - 1) * per_page
     with get_db_ctx() as conn:
         total = conn.execute(
@@ -483,8 +481,6 @@ def get_recent_messages_paginated(page: int = 1, per_page: int = 10) -> tuple[li
     :returns: A tuple of (paginated messages, total_count).
     :rtype: tuple[list[CrossroadsMessage], int]
     """
-    per_page = min(max(1, per_page), 50)
-    page = max(1, page)
     offset = (page - 1) * per_page
     now = datetime.now(timezone.utc).isoformat()
     with get_db_ctx() as conn:
