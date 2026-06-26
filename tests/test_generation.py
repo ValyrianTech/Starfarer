@@ -1938,3 +1938,234 @@ class TestAncientGateSystemType:
                 break
         assert found_pulsar, "Could not find a seed that produces pulsar phenomenon in range 0-999"
         assert found_black_hole, "Could not find a seed that produces black_hole phenomenon in range 0-999"
+
+
+class TestNewHazardEvents:
+    """Tests for the new and updated hazard events."""
+
+    def test_new_events_exist_in_templates(self) -> None:
+        """Micrometeorite Storm and Quantum Fluctuation should be in EVENT_TEMPLATES."""
+        from backend.generation.events import EVENT_TEMPLATES
+        titles = {t["title"] for t in EVENT_TEMPLATES}
+        assert "Micrometeorite Storm" in titles
+        assert "Quantum Fluctuation" in titles
+
+    def test_micrometeorite_storm_structure(self) -> None:
+        """Micrometeorite Storm should have correct type, rarity, title, flavor, and choices."""
+        from backend.generation.events import EVENT_TEMPLATES
+        template = next(t for t in EVENT_TEMPLATES if t["title"] == "Micrometeorite Storm")
+        assert template["type"] == "hazard"
+        assert template["rarity"] == "common"
+        assert len(template["flavor"]) > 0
+        assert len(template["choices"]) == 3
+        for choice in template["choices"]:
+            assert "text" in choice
+            assert "outcome" in choice
+            assert len(choice["text"]) > 0
+            assert len(choice["outcome"]) > 0
+
+    def test_quantum_fluctuation_structure(self) -> None:
+        """Quantum Fluctuation should have correct type, rarity, title, flavor, and choices."""
+        from backend.generation.events import EVENT_TEMPLATES
+        template = next(t for t in EVENT_TEMPLATES if t["title"] == "Quantum Fluctuation")
+        assert template["type"] == "hazard"
+        assert template["rarity"] == "rare"
+        assert len(template["flavor"]) > 0
+        assert len(template["choices"]) == 3
+        for choice in template["choices"]:
+            assert "text" in choice
+            assert "outcome" in choice
+            assert len(choice["text"]) > 0
+            assert len(choice["outcome"]) > 0
+
+    def test_updated_solar_flare_structure(self) -> None:
+        """Updated Solar Flare should have the new flavor and choices."""
+        from backend.generation.events import EVENT_TEMPLATES
+        template = next(t for t in EVENT_TEMPLATES if t["title"] == "Solar Flare")
+        assert template["type"] == "hazard"
+        assert template["rarity"] == "common"
+        assert "massive solar flare erupts from the star" in template["flavor"]
+        choices_text = {c["text"] for c in template["choices"]}
+        assert "Take cover behind the nearest planet" in choices_text
+        assert "Deploy radiation shielding" in choices_text
+        assert "Ride it out" in choices_text
+
+    def test_updated_ion_storm_structure(self) -> None:
+        """Updated Ion Storm should have the new flavor and choices."""
+        from backend.generation.events import EVENT_TEMPLATES
+        template = next(t for t in EVENT_TEMPLATES if t["title"] == "Ion Storm")
+        assert template["type"] == "hazard"
+        assert template["rarity"] == "uncommon"
+        assert "Electromagnetic interference" in template["flavor"]
+        choices_text = {c["text"] for c in template["choices"]}
+        assert "Power down non-essential systems" in choices_text
+        assert "Push through with emergency power" in choices_text
+        assert "Wait it out" in choices_text
+
+    def test_new_events_have_cooldowns(self) -> None:
+        """Micrometeorite Storm and Quantum Fluctuation should have cooldowns."""
+        from backend.generation.events import EVENT_COOLDOWNS
+        assert "Micrometeorite Storm" in EVENT_COOLDOWNS
+        assert "Quantum Fluctuation" in EVENT_COOLDOWNS
+        assert EVENT_COOLDOWNS["Micrometeorite Storm"] == 3
+        assert EVENT_COOLDOWNS["Quantum Fluctuation"] == 8
+
+    def test_hazard_event_cooldown_scales_with_repeat_triggers(self) -> None:
+        """Hazard event cooldown should increase when the same event is triggered repeatedly."""
+        from backend.generation.events import apply_cooldown, EVENT_COOLDOWNS
+        from backend.models.ship import Ship
+
+        ship = Ship()
+        state = GameState(id="test-hazard-scale", seed=42, ship=ship)
+
+        title = "Micrometeorite Storm"
+        base = EVENT_COOLDOWNS[title]
+
+        # First trigger
+        apply_cooldown(state, title, "hazard")
+        assert state.event_cooldowns[title] == base * 1
+        assert state.hazard_event_counts[title] == 1
+
+        # Second trigger
+        apply_cooldown(state, title, "hazard")
+        assert state.event_cooldowns[title] == base * 2
+        assert state.hazard_event_counts[title] == 2
+
+        # Third trigger
+        apply_cooldown(state, title, "hazard")
+        assert state.event_cooldowns[title] == base * 3
+        assert state.hazard_event_counts[title] == 3
+
+    def test_non_hazard_events_do_not_scale_cooldown(self) -> None:
+        """Non-hazard events should not have scaled cooldowns and should not increment hazard_event_counts."""
+        from backend.generation.events import apply_cooldown, EVENT_COOLDOWNS
+        from backend.models.ship import Ship
+
+        ship = Ship()
+        state = GameState(id="test-nonhazard-scale", seed=42, ship=ship)
+
+        title = "Ancient Signal"
+        base = EVENT_COOLDOWNS.get(title, 5)
+
+        # First trigger
+        apply_cooldown(state, title, "exploration")
+        assert state.event_cooldowns[title] == base
+        assert state.hazard_event_counts == {}
+
+        # Second trigger
+        apply_cooldown(state, title, "exploration")
+        assert state.event_cooldowns[title] == base
+        assert state.hazard_event_counts == {}
+
+    def test_micrometeorite_storm_can_be_triggered(self) -> None:
+        """Micrometeorite Storm should be triggerable via the event system."""
+        from backend.generation.events import trigger_event
+        from backend.generation.universe import generate_universe
+        from backend.models.ship import Ship
+        import random
+
+        systems, lore = generate_universe(42)
+        ship = Ship(current_system_id=list(systems.keys())[0])
+        state = GameState(id="test-trigger-mm", seed=42, ship=ship, systems=systems)
+
+        # Set up conditions for the event to trigger
+        state.event_cooldowns = {}
+        state.last_event_title = None
+
+        # Try multiple times with a known seed to trigger Micrometeorite Storm
+        found = False
+        for i in range(100):
+            state.events = []
+            rng = random.Random(1000 + i)
+            event = trigger_event(state, rng_override=rng)
+            if event and event.title == "Micrometeorite Storm":
+                found = True
+                assert event.event_type == "hazard"
+                assert len(event.choices) == 3
+                assert event.flavor is not None
+                break
+
+        assert found, "Micrometeorite Storm should be triggerable within 100 attempts"
+
+    def test_quantum_fluctuation_can_be_triggered(self) -> None:
+        """Quantum Fluctuation should be triggerable via the event system."""
+        from backend.generation.events import trigger_event
+        from backend.generation.universe import generate_universe
+        from backend.models.ship import Ship
+        import random
+
+        systems, lore = generate_universe(42)
+        ship = Ship(current_system_id=list(systems.keys())[0])
+        state = GameState(id="test-trigger-qf", seed=42, ship=ship, systems=systems)
+
+        state.event_cooldowns = {}
+        state.last_event_title = None
+
+        found = False
+        for i in range(500):
+            state.events = []
+            rng = random.Random(2000 + i)
+            event = trigger_event(state, rng_override=rng)
+            if event and event.title == "Quantum Fluctuation":
+                found = True
+                assert event.event_type == "hazard"
+                assert len(event.choices) == 3
+                assert event.flavor is not None
+                break
+
+        assert found, "Quantum Fluctuation should be triggerable within 500 attempts"
+
+    def test_cooldown_prevents_immediate_repeat(self) -> None:
+        """Cooldown should prevent the same hazard event from triggering again immediately."""
+        from backend.generation.events import trigger_event, apply_cooldown
+        from backend.generation.universe import generate_universe
+        from backend.models.ship import Ship
+        import random
+
+        systems, lore = generate_universe(42)
+        ship = Ship(current_system_id=list(systems.keys())[0])
+        state = GameState(id="test-cooldown-repeat", seed=42, ship=ship, systems=systems)
+
+        # Set a cooldown for Micrometeorite Storm
+        state.event_cooldowns["Micrometeorite Storm"] = 10
+        state.last_event_title = None
+
+        # The event should not be Micrometeorite Storm due to cooldown
+        triggered_titles = set()
+        for i in range(50):
+            state.events = []
+            rng = random.Random(3000 + i)
+            event = trigger_event(state, rng_override=rng)
+            if event:
+                triggered_titles.add(event.title)
+
+        assert "Micrometeorite Storm" not in triggered_titles, \
+            "Micrometeorite Storm should not trigger when on cooldown"
+
+    def test_hazard_event_counts_persists_across_triggers(self) -> None:
+        """hazard_event_counts should accumulate across multiple trigger_event calls."""
+        from backend.generation.events import trigger_event
+        from backend.generation.universe import generate_universe
+        from backend.models.ship import Ship
+        import random
+
+        systems, lore = generate_universe(42)
+        ship = Ship(current_system_id=list(systems.keys())[0])
+        state = GameState(id="test-persist-counts", seed=42, ship=ship, systems=systems)
+
+        # Clear cooldowns so events can trigger
+        state.event_cooldowns = {}
+        state.last_event_title = None
+
+        hazard_triggers = 0
+        for i in range(200):
+            state.events = []
+            rng = random.Random(4000 + i)
+            event = trigger_event(state, rng_override=rng)
+            if event and event.event_type == "hazard":
+                hazard_triggers += 1
+
+        # hazard_event_counts should reflect total hazard triggers
+        total_counts = sum(state.hazard_event_counts.values())
+        assert total_counts == hazard_triggers, \
+            f"hazard_event_counts sum ({total_counts}) should equal hazard triggers ({hazard_triggers})"

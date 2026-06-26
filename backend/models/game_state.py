@@ -73,6 +73,7 @@ class GameState:
     daily_missions_used: dict[str, str] = field(default_factory=dict)
     accepted_missions: dict[str, dict] = field(default_factory=dict)
     dismissed_hints: set[str] = field(default_factory=set)
+    hazard_event_counts: dict[str, int] = field(default_factory=dict)
     _next_log_id: int = 1
 
     def __post_init__(self) -> None:

@@ -31,11 +31,11 @@ EVENT_TEMPLATES: list[dict[str, Any]] = [
         "type": "hazard",
         "rarity": "common",
         "title": "Solar Flare",
-        "flavor": "Alarms blare as the system star unleashes a massive coronal ejection directly toward your ship. Radiation levels spike.",
+        "flavor": "A massive solar flare erupts from the star, sending a wave of radiation toward your ship. Alarms blare across all decks.",
         "choices": [
-            {"text": "Divert power to shields", "outcome": "hull:-10; fuel:-10; Shields absorbed most of the blast."},
-            {"text": "Take shelter behind the nearest planet", "outcome": "fuel:-15; Safely avoided the worst of it."},
-            {"text": "Ride it out", "outcome": "hull:-25; The hull groans under the onslaught."},
+            {"text": "Take cover behind the nearest planet", "outcome": "hull:-10; fuel:-5; Emergency burn to reach cover."},
+            {"text": "Deploy radiation shielding", "outcome": "credits:-50; Radiation shielding deployed successfully, no damage taken."},
+            {"text": "Ride it out", "outcome": "hull:-20; crew:-1; morale:-10; Radiation sickness claims a crew member."},
         ],
     },
     {
@@ -129,6 +129,17 @@ EVENT_TEMPLATES: list[dict[str, Any]] = [
     },
     {
         "type": "hazard",
+        "rarity": "common",
+        "title": "Micrometeorite Storm",
+        "flavor": "A dense cloud of micrometeorites streaks toward your ship, pinging off the hull like cosmic hail. Impact alerts flash across the bridge.",
+        "choices": [
+            {"text": "Activate point defense lasers", "outcome": "fuel:-10; Point defense lasers neutralized the threat, but drained power reserves."},
+            {"text": "Angle hull plating", "outcome": "hull:-15; Hull plating deflected most impacts, but some got through."},
+            {"text": "Dodge and weave", "outcome": "hull:-25; The evasive maneuver failed \u2014 the storm was too dense."},
+        ],
+    },
+    {
+        "type": "hazard",
         "rarity": "uncommon",
         "title": "Nebula Storm",
         "flavor": "The nebula around you begins to churn violently. Electromagnetic discharges ripple through the clouds, and your shields flicker under the onslaught.",
@@ -195,6 +206,17 @@ EVENT_TEMPLATES: list[dict[str, Any]] = [
             {"text": "Full burn to escape", "outcome": "fuel:-20; hull:-5; Engines screamed, but you pulled free of the anomaly."},
             {"text": "Use the slingshot", "outcome": "fuel:-10; Rode the gravity wave and saved fuel in the process."},
             {"text": "Study the anomaly", "outcome": "fuel:-5; credits:100; Observed the anomaly from the edge and gathered breakthrough data."},
+        ],
+    },
+    {
+        "type": "hazard",
+        "rarity": "rare",
+        "title": "Quantum Fluctuation",
+        "flavor": "Space-time briefly warps around your ship. Instruments go haywire. For a moment, you see... something else. A shimmering tear in reality pulses nearby.",
+        "choices": [
+            {"text": "Record the anomaly", "outcome": "credits:250; Recorded a Quantum Data sample \u2014 highly valuable scientific data."},
+            {"text": "Stabilize the ship", "outcome": "fuel:-10; Stabilized the ship through the fluctuation. No damage sustained."},
+            {"text": "Follow the fluctuation", "outcome": "hull:-15; The fluctuation collapsed violently, stressing the hull."},
         ],
     },
     {
@@ -345,13 +367,12 @@ EVENT_TEMPLATES: list[dict[str, Any]] = [
         "type": "hazard",
         "rarity": "uncommon",
         "title": "Ion Storm",
-        "flavor": "Your ship flies into a dense pocket of ionized gas. Electrical discharges crawl across the hull as systems flicker.",
+        "flavor": "Electromagnetic interference disrupts your ship's systems. Screens flicker, navigation wavers as the ion storm engulfs your vessel.",
         "choices": [
-            {"text": "Power through", "outcome": "hull:-12; Gained an Ion Crystal discovery!"},
-            {"text": "Shield systems and wait", "outcome": "fuel:-5; hull:-5; Waited out the storm."},
-            {"text": "Navigate around", "outcome": "fuel:-9; Took a detour around the ion storm."},
+            {"text": "Power down non-essential systems", "outcome": "cargo:-1; Systems safely powered down, but some cargo was jettisoned."},
+            {"text": "Push through with emergency power", "outcome": "fuel:-15; hull:-5; Emergency power pushed through the storm with electrical damage."},
+            {"text": "Wait it out", "outcome": "fuel:-5; morale:-5; Waited out the storm safely, but morale dipped from the delay."},
         ],
-        "trigger_conditions": {"phenomenon": "nebula"},
     },
     {
         "type": "discovery",
@@ -505,6 +526,7 @@ EVENT_COOLDOWNS = {
     "Passing Merchant": 3,
     "Solar Flare": 3,
     "Asteroid Swarm": 3,
+    "Micrometeorite Storm": 3,
     "Crew Discovery": 3,
     "Derelict Vessel": 3,
     "Mysterious Beacon": 3,
@@ -528,6 +550,7 @@ EVENT_COOLDOWNS = {
     "Crew Dispute": 8,
     "Spaghettification Near-Miss": 8,
     "Neutron Star Proximity": 8,
+    "Quantum Fluctuation": 8,
     "Signal from Home": 10,
     "Gravity Anomaly": 10,
     "Priority Salvage Rights": 10,
@@ -536,9 +559,20 @@ EVENT_COOLDOWNS = {
 }
 
 
-def apply_cooldown(state: GameState, event_title: str) -> None:
-    """Set cooldown for an event after it fires."""
-    state.event_cooldowns[event_title] = EVENT_COOLDOWNS.get(event_title, 5)
+def apply_cooldown(state: GameState, event_title: str, event_type: str = "") -> None:
+    """Set cooldown for an event after it fires.
+
+    For hazard events, the cooldown scales with how many times the
+    event has been triggered in the current session, making repeat
+    hazard events less frequent.
+    """
+    base = EVENT_COOLDOWNS.get(event_title, 5)
+    if event_type == "hazard":
+        count = state.hazard_event_counts.get(event_title, 0)
+        state.hazard_event_counts[event_title] = count + 1
+        state.event_cooldowns[event_title] = base * (count + 1)
+    else:
+        state.event_cooldowns[event_title] = base
 
 
 def decrement_cooldowns(state: GameState) -> None:
@@ -687,7 +721,7 @@ def trigger_event(state: GameState, rng_override: Optional[random.Random] = None
             return None
         template = eligible[deterministic_hash(system.id, str(len(state.log_entries))) % len(eligible)]
         state.last_event_title = template["title"]
-        apply_cooldown(state, template["title"])
+        apply_cooldown(state, template["title"], template["type"])
         if state.crisis_cooldown > 0:
             state.crisis_cooldown -= 1
         if template.get("category") == "crisis":
@@ -714,7 +748,7 @@ def trigger_event(state: GameState, rng_override: Optional[random.Random] = None
         weights = [rarity_weights.get(t.get("rarity", "common"), 1) for t in eligible]
         template = rng.choices(eligible, weights=weights, k=1)[0]
         state.last_event_title = template["title"]
-        apply_cooldown(state, template["title"])
+        apply_cooldown(state, template["title"], template["type"])
         if state.crisis_cooldown > 0:
             state.crisis_cooldown -= 1
         if template.get("category") == "crisis":
