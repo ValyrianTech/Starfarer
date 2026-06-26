@@ -25,7 +25,7 @@ Content-Type: application/json
 {
   "seed": 42,                    // optional: universe seed (same seed = same universe)
   "ship_name": "MyShip",         // optional: name your ship (default: "Serendipity")
-  "shared_universe": true        // optional: enable multiplayer features (default: false)
+  "shared_universe": false       // optional: enable multiplayer features (default: false)
 }
 ```
 
@@ -93,7 +93,9 @@ Returns all systems sorted by distance. Each entry includes:
 POST /api/game/{game_id}/jump/{system_id}
 ```
 
-Costs fuel based on distance (3 fuel per LY, minimum 1). Morale decays by 2 per jump (less with life support upgrades). A procedural event may trigger after jumping.
+Costs fuel based on distance (3 fuel per LY, minimum 1). Morale decays by 2 per jump (less with life support upgrades). A procedural event may trigger after jumping. In shared universe mode, a ghost signature is recorded in the source system before you jump, leaving an echo for other players.
+
+**Shared universe notifications:** Ghost signatures, Crossroads messages, and discovery ripples are shown in the frontend UI. Dismissed ripple notifications are tracked via `window._dismissedRipples` and will not reappear on subsequent state updates.
 
 ### 3.4 Scan a System
 

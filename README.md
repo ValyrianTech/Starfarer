@@ -35,9 +35,9 @@ A biome discovery codex (`GET /api/game/{id}/codex`) tracks which of the 8 plane
 
 ### Multiplayer: Ghosts in the Void
 
-Starfarer features an asynchronous shared universe system called **Ghosts in the Void**. To enable the shared universe, set `shared_universe: true` in the `POST /api/game/new` request body. When disabled (default), you can use a custom seed for a single-player experience. In shared universe mode, all game sessions share the same canonical universe (seed 42), enabling cross-session player interactions:
+Starfarer features an asynchronous shared universe system called **Ghosts in the Void**. To enable the shared universe, set `shared_universe: true` in the `POST /api/game/new` request body; the field defaults to `false` (single-player). When enabled, all game sessions share the same canonical universe (seed 42), enabling cross-session player interactions:
 
-- **Ghost Signatures**: When you jump, scan, or explore, your ship leaves a ghost signature in the system. Other players visiting the same system can see echoes of your passage — your discoveries, body visits, and an optional message.
+- **Ghost Signatures**: When you jump, scan, or explore, your ship leaves a ghost signature in the current system. On jump, the signature is recorded in the source system (before departing), so other players see echoes where you were. Ghosts capture your discoveries, body visits, and an optional message.
 - **The Crossroads**: A shared trading post where players can donate items and lore fragments for others to claim. You can also post messages visible to all travellers (messages expire after 7 days).
 - **Discovery Ripples**: When you discover a lore fragment, a ripple event propagates to nearby systems (within 5 LY). Other players in those systems receive a notification and can acknowledge the ripple.
 

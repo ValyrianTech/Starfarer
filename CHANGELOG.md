@@ -200,6 +200,9 @@
 - `_cleanup_stale_locks` iterates over a dict that may be modified concurrently: cleanup is now performed inside the `_lock_for_locks` mutex to prevent race conditions.
 - `api_post_message` returns inconsistent error format: error detection now checks `msg.get("success")` instead of `"id" not in msg`, ensuring all error paths return proper HTTP 400 responses.
 - `post_message` now returns a consistent `{"success": True, "message": ...}` dict instead of raw message dict, providing a uniform success indicator across all multiplayer endpoints.
+- `_state_from_dict` now defaults `shared_universe` to `False` (was `True`) for legacy saves that lack the field, preventing old single-player saves from being inadvertently treated as shared-universe games on load.
+- Ghost signatures are now recorded in the source system before the jump (not the destination system), so other players see the echo in the system the player departed from.
+- `initMultiplayerUI()` now filters out previously dismissed ripples using the `window._dismissedRipples` set, preventing dismissed ripple notifications from reappearing on every state update.
 
 ### Removed
 - Unused `Optional` import from `backend/codex.py`
