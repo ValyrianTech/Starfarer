@@ -2196,7 +2196,7 @@ class TestNewHazardEvents:
 
     def test_cooldown_prevents_immediate_repeat(self) -> None:
         """Cooldown should prevent the same hazard event from triggering again immediately."""
-        from backend.generation.events import trigger_event, apply_cooldown
+        from backend.generation.events import trigger_event
         from backend.generation.universe import generate_universe
         from backend.models.ship import Ship
         import random

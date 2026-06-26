@@ -53,6 +53,9 @@
 - `DismissHintRequest` schema in `backend/api/schemas.py` with `hint_id: str` field
 - `dismissed_hints` field (`set[str]`) added to `GameState` for persistent hint dismissal tracking across save/load
 - `hints` field in full game state response (`GET /api/game/{id}`) — an array of active hint dicts with `id`, `severity`, `message`, and optional `command`
+- 3 new black hole events: 'Event Horizon Approach' (hazard, uncommon, no scanner required), 'Hawking Radiation Harvest (Deep Scan)' (discovery, uncommon, scanner_required=2), and 'Time Dilation Echo' (discovery, rare, scanner_required=3)
+- `scanner_required` field in event trigger conditions — events with this field are only eligible if the ship's scanner level meets or exceeds the requirement
+- Cooldown entries for 'Event Horizon Approach' (8), 'Hawking Radiation Harvest (Deep Scan)' (8), and 'Time Dilation Echo' (10)
 
 ### Changed
 - Solar Flare event: updated flavor text and rebalanced choices (now offers planetary cover, radiation shielding, or riding it out with crew/morale consequences)
@@ -72,8 +75,13 @@
 - Mission completion log entry now includes `credits_change` metadata
 - Added type annotations to `add_log` method (`**kwargs: str | int`)
 - Added type annotations across multiple modules to fix mypy errors
+- Black hole event count raised from 5 to 8 (from the original 5 plus the 3 new events above)
+- Hawking Radiation Harvest cooldown changed from 6 to 8 (to disambiguate from the new 'Hawking Radiation Harvest (Deep Scan)' event)
 
 ### Fixed
+- `test_new_events_correct_cooldown_values` now asserts the correct cooldown for 'Hawking Radiation Harvest (Deep Scan)' instead of the old 'Hawking Radiation Harvest' event (was checking the wrong event's cooldown)
+- `NEW_BH_TITLES` test set now includes 'Hawking Radiation Harvest (Deep Scan)' instead of the old 'Hawking Radiation Harvest' title, ensuring the new event is properly tested
+- `test_new_events_can_be_triggered_in_black_hole` now verifies that the triggered event is actually one of the 3 new black hole events (was only checking that *any* event triggered, not that it was a new event)
 - `_apply_cooldown_fallback` no longer returns a single event when multiple eligible events share the same lowest cooldown — now returns all eligible events with the minimum cooldown before applying `last_event_title` deduplication
 - `_next_log_id` regression on save/load cycles: `_state_from_dict` now warns and clamps `_next_log_id` to `max_id + 1` when the saved value is lower, preventing log entry ID collisions
 - Old-format `accepted_missions` migration: `_state_from_dict` now converts legacy string-format mission values (faction_id only) to full dict format with default costs/rewards, preventing crashes on mission completion from migrated saves
@@ -94,6 +102,7 @@
 - Discovery and hazard events now properly award faction reputation
 - Contradictory outcome in Accretion Disk Prospecting event resolved
 - Gravitational Lens Observation outcome no longer incorrectly claims lore fragment discovery
+- Duplicate event title 'Hawking Radiation Harvest' causing ambiguous behavior and doubled weight (resolved by renaming the new event and adjusting cooldowns)
 - `_get_eligible_templates` fallback behavior documented: when all templates with trigger conditions are filtered out, only templates with no trigger conditions are returned
 - `trigger_event` low-morale path behavior documented: probability roll is skipped entirely when morale < 30
 - Fragile RNG seed dependency in `test_black_hole_events_can_be_triggered` fixed by using mocked `random()`
