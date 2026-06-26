@@ -588,11 +588,17 @@ def apply_cooldown(state: GameState, event_title: str, event_type: str = "") -> 
 
 
 def decrement_cooldowns(state: GameState) -> None:
-    """Decrement all active cooldowns by 1."""
+    """Decrement all active cooldowns by 1 and decay hazard event counts."""
     for event_id in list(state.event_cooldowns):
         state.event_cooldowns[event_id] -= 1
         if state.event_cooldowns[event_id] <= 0:
             del state.event_cooldowns[event_id]
+
+    for event_title in list(state.hazard_event_counts):
+        if event_title not in state.event_cooldowns:
+            state.hazard_event_counts[event_title] = max(0, state.hazard_event_counts[event_title] - 1)
+            if state.hazard_event_counts[event_title] == 0:
+                del state.hazard_event_counts[event_title]
 
 
 def _get_eligible_templates(state: GameState, templates: list[dict]) -> list[dict]:
