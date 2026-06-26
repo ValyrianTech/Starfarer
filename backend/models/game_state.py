@@ -227,6 +227,8 @@ class GameState:
             "lore_fragments_total": len(self.lore_fragments),
             "faction_relations": self.get_known_factions(),
             "reputation_summary": self.build_reputation_summary(),
+            "biomes_visited_count": len(self.biomes_visited),
+            "biomes_visited": list(self.biomes_visited),
         }
 
     def get_faction_reputation(self, faction_id: str) -> int:

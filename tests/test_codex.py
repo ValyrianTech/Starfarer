@@ -395,6 +395,7 @@ class TestGameStateResponseIncludesBiomesVisited:
         state = _make_game()
         state.biomes_visited.add("desert")
         summary = state.state_summary()
-        # state_summary doesn't need to include biomes_visited explicitly,
-        # but we verify the state has it
-        assert "desert" in state.biomes_visited
+        assert "biomes_visited" in summary
+        assert "biomes_visited_count" in summary
+        assert summary["biomes_visited_count"] == 1
+        assert "desert" in summary["biomes_visited"]
