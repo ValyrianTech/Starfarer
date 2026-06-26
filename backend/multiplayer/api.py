@@ -31,9 +31,16 @@ router = APIRouter(prefix="/api")
 
 _game_locks: dict[str, Lock] = {}
 _lock_for_locks: Lock = Lock()
+_lock_access_count: int = 0
 
 
 def _get_lock(game_id: str) -> Lock:
+    global _lock_access_count
+    _lock_access_count += 1
+    # Periodic cleanup of stale locks every 100 accesses
+    # (called outside the lock to avoid deadlock with _cleanup_stale_locks)
+    if _lock_access_count % 100 == 0:
+        _cleanup_stale_locks()
     with _lock_for_locks:
         if game_id not in _game_locks:
             _game_locks[game_id] = Lock()
@@ -62,6 +69,7 @@ def _check_game(game_id: str):
     """
     state = _get_state(game_id)
     if not state:
+        _cleanup_game_lock(game_id)
         raise HTTPException(status_code=404, detail="Game not found")
     return state
 
