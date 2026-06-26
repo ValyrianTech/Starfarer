@@ -270,7 +270,7 @@ def explore_surface(state: GameState) -> list[Discovery]:
                 state.add_log("lore", f"Discovered lore fragment: {lore_frag.title} ({lore_frag.id}).", category="discovery", title="Lore Fragment Discovered", system=system.name, body=body.name)
 
                 if state.shared_universe:
-                    create_ripple(state, disc)
+                    create_ripple(state, disc, all_systems=state.systems)
             elif lore_frag and lore_frag.discovered and not lore_linked:
                 logger.debug(f"Lore fragment {lore_frag.id} ({lore_frag.title}) already discovered but found on body {body.id}.")
                 lore_linked = True
