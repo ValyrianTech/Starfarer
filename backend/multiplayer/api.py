@@ -114,8 +114,7 @@ def _check_game(game_id: str) -> GameState:
 def api_system_ghosts(game_id: str, sys_id: str, page: int = 1, per_page: int = 10) -> dict:
     """Retrieve ghost signatures left by other players in a star system.
 
-    Ghost signatures are automatically recorded on jump, scan, and
-    explore actions. They provide a trace of other travellers who
+    Ghost signatures provide a trace of other travellers who
     have passed through the system. Supports pagination via optional
     ``page`` and ``per_page`` query parameters.
 
