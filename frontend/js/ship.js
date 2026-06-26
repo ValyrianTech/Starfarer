@@ -9,7 +9,7 @@ function renderShipStatus(ship) {
 
   panel.innerHTML = `
     <div class="ui-panel" style="position:fixed;bottom:1rem;left:1rem;z-index:20;min-width:280px;" id="ship-status-panel">
-      <div class="ui-panel-title">${ship.name} — Ship Status</div>
+      <div class="ui-panel-title">${escapeHtml(ship.name)} — Ship Status</div>
       <div class="stat-bar">
         <span class="stat-bar-label">Fuel</span>
         <div class="stat-bar-track"><div class="stat-bar-fill fuel" style="width:${fuelPct}%"></div></div>
@@ -103,9 +103,9 @@ async function renderCargoPanel() {
           const isTop3 = top3Ids.has(item.id);
           return `
             <div class="cargo-item${isTop3 ? ' cargo-item-top' : ''}">
-              <div class="cargo-item-name">${isTop3 ? '<span class="cargo-star">\u2605</span>' : ''}${item.name}</div>
+              <div class="cargo-item-name">${isTop3 ? '<span class="cargo-star">\u2605</span>' : ''}${escapeHtml(item.name)}</div>
               <div class="cargo-item-meta">
-                <span class="cargo-item-category">${item.category}</span>
+                <span class="cargo-item-category">${escapeHtml(item.category)}</span>
                 <span class="cargo-item-value">${formatNumber(item.value)} cr</span>
               </div>
             </div>
