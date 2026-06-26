@@ -21,7 +21,6 @@ from backend.models.discovery import Discovery
 from backend.utils import deterministic_hash, seeded_random
 from backend.generation.universe import distance_between
 from backend.generation.lore import get_fragment_for_body
-from backend.multiplayer.ghosts import record_ghost
 from backend.multiplayer.ripples import create_ripple
 
 logger = logging.getLogger(__name__)
@@ -81,8 +80,6 @@ def perform_jump(state: GameState, target_system: StarSystem, fuel_cost: int) ->
     life_support_level = state.ship.morale_decay_reduction
     morale_decay = max(1, MORALE_DECAY_PER_JUMP - life_support_level)
     state.ship.morale = max(0, state.ship.morale - morale_decay)
-    if state.shared_universe and current:
-        record_ghost(state, current.id)
     state.ship.current_system_id = target_system.id
     state.ship.current_body_id = None
     target_system.visited = True
@@ -135,8 +132,6 @@ def perform_scan(state: GameState) -> str:
     system.scanned = True
     state.add_log("exploration", f"Scanned {system.name}. {len(system.bodies)} orbital bodies detected.", category="scan", title="System Scan", system=system.name, fuel_change=-SCAN_FUEL_COST)
 
-    if state.shared_universe:
-        record_ghost(state, state.ship.current_system_id)
 
     return f"Scan complete. {len(system.bodies)} bodies found."
 
@@ -268,8 +263,6 @@ def explore_surface(state: GameState) -> list[Discovery]:
                 lore_linked = True
                 state.add_log("lore", f"Discovered lore fragment: {lore_frag.title} ({lore_frag.id}).", category="discovery", title="Lore Fragment Discovered", system=system.name, body=body.name)
 
-                if state.shared_universe:
-                    create_ripple(state, disc, all_systems=state.systems)
             elif lore_frag and lore_frag.discovered and not lore_linked:
                 logger.debug(f"Lore fragment {lore_frag.id} ({lore_frag.title}) already discovered but found on body {body.id}.")
                 lore_linked = True
@@ -284,8 +277,6 @@ def explore_surface(state: GameState) -> list[Discovery]:
     if body.biome:
         state.record_biome_visit(body.biome)
 
-    if state.shared_universe:
-        record_ghost(state, state.ship.current_system_id)
 
     return discoveries
 

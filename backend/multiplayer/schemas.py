@@ -54,6 +54,14 @@ class PostMessageRequest(BaseModel):
     @field_validator('text')
     @classmethod
     def text_not_blank(cls, v: str) -> str:
+        """Validate that the message text is not blank or whitespace-only.
+
+        :param v: The raw text value from the request body.
+        :type v: str
+        :returns: The text with leading and trailing whitespace removed.
+        :rtype: str
+        :raises ValueError: If the stripped text is empty.
+        """
         if not v.strip():
             raise ValueError('Message text cannot be blank')
         return v.strip()

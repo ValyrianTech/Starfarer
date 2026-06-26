@@ -12,6 +12,7 @@ from threading import Lock
 from fastapi import APIRouter, HTTPException
 
 from backend.api.routes import _get_state, _save_state
+from backend.models.game_state import GameState
 from backend.game.manager import GAME_STORE
 from backend.multiplayer.schemas import (
     LeaveGhostRequest, DonateItemRequest, DonateLoreRequest,
@@ -37,6 +38,17 @@ _lock_access_count = itertools.count(1)
 
 
 def _get_lock(game_id: str) -> Lock:
+    """Return a thread lock for the given game_id, creating one if needed.
+
+    Performs periodic cleanup of stale locks (those belonging to games
+    no longer in ``GAME_STORE``) every 100 accesses via the internal
+    access counter.
+
+    :param game_id: The unique identifier of the game.
+    :type game_id: str
+    :returns: The :class:`threading.Lock` associated with the given game.
+    :rtype: Lock
+    """
     count = next(_lock_access_count)
     with _lock_for_locks:
         # Periodic cleanup of stale locks every 100 accesses
@@ -50,17 +62,34 @@ def _get_lock(game_id: str) -> Lock:
 
 
 def _cleanup_game_lock(game_id: str) -> None:
+    """Remove the lock entry for the given game_id from the lock dictionary.
+
+    Called when a game is no longer valid (e.g. not found in ``GAME_STORE``),
+    ensuring stale locks do not accumulate.
+
+    :param game_id: The unique identifier of the game whose lock to remove.
+    :type game_id: str
+    :rtype: None
+    """
     _game_locks.pop(game_id, None)
 
 
 def _cleanup_stale_locks() -> None:
+    """Remove all locks for games that are no longer present in ``GAME_STORE``.
+
+    Iterates over the lock dictionary under the ``_lock_for_locks`` mutex
+    and deletes any entry whose game_id is not currently tracked by the
+    game manager.
+
+    :rtype: None
+    """
     with _lock_for_locks:
         for gid in list(_game_locks.keys()):
             if gid not in GAME_STORE:
                 del _game_locks[gid]
 
 
-def _check_game(game_id: str):
+def _check_game(game_id: str) -> GameState:
     """Validate that a game exists and return its state.
 
     :param game_id: The unique identifier of the game.
@@ -85,8 +114,7 @@ def _check_game(game_id: str):
 def api_system_ghosts(game_id: str, sys_id: str, page: int = 1, per_page: int = 10) -> dict:
     """Retrieve ghost signatures left by other players in a star system.
 
-    Ghost signatures are automatically recorded on jump, scan, and
-    explore actions. They provide a trace of other travellers who
+    Ghost signatures provide a trace of other travellers who
     have passed through the system. Supports pagination via optional
     ``page`` and ``per_page`` query parameters.
 
@@ -104,7 +132,7 @@ def api_system_ghosts(game_id: str, sys_id: str, page: int = 1, per_page: int = 
     :raises HTTPException: 404 if the game is not found.
     :raises HTTPException: 404 if page exceeds total pages with active ghosts.
     """
-    state = _check_game(game_id)
+    _check_game(game_id)
     result = get_system_ghosts(sys_id, page=page, per_page=per_page)
     return result
 
