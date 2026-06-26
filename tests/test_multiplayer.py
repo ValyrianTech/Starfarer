@@ -635,6 +635,30 @@ class TestMultiplayerCrossroads:
         assert result["success"] is False
         GAME_STORE.pop(state.id, None)
 
+    def test_donate_lore_removes_fragment_from_player(self) -> None:
+        """After donating a lore fragment, it should be removed from the player's lore_fragments list,
+        preventing the same fragment from being donated multiple times."""
+        state = new_game(42, "LoreDonor", shared_universe=True)
+        GAME_STORE[state.id] = state
+        lf = _make_lore_fragment("lore_double_donate", discovered=True)
+        state.lore_fragments.append(lf)
+        initial_count = len(state.lore_fragments)
+
+        # First donation should succeed
+        result1 = donate_lore(state, "lore_double_donate")
+        assert result1["success"] is True
+
+        # Fragment should be removed from player's state
+        assert len(state.lore_fragments) == initial_count - 1
+        fragment_ids = [f.id for f in state.lore_fragments]
+        assert "lore_double_donate" not in fragment_ids
+
+        # Second donation should fail since fragment is gone
+        result2 = donate_lore(state, "lore_double_donate")
+        assert result2["success"] is False
+        assert "not found" in result2["detail"].lower()
+        GAME_STORE.pop(state.id, None)
+
     def test_claim_lore_success(self) -> None:
         donor = new_game(42, "LoreDonor", shared_universe=True)
         GAME_STORE[donor.id] = donor

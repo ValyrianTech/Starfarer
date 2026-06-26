@@ -170,6 +170,7 @@ def donate_lore(
         created_at=datetime.now(timezone.utc).isoformat(),
     )
     save_crossroads_lore(lore)
+    game_state.lore_fragments = [lf for lf in game_state.lore_fragments if lf.id != fragment_id]
     game_state.add_log(
         "multiplayer",
         f"Donated lore fragment '{fragment.title}' to the Crossroads.",
