@@ -257,8 +257,13 @@ class TestMultiplayerDatabase:
             created_at=datetime.now(timezone.utc).isoformat(),
         )
         save_crossroads_item(ci)
-        ok = db_claim_item("item-claim-1", "claimer-game-1")
-        assert ok is True
+        result = db_claim_item("item-claim-1", "claimer-game-1")
+        assert isinstance(result, dict)
+        assert result["id"] == "item-claim-1"
+        assert result["item_name"] == "Nebula Dust"
+        assert result["quantity"] == 1
+        assert result["claimed"] is True
+        assert result["claimer_game_id"] == "claimer-game-1"
 
     def test_claim_item_already_claimed(self) -> None:
         from backend.multiplayer.database import save_crossroads_item, claim_item as db_claim_item
@@ -274,12 +279,29 @@ class TestMultiplayerDatabase:
         save_crossroads_item(ci)
         db_claim_item("item-claim-2", "claimer-a")
         ok = db_claim_item("item-claim-2", "claimer-b")
-        assert ok is False
+        assert ok is None
 
     def test_claim_item_not_found(self) -> None:
         from backend.multiplayer.database import claim_item as db_claim_item
         ok = db_claim_item("nonexistent-item-id", "claimer-x")
-        assert ok is False
+        assert ok is None
+
+    def test_claim_item_select_returns_none(self) -> None:
+        from backend.multiplayer.database import claim_item as db_claim_item
+
+        update_cursor = MagicMock()
+        update_cursor.rowcount = 1
+
+        select_cursor = MagicMock()
+        select_cursor.fetchone.return_value = None
+
+        mock_conn = MagicMock()
+        mock_conn.execute.side_effect = [update_cursor, select_cursor]
+
+        with patch("backend.multiplayer.database.get_db_ctx") as mock_get_db_ctx:
+            mock_get_db_ctx.return_value.__enter__.return_value = mock_conn
+            result = db_claim_item("test-item-id", "test-claimer")
+            assert result is None
 
     def test_save_and_get_available_lore(self) -> None:
         from backend.multiplayer.database import save_crossroads_lore, get_available_lore
@@ -309,8 +331,12 @@ class TestMultiplayerDatabase:
             created_at=datetime.now(timezone.utc).isoformat(),
         )
         save_crossroads_lore(cl)
-        ok = db_claim_lore("lore-claim-1", "claimer-game-1")
-        assert ok is True
+        result = db_claim_lore("lore-claim-1", "claimer-game-1")
+        assert isinstance(result, dict)
+        assert result["id"] == "lore-claim-1"
+        assert result["fragment_id"] == "lore_wanderer_1"
+        assert result["claimed"] is True
+        assert result["claimer_game_id"] == "claimer-game-1"
 
     def test_claim_lore_already_claimed(self) -> None:
         from backend.multiplayer.database import save_crossroads_lore, claim_lore as db_claim_lore
@@ -325,7 +351,24 @@ class TestMultiplayerDatabase:
         save_crossroads_lore(cl)
         db_claim_lore("lore-claim-2", "claimer-a")
         ok = db_claim_lore("lore-claim-2", "claimer-b")
-        assert ok is False
+        assert ok is None
+
+    def test_claim_lore_select_returns_none(self) -> None:
+        from backend.multiplayer.database import claim_lore as db_claim_lore
+
+        update_cursor = MagicMock()
+        update_cursor.rowcount = 1
+
+        select_cursor = MagicMock()
+        select_cursor.fetchone.return_value = None
+
+        mock_conn = MagicMock()
+        mock_conn.execute.side_effect = [update_cursor, select_cursor]
+
+        with patch("backend.multiplayer.database.get_db_ctx") as mock_get_db_ctx:
+            mock_get_db_ctx.return_value.__enter__.return_value = mock_conn
+            result = db_claim_lore("test-lore-id", "test-claimer")
+            assert result is None
 
     def test_save_and_get_recent_messages(self) -> None:
         from backend.multiplayer.database import save_crossroads_message, get_recent_messages
@@ -841,7 +884,7 @@ class TestMultiplayerCrossroads:
         claimer = new_game(43, "Claimer", shared_universe=True)
         GAME_STORE[claimer.id] = claimer
 
-        with patch("backend.multiplayer.crossroads.db_claim_item", return_value=False):
+        with patch("backend.multiplayer.crossroads.db_claim_item", return_value=None):
             result = claim_item(don_result["donation"]["id"], claimer)
         assert result["success"] is False
 
@@ -890,7 +933,7 @@ class TestMultiplayerCrossroads:
         claimer = new_game(43, "LoreClaimer", shared_universe=True)
         GAME_STORE[claimer.id] = claimer
 
-        with patch("backend.multiplayer.crossroads.db_claim_lore", return_value=False):
+        with patch("backend.multiplayer.crossroads.db_claim_lore", return_value=None):
             result = claim_lore(don_result["donation"]["id"], claimer)
         assert result["success"] is False
 

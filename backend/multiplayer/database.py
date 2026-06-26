@@ -229,31 +229,47 @@ def get_available_items() -> list[CrossroadsItem]:
     return result
 
 
-def claim_item(item_id: str, claimer_game_id: str) -> bool:
-    """Mark a crossroads item as claimed by a player.
+def claim_item(item_id: str, claimer_game_id: str) -> Optional[dict]:
+    """Mark a crossroads item as claimed by a player (atomic).
 
-    Only succeeds if the item exists and has not already been claimed.
+    Uses a single atomic UPDATE ... WHERE claimed=0 to eliminate the
+    TOCTOU race condition between checking and claiming the item.
 
     :param item_id: The unique identifier of the item to claim.
     :type item_id: str
     :param claimer_game_id: The game ID of the claiming player.
     :type claimer_game_id: str
-    :returns: ``True`` if the claim was successful, ``False`` otherwise.
-    :rtype: bool
+    :returns: A dictionary of the claimed item data on success,
+        ``None`` if the item does not exist or was already claimed.
+    :rtype: dict or None
     """
     with get_db_ctx() as conn:
-        row = conn.execute(
-            "SELECT id, claimed FROM crossroads_items WHERE id = ?",
-            (item_id,),
-        ).fetchone()
-        if not row or row["claimed"]:
-            return False
-        conn.execute(
-            "UPDATE crossroads_items SET claimed = 1, claimer_game_id = ? WHERE id = ?",
+        cursor = conn.execute(
+            "UPDATE crossroads_items SET claimed = 1, claimer_game_id = ? "
+            "WHERE id = ? AND claimed = 0",
             (claimer_game_id, item_id),
         )
+        if cursor.rowcount == 0:
+            conn.commit()
+            return None
         conn.commit()
-        return True
+        row = conn.execute(
+            "SELECT * FROM crossroads_items WHERE id = ?",
+            (item_id,),
+        ).fetchone()
+        if not row:
+            return None
+        return {
+            "id": row["id"],
+            "donor_game_id": row["donor_game_id"],
+            "donor_name": row["donor_name"],
+            "item_name": row["item_name"],
+            "quantity": row["quantity"],
+            "message": row["message"],
+            "claimed": bool(row["claimed"]),
+            "claimer_game_id": row["claimer_game_id"],
+            "created_at": row["created_at"],
+        }
 
 
 # ---------------------------------------------------------------------------
@@ -311,32 +327,46 @@ def get_available_lore() -> list[CrossroadsLore]:
     return result
 
 
-def claim_lore(donation_id: str, claimer_game_id: str) -> bool:
-    """Mark a crossroads lore donation as claimed by a player.
+def claim_lore(donation_id: str, claimer_game_id: str) -> Optional[dict]:
+    """Mark a crossroads lore donation as claimed by a player (atomic).
 
-    Only succeeds if the lore donation exists and has not already
-    been claimed.
+    Uses a single atomic UPDATE ... WHERE claimed=0 to eliminate the
+    TOCTOU race condition between checking and claiming the donation.
 
     :param donation_id: The unique identifier of the lore donation.
     :type donation_id: str
     :param claimer_game_id: The game ID of the claiming player.
     :type claimer_game_id: str
-    :returns: ``True`` if the claim was successful, ``False`` otherwise.
-    :rtype: bool
+    :returns: A dictionary of the claimed lore data on success,
+        ``None`` if the donation does not exist or was already claimed.
+    :rtype: dict or None
     """
     with get_db_ctx() as conn:
-        row = conn.execute(
-            "SELECT id, claimed FROM crossroads_lore WHERE id = ?",
-            (donation_id,),
-        ).fetchone()
-        if not row or row["claimed"]:
-            return False
-        conn.execute(
-            "UPDATE crossroads_lore SET claimed = 1, claimer_game_id = ? WHERE id = ?",
+        cursor = conn.execute(
+            "UPDATE crossroads_lore SET claimed = 1, claimer_game_id = ? "
+            "WHERE id = ? AND claimed = 0",
             (claimer_game_id, donation_id),
         )
+        if cursor.rowcount == 0:
+            conn.commit()
+            return None
         conn.commit()
-        return True
+        row = conn.execute(
+            "SELECT * FROM crossroads_lore WHERE id = ?",
+            (donation_id,),
+        ).fetchone()
+        if not row:
+            return None
+        return {
+            "id": row["id"],
+            "donor_game_id": row["donor_game_id"],
+            "donor_name": row["donor_name"],
+            "fragment_id": row["fragment_id"],
+            "message": row["message"],
+            "claimed": bool(row["claimed"]),
+            "claimer_game_id": row["claimer_game_id"],
+            "created_at": row["created_at"],
+        }
 
 
 # ---------------------------------------------------------------------------
