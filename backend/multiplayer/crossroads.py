@@ -222,7 +222,7 @@ def get_available_lore_list() -> list[dict]:
     :rtype: list[dict]
     """
     items = get_available_lore()
-    return [l.to_dict() for l in items]
+    return [item.to_dict() for item in items]
 
 
 def post_message(game_state: GameState, text: str) -> dict:

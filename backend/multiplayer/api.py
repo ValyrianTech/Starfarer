@@ -104,7 +104,7 @@ def api_system_ghosts(game_id: str, sys_id: str, page: int = 1, per_page: int = 
     :raises HTTPException: 404 if the game is not found.
     :raises HTTPException: 404 if page exceeds total pages with active ghosts.
     """
-    state = _check_game(game_id)
+    _check_game(game_id)
     result = get_system_ghosts(sys_id, page=page, per_page=per_page)
     return result
 

@@ -333,7 +333,7 @@ class TestMultiplayerDatabase:
         )
         save_crossroads_lore(cl)
         lore_list = get_available_lore()
-        found = [l for l in lore_list if l.id == "lore-db-1"]
+        found = [item for item in lore_list if item.id == "lore-db-1"]
         assert len(found) == 1
         assert found[0].fragment_id == "lore_architects_1"
 
@@ -1213,7 +1213,7 @@ class TestMultiplayerCrossroads:
         state.lore_fragments.append(lf)
         donate_lore(state, "lore_list_test")
         lore_list = get_available_lore_list()
-        found = [l for l in lore_list if l["fragment_id"] == "lore_list_test"]
+        found = [item for item in lore_list if item["fragment_id"] == "lore_list_test"]
         assert len(found) >= 1
         GAME_STORE.pop(state.id, None)
 
@@ -1277,7 +1277,7 @@ class TestMultiplayerRipples:
         # Ripples target other systems, not the source
         if result["ripples_created"] > 0:
             # Get the first target system from the created ripple
-            target_sys_id = result["ripples"][0]["target_system_id"]
+            _ = result["ripples"][0]["target_system_id"]
             # Now check that the ripple exists in the DB for that target
             from backend.multiplayer.database import get_pending_ripples as db_get_pending
             db_ripples = db_get_pending(state_a.id)
@@ -1930,7 +1930,7 @@ class TestMultiplayerAPI:
         from backend.multiplayer.api import _get_lock
         import threading
         lock = _get_lock("test-get-lock-1")
-        assert type(lock) == type(threading.Lock())
+        assert isinstance(lock, type(threading.Lock()))
 
     def test_get_lock_same_game_id(self) -> None:
         """Verify that _get_lock returns the same lock for the same game_id."""
