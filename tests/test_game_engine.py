@@ -3354,9 +3354,9 @@ class TestPhenomenonEvents:
     """Tests for phenomenon-specific events (nebula, pulsar, binary star)."""
 
     def test_nebula_events_exist(self) -> None:
-        """Verify 3 nebula events exist in EVENT_TEMPLATES with trigger_conditions {'phenomenon': 'nebula'}."""
+        """Verify 4 nebula events exist in EVENT_TEMPLATES with trigger_conditions {'phenomenon': 'nebula'}."""
         nebula_events = [t for t in EVENT_TEMPLATES if t.get("trigger_conditions", {}).get("phenomenon") == "nebula"]
-        assert len(nebula_events) == 3, f"Expected 3 nebula events, got {len(nebula_events)}"
+        assert len(nebula_events) == 4, f"Expected 4 nebula events, got {len(nebula_events)}"
 
     def test_pulsar_events_exist(self) -> None:
         """Verify 3 pulsar events exist with trigger_conditions {'phenomenon': 'pulsar'}."""
@@ -3394,8 +3394,8 @@ class TestPhenomenonEvents:
         system.phenomenon = "nebula"
         eligible = _get_eligible_templates(state, EVENT_TEMPLATES)
         nebula_eligible = [t for t in eligible if t.get("trigger_conditions", {}).get("phenomenon") == "nebula"]
-        assert len(nebula_eligible) == 3, \
-            f"Expected 3 nebula events eligible in nebula system, got {len(nebula_eligible)}"
+        assert len(nebula_eligible) == 4, \
+            f"Expected 4 nebula events eligible in nebula system, got {len(nebula_eligible)}"
 
         # Test pulsar
         system.phenomenon = "pulsar"
@@ -3541,12 +3541,12 @@ class TestPhenomenonEvents:
         assert actual_types.issubset(valid_types), f"Binary star events have unexpected types: {actual_types - valid_types}"
 
     def test_all_phenomenon_events_count(self) -> None:
-        """Total phenomenon events = 8 (3 nebula + 3 pulsar + 2 binary)."""
+        """Total phenomenon events = 9 (4 nebula + 3 pulsar + 2 binary)."""
         nebula_events = [t for t in EVENT_TEMPLATES if t.get("trigger_conditions", {}).get("phenomenon") == "nebula"]
         pulsar_events = [t for t in EVENT_TEMPLATES if t.get("trigger_conditions", {}).get("phenomenon") == "pulsar"]
         binary_events = [t for t in EVENT_TEMPLATES if t.get("trigger_conditions", {}).get("phenomenon") == "binary_star"]
         total = len(nebula_events) + len(pulsar_events) + len(binary_events)
-        assert total == 8, f"Expected 8 total phenomenon events, got {total} (nebula={len(nebula_events)}, pulsar={len(pulsar_events)}, binary={len(binary_events)})"
+        assert total == 9, f"Expected 9 total phenomenon events, got {total} (nebula={len(nebula_events)}, pulsar={len(pulsar_events)}, binary={len(binary_events)})"
 
 
 class TestEventCooldowns:
