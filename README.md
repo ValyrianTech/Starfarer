@@ -47,7 +47,7 @@ The following multiplayer endpoints are available:
 
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
-| GET | `/api/game/{id}/system/{sys_id}/ghosts` | Get ghost signatures in a system |
+| GET | `/api/game/{id}/system/{sys_id}/ghosts` | Get ghost signatures in a system (paginated, max 50/page) |
 | POST | `/api/game/{id}/leave-ghost` | Leave a ghost signature |
 | GET | `/api/crossroads/items` | List available items |
 | POST | `/api/crossroads/donate-item` | Donate an item |
@@ -55,7 +55,7 @@ The following multiplayer endpoints are available:
 | GET | `/api/crossroads/lore` | List available lore |
 | POST | `/api/crossroads/donate-lore` | Donate a lore fragment |
 | POST | `/api/crossroads/claim-lore/{donation_id}` | Claim a lore fragment |
-| GET | `/api/crossroads/messages` | Get recent messages |
+| GET | `/api/crossroads/messages` | Get recent messages (paginated, max 50/page) |
 | POST | `/api/crossroads/post-message` | Post a message |
 | GET | `/api/game/{id}/ripples` | Get pending ripples |
 | POST | `/api/game/{id}/ripple/{ripple_id}/acknowledge` | Acknowledge a ripple |
