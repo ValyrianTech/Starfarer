@@ -519,7 +519,7 @@ class TestMultiplayerDatabase:
                 expires_at=(datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
             )
             save_crossroads_message(cm)
-        msgs, total = get_recent_messages_paginated(page=1, per_page=5)
+        msgs, total, _, _ = get_recent_messages_paginated(page=1, per_page=5)
         assert len(msgs) == 5
         assert total == 10
 
@@ -535,8 +535,8 @@ class TestMultiplayerDatabase:
                 expires_at=(datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
             )
             save_crossroads_message(cm)
-        page1_msgs, _ = get_recent_messages_paginated(page=1, per_page=5)
-        page2_msgs, _ = get_recent_messages_paginated(page=2, per_page=5)
+        page1_msgs, _, _, _ = get_recent_messages_paginated(page=1, per_page=5)
+        page2_msgs, _, _, _ = get_recent_messages_paginated(page=2, per_page=5)
         page1_ids = {m.id for m in page1_msgs}
         page2_ids = {m.id for m in page2_msgs}
         assert len(page1_msgs) == 5
@@ -555,7 +555,7 @@ class TestMultiplayerDatabase:
                 expires_at=(datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
             )
             save_crossroads_message(cm)
-        msgs, total = get_recent_messages_paginated(page=10, per_page=5)
+        msgs, total, _, _ = get_recent_messages_paginated(page=10, per_page=5)
         assert len(msgs) == 0
         assert total == 3
 
@@ -579,7 +579,7 @@ class TestMultiplayerDatabase:
         )
         save_crossroads_message(active)
         save_crossroads_message(expired)
-        msgs, total = get_recent_messages_paginated(page=1, per_page=10)
+        msgs, total, _, _ = get_recent_messages_paginated(page=1, per_page=10)
         ids = {m.id for m in msgs}
         assert "msg-active" in ids
         assert "msg-dead" not in ids
@@ -598,7 +598,7 @@ class TestMultiplayerDatabase:
                 expires_at=(datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
             )
             save_crossroads_message(cm)
-        _, total = get_recent_messages_paginated(page=1, per_page=3)
+        _, total, _, _ = get_recent_messages_paginated(page=1, per_page=3)
         assert total == 7
 
     def test_get_recent_messages_paginated_per_page_capped(self) -> None:

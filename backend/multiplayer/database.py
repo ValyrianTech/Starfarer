@@ -172,12 +172,12 @@ def get_ghost_signatures(system_id: str) -> list[GhostSignature]:
     return result
 
 
-def get_ghost_signatures_paginated(system_id: str, page: int = 1, per_page: int = 10) -> tuple[list[GhostSignature], int]:
+def get_ghost_signatures_paginated(system_id: str, page: int = 1, per_page: int = 10) -> tuple[list[GhostSignature], int, int, int]:
     """Retrieve paginated ghost signatures for a given star system.
 
-    Returns a tuple of (paginated ghosts list, total count). Results
-    are ordered by timestamp descending (most recent first), using
-    SQL LIMIT/OFFSET for pagination.
+    Returns a tuple of (paginated ghosts list, total count, clamped page,
+    clamped per_page). Results are ordered by timestamp descending (most
+    recent first), using SQL LIMIT/OFFSET for pagination.
 
     :param system_id: The unique identifier of the star system.
     :type system_id: str
@@ -185,9 +185,11 @@ def get_ghost_signatures_paginated(system_id: str, page: int = 1, per_page: int 
     :type page: int
     :param per_page: Number of ghosts per page (max 50, default 10).
     :type per_page: int
-    :returns: A tuple of (paginated ghosts, total_count).
-    :rtype: tuple[list[GhostSignature], int]
+    :returns: A tuple of (paginated ghosts, total_count, clamped_page, clamped_per_page).
+    :rtype: tuple[list[GhostSignature], int, int, int]
     """
+    per_page = min(max(1, per_page), 50)
+    page = max(1, page)
     offset = (page - 1) * per_page
     with get_db_ctx() as conn:
         total = conn.execute(
@@ -210,7 +212,7 @@ def get_ghost_signatures_paginated(system_id: str, page: int = 1, per_page: int 
             message=row["message"],
             body_visits=_load_json_column(row["body_visits"]),
         ))
-    return result, total
+    return result, total, page, per_page
 
 
 # ---------------------------------------------------------------------------
@@ -467,20 +469,22 @@ def get_recent_messages(limit: int = 50) -> list[CrossroadsMessage]:
     return result
 
 
-def get_recent_messages_paginated(page: int = 1, per_page: int = 10) -> tuple[list[CrossroadsMessage], int]:
+def get_recent_messages_paginated(page: int = 1, per_page: int = 10) -> tuple[list[CrossroadsMessage], int, int, int]:
     """Retrieve paginated recent crossroads messages, excluding expired ones.
 
-    Returns a tuple of (paginated messages list, total count). Results
-    are ordered by creation time descending (most recent first), using
-    SQL LIMIT/OFFSET for pagination.
+    Returns a tuple of (paginated messages list, total count, clamped page,
+    clamped per_page). Results are ordered by creation time descending
+    (most recent first), using SQL LIMIT/OFFSET for pagination.
 
     :param page: The page number to retrieve (1-indexed, default 1).
     :type page: int
     :param per_page: Number of messages per page (max 50, default 10).
     :type per_page: int
-    :returns: A tuple of (paginated messages, total_count).
-    :rtype: tuple[list[CrossroadsMessage], int]
+    :returns: A tuple of (paginated messages, total_count, clamped_page, clamped_per_page).
+    :rtype: tuple[list[CrossroadsMessage], int, int, int]
     """
+    per_page = min(max(1, per_page), 50)
+    page = max(1, page)
     offset = (page - 1) * per_page
     now = datetime.now(timezone.utc).isoformat()
     with get_db_ctx() as conn:
@@ -502,7 +506,7 @@ def get_recent_messages_paginated(page: int = 1, per_page: int = 10) -> tuple[li
             created_at=row["created_at"],
             expires_at=row["expires_at"],
         ))
-    return result, total
+    return result, total, page, per_page
 
 
 def cleanup_expired_messages() -> int:
