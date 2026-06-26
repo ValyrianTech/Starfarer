@@ -7,6 +7,10 @@ function renderShipStatus(ship) {
   const moralePct = ship.morale;
   const cargoPct = (ship.cargo / ship.max_cargo) * 100;
 
+  const crossroadsBtn = window._sharedUniverse
+    ? '<button data-action="show-crossroads" class="ui-button" style="font-size:0.7rem;padding:0.3rem 0.5rem;">Crossroads</button>'
+    : '';
+
   panel.innerHTML = `
     <div class="ui-panel" style="position:fixed;bottom:1rem;left:1rem;z-index:20;min-width:280px;" id="ship-status-panel">
       <div class="ui-panel-title">${escapeHtml(ship.name)} — Ship Status</div>
@@ -40,6 +44,7 @@ function renderShipStatus(ship) {
         <button data-action="show-log" class="ui-button" style="font-size:0.7rem;padding:0.3rem 0.5rem;">Log</button>
         <button data-action="show-lore" data-lore-nav="true" class="ui-button" style="font-size:0.7rem;padding:0.3rem 0.5rem;">Lore</button>
         <button data-action="show-codex" class="ui-button" style="font-size:0.7rem;padding:0.3rem 0.5rem;">Codex</button>
+        ${crossroadsBtn}
         <button data-action="save-game" class="ui-button" style="font-size:0.7rem;padding:0.3rem 0.5rem;">Save</button>
       </div>
     </div>

@@ -21,6 +21,8 @@ from backend.models.discovery import Discovery
 from backend.utils import deterministic_hash, seeded_random
 from backend.generation.universe import distance_between
 from backend.generation.lore import get_fragment_for_body
+from backend.multiplayer.ghosts import record_ghost
+from backend.multiplayer.ripples import create_ripple
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +97,9 @@ def perform_jump(state: GameState, target_system: StarSystem, fuel_cost: int) ->
 
     state.update_stranded_state()
 
+    if state.shared_universe:
+        record_ghost(state, state.ship.current_system_id)
+
     state.jumps_since_rep_decay += 1
     if state.jumps_since_rep_decay >= 10:
         state.jumps_since_rep_decay = 0
@@ -130,6 +135,10 @@ def perform_scan(state: GameState) -> str:
     ship.fuel -= SCAN_FUEL_COST
     system.scanned = True
     state.add_log("exploration", f"Scanned {system.name}. {len(system.bodies)} orbital bodies detected.", category="scan", title="System Scan", system=system.name, fuel_change=-SCAN_FUEL_COST)
+
+    if state.shared_universe:
+        record_ghost(state, state.ship.current_system_id)
+
     return f"Scan complete. {len(system.bodies)} bodies found."
 
 
@@ -254,14 +263,15 @@ def explore_surface(state: GameState) -> list[Discovery]:
             disc = _generate_discovery(item_rng, cat, body, system)
 
             if lore_frag and not lore_frag.discovered and not lore_linked:
-                # First discovery of this lore fragment — link it to this discovery
                 disc.lore_fragment_id = lore_frag.id
                 lore_frag.discovered = True
                 lore_frag.discovery_timestamp = datetime.now(timezone.utc).isoformat()
                 lore_linked = True
                 state.add_log("lore", f"Discovered lore fragment: {lore_frag.title} ({lore_frag.id}).", category="discovery", title="Lore Fragment Discovered", system=system.name, body=body.name)
+
+                if state.shared_universe:
+                    create_ripple(state, disc)
             elif lore_frag and lore_frag.discovered and not lore_linked:
-                # Lore fragment already discovered in a previous explore action — expected behavior
                 logger.debug(f"Lore fragment {lore_frag.id} ({lore_frag.title}) already discovered but found on body {body.id}.")
                 lore_linked = True
 
@@ -274,6 +284,10 @@ def explore_surface(state: GameState) -> list[Discovery]:
     body.poi_count = max(0, body.poi_count - num_finds)
     if body.biome:
         state.record_biome_visit(body.biome)
+
+    if state.shared_universe:
+        record_ghost(state, state.ship.current_system_id)
+
     return discoveries
 
 

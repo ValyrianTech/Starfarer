@@ -106,7 +106,8 @@ def api_new_game(req: NewGameRequest) -> dict:
     :returns: A dictionary with ``game_id`` and a ``state`` summary.
     :rtype: dict
     """
-    state = new_game(seed=req.seed, ship_name=req.ship_name)
+    shared_universe = req.shared_universe if req.shared_universe is not None else False
+    state = new_game(seed=req.seed, ship_name=req.ship_name, shared_universe=shared_universe)
     if req.game_id:
         state.id = req.game_id
     GAME_STORE[state.id] = state
@@ -1381,4 +1382,5 @@ def _full_state_response(state: GameState, sort: str | None = None, order: str |
         "hints": hints,
         "biomes_visited": list(state.biomes_visited),
         "biomes_visited_count": len(state.biomes_visited),
+        "shared_universe": state.shared_universe,
     }
