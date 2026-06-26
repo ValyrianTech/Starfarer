@@ -154,11 +154,11 @@ function showSystemInfo(sys) {
   const panel = $('#galaxy-system-info');
   if (!panel) return;
   panel.innerHTML = `
-    <div class="name" style="color:${starColor(sys.star_type)}">${sys.name}</div>
+    <div class="name" style="color:${starColor(sys.star_type)}">${escapeHtml(sys.name)}</div>
     <div>Type: ${sys.star_type} | ${sys.phenomenon !== 'none' ? sys.phenomenon : 'Standard'}</div>
     <div>Bodies: ${sys.body_count} | Visited: ${sys.visited ? 'Yes' : 'No'}</div>
     <div style="margin-top:0.5rem;">
-      ${sys.id !== window._currentSystemId ? `<button data-action="jump-to" data-system-id="${sys.id}" class="ui-button" style="font-size:0.8rem;">Jump to ${sys.name}</button>` : '<span style="color:var(--color-star)">Current location</span>'}
+      ${sys.id !== window._currentSystemId ? `<button data-action="jump-to" data-system-id="${sys.id}" class="ui-button" style="font-size:0.8rem;">Jump to ${escapeHtml(sys.name)}</button>` : '<span style="color:var(--color-star)">Current location</span>'}
     </div>
   `;
 }

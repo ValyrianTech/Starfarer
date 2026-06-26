@@ -228,6 +228,12 @@ async function handleAction(action, target) {
         break;
       }
 
+      case 'show-codex': {
+        await loadCodex(GAME_ID);
+        showScreen('codex');
+        break;
+      }
+
       case 'save-game': {
         await API.save(GAME_ID);
         break;
@@ -257,5 +263,80 @@ document.addEventListener('keydown', (e) => {
     closeEventModal();
   }
 });
+
+async function loadCodex(gameId) {
+  try {
+    const data = await API.codex(gameId);
+    renderCodex(data.codex);
+  } catch (e) {
+    console.error('Load codex error:', e);
+  }
+}
+
+function renderCodex(codexEntries) {
+  const container = $('#codex-content');
+  if (!container) return;
+
+  container.innerHTML = '';
+
+  const header = document.createElement('div');
+  header.className = 'codex-header fade-in';
+  const h2 = document.createElement('h2');
+  h2.textContent = 'Biome Discovery Codex';
+  const hp = document.createElement('p');
+  hp.textContent = 'Progressive knowledge of planetary biomes.';
+  header.appendChild(h2);
+  header.appendChild(hp);
+  container.appendChild(header);
+
+  for (const entry of codexEntries) {
+    const entryDiv = document.createElement('div');
+    entryDiv.classList.add('codex-entry', 'fade-in', entry.unlocked ? 'unlocked' : 'locked');
+
+    const entryHeader = document.createElement('div');
+    entryHeader.className = 'codex-entry-header';
+
+    const biomeName = document.createElement('span');
+    biomeName.className = 'codex-biome-name';
+    biomeName.textContent = entry.name;
+    entryHeader.appendChild(biomeName);
+
+    const starsSpan = document.createElement('span');
+    starsSpan.className = 'codex-stars';
+    if (entry.value_rating !== null) {
+      starsSpan.textContent = '\u2605'.repeat(entry.value_rating) + '\u2606'.repeat(5 - entry.value_rating);
+    } else {
+      starsSpan.textContent = 'Upgrade scanner for ratings';
+    }
+    entryHeader.appendChild(starsSpan);
+    entryDiv.appendChild(entryHeader);
+
+    const descDiv = document.createElement('div');
+    descDiv.className = 'codex-entry-desc';
+    descDiv.textContent = entry.description;
+    entryDiv.appendChild(descDiv);
+
+    if (entry.hint) {
+      const hintDiv = document.createElement('div');
+      hintDiv.className = 'codex-entry-hint';
+      hintDiv.textContent = entry.hint;
+      entryDiv.appendChild(hintDiv);
+    }
+
+    if (entry.common_discoveries && entry.common_discoveries.length > 0) {
+      const discList = document.createElement('div');
+      discList.className = 'codex-disc-list';
+      for (const d of entry.common_discoveries) {
+        const discTag = document.createElement('span');
+        discTag.className = 'codex-disc-tag';
+        discTag.textContent = d;
+        discList.appendChild(discTag);
+      }
+      entryDiv.appendChild(discList);
+    }
+
+    container.appendChild(entryDiv);
+  }
+}
 
 initApp();

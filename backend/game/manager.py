@@ -239,6 +239,7 @@ def _state_to_dict(state: GameState) -> dict:
         "accepted_missions": dict(state.accepted_missions),
         "dismissed_hints": list(state.dismissed_hints),
         "hazard_event_counts": state.hazard_event_counts,
+        "biomes_visited": list(state.biomes_visited),
         "_next_log_id": state._next_log_id,
     }
 
@@ -344,6 +345,7 @@ def _state_from_dict(d: dict) -> GameState:
         accepted_missions=accepted_missions,
         dismissed_hints=set(d.get("dismissed_hints", [])),
         hazard_event_counts=d.get("hazard_event_counts", {}),
+        biomes_visited=set(d.get("biomes_visited", [])),
         _next_log_id=_next_log_id,
     )
 

@@ -487,7 +487,7 @@ Everything you've found, organized by category with credit values.
 GET /api/game/{game_id}?sort=value&order=desc
 ```
 
-Complete state dump: ship, current system, pending events, discoveries, log entries, fuel status, active contextual hints, and reputation summary. Accepts optional `sort` (`"value"` or `"name"`) and `order` (`"asc"` or `"desc"`) query parameters for sorting cargo items in the response. The response includes `total_value` (sum of all cargo credit values), `top3_ids` (the 3 most valuable cargo item IDs), and `hints` (active contextual hint objects with `id`, `severity`, `message`, and optional `command`) fields.
+Complete state dump: ship, current system, pending events, discoveries, log entries, fuel status, active contextual hints, reputation summary, biomes visited, and cargo details. Accepts optional `sort` (`"value"` or `"name"`) and `order` (`"asc"` or `"desc"`) query parameters for sorting cargo items in the response. The response includes `total_value` (sum of all cargo credit values), `top3_ids` (the 3 most valuable cargo item IDs), `hints` (active contextual hint objects with `id`, `severity`, `message`, and optional `command`), `biomes_visited` (list of biome type strings the player has visited), and `biomes_visited_count` (count of unique biomes visited) fields.
 
 ### Cargo Hold
 
@@ -525,6 +525,31 @@ Returns all lore fragments organized by story arc. Each arc shows:
 Discovered fragments include `discovery_location` (system - body), `discovery_date`, and `discovery_timestamp`. The overall `progress` field tracks your collection completion.
 
 Lore fragments are found during exploration when you land on the right body. Hints from the lore viewer guide you toward their locations.
+
+### Biome Discovery Codex
+
+```http
+GET /api/game/{game_id}/codex
+```
+
+Returns a codex of planetary biome knowledge that grows as you explore the galaxy. The codex covers 8 biome types: ocean, jungle, crystal, volcanic, desert, tundra, barren, and gas_giant. Knowledge is revealed progressively in 3 tiers based on your ship's scanner level:
+
+| Scanner Level | Knowledge Unlocked |
+|---------------|-------------------|
+| 0+ (Tier 1) | Biome name, description (if visited, otherwise "???"), and a general hint about what to expect |
+| 1+ (Tier 2) | Value rating (1–5 stars) indicating how valuable discoveries in that biome tend to be |
+| 2+ (Tier 3) | Specific discovery types commonly found in that biome (only shown for biomes you've visited) |
+
+**Biomes visited tracking:** Biomes are recorded automatically when you land on a body or explore its surface. The `biomes_visited` set on the game state tracks which biomes you've encountered. A biome's entry in the codex is marked as `"unlocked"` if you've visited it, and `"locked"` otherwise. Locked biomes show limited information but their hints are always visible so you know what to look for.
+
+Each codex entry includes:
+- `biome_id` — internal biome type string
+- `name` — display name (e.g., "Jungle", "Crystal")
+- `description` — biome description (or "???" if not yet visited)
+- `value_rating` — star rating 1–5 (or `null` if scanner below level 1)
+- `hint` — general tip about the biome's discovery potential
+- `common_discoveries` — list of discovery type names commonly found (or empty list if not unlocked or scanner below level 2)
+- `unlocked` — boolean indicating whether you've visited this biome
 
 ### Faction Relations
 
@@ -680,6 +705,7 @@ The game persists all state to SQLite. Save frequently — especially before ris
 | GET | `/api/game/{id}/discoveries` | Discovery list |
 | GET | `/api/game/{id}/cargo?sort={value\|name}&order={asc\|desc}` | Cargo hold details (sortable, includes total_value) |
 | GET | `/api/game/{id}/lore` | Lore fragment collection |
+| GET | `/api/game/{id}/codex` | Biome discovery codex |
 | POST | `/api/game/{id}/trade` | Buy/sell at station |
 | POST | `/api/game/{id}/trade/bulk-sell` | Sell multiple discoveries |
 | GET | `/api/game/{id}/upgrades` | Upgrade options |
@@ -731,7 +757,7 @@ For AI agents using browser tools:
 2. **Find actions:** `document.querySelectorAll('[data-action]')` — all interactive elements
 3. **Click actions:** Elements have `data-action` values like `"jump-to"`, `"scan"`, `"land"`, `"explore"`, `"resolve-event"`
 4. **Click with params:** Some elements carry extra data like `data-system-id`, `data-body-id`, `data-event-id`, `data-choice-idx`
-5. **Screen navigation:** Click `data-action="show-galaxy"` for map, `data-action="show-log"` for log
+5. **Screen navigation:** Click `data-action="show-galaxy"` for map, `data-action="show-log"` for log, `data-action="show-codex"` for the biome discovery codex
 6. **Canvas interaction:** The galaxy map is a Canvas element. Click on stars to select them, then use the "Jump" button. Pan by dragging, zoom with scroll wheel.
 
 ---

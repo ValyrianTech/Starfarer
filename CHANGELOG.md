@@ -3,6 +3,11 @@
 ## [Unreleased]
 
 ### Added
+- Biome Codex system (`backend/codex.py`) providing progressive biome knowledge across 3 scanner tiers: Tier 1 (biome names, descriptions, general hints), Tier 2 (value ratings), Tier 3 (specific discovery types per biome). Knowledge is gated by biome visit status (tracked via `biomes_visited`) and scanner level.
+- `GET /api/game/{id}/codex` endpoint returning the player's codex — a list of 8 biome entries (ocean, jungle, crystal, volcanic, desert, tundra, barren, gas_giant) with progressive knowledge fields
+- Frontend codex screen with HTML container, CSS styling (`.codex-entry`, `.codex-entry-header`, `.codex-biome-name`, `.codex-stars`, `.codex-disc-tag`, `.codex-entry.locked`/`.unlocked` states), and JS rendering via `renderCodex()` in `main.js`
+- `biomes_visited: set[str]` field on `GameState` and `record_biome_visit(biome)` method — records biomes when landing on a body and when exploring the surface
+- `biomes_visited` (list) and `biomes_visited_count` (int) fields in full game state response (`_full_state_response`) and state summary (`state_summary`)
 - 'Micrometeorite Storm' common hazard event with point defense, hull plating, and evasive maneuver choices
 - 'Quantum Fluctuation' rare hazard event with anomaly recording, stabilization, and fluctuation-following choices
 - Hazard event cooldown scaling: hazard events now scale their cooldown based on how many times they've been triggered (capped at 3x multiplier), making repeat hazard events less frequent
@@ -28,6 +33,7 @@
 - Lore discovery notification toast: In-app notification when a lore fragment is discovered
 - Lore button pulse animation: Lore button glows when new fragments are unread
 - Safe fallback for unknown systems in lore discovery location (when system not found in state)
+- `escapeHtml()` utility function in `frontend/js/utils.js` for safe rendering of user-facing text content
 - Event cooldown system: per-event cooldowns prevent event repetition within a session
 - `EVENT_COOLDOWNS` dictionary with configurable cooldown values per event title (3, 5, 6, 8, or 10 turns)
 - `apply_cooldown()` and `decrement_cooldowns()` functions for cooldown lifecycle management
@@ -58,6 +64,7 @@
 - Cooldown entries for 'Event Horizon Approach' (8), 'Hawking Radiation Harvest (Deep Scan)' (8), and 'Time Dilation Echo' (10)
 
 ### Changed
+- `Body.biome` field type changed from `str` to `Optional[str]` (defaults to `None`); `Body.from_dict` now uses `d.get("biome")` instead of `d["biome"]` for safe deserialization of None biomes
 - Solar Flare event: updated flavor text and rebalanced choices (now offers planetary cover, radiation shielding, or riding it out with crew/morale consequences)
 - Ion Storm event: updated flavor text and rebalanced choices (now offers system power-down, emergency power push, or waiting it out)
 - `EVENT_COOLDOWNS` dictionary: reorganized alphabetically and expanded with explicit cooldown entries for all event templates (including Abandoned Outpost, Ancient Signal, Black Market Access, Crew Dispute, Crew Illness, Crew Recruitment Offer, Derelict Signal, Elite Crew Available, Engine Fire, Food Contamination, Fuel Cache Locations, Gravity Anomaly, Hull Breach, Micrometeorite Storm, Nebula Storm, Quantum Fluctuation, Radiation Leak, Restricted Coordinates, Trade Route Opportunity, Uncharted Ruins, Wormhole Anomaly)
@@ -79,6 +86,11 @@
 - Hawking Radiation Harvest cooldown changed from 6 to 8 (to disambiguate from the new 'Hawking Radiation Harvest (Deep Scan)' event)
 
 ### Fixed
+- `BIOME_WEIGHTS` in `backend/generation/lore.py` now includes `None: 1` entry so lore fragments can be distributed to bodies without a biome
+- `renderCodex()` now uses `textContent` instead of `innerHTML` for all user-facing data fields (biome names, descriptions, hints, star ratings, discovery tags), preventing potential XSS injection
+- Codex hint field now correctly shown for all biomes regardless of unlock status — hints use `tier1_hint` from `BIOME_CODEX_DATA` and are displayed whenever `scanner_level >= 0`
+- `.unlocked` CSS class now has corresponding styles in `ui.css` (cyan border, full opacity), fixing the visual distinction between unlocked and locked codex entries
+- Event modals (`events.js`), galaxy info panel (`galaxy.js`), ship status (`ship.js`), and system view (`system.js`) now use `escapeHtml()` for all user-facing data, preventing XSS injection
 - `test_new_events_correct_cooldown_values` now asserts the correct cooldown for 'Hawking Radiation Harvest (Deep Scan)' instead of the old 'Hawking Radiation Harvest' event (was checking the wrong event's cooldown)
 - `NEW_BH_TITLES` test set now includes 'Hawking Radiation Harvest (Deep Scan)' instead of the old 'Hawking Radiation Harvest' title, ensuring the new event is properly tested
 - `test_new_events_can_be_triggered_in_black_hole` now verifies that the triggered event is actually one of the 3 new black hole events (was only checking that *any* event triggered, not that it was a new event)
@@ -152,6 +164,7 @@
 - `round()` in `perform_trade` now uses round-half-up (`int(x + 0.5)`) instead of banker's rounding to prevent unexpected results from fractional credit truncation
 
 ### Removed
+- Unused `Optional` import from `backend/codex.py`
 - Unused `Optional` import from `backend/hints.py`
 - Unused imports (`INITIAL_FUEL`, `INITIAL_HULL`, `INITIAL_CARGO`, `INITIAL_CREW`, `INITIAL_MORALE`) from `tests/test_hints.py`
 - Dead code `get_available_events` (defined but never used in production)

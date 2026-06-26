@@ -74,6 +74,7 @@ class GameState:
     accepted_missions: dict[str, dict] = field(default_factory=dict)
     dismissed_hints: set[str] = field(default_factory=set)
     hazard_event_counts: dict[str, int] = field(default_factory=dict)
+    biomes_visited: set[str] = field(default_factory=set)
     _next_log_id: int = 1
 
     def __post_init__(self) -> None:
@@ -226,6 +227,8 @@ class GameState:
             "lore_fragments_total": len(self.lore_fragments),
             "faction_relations": self.get_known_factions(),
             "reputation_summary": self.build_reputation_summary(),
+            "biomes_visited_count": len(self.biomes_visited),
+            "biomes_visited": list(self.biomes_visited),
         }
 
     def get_faction_reputation(self, faction_id: str) -> int:
@@ -312,3 +315,11 @@ class GameState:
         :type system_id: str
         """
         self.station_visits[system_id] = self.station_visits.get(system_id, 0) + 1
+
+    def record_biome_visit(self, biome: str) -> None:
+        """Record that the player has visited a biome.
+
+        :param biome: The biome type string (e.g. "jungle", "desert").
+        :type biome: str
+        """
+        self.biomes_visited.add(biome)

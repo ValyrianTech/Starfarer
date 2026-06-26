@@ -11,10 +11,10 @@ function renderSystemView(systemData, gameId) {
     for (const body of sys.bodies) {
       bodiesHTML += `
         <div class="body-card" data-action="land" data-body-id="${body.id}">
-          <div class="body-name">${body.name}</div>
+          <div class="body-name">${escapeHtml(body.name)}</div>
           <div class="body-meta">${body.body_type} | Size ${body.size}</div>
-          <div class="body-biome ${body.biome}">${body.biome.replace('_', ' ')}</div>
-          <div class="body-desc">${body.description}</div>
+          <div class="body-biome ${body.biome}">${escapeHtml(body.biome).replace('_', ' ')}</div>
+          <div class="body-desc">${escapeHtml(body.description)}</div>
         </div>`;
     }
     bodiesHTML += '</div>';
@@ -26,7 +26,7 @@ function renderSystemView(systemData, gameId) {
     for (const n of nearby) {
       const reachable = n.reachable ? '' : 'style="opacity:0.4"';
       nearbyHTML += `<div class="nearby-item" data-action="jump-to" data-system-id="${n.id}" ${reachable}>
-        ${n.name} <span class="dist">${n.distance_ly} LY</span>
+        ${escapeHtml(n.name)} <span class="dist">${n.distance_ly} LY</span>
       </div>`;
     }
     nearbyHTML += '</div></div>';
@@ -34,7 +34,7 @@ function renderSystemView(systemData, gameId) {
 
   container.innerHTML = `
     <div class="system-header fade-in">
-      <div class="name">${sys.name}</div>
+      <div class="name">${escapeHtml(sys.name)}</div>
       <div class="type">${sys.star_type}-type Star | ${sys.bodies.length} orbital bodies</div>
     </div>
     ${sys.phenomenon !== 'none' ? `<div class="system-phenomenon">${sys.phenomenon_desc || sys.phenomenon}</div>` : ''}
@@ -70,8 +70,8 @@ function renderSurfaceView(bodyData, discoveries, gameId) {
   container.innerHTML = `
     <div class="surface-explore fade-in">
       <div class="surface-body-header">
-        <div class="name">Surface: ${bodyData.name || 'Unknown'}</div>
-        <div>Biome: ${(bodyData.biome || '').replace('_', ' ')}</div>
+        <div class="name">Surface: ${escapeHtml(bodyData.name || 'Unknown')}</div>
+        <div>Biome: ${escapeHtml(bodyData.biome || '').replace('_', ' ')}</div>
       </div>
       <div style="text-align:center;margin-bottom:1rem;">
         <button data-action="explore" class="ui-button">Explore Surface</button>

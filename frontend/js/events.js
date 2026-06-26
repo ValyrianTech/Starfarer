@@ -12,8 +12,8 @@ function showEventModal(eventData, gameId) {
 
   overlay.innerHTML = `
     <div class="modal">
-      <div class="modal-title">${eventData.title}</div>
-      <div class="modal-body">${eventData.flavor}</div>
+      <div class="modal-title">${escapeHtml(eventData.title)}</div>
+      <div class="modal-body">${escapeHtml(eventData.flavor)}</div>
       ${choicesHTML}
     </div>
   `;

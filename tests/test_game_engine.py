@@ -3494,7 +3494,6 @@ class TestNewBlackHoleEvents:
 
         # Put all non-new-BH events on cooldown so only the 3 new BH events are eligible
         from backend.generation.events import EVENT_TEMPLATES
-        old_bh_titles = {"Time Dilation Anomaly", "Hawking Radiation Harvest", "Spaghettification Near-Miss", "Accretion Disk Prospecting", "Gravitational Lens Observation"}
         for template in EVENT_TEMPLATES:
             if template.get("trigger_conditions", {}).get("phenomenon") != "black_hole" or template["title"] not in self.NEW_BH_TITLES:
                 state.event_cooldowns[template["title"]] = 999

@@ -1096,6 +1096,29 @@ class TestLoreDistribution:
                 body_id = frag.discovery_id.split("::")[1]
                 assert body_id == "b2", f"Fragment should be on body2, not {body_id}"
 
+    def test_lore_placed_on_body_with_none_biome(self) -> None:
+        """Lore fragments should be placed on bodies with biome=None (weight 1)."""
+        from backend.generation.lore import distribute_lore_fragments
+
+        body = Body(
+            id="b1", name="Body1", body_type="planet", biome=None,
+            size=3, distance_from_star=0.5, poi_count=1
+        )
+        system = StarSystem(
+            id="s1", name="TestSys", x=0.0, y=0.0,
+            star_type="G", star_color="#fff",
+            phenomenon="none", phenomenon_desc="",
+            bodies=[body],
+        )
+        systems = {"s1": system}
+
+        placement = distribute_lore_fragments(42, systems)
+        assert len(placement) > 0
+        for sys_id, frags in placement.items():
+            for frag in frags:
+                body_id = frag.discovery_id.split("::")[1]
+                assert body_id == "b1", f"Fragment should be on body b1, not {body_id}"
+
     def test_all_discovery_ids_are_unique(self) -> None:
         """All placed fragments must have unique discovery_ids (no body hosts two fragments)."""
         from backend.generation.lore import distribute_lore_fragments
