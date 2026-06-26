@@ -1,7 +1,6 @@
 """Biome Discovery Codex — in-game knowledge about biomes and their discoveries."""
 
 from __future__ import annotations
-from typing import Optional
 from backend.models.game_state import GameState
 
 BIOME_CODEX_DATA = [
