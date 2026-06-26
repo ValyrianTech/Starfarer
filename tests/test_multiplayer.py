@@ -901,6 +901,24 @@ class TestMultiplayerCrossroads:
         GAME_STORE.pop(donor.id, None)
         GAME_STORE.pop(claimer.id, None)
 
+    def test_claim_item_no_current_system(self) -> None:
+        """claim_item should fail gracefully when ship has no current system."""
+        donor = new_game(42, "DonorShip", shared_universe=True)
+        GAME_STORE[donor.id] = donor
+        disc = _make_discovery(name="NoSys Item")
+        donor.discoveries.append(disc)
+        don_result = donate_item(donor, "NoSys Item", 1)
+
+        claimer = new_game(43, "ClaimerShip", shared_universe=True)
+        GAME_STORE[claimer.id] = claimer
+        claimer.ship.current_system_id = ""  # Simulate save corruption
+        result = claim_item(don_result["donation"]["id"], claimer)
+        assert result["success"] is False
+        assert "no current system" in result["detail"].lower()
+
+        GAME_STORE.pop(donor.id, None)
+        GAME_STORE.pop(claimer.id, None)
+
     def test_claim_lore_not_found(self) -> None:
         state = new_game(42, "Claimer", shared_universe=True)
         GAME_STORE[state.id] = state
