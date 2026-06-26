@@ -6,6 +6,7 @@ and messages, and discovery ripple events. All endpoints are mounted
 under ``/api``.
 """
 
+import itertools
 from threading import Lock
 
 from fastapi import APIRouter, HTTPException
@@ -32,15 +33,14 @@ router = APIRouter(prefix="/api")
 
 _game_locks: dict[str, Lock] = {}
 _lock_for_locks: Lock = Lock()
-_lock_access_count: int = 0
+_lock_access_count = itertools.count(1)
 
 
 def _get_lock(game_id: str) -> Lock:
-    global _lock_access_count
-    _lock_access_count += 1
+    count = next(_lock_access_count)
     # Periodic cleanup of stale locks every 100 accesses
     # (cleanup acquires _lock_for_locks internally, so we call it outside the lock)
-    if _lock_access_count % 100 == 0:
+    if count % 100 == 0:
         _cleanup_stale_locks()
     with _lock_for_locks:
         if game_id not in _game_locks:
