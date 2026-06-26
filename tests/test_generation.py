@@ -1938,3 +1938,537 @@ class TestAncientGateSystemType:
                 break
         assert found_pulsar, "Could not find a seed that produces pulsar phenomenon in range 0-999"
         assert found_black_hole, "Could not find a seed that produces black_hole phenomenon in range 0-999"
+
+
+class TestNewHazardEvents:
+    """Tests for the new and updated hazard events."""
+
+    def test_new_events_exist_in_templates(self) -> None:
+        """Micrometeorite Storm and Quantum Fluctuation should be in EVENT_TEMPLATES."""
+        from backend.generation.events import EVENT_TEMPLATES
+        titles = {t["title"] for t in EVENT_TEMPLATES}
+        assert "Micrometeorite Storm" in titles
+        assert "Quantum Fluctuation" in titles
+
+    def test_micrometeorite_storm_structure(self) -> None:
+        """Micrometeorite Storm should have correct type, rarity, title, flavor, and choices."""
+        from backend.generation.events import EVENT_TEMPLATES
+        template = next(t for t in EVENT_TEMPLATES if t["title"] == "Micrometeorite Storm")
+        assert template["type"] == "hazard"
+        assert template["rarity"] == "common"
+        assert len(template["flavor"]) > 0
+        assert len(template["choices"]) == 3
+        for choice in template["choices"]:
+            assert "text" in choice
+            assert "outcome" in choice
+            assert len(choice["text"]) > 0
+            assert len(choice["outcome"]) > 0
+
+    def test_quantum_fluctuation_structure(self) -> None:
+        """Quantum Fluctuation should have correct type, rarity, title, flavor, and choices."""
+        from backend.generation.events import EVENT_TEMPLATES
+        template = next(t for t in EVENT_TEMPLATES if t["title"] == "Quantum Fluctuation")
+        assert template["type"] == "hazard"
+        assert template["rarity"] == "rare"
+        assert len(template["flavor"]) > 0
+        assert len(template["choices"]) == 3
+        for choice in template["choices"]:
+            assert "text" in choice
+            assert "outcome" in choice
+            assert len(choice["text"]) > 0
+            assert len(choice["outcome"]) > 0
+
+    def test_updated_solar_flare_structure(self) -> None:
+        """Updated Solar Flare should have the new flavor and choices."""
+        from backend.generation.events import EVENT_TEMPLATES
+        template = next(t for t in EVENT_TEMPLATES if t["title"] == "Solar Flare")
+        assert template["type"] == "hazard"
+        assert template["rarity"] == "common"
+        assert "massive solar flare erupts from the star" in template["flavor"]
+        choices_text = {c["text"] for c in template["choices"]}
+        assert "Take cover behind the nearest planet" in choices_text
+        assert "Deploy radiation shielding" in choices_text
+        assert "Ride it out" in choices_text
+
+    def test_updated_ion_storm_structure(self) -> None:
+        """Updated Ion Storm should have the new flavor and choices."""
+        from backend.generation.events import EVENT_TEMPLATES
+        template = next(t for t in EVENT_TEMPLATES if t["title"] == "Ion Storm")
+        assert template["type"] == "hazard"
+        assert template["rarity"] == "uncommon"
+        assert "Electromagnetic interference" in template["flavor"]
+        choices_text = {c["text"] for c in template["choices"]}
+        assert "Power down non-essential systems" in choices_text
+        assert "Push through with emergency power" in choices_text
+        assert "Wait it out" in choices_text
+
+    def test_new_events_have_cooldowns(self) -> None:
+        """Micrometeorite Storm and Quantum Fluctuation should have cooldowns."""
+        from backend.generation.events import EVENT_COOLDOWNS
+        assert "Micrometeorite Storm" in EVENT_COOLDOWNS
+        assert "Quantum Fluctuation" in EVENT_COOLDOWNS
+        assert EVENT_COOLDOWNS["Micrometeorite Storm"] == 3
+        assert EVENT_COOLDOWNS["Quantum Fluctuation"] == 8
+
+    def test_hazard_event_cooldown_scales_with_repeat_triggers(self) -> None:
+        """Hazard event cooldown should increase when the same event is triggered repeatedly, but cap at 3x."""
+        from backend.generation.events import apply_cooldown, EVENT_COOLDOWNS
+        from backend.models.ship import Ship
+
+        ship = Ship()
+        state = GameState(id="test-hazard-scale", seed=42, ship=ship)
+
+        title = "Micrometeorite Storm"
+        base = EVENT_COOLDOWNS[title]
+
+        # First trigger: multiplier = min(1, 3) = 1
+        apply_cooldown(state, title, "hazard")
+        assert state.event_cooldowns[title] == base * 1
+        assert state.hazard_event_counts[title] == 1
+
+        # Second trigger: multiplier = min(2, 3) = 2
+        apply_cooldown(state, title, "hazard")
+        assert state.event_cooldowns[title] == base * 2
+        assert state.hazard_event_counts[title] == 2
+
+        # Third trigger: multiplier = min(3, 3) = 3
+        apply_cooldown(state, title, "hazard")
+        assert state.event_cooldowns[title] == base * 3
+        assert state.hazard_event_counts[title] == 3
+
+        # Fourth trigger: multiplier = min(4, 3) = 3 (capped!)
+        apply_cooldown(state, title, "hazard")
+        assert state.event_cooldowns[title] == base * 3
+        assert state.hazard_event_counts[title] == 4
+
+        # Fifth trigger: multiplier = min(5, 3) = 3 (still capped)
+        apply_cooldown(state, title, "hazard")
+        assert state.event_cooldowns[title] == base * 3
+        assert state.hazard_event_counts[title] == 5
+
+    def test_phenomenon_gated_hazard_events_do_not_scale_cooldown(self) -> None:
+        """Phenomenon-gated hazard events should NOT scale cooldown when triggered repeatedly."""
+        from backend.generation.events import apply_cooldown, EVENT_COOLDOWNS
+        from backend.models.ship import Ship
+
+        ship = Ship()
+        state = GameState(id="test-gated-scale", seed=42, ship=ship)
+
+        # Ion Storm has trigger_conditions: {phenomenon: nebula}
+        title = "Ion Storm"
+        base = EVENT_COOLDOWNS[title]
+
+        # First trigger: should use base cooldown (no scaling)
+        apply_cooldown(state, title, "hazard")
+        assert state.event_cooldowns[title] == base, f"Expected {base}, got {state.event_cooldowns[title]}"
+        # hazard_event_counts should NOT be incremented for gated events
+        assert title not in state.hazard_event_counts, f"Expected no hazard_event_counts entry for {title}"
+
+        # Second trigger: still base cooldown (no scaling)
+        apply_cooldown(state, title, "hazard")
+        assert state.event_cooldowns[title] == base, f"Expected {base}, got {state.event_cooldowns[title]}"
+        assert title not in state.hazard_event_counts
+
+        # Third trigger: still base cooldown (no scaling)
+        apply_cooldown(state, title, "hazard")
+        assert state.event_cooldowns[title] == base, f"Expected {base}, got {state.event_cooldowns[title]}"
+        assert title not in state.hazard_event_counts
+
+    def test_mixed_hazard_events_scaling_and_non_scaling(self) -> None:
+        """Non-gated hazard events should scale while gated ones don't, even in the same state."""
+        from backend.generation.events import apply_cooldown, EVENT_COOLDOWNS
+        from backend.models.ship import Ship
+
+        ship = Ship()
+        state = GameState(id="test-mixed-scale", seed=42, ship=ship)
+
+        # Solar Flare has NO trigger_conditions - should scale
+        solar_title = "Solar Flare"
+        solar_base = EVENT_COOLDOWNS[solar_title]
+
+        # Ion Storm has trigger_conditions - should NOT scale
+        ion_title = "Ion Storm"
+        ion_base = EVENT_COOLDOWNS[ion_title]
+
+        # First trigger of Solar Flare: multiplier = min(1, 3) = 1
+        apply_cooldown(state, solar_title, "hazard")
+        assert state.event_cooldowns[solar_title] == solar_base * 1
+        assert state.hazard_event_counts[solar_title] == 1
+
+        # First trigger of Ion Storm: base cooldown (no scaling)
+        apply_cooldown(state, ion_title, "hazard")
+        assert state.event_cooldowns[ion_title] == ion_base
+        assert ion_title not in state.hazard_event_counts
+
+        # Second trigger of Solar Flare: multiplier = min(2, 3) = 2
+        apply_cooldown(state, solar_title, "hazard")
+        assert state.event_cooldowns[solar_title] == solar_base * 2
+        assert state.hazard_event_counts[solar_title] == 2
+
+        # Second trigger of Ion Storm: still base cooldown
+        apply_cooldown(state, ion_title, "hazard")
+        assert state.event_cooldowns[ion_title] == ion_base
+        assert ion_title not in state.hazard_event_counts
+
+        # Third trigger of Solar Flare: multiplier = min(3, 3) = 3
+        apply_cooldown(state, solar_title, "hazard")
+        assert state.event_cooldowns[solar_title] == solar_base * 3
+        assert state.hazard_event_counts[solar_title] == 3
+
+    def test_non_hazard_events_do_not_scale_cooldown(self) -> None:
+        """Non-hazard events should not have scaled cooldowns and should not increment hazard_event_counts."""
+        from backend.generation.events import apply_cooldown, EVENT_COOLDOWNS
+        from backend.models.ship import Ship
+
+        ship = Ship()
+        state = GameState(id="test-nonhazard-scale", seed=42, ship=ship)
+
+        title = "Ancient Signal"
+        base = EVENT_COOLDOWNS.get(title, 5)
+
+        # First trigger
+        apply_cooldown(state, title, "exploration")
+        assert state.event_cooldowns[title] == base
+        assert state.hazard_event_counts == {}
+
+        # Second trigger
+        apply_cooldown(state, title, "exploration")
+        assert state.event_cooldowns[title] == base
+        assert state.hazard_event_counts == {}
+
+    def test_micrometeorite_storm_can_be_triggered(self) -> None:
+        """Micrometeorite Storm should be triggerable via the event system."""
+        from backend.generation.events import trigger_event
+        from backend.generation.universe import generate_universe
+        from backend.models.ship import Ship
+        import random
+
+        systems, lore = generate_universe(42)
+        ship = Ship(current_system_id=list(systems.keys())[0])
+        state = GameState(id="test-trigger-mm", seed=42, ship=ship, systems=systems)
+
+        # Set up conditions for the event to trigger
+        state.event_cooldowns = {}
+        state.last_event_title = None
+
+        # Try multiple times with a known seed to trigger Micrometeorite Storm
+        found = False
+        for i in range(100):
+            state.events = []
+            rng = random.Random(1000 + i)
+            event = trigger_event(state, rng_override=rng)
+            if event and event.title == "Micrometeorite Storm":
+                found = True
+                assert event.event_type == "hazard"
+                assert len(event.choices) == 3
+                assert event.flavor is not None
+                break
+
+        assert found, "Micrometeorite Storm should be triggerable within 100 attempts"
+
+    def test_quantum_fluctuation_can_be_triggered(self) -> None:
+        """Quantum Fluctuation should be triggerable via the event system."""
+        from backend.generation.events import trigger_event
+        from backend.generation.universe import generate_universe
+        from backend.models.ship import Ship
+        import random
+
+        systems, lore = generate_universe(42)
+        ship = Ship(current_system_id=list(systems.keys())[0])
+        state = GameState(id="test-trigger-qf", seed=42, ship=ship, systems=systems)
+
+        state.event_cooldowns = {}
+        state.last_event_title = None
+
+        found = False
+        for i in range(500):
+            state.events = []
+            rng = random.Random(2000 + i)
+            event = trigger_event(state, rng_override=rng)
+            if event and event.title == "Quantum Fluctuation":
+                found = True
+                assert event.event_type == "hazard"
+                assert len(event.choices) == 3
+                assert event.flavor is not None
+                break
+
+        assert found, "Quantum Fluctuation should be triggerable within 500 attempts"
+
+    def test_cooldown_prevents_immediate_repeat(self) -> None:
+        """Cooldown should prevent the same hazard event from triggering again immediately."""
+        from backend.generation.events import trigger_event, apply_cooldown
+        from backend.generation.universe import generate_universe
+        from backend.models.ship import Ship
+        import random
+
+        systems, lore = generate_universe(42)
+        ship = Ship(current_system_id=list(systems.keys())[0])
+        state = GameState(id="test-cooldown-repeat", seed=42, ship=ship, systems=systems)
+
+        # Set a cooldown for Micrometeorite Storm
+        state.event_cooldowns["Micrometeorite Storm"] = 10
+        state.last_event_title = None
+
+        # The event should not be Micrometeorite Storm due to cooldown
+        triggered_titles = set()
+        for i in range(50):
+            state.events = []
+            rng = random.Random(3000 + i)
+            event = trigger_event(state, rng_override=rng)
+            if event:
+                triggered_titles.add(event.title)
+
+        assert "Micrometeorite Storm" not in triggered_titles, \
+            "Micrometeorite Storm should not trigger when on cooldown"
+
+    def test_hazard_event_counts_persists_across_triggers(self) -> None:
+        """hazard_event_counts should accumulate across multiple trigger_event calls."""
+        from backend.generation.events import trigger_event
+        from backend.generation.universe import generate_universe
+        from backend.models.ship import Ship
+        import random
+
+        systems, lore = generate_universe(42)
+        ship = Ship(current_system_id=list(systems.keys())[0])
+        state = GameState(id="test-persist-counts", seed=42, ship=ship, systems=systems)
+
+        # Clear cooldowns so events can trigger
+        state.event_cooldowns = {}
+        state.last_event_title = None
+
+        hazard_triggers = 0
+        for i in range(200):
+            state.events = []
+            rng = random.Random(4000 + i)
+            event = trigger_event(state, rng_override=rng)
+            if event and event.event_type == "hazard":
+                hazard_triggers += 1
+
+        # hazard_event_counts should reflect total hazard triggers
+        total_counts = sum(state.hazard_event_counts.values())
+        assert total_counts == hazard_triggers, \
+            f"hazard_event_counts sum ({total_counts}) should equal hazard triggers ({hazard_triggers})"
+
+    def test_hazard_event_counts_decay_when_not_on_cooldown(self) -> None:
+        """hazard_event_counts should decay by 1 when the event is not on cooldown."""
+        from backend.generation.events import decrement_cooldowns
+        from backend.models.ship import Ship
+
+        ship = Ship()
+        state = GameState(id="test-decay", seed=42, ship=ship)
+
+        # Set up a hazard event count
+        state.hazard_event_counts["Solar Flare"] = 5
+
+        # No cooldown for Solar Flare, so it should decay
+        decrement_cooldowns(state)
+
+        assert state.hazard_event_counts["Solar Flare"] == 4
+
+    def test_hazard_event_counts_do_not_decay_when_on_cooldown(self) -> None:
+        """hazard_event_counts should NOT decay when the event is on cooldown."""
+        from backend.generation.events import decrement_cooldowns
+        from backend.models.ship import Ship
+
+        ship = Ship()
+        state = GameState(id="test-no-decay", seed=42, ship=ship)
+
+        # Set up a hazard event count AND a cooldown for the same event
+        state.hazard_event_counts["Solar Flare"] = 5
+        state.event_cooldowns["Solar Flare"] = 3
+
+        # Event is on cooldown, so count should NOT decay
+        decrement_cooldowns(state)
+
+        assert state.hazard_event_counts["Solar Flare"] == 5
+
+    def test_hazard_event_counts_decay_to_zero_removes_entry(self) -> None:
+        """When hazard_event_counts decays to 0, the entry should be removed."""
+        from backend.generation.events import decrement_cooldowns
+        from backend.models.ship import Ship
+
+        ship = Ship()
+        state = GameState(id="test-decay-zero", seed=42, ship=ship)
+
+        # Set up a hazard event count of 1
+        state.hazard_event_counts["Solar Flare"] = 1
+
+        # Decay it to 0 - should remove the entry
+        decrement_cooldowns(state)
+
+        assert "Solar Flare" not in state.hazard_event_counts
+        assert state.hazard_event_counts == {}
+
+    def test_hazard_event_counts_decay_multiple_events(self) -> None:
+        """Multiple hazard events should all decay independently."""
+        from backend.generation.events import decrement_cooldowns
+        from backend.models.ship import Ship
+
+        ship = Ship()
+        state = GameState(id="test-decay-multi", seed=42, ship=ship)
+
+        # Set up multiple hazard event counts
+        state.hazard_event_counts["Solar Flare"] = 5
+        state.hazard_event_counts["Asteroid Swarm"] = 3
+        state.hazard_event_counts["Micrometeorite Storm"] = 1
+
+        # Put one event on cooldown to test it doesn't decay
+        state.event_cooldowns["Asteroid Swarm"] = 2
+
+        decrement_cooldowns(state)
+
+        # Solar Flare (not on cooldown) should decay
+        assert state.hazard_event_counts["Solar Flare"] == 4
+        # Asteroid Swarm (on cooldown) should NOT decay
+        assert state.hazard_event_counts["Asteroid Swarm"] == 3
+        # Micrometeorite Storm (not on cooldown, count=1) should be removed
+        assert "Micrometeorite Storm" not in state.hazard_event_counts
+
+    def test_decrement_cooldowns_still_decrements_cooldowns(self) -> None:
+        """The original cooldown decrement behavior should still work."""
+        from backend.generation.events import decrement_cooldowns
+        from backend.models.ship import Ship
+
+        ship = Ship()
+        state = GameState(id="test-original", seed=42, ship=ship)
+
+        # Set up cooldowns
+        state.event_cooldowns["Solar Flare"] = 3
+        state.event_cooldowns["Ancient Signal"] = 1
+
+        decrement_cooldowns(state)
+
+        # Solar Flare cooldown should decrement from 3 to 2
+        assert state.event_cooldowns["Solar Flare"] == 2
+        # Ancient Signal cooldown should decrement from 1 to 0 and be removed
+        assert "Ancient Signal" not in state.event_cooldowns
+
+    def test_hazard_event_count_does_not_decay_on_cooldown_expiry_tick(self) -> None:
+        """When a cooldown expires (reaches 0), the hazard_event_count should NOT decay on the same tick.
+        
+        This tests the fix for PR #58 change request 2: if an event had cooldown=1 and count=3,
+        after decrement: cooldown expires (removed), but count should stay at 3 (not decay to 2).
+        """
+        from backend.generation.events import decrement_cooldowns
+        from backend.models.ship import Ship
+
+        ship = Ship()
+        state = GameState(id="test-no-decay-on-expiry", seed=42, ship=ship)
+
+        # Set up: cooldown=1 (will expire this tick), count=3
+        state.event_cooldowns["Solar Flare"] = 1
+        state.hazard_event_counts["Solar Flare"] = 3
+
+        decrement_cooldowns(state)
+
+        # Cooldown should have expired (removed)
+        assert "Solar Flare" not in state.event_cooldowns
+        # Count should NOT have decayed (stays at 3, not 2)
+        assert state.hazard_event_counts["Solar Flare"] == 3, \
+            f"Expected count to stay at 3, got {state.hazard_event_counts['Solar Flare']}"
+
+    def test_hazard_event_count_decays_on_next_tick_after_cooldown_expiry(self) -> None:
+        """After a cooldown expires, the count should decay on the NEXT tick, not the same tick."""
+        from backend.generation.events import decrement_cooldowns
+        from backend.models.ship import Ship
+
+        ship = Ship()
+        state = GameState(id="test-decay-next-tick", seed=42, ship=ship)
+
+        # Set up: cooldown=1 (will expire this tick), count=3
+        state.event_cooldowns["Solar Flare"] = 1
+        state.hazard_event_counts["Solar Flare"] = 3
+
+        # Tick 1: cooldown expires, count should NOT decay
+        decrement_cooldowns(state)
+        assert "Solar Flare" not in state.event_cooldowns
+        assert state.hazard_event_counts["Solar Flare"] == 3
+
+        # Tick 2: no cooldown, count SHOULD decay
+        decrement_cooldowns(state)
+        assert state.hazard_event_counts["Solar Flare"] == 2
+
+    def test_hazard_event_count_preserved_when_cooldown_expires_and_still_on_cooldown(self) -> None:
+        """Events on cooldown should still not have their count decay, even after the cooldown was just applied."""
+        from backend.generation.events import decrement_cooldowns
+        from backend.models.ship import Ship
+
+        ship = Ship()
+        state = GameState(id="test-preserved-on-cooldown", seed=42, ship=ship)
+
+        # Set up: cooldown=3 (not expiring), count=5
+        state.event_cooldowns["Solar Flare"] = 3
+        state.hazard_event_counts["Solar Flare"] = 5
+
+        decrement_cooldowns(state)
+
+        # Cooldown should decrement to 2
+        assert state.event_cooldowns["Solar Flare"] == 2
+        # Count should NOT decay (event is on cooldown)
+        assert state.hazard_event_counts["Solar Flare"] == 5
+
+    def test_hazard_event_count_decay_multiple_ticks_with_mixed_cooldowns(self) -> None:
+        """Multiple events with different cooldown states should all decay correctly."""
+        from backend.generation.events import decrement_cooldowns
+        from backend.models.ship import Ship
+
+        ship = Ship()
+        state = GameState(id="test-mixed-ticks", seed=42, ship=ship)
+
+        # Event A: cooldown=1 (expiring this tick), count=3
+        # Event B: cooldown=3 (not expiring), count=5
+        # Event C: no cooldown, count=2
+        state.event_cooldowns["Solar Flare"] = 1
+        state.event_cooldowns["Asteroid Swarm"] = 3
+        state.hazard_event_counts["Solar Flare"] = 3
+        state.hazard_event_counts["Asteroid Swarm"] = 5
+        state.hazard_event_counts["Micrometeorite Storm"] = 2
+
+        # Tick 1
+        decrement_cooldowns(state)
+        # Solar Flare: cooldown expired, count stays at 3
+        assert "Solar Flare" not in state.event_cooldowns
+        assert state.hazard_event_counts["Solar Flare"] == 3
+        # Asteroid Swarm: cooldown 3->2, count stays at 5
+        assert state.event_cooldowns["Asteroid Swarm"] == 2
+        assert state.hazard_event_counts["Asteroid Swarm"] == 5
+        # Micrometeorite Storm: no cooldown, count 2->1
+        assert state.hazard_event_counts["Micrometeorite Storm"] == 1
+
+        # Tick 2
+        decrement_cooldowns(state)
+        # Solar Flare: no cooldown, count 3->2
+        assert state.hazard_event_counts["Solar Flare"] == 2
+        # Asteroid Swarm: cooldown 2->1, count stays at 5
+        assert state.event_cooldowns["Asteroid Swarm"] == 1
+        assert state.hazard_event_counts["Asteroid Swarm"] == 5
+        # Micrometeorite Storm: no cooldown, count 1->0 and removed
+        assert "Micrometeorite Storm" not in state.hazard_event_counts
+
+        # Tick 3
+        decrement_cooldowns(state)
+        # Solar Flare: no cooldown, count 2->1
+        assert state.hazard_event_counts["Solar Flare"] == 1
+        # Asteroid Swarm: cooldown expired, count stays at 5
+        assert "Asteroid Swarm" not in state.event_cooldowns
+        assert state.hazard_event_counts["Asteroid Swarm"] == 5
+
+        # Tick 4
+        decrement_cooldowns(state)
+        # Solar Flare: no cooldown, count 1->0 and removed
+        assert "Solar Flare" not in state.hazard_event_counts
+        # Asteroid Swarm: no cooldown, count 5->4
+        assert state.hazard_event_counts["Asteroid Swarm"] == 4
+
+
+class TestEventCooldowns:
+    """Validation tests for EVENT_COOLDOWNS coverage."""
+
+    def test_all_event_templates_have_cooldowns(self) -> None:
+        """Every event title in EVENT_TEMPLATES must have a corresponding entry in EVENT_COOLDOWNS."""
+        from backend.generation.events import EVENT_TEMPLATES, EVENT_COOLDOWNS
+
+        for template in EVENT_TEMPLATES:
+            title = template["title"]
+            assert title in EVENT_COOLDOWNS, \
+                f"Event template '{title}' is missing from EVENT_COOLDOWNS"

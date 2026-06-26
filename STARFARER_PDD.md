@@ -134,6 +134,8 @@ Discovery and Hazard events now properly award faction reputation (Stellar Carto
 
 To prevent event repetition and encourage variety, each event template has a configurable cooldown value (3, 5, 6, 8, or 10 turns) defined in the `EVENT_COOLDOWNS` dictionary. When an event fires, `apply_cooldown()` records the cooldown in `GameState.event_cooldowns: dict[str, int]`. Before triggering a new event (on jump, scan, or explore), `decrement_cooldowns(state)` reduces all active cooldowns by 1 and removes expired ones. If all otherwise-eligible events are on cooldown, `_apply_cooldown_fallback()` selects the event with the lowest remaining cooldown, avoiding the last-fired event (`last_event_title`) when possible. Cooldowns persist across save/load via the manager serialization layer.
 
+**Hazard event cooldown scaling:** Hazard events (type `"hazard"`) have scaled cooldowns to prevent the same hazard from repeating too frequently. Each time a hazard event triggers, its cooldown is multiplied by the number of times it has been triggered in the current session, capped at a 3x multiplier. The trigger count is tracked in `GameState.hazard_event_counts: dict[str, int]` and decays by 1 each time the cooldown expires (when the event title is no longer in `event_cooldowns`). This means the first trigger uses the base cooldown, the second uses 2x base, and the third and subsequent triggers use 3x base. The count recovers over time as cooldowns expire, so repeated hazard events become progressively less frequent but the system recovers naturally.
+
 #### 3.4.2 Event Structure
 Each event has:
 - Trigger condition (location, player state, probability)

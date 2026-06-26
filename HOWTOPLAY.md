@@ -161,7 +161,10 @@ Choices have outcomes that modify stats: `fuel`, `hull`, `morale`, `credits`, `c
 | Pirate/Combat | Avoid if possible | Hull damage is expensive to repair |
 | Trade Opportunity | Take it | Free credits and resources |
 | Crew Morale Event | Boost morale | Low morale triggers cascading failures |
-| Nebula Event (Ion Storm) | Power through | Minor hull damage but yields Ion Crystal discovery |
+| Hazard Event (Solar Flare) | Take cover behind nearest planet | Minimal hull damage and fuel cost |
+| Hazard Event (Micrometeorite Storm) | Activate point defense lasers | Fuel cost only, no hull damage |
+| Hazard Event (Quantum Fluctuation) | Record the anomaly | High credit reward with no damage |
+| Nebula Event (Ion Storm) | Power down non-essential systems | Cargo loss but no hull damage |
 | Nebula Event (Protostar Formation) | Collect samples | Minor hull damage but yields valuable mineral samples |
 | Nebula Event (Nebula Navigation Puzzle) | Follow the clearing current | Gains fuel by finding a shortcut |
 | Pulsar Event (Radiation Pulse) | Dive behind asteroid/moon | Avoids hull damage at fuel cost |
@@ -698,7 +701,9 @@ Events may be phenomenon-specific, triggering only in systems with matching phen
 
 #### Event Cooldowns
 
-Events now have per-event cooldowns to prevent the same event from firing repeatedly in a single session. Cooldown values range from 3 to 10 turns depending on event rarity and type. After an event fires, it goes on cooldown and will not trigger again until the cooldown expires. Cooldowns decrement by 1 each time you jump, scan, or explore. If all eligible events are on cooldown, the system uses a fallback: the event with the lowest remaining cooldown may fire, with preference given to events other than the one that last fired (`last_event_title` deduplication). This ensures event variety while still allowing events to occur when the pool is constrained.
+Events have per-event cooldowns to prevent the same event from firing repeatedly in a single session. Cooldown values range from 3 to 10 turns depending on event rarity and type. After an event fires, it goes on cooldown and will not trigger again until the cooldown expires. Cooldowns decrement by 1 each time you jump, scan, or explore. If all eligible events are on cooldown, the system uses a fallback: the event with the lowest remaining cooldown may fire, with preference given to events other than the one that last fired (`last_event_title` deduplication). This ensures event variety while still allowing events to occur when the pool is constrained.
+
+**Hazard event cooldown scaling:** Hazard events (such as Solar Flare, Micrometeorite Storm, Ion Storm, and Quantum Fluctuation) have scaled cooldowns. Each time a hazard event triggers, its cooldown is multiplied by the number of times it has been triggered in the current session (capped at 3x). This means the first trigger uses the base cooldown, the second trigger uses 2x the base cooldown, and the third and subsequent triggers use 3x the base cooldown. The trigger count (`hazard_event_counts`) decays by 1 each time the cooldown expires, so repeated hazard events become progressively less frequent but the count recovers over time.
 
 ### Reputation Bonuses
 When your faction reputation reaches **20 or higher**, resolving events of that faction's type grants bonus rewards:

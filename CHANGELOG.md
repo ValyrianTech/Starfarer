@@ -3,8 +3,13 @@
 ## [Unreleased]
 
 ### Added
+- 'Micrometeorite Storm' common hazard event with point defense, hull plating, and evasive maneuver choices
+- 'Quantum Fluctuation' rare hazard event with anomaly recording, stabilization, and fluctuation-following choices
+- Hazard event cooldown scaling: hazard events now scale their cooldown based on how many times they've been triggered (capped at 3x multiplier), making repeat hazard events less frequent
+- `hazard_event_counts` field to `GameState` for tracking hazard event trigger counts across save/load
+- `hazard_event_counts` serialization support in `manager.py` for persistent tracking
 - Comprehensive docstrings for `Hint.__init__` and `_format_message` in `backend/hints.py`
-- Sort and order query parameters to GET /api/game/{id}/cargo endpoint: `sort` (\"value\" or \"name\", default \"value\") and `order` (\"asc\" or \"desc\", default \"desc\")
+- Sort and order query parameters to GET /api/game/{id}/cargo endpoint: `sort` ("value" or "name", default "value") and `order` ("asc" or "desc", default "desc")
 - Sort and order query parameters to GET /api/game/{id} full game state endpoint (same values as cargo endpoint)
 - `total_value` field to GET /api/game/{id}/cargo response (sum of all cargo item values)
 - `total_value` field to GET /api/game/{id} full game state response
@@ -50,6 +55,11 @@
 - `hints` field in full game state response (`GET /api/game/{id}`) — an array of active hint dicts with `id`, `severity`, `message`, and optional `command`
 
 ### Changed
+- Solar Flare event: updated flavor text and rebalanced choices (now offers planetary cover, radiation shielding, or riding it out with crew/morale consequences)
+- Ion Storm event: updated flavor text and rebalanced choices (now offers system power-down, emergency power push, or waiting it out)
+- `EVENT_COOLDOWNS` dictionary: reorganized alphabetically and expanded with explicit cooldown entries for all event templates (including Abandoned Outpost, Ancient Signal, Black Market Access, Crew Dispute, Crew Illness, Crew Recruitment Offer, Derelict Signal, Elite Crew Available, Engine Fire, Food Contamination, Fuel Cache Locations, Gravity Anomaly, Hull Breach, Micrometeorite Storm, Nebula Storm, Quantum Fluctuation, Radiation Leak, Restricted Coordinates, Trade Route Opportunity, Uncharted Ruins, Wormhole Anomaly)
+- `apply_cooldown()` now accepts an `event_type` parameter; hazard events use scaled cooldowns based on trigger count
+- `decrement_cooldowns()` now decays `hazard_event_counts` when cooldowns expire
 - Added type annotations to `get_fuel_status` function parameters in `backend/fuel.py`
 - Refactored `resolve_event()` to use `_EVENT_REP_MAP` dictionary for event type → faction mapping
 - Updated fuel pricing tests to use local variable names avoiding shadowing
@@ -64,6 +74,7 @@
 - Added type annotations across multiple modules to fix mypy errors
 
 ### Fixed
+- `_apply_cooldown_fallback` no longer returns a single event when multiple eligible events share the same lowest cooldown — now returns all eligible events with the minimum cooldown before applying `last_event_title` deduplication
 - `_next_log_id` regression on save/load cycles: `_state_from_dict` now warns and clamps `_next_log_id` to `max_id + 1` when the saved value is lower, preventing log entry ID collisions
 - Old-format `accepted_missions` migration: `_state_from_dict` now converts legacy string-format mission values (faction_id only) to full dict format with default costs/rewards, preventing crashes on mission completion from migrated saves
 - `api_faction_mission` now properly adds mission to `accepted_missions` dict with full metadata before calling `complete_mission`, fixing the missing accept workflow and enabling resource deduction checks
@@ -77,7 +88,6 @@
 - `_state_from_dict` no longer treats boolean values (`True`/`False`) as valid integer IDs in log entries — booleans are now correctly detected as non-integer and reassigned sequential IDs
 - `_state_from_dict` now properly initializes `_next_log_id` when loading old saves that lack the field, computing it from the maximum existing log entry ID
 - `_state_from_dict` now filters out non-dict log entries (e.g., plain strings) instead of crashing
-- `_apply_cooldown_fallback` no longer returns events still on cooldown when all eligible events share the same cooldown value — now filters to only events with the minimum cooldown before applying `last_event_title` deduplication
 - Query parameters now URL-encoded in `api.js` cargo method using `encodeURIComponent()`
 - Validation of sort and order query parameters in API cargo endpoint returns 422 with helpful error messages for invalid values
 - Narrative event type now correctly resolves without attempting reputation changes
@@ -97,7 +107,6 @@
 - `explore_surface` now correctly handles the `lore_linked` flag when `num_finds` is 0
 - Lore fragment discovery date extraction now uses regex instead of fragile substring matching on log messages
 - Lore fragment discovery now stores `discovery_timestamp` as ISO format datetime
-- Cooldown fallback in `trigger_event` no longer bypasses last_event_title dedup when all eligible events share the same cooldown value
 - Duplicated cooldown fallback logic in `trigger_event` consolidated into `_apply_cooldown_fallback()`
 - Resolved inconsistent cooldown decrement timing: `resolve_event` route now ticks cooldowns after resolution instead of before
 - In-place mutation of eligible list in `_apply_cooldown_fallback` fixed by using a copy of the list before sorting

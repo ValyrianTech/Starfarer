@@ -3541,7 +3541,7 @@ class TestPhenomenonEvents:
         assert actual_types.issubset(valid_types), f"Binary star events have unexpected types: {actual_types - valid_types}"
 
     def test_all_phenomenon_events_count(self) -> None:
-        """Total new events = 9 (4 nebula + 3 pulsar + 2 binary)."""
+        """Total phenomenon events = 9 (4 nebula + 3 pulsar + 2 binary)."""
         nebula_events = [t for t in EVENT_TEMPLATES if t.get("trigger_conditions", {}).get("phenomenon") == "nebula"]
         pulsar_events = [t for t in EVENT_TEMPLATES if t.get("trigger_conditions", {}).get("phenomenon") == "pulsar"]
         binary_events = [t for t in EVENT_TEMPLATES if t.get("trigger_conditions", {}).get("phenomenon") == "binary_star"]
@@ -3670,7 +3670,7 @@ class TestEventCooldowns:
         eligible = _get_eligible_templates(state, EVENT_TEMPLATES)
         result = _apply_cooldown_fallback(eligible, state)
         assert len(result) > 0
-        assert result == eligible  # all events pass the cooldown check
+        assert list(result) == list(eligible)  # all events pass the cooldown check
 
         # When eligible is empty, result should be empty
         result_empty = _apply_cooldown_fallback([], state)
