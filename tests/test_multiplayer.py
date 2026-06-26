@@ -1333,6 +1333,23 @@ class TestMultiplayerAPI:
         assert "message" in data
         assert data["message"]["text"] == "API test message"
 
+    def test_api_post_message_returns_400_on_error(self) -> None:
+        """api_post_message should return 400 when post_message returns an error."""
+        from unittest.mock import patch
+        resp = client.post("/api/game/new", json={"shared_universe": True})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+
+        with patch("backend.multiplayer.api.post_message") as mock_post:
+            mock_post.return_value = {"success": False, "detail": "Something went wrong"}
+            resp = client.post(
+                "/api/crossroads/post-message",
+                json={"game_id": game_id, "text": "Valid text"},
+            )
+        assert resp.status_code == 400
+        data = resp.json()
+        assert "Something went wrong" in data["detail"]
+
     def test_api_ripples(self) -> None:
         resp = client.post("/api/game/new", json={"shared_universe": True})
         assert resp.status_code == 200
