@@ -38,11 +38,12 @@ _lock_access_count = itertools.count(1)
 
 def _get_lock(game_id: str) -> Lock:
     count = next(_lock_access_count)
-    # Periodic cleanup of stale locks every 100 accesses
-    # (cleanup acquires _lock_for_locks internally, so we call it outside the lock)
-    if count % 100 == 0:
-        _cleanup_stale_locks()
     with _lock_for_locks:
+        # Periodic cleanup of stale locks every 100 accesses
+        if count % 100 == 0:
+            for gid in list(_game_locks.keys()):
+                if gid not in GAME_STORE:
+                    del _game_locks[gid]
         if game_id not in _game_locks:
             _game_locks[game_id] = Lock()
         return _game_locks[game_id]
