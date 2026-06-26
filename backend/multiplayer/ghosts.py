@@ -34,18 +34,16 @@ def record_ghost(
     :returns: A dictionary representation of the recorded ghost signature.
     :rtype: dict
     """
+    system_discoveries = [d for d in game_state.discoveries if d.system_id == system_id]
     ghost = GhostSignature(
         id=str(uuid.uuid4()),
         game_id=game_state.id,
         player_name=game_state.ship.name,
         system_id=system_id,
         timestamp=datetime.now(timezone.utc).isoformat(),
-        discoveries=[d.name for d in game_state.discoveries],
+        discoveries=[d.name for d in system_discoveries],
         message=message,
-        body_visits=[
-            d.body_id for d in game_state.discoveries
-            if d.system_id == system_id
-        ],
+        body_visits=[d.body_id for d in system_discoveries if d.body_id is not None],
     )
     save_ghost_signature(ghost)
     game_state.add_log(
