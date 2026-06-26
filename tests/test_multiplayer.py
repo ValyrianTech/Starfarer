@@ -1737,19 +1737,23 @@ class TestMultiplayerAPI:
             assert key in d4
 
     def test_api_crossroads_messages_page_less_than_one(self) -> None:
-        """api_crossroads_messages should return 422 when page < 1."""
+        """api_crossroads_messages should clamp page < 1 to 1."""
         resp = client.get("/api/crossroads/messages?page=0")
-        assert resp.status_code == 422
+        assert resp.status_code == 200
         data = resp.json()
-        assert "page must be >= 1" in data["detail"]
+        assert data["page"] == 1
+        for key in ("messages", "page", "per_page", "total_messages", "total_pages"):
+            assert key in data
 
 
     def test_api_crossroads_messages_per_page_less_than_one(self) -> None:
-        """api_crossroads_messages should return 422 when per_page < 1."""
+        """api_crossroads_messages should clamp per_page < 1 to 1."""
         resp = client.get("/api/crossroads/messages?per_page=0")
-        assert resp.status_code == 422
+        assert resp.status_code == 200
         data = resp.json()
-        assert "per_page must be >= 1" in data["detail"]
+        assert data["per_page"] == 1
+        for key in ("messages", "page", "per_page", "total_messages", "total_pages"):
+            assert key in data
 
 
     def test_api_post_message(self) -> None:
