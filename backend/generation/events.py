@@ -378,7 +378,7 @@ EVENT_TEMPLATES: list[dict[str, Any]] = [
     {
         "type": "discovery",
         "rarity": "uncommon",
-        "title": "Hawking Radiation Harvest",
+        "title": "Hawking Radiation Harvest (Deep Scan)",
         "flavor": "Your sensors detect faint Hawking radiation emanating from the black hole — a rare energy signature that could be harvested for profit or research.",
         "choices": [
             {"text": "Deploy energy collectors", "outcome": "credits:300; fuel:-10; Sold the harvested energy."},
@@ -579,6 +579,7 @@ EVENT_COOLDOWNS = {
     "Gravitational Lens Observation": 6,
     "Gravity Anomaly": 10,
     "Hawking Radiation Harvest": 8,
+    "Hawking Radiation Harvest (Deep Scan)": 8,
     "Hull Breach": 8,
     "Ion Storm": 6,
     "Lagrange Point Discovery": 6,
