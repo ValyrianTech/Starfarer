@@ -50,8 +50,12 @@ def donate_item(
         return {"success": False, "detail": f"No discovery named '{item_name}' in cargo."}
 
     actual_quantity = min(quantity, len(matching))
-    for i in range(actual_quantity):
-        game_state.discoveries.remove(matching[i])
+    indices_to_remove = []
+    for i, d in enumerate(game_state.discoveries):
+        if d.name == item_name and len(indices_to_remove) < actual_quantity:
+            indices_to_remove.append(i)
+    for i in sorted(indices_to_remove, reverse=True):
+        game_state.discoveries.pop(i)
 
     item = CrossroadsItem(
         id=str(uuid.uuid4()),
