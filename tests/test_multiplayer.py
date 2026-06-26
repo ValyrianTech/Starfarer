@@ -1344,7 +1344,9 @@ class TestMultiplayerAPI:
         sys_id = resp.json()["state"]["ship"]["current_system_id"]
 
         resp = client.get(f"/api/game/{game_id}/system/{sys_id}/ghosts?page=0")
-        assert resp.status_code == 422
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["page"] == 1  # clamped from 0
 
     def test_api_system_ghosts_per_page_less_than_one(self) -> None:
         resp = client.post("/api/game/new", json={"shared_universe": True})
@@ -1353,7 +1355,9 @@ class TestMultiplayerAPI:
         sys_id = resp.json()["state"]["ship"]["current_system_id"]
 
         resp = client.get(f"/api/game/{game_id}/system/{sys_id}/ghosts?per_page=0")
-        assert resp.status_code == 422
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["per_page"] == 1  # clamped from 0
 
     def test_api_system_ghosts_page_out_of_range_empty(self) -> None:
         resp = client.post("/api/game/new", json={"shared_universe": True})

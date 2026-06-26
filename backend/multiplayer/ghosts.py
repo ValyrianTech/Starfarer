@@ -70,6 +70,7 @@ def get_system_ghosts(system_id: str, page: int = 1, per_page: int = 10) -> dict
         ``total_ghosts``, and ``total_pages``.
     :rtype: dict
     """
+    page = max(1, page)
     per_page = min(max(1, per_page), 50)
     ghosts, total = get_ghost_signatures_paginated(system_id, page=page, per_page=per_page)
     total_pages = max(1, math.ceil(total / per_page))
