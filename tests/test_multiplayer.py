@@ -812,8 +812,8 @@ class TestMultiplayerGhosts:
         for i in range(5):
             record_ghost(state, system.id, message=f"Ghost {i}")
         result = get_system_ghosts(system.id, page=10, per_page=10)
-        assert result["ghosts"] == []
-        assert result["page"] == 10
+        assert result["page"] == 1
+        assert len(result["ghosts"]) == 5
         assert result["total_ghosts"] >= 5
         GAME_STORE.pop(state.id, None)
 
@@ -1495,7 +1495,10 @@ class TestMultiplayerAPI:
             )
 
         resp = client.get(f"/api/game/{game_id}/system/{sys_id}/ghosts?page=100")
-        assert resp.status_code == 404
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["page"] == 1
+        assert len(data["ghosts"]) == 5
 
     def test_api_system_ghosts_page_less_than_one(self) -> None:
         resp = client.post("/api/game/new", json={"shared_universe": True})
