@@ -1613,6 +1613,22 @@ class TestMultiplayerAPI:
             assert key in d3
             assert key in d4
 
+    def test_api_crossroads_messages_page_less_than_one(self) -> None:
+        """api_crossroads_messages should return 422 when page < 1."""
+        resp = client.get("/api/crossroads/messages?page=0")
+        assert resp.status_code == 422
+        data = resp.json()
+        assert "page must be >= 1" in data["detail"]
+
+
+    def test_api_crossroads_messages_per_page_less_than_one(self) -> None:
+        """api_crossroads_messages should return 422 when per_page < 1."""
+        resp = client.get("/api/crossroads/messages?per_page=0")
+        assert resp.status_code == 422
+        data = resp.json()
+        assert "per_page must be >= 1" in data["detail"]
+
+
     def test_api_post_message(self) -> None:
         resp = client.post("/api/game/new", json={"shared_universe": True})
         assert resp.status_code == 200
