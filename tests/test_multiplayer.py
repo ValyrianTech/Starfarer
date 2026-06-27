@@ -22,7 +22,7 @@ from backend.multiplayer.crossroads import (
     post_message, get_messages,
 )
 from backend.multiplayer.ripples import create_ripple, get_pending_ripples, acknowledge_ripple
-from backend.multiplayer.api import _game_locks, _get_lock, _cleanup_game_lock, _cleanup_stale_locks
+from backend.multiplayer.api import _game_locks, _get_lock, _cleanup_game_lock, _cleanup_stale_locks, _game_exists
 from backend.models.discovery import Discovery, LoreFragment
 
 client = TestClient(app)
@@ -1922,6 +1922,24 @@ class TestMultiplayerAPI:
 
         resp = client.post(f"/api/game/{game_id}/ripple/nonexistent-ripple/acknowledge")
         assert resp.status_code == 400
+
+    def test_game_exists_in_store(self) -> None:
+        resp = client.post("/api/game/new", json={"shared_universe": True})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        assert _game_exists(game_id) is True
+
+    def test_game_exists_in_db_not_in_store(self) -> None:
+        resp = client.post("/api/game/new", json={"shared_universe": True})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE.pop(game_id)
+        game_save(state)
+        assert game_id not in GAME_STORE
+        assert _game_exists(game_id) is True
+
+    def test_game_exists_not_found(self) -> None:
+        assert _game_exists("nonexistent-game-id") is False
 
     def test_get_lock_returns_lock(self) -> None:
         """Verify that _get_lock returns a threading.Lock instance."""
