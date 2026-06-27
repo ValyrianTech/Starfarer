@@ -130,6 +130,21 @@ def load_game(game_id: str) -> dict | None:
     return None
 
 
+def game_exists(game_id: str) -> bool:
+    """Check if a game exists in the database without loading its full state.
+
+    :param game_id: The unique identifier for the game.
+    :type game_id: str
+    :returns: ``True`` if the game exists, ``False`` otherwise.
+    :rtype: bool
+    """
+    with get_db_ctx() as conn:
+        row = conn.execute(
+            "SELECT 1 FROM games WHERE id = ?", (game_id,)
+        ).fetchone()
+        return row is not None
+
+
 def save_game(game_id: str, state: dict) -> None:
     """Save the current game state to both the games and saves tables.
 

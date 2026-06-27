@@ -93,7 +93,7 @@ def _game_exists(game_id: str) -> bool:
     """Check if a game exists without loading its full state.
 
     Checks the in-memory ``GAME_STORE`` first, then falls back to
-    the database. Does not deserialize the full :class:`GameState`.
+    a lightweight database existence query.
 
     :param game_id: The unique identifier of the game.
     :type game_id: str
@@ -102,8 +102,8 @@ def _game_exists(game_id: str) -> bool:
     """
     if game_id in GAME_STORE:
         return True
-    from backend.database import load_game
-    return load_game(game_id) is not None
+    from backend.database import game_exists
+    return game_exists(game_id)
 
 
 def _check_game(game_id: str) -> GameState:
