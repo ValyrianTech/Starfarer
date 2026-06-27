@@ -89,6 +89,23 @@ def _cleanup_stale_locks() -> None:
                 del _game_locks[gid]
 
 
+def _game_exists(game_id: str) -> bool:
+    """Check if a game exists without loading its full state.
+
+    Checks the in-memory ``GAME_STORE`` first, then falls back to
+    the database. Does not deserialize the full :class:`GameState`.
+
+    :param game_id: The unique identifier of the game.
+    :type game_id: str
+    :returns: ``True`` if the game exists, ``False`` otherwise.
+    :rtype: bool
+    """
+    if game_id in GAME_STORE:
+        return True
+    from backend.database import load_game
+    return load_game(game_id) is not None
+
+
 def _check_game(game_id: str) -> GameState:
     """Validate that a game exists and return its state.
 
@@ -132,7 +149,8 @@ def api_system_ghosts(game_id: str, sys_id: str, page: int = 1, per_page: int = 
     :raises HTTPException: 404 if the game is not found.
     :raises HTTPException: 404 if page exceeds total pages with active ghosts.
     """
-    _check_game(game_id)
+    if not _game_exists(game_id):
+        raise HTTPException(status_code=404, detail="Game not found")
     result = get_system_ghosts(sys_id, page=page, per_page=per_page)
     if page > result["total_pages"] and result["total_ghosts"] > 0:
         raise HTTPException(status_code=404, detail="Page out of range")
