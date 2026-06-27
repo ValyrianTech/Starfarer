@@ -1493,10 +1493,8 @@ class TestMultiplayerAPI:
             )
 
         resp = client.get(f"/api/game/{game_id}/system/{sys_id}/ghosts?page=100")
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["page"] == 1
-        assert len(data["ghosts"]) == 5
+        assert resp.status_code == 404
+        assert resp.json()["detail"] == "Page out of range"
 
     def test_api_system_ghosts_page_less_than_one(self) -> None:
         resp = client.post("/api/game/new", json={"shared_universe": True})
