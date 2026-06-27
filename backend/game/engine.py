@@ -21,7 +21,6 @@ from backend.models.discovery import Discovery
 from backend.utils import deterministic_hash, seeded_random
 from backend.generation.universe import distance_between
 from backend.generation.lore import get_fragment_for_body
-from backend.multiplayer.ripples import create_ripple
 
 logger = logging.getLogger(__name__)
 
