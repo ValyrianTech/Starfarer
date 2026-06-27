@@ -134,6 +134,8 @@ def api_system_ghosts(game_id: str, sys_id: str, page: int = 1, per_page: int = 
     """
     _check_game(game_id)
     result = get_system_ghosts(sys_id, page=page, per_page=per_page)
+    if page > result["total_pages"] and result["total_ghosts"] > 0:
+        raise HTTPException(status_code=404, detail="Page out of range")
     return result
 
 
