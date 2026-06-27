@@ -13,7 +13,9 @@ from typing import Optional
 
 from backend.models.game_state import GameState
 from backend.multiplayer.models import GhostSignature
-from backend.multiplayer.database import save_ghost_signature, get_ghost_signatures, get_ghost_signatures_paginated
+from backend.multiplayer.database import (
+    save_ghost_signature, get_ghost_signatures_paginated,
+)
 
 
 def record_ghost(
@@ -49,7 +51,7 @@ def record_ghost(
     save_ghost_signature(ghost)
     game_state.add_log(
         "multiplayer",
-        f"Left a ghost signature in the system.",
+        "Left a ghost signature in the system.",
         category="multiplayer",
         title="Ghost Signature Recorded",
         system=system_id,
@@ -71,13 +73,12 @@ def get_system_ghosts(system_id: str, page: int = 1, per_page: int = 10) -> dict
     :rtype: dict
     """
     ghosts, total, page, per_page = get_ghost_signatures_paginated(system_id, page=page, per_page=per_page)
-    total_pages = math.ceil(total / per_page)
-    if total_pages > 0:
-        page = min(page, total_pages)
-    else:
+    total_pages = math.ceil(total / per_page) if total > 0 else 0
+    if total_pages > 0 and page > total_pages:
+        page = total_pages
+        ghosts, total, page, per_page = get_ghost_signatures_paginated(system_id, page=page, per_page=per_page)
+    elif total_pages == 0:
         page = 1
-    if not ghosts and total > 0:
-        ghosts, _, _, _ = get_ghost_signatures_paginated(system_id, page=page, per_page=per_page)
     return {
         "ghosts": [g.to_dict() for g in ghosts],
         "page": page,

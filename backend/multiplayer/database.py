@@ -8,7 +8,6 @@ Uses the same database file as the main application via
 """
 
 import json
-import sqlite3
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 

@@ -22,9 +22,8 @@ from backend.multiplayer.crossroads import (
     post_message, get_messages,
 )
 from backend.multiplayer.ripples import create_ripple, get_pending_ripples, acknowledge_ripple
-from backend.multiplayer.api import _game_locks, _get_lock, _cleanup_game_lock, _cleanup_stale_locks, _lock_access_count
+from backend.multiplayer.api import _game_locks, _get_lock, _cleanup_game_lock, _cleanup_stale_locks, _game_exists
 from backend.models.discovery import Discovery, LoreFragment
-from backend.models.game_state import GameState
 
 client = TestClient(app)
 
@@ -334,7 +333,7 @@ class TestMultiplayerDatabase:
         )
         save_crossroads_lore(cl)
         lore_list = get_available_lore()
-        found = [l for l in lore_list if l.id == "lore-db-1"]
+        found = [item for item in lore_list if item.id == "lore-db-1"]
         assert len(found) == 1
         assert found[0].fragment_id == "lore_architects_1"
 
@@ -766,6 +765,14 @@ class TestMultiplayerGhosts:
         assert ghosts_data["ghosts"] == []
         assert ghosts_data["total_ghosts"] == 0
         assert ghosts_data["total_pages"] == 0
+
+    def test_get_system_ghosts_empty_clamps_page(self) -> None:
+        """When total ghosts is 0, page should be clamped to 1 even if page > 1."""
+        ghosts_data = get_system_ghosts("nonexistent-system-id-xyz", page=10, per_page=10)
+        assert ghosts_data["ghosts"] == []
+        assert ghosts_data["total_ghosts"] == 0
+        assert ghosts_data["total_pages"] == 0
+        assert ghosts_data["page"] == 1, f"Expected page to be clamped to 1, got {ghosts_data['page']}"
 
     def test_get_system_ghosts_pagination_default(self) -> None:
         state = new_game(42, "GhostShip", shared_universe=True)
@@ -1214,7 +1221,7 @@ class TestMultiplayerCrossroads:
         state.lore_fragments.append(lf)
         donate_lore(state, "lore_list_test")
         lore_list = get_available_lore_list()
-        found = [l for l in lore_list if l["fragment_id"] == "lore_list_test"]
+        found = [item for item in lore_list if item["fragment_id"] == "lore_list_test"]
         assert len(found) >= 1
         GAME_STORE.pop(state.id, None)
 
@@ -1244,7 +1251,6 @@ class TestMultiplayerCrossroads:
 
 class TestMultiplayerRipples:
     def test_create_ripple_within_radius(self) -> None:
-        from backend.generation.universe import distance_between
         state = new_game(42, "RippleShip", shared_universe=True)
         GAME_STORE[state.id] = state
         system = state.get_current_system()
@@ -1279,7 +1285,7 @@ class TestMultiplayerRipples:
         # Ripples target other systems, not the source
         if result["ripples_created"] > 0:
             # Get the first target system from the created ripple
-            target_sys_id = result["ripples"][0]["target_system_id"]
+            _ = result["ripples"][0]["target_system_id"]
             # Now check that the ripple exists in the DB for that target
             from backend.multiplayer.database import get_pending_ripples as db_get_pending
             db_ripples = db_get_pending(state_a.id)
@@ -1495,10 +1501,8 @@ class TestMultiplayerAPI:
             )
 
         resp = client.get(f"/api/game/{game_id}/system/{sys_id}/ghosts?page=100")
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["page"] == 1
-        assert len(data["ghosts"]) == 5
+        assert resp.status_code == 404
+        assert resp.json()["detail"] == "Page out of range"
 
     def test_api_system_ghosts_page_less_than_one(self) -> None:
         resp = client.post("/api/game/new", json={"shared_universe": True})
@@ -1927,23 +1931,41 @@ class TestMultiplayerAPI:
         resp = client.post(f"/api/game/{game_id}/ripple/nonexistent-ripple/acknowledge")
         assert resp.status_code == 400
 
+    def test_game_exists_in_store(self) -> None:
+        resp = client.post("/api/game/new", json={"shared_universe": True})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        assert _game_exists(game_id) is True
+
+    def test_game_exists_in_db_not_in_store(self) -> None:
+        resp = client.post("/api/game/new", json={"shared_universe": True})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE.pop(game_id)
+        game_save(state)
+        assert game_id not in GAME_STORE
+        assert _game_exists(game_id) is True
+
+    def test_game_exists_not_found(self) -> None:
+        assert _game_exists("nonexistent-game-id") is False
+
     def test_get_lock_returns_lock(self) -> None:
         """Verify that _get_lock returns a threading.Lock instance."""
-        from backend.multiplayer.api import _get_lock, _game_locks
+        from backend.multiplayer.api import _get_lock
         import threading
         lock = _get_lock("test-get-lock-1")
-        assert type(lock) == type(threading.Lock())
+        assert isinstance(lock, type(threading.Lock()))
 
     def test_get_lock_same_game_id(self) -> None:
         """Verify that _get_lock returns the same lock for the same game_id."""
-        from backend.multiplayer.api import _get_lock, _game_locks
+        from backend.multiplayer.api import _get_lock
         lock1 = _get_lock("test-get-lock-2")
         lock2 = _get_lock("test-get-lock-2")
         assert lock1 is lock2
 
     def test_get_lock_different_game_ids(self) -> None:
         """Verify that _get_lock returns different locks for different game_ids."""
-        from backend.multiplayer.api import _get_lock, _game_locks
+        from backend.multiplayer.api import _get_lock
         lock1 = _get_lock("test-get-lock-3a")
         lock2 = _get_lock("test-get-lock-3b")
         assert lock1 is not lock2
@@ -1998,10 +2020,8 @@ class TestMultiplayerAPI:
 
     def test_lock_serializes_concurrent_requests(self) -> None:
         """Verify that the lock serializes concurrent access to prevent state corruption."""
-        import threading
         import concurrent.futures
-        import time
-        from backend.multiplayer.api import _get_lock, _game_locks
+        from backend.multiplayer.api import _game_locks
 
         resp = client.post("/api/game/new", json={"shared_universe": True})
         assert resp.status_code == 200

@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from backend.models.game_state import GameState
-from backend.models.discovery import Discovery, LoreFragment
+from backend.models.discovery import Discovery
 from backend.multiplayer.models import (
     CrossroadsItem, CrossroadsLore, CrossroadsMessage,
 )
@@ -53,7 +53,7 @@ def donate_item(
         return {"success": False, "detail": f"No discovery named '{item_name}' in cargo."}
 
     actual_quantity = min(quantity, len(matching))
-    indices_to_remove = []
+    indices_to_remove: list[int] = []
     for i, d in enumerate(game_state.discoveries):
         if d.name == item_name and len(indices_to_remove) < actual_quantity:
             indices_to_remove.append(i)
@@ -222,7 +222,7 @@ def get_available_lore_list() -> list[dict]:
     :rtype: list[dict]
     """
     items = get_available_lore()
-    return [l.to_dict() for l in items]
+    return [item.to_dict() for item in items]
 
 
 def post_message(game_state: GameState, text: str) -> dict:
