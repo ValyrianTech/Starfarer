@@ -77,6 +77,8 @@ def get_system_ghosts(system_id: str, page: int = 1, per_page: int = 10) -> dict
     if total_pages > 0 and page > total_pages:
         page = total_pages
         ghosts, total, page, per_page = get_ghost_signatures_paginated(system_id, page=page, per_page=per_page)
+    elif total_pages == 0:
+        page = 1
     return {
         "ghosts": [g.to_dict() for g in ghosts],
         "page": page,

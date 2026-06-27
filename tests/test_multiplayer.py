@@ -766,6 +766,14 @@ class TestMultiplayerGhosts:
         assert ghosts_data["total_ghosts"] == 0
         assert ghosts_data["total_pages"] == 0
 
+    def test_get_system_ghosts_empty_clamps_page(self) -> None:
+        """When total ghosts is 0, page should be clamped to 1 even if page > 1."""
+        ghosts_data = get_system_ghosts("nonexistent-system-id-xyz", page=10, per_page=10)
+        assert ghosts_data["ghosts"] == []
+        assert ghosts_data["total_ghosts"] == 0
+        assert ghosts_data["total_pages"] == 0
+        assert ghosts_data["page"] == 1, f"Expected page to be clamped to 1, got {ghosts_data['page']}"
+
     def test_get_system_ghosts_pagination_default(self) -> None:
         state = new_game(42, "GhostShip", shared_universe=True)
         GAME_STORE[state.id] = state
