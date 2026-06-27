@@ -143,22 +143,6 @@ def save_ghost_signature(ghost: GhostSignature) -> None:
         conn.commit()
 
 
-def count_ghost_signatures(system_id: str) -> int:
-    """Count the total number of ghost signatures for a given star system.
-
-    :param system_id: The unique identifier of the star system.
-    :type system_id: str
-    :returns: The total number of ghost signatures.
-    :rtype: int
-    """
-    with get_db_ctx() as conn:
-        total = conn.execute(
-            "SELECT COUNT(*) FROM ghost_signatures WHERE system_id = ?",
-            (system_id,),
-        ).fetchone()[0]
-    return total
-
-
 def get_ghost_signatures(system_id: str) -> list[GhostSignature]:
     """Retrieve all ghost signatures recorded for a given star system.
 
