@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Starfarer — Spectator</title>
+  <link rel="stylesheet" href="css/spectator.css" />
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "./vendor/three/three.module.js"
+      }
+    }
+  </script>
+</head>
+<body>
+  <canvas id="scene"></canvas>
+
+  <!-- Game picker overlay -->
+  <div id="picker-overlay" class="overlay hidden">
+    <div class="picker-panel">
+      <h1 class="picker-title">STARFARER</h1>
+      <p class="picker-subtitle">Echoes of the Void — Spectator Mode</p>
+      <div id="picker-list" class="picker-list"></div>
+      <p id="picker-empty" class="picker-empty hidden">No games found. Start a game via the API first.</p>
+    </div>
+  </div>
+
+  <!-- HUD -->
+  <div id="hud" class="hidden">
+
+    <header id="hud-top">
+      <div id="ship-panel" class="panel">
+        <div class="panel-header">
+          <span id="ship-name">—</span>
+          <span id="ship-location" class="muted">—</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">FUEL</span>
+          <div class="bar"><div id="bar-fuel" class="bar-fill fuel"></div></div>
+          <span id="val-fuel" class="stat-value">—</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">HULL</span>
+          <div class="bar"><div id="bar-hull" class="bar-fill hull"></div></div>
+          <span id="val-hull" class="stat-value">—</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">MORALE</span>
+          <div class="bar"><div id="bar-morale" class="bar-fill morale"></div></div>
+          <span id="val-morale" class="stat-value">—</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">CARGO</span>
+          <div class="bar"><div id="bar-cargo" class="bar-fill cargo"></div></div>
+          <span id="val-cargo" class="stat-value">—</span>
+        </div>
+        <div class="inline-stats">
+          <span>⬡ <span id="val-credits">—</span> cr</span>
+          <span>✦ crew <span id="val-crew">—</span></span>
+        </div>
+      </div>
+
+      <div id="title-panel">
+        <div id="conn-status" class="conn connecting">CONNECTING</div>
+      </div>
+
+      <div id="info-panel" class="panel">
+        <div class="panel-header"><span>EXPEDITION</span></div>
+        <div class="inline-stats column">
+          <span>Systems visited: <b id="val-systems">—</b></span>
+          <span>Discoveries: <b id="val-discoveries">—</b></span>
+          <span>Lore fragments: <b id="val-lore">—</b></span>
+          <span>Biomes seen: <b id="val-biomes">—</b></span>
+        </div>
+        <div id="faction-list"></div>
+      </div>
+    </header>
+
+    <div id="event-card" class="panel hidden">
+      <div class="panel-header event-header">
+        <span id="event-title">—</span>
+        <span class="muted">AWAITING DECISION</span>
+      </div>
+      <p id="event-flavor">—</p>
+      <div id="event-choices"></div>
+    </div>
+
+    <footer id="hud-bottom">
+      <div id="log-panel" class="panel">
+        <div class="panel-header"><span>SHIP LOG</span></div>
+        <div id="log-feed"></div>
+      </div>
+    </footer>
+
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

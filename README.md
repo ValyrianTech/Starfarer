@@ -11,7 +11,18 @@ pip install -r requirements.txt
 uvicorn backend.main:app --reload --host 0.0.0.0 --port 8001
 ```
 
-Browse to `http://localhost:8001` for the frontend client, or `http://localhost:8001/docs` for the interactive API docs (Swagger).
+Browse to `http://localhost:8001` for the frontend client, `http://localhost:8001/webui/` for the read-only 3D spectator view, or `http://localhost:8001/docs` for the interactive API docs (Swagger).
+
+## Spectator Mode
+
+A separate, read-only web app for humans to watch a game in progress (e.g. while an AI is playing). Open `http://localhost:8001/webui/` and pick a game, or link directly with `http://localhost:8001/webui/?game=<game_id>`.
+
+- 3D galaxy map (Three.js) with glowing stars, phenomenon effects (nebulae, pulsars, binary stars, black holes, asteroid fields, ancient gates), and an auto-orbiting camera that follows the ship
+- Animated hyperspace jumps with an engine trail; visited systems light up as the galaxy is explored
+- Live HUD: ship vitals (fuel/hull/morale/cargo), credits, crew, faction reputation, expedition stats, pending event card, and a scrolling ship log
+- Powered by two read-only endpoints: `GET /api/spectate/games` (game list) and `GET /api/spectate/{game_id}/stream` (Server-Sent Events stream pushing a state summary plus new log entries whenever the game changes)
+
+No interaction is possible from the spectator view — it never mutates game state.
 
 ## How to Play
 
@@ -23,6 +34,7 @@ See **[HOWTOPLAY.md](HOWTOPLAY.md)** — a complete gameplay guide covering all 
 |-------|-------|
 | Backend | Python 3.12, FastAPI, Pydantic, SQLite (WAL mode) |
 | Frontend | Vanilla JS, HTML5 Canvas, CSS3 — served as static files by FastAPI |
+| Spectator webui | Vanilla JS, Three.js (vendored, no build step), SSE — served at `/webui` |
 | Procedural generation | Deterministic, seed-based (same seed = same universe) |
 
 All game actions are REST API calls. The browser UI is a reference client — you can play entirely via the API.

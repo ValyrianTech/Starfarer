@@ -15,12 +15,14 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 import os
 
 from backend.api.routes import router
+from backend.api.spectate import router as spectate_router
 from backend.multiplayer.api import router as multiplayer_router
 from backend.database import init_db, run_migrations
 from backend.multiplayer.database import init_multiplayer_db
 from backend.config import DATA_DIR
 
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend")
+WEBUI_DIR = os.path.join(os.path.dirname(__file__), "..", "webui")
 
 
 @asynccontextmanager
@@ -62,6 +64,7 @@ app.add_middleware(
 )
 
 app.include_router(router)
+app.include_router(spectate_router)
 app.include_router(multiplayer_router)
 
 
@@ -75,6 +78,9 @@ if os.path.isdir(FRONTEND_DIR):
     assets_dir = os.path.join(FRONTEND_DIR, "assets")
     if os.path.isdir(assets_dir):
         app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+if os.path.isdir(WEBUI_DIR):
+    app.mount("/webui", StaticFiles(directory=WEBUI_DIR, html=True), name="webui")
 
 
 @app.get("/")
