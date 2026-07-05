@@ -132,6 +132,14 @@ DEFAULT_DISCOVERY_CATEGORIES = ["mineral", "artifact", "lifeform", "signal", "ru
 #: All discovery categories.
 ALL_DISCOVERY_CATEGORIES = ["mineral", "artifact", "lifeform", "signal", "ruin"]
 
+_RESOURCE_LABELS = {
+    "mineral": "Minerals",
+    "artifact": "Artifacts",
+    "lifeform": "Lifeforms",
+    "signal": "Signals",
+    "ruin": "Ruins",
+}
+
 
 def _categories_for_biome(biome: Optional[str]) -> list[str]:
     """Return the discovery categories available for a given biome."""
@@ -257,14 +265,7 @@ def perform_scan(state: GameState) -> str:
                     )
                 continue
             categories = _categories_for_biome(body.biome)
-            labels = {
-                "mineral": "Minerals",
-                "artifact": "Artifacts",
-                "lifeform": "Lifeforms",
-                "signal": "Signals",
-                "ruin": "Ruins",
-            }
-            available = ", ".join(labels[c] for c in categories)
+            available = ", ".join(_RESOURCE_LABELS[c] for c in categories)
             if "mineral" in categories:
                 lines.append(f"{body.name} ({body.biome or 'unknown'}): {available}")
             else:
