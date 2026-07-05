@@ -4465,6 +4465,23 @@ class TestScannerTierFeatures:
         data = get_scanner_tier_data(state, system)
         assert "Lore World" in data["anomaly_detection"]
 
+    def test_get_scanner_tier_data_l4_suppressed_when_scanner_5_and_poi_zero(self) -> None:
+        """Scanner L4 anomaly_detection should suppress bodies with poi_count==0 when scanner >= 5."""
+        state = new_game(seed=42)
+        state.ship.scanner = 5
+        body = Body(id="loreb", name="Lore World", body_type="planet", size=3, distance_from_star=1.0, biome="ocean", poi_count=0)
+        system = self._make_system([body], sys_id="sys_lore_suppress")
+        frag = LoreFragment(
+            id="lore_suppress_test", arc="test", title="Test Fragment", text="secret",
+            discovery_id=f"{system.id}::{body.id}",
+        )
+        state.lore_fragments.append(frag)
+        # _body_has_anomaly returns True (lore fragment), but scanner >= 5 and poi_count == 0
+        # so the body should be suppressed from anomaly_detection
+        assert _body_has_anomaly(state, system, body) is True
+        data = get_scanner_tier_data(state, system)
+        assert "Lore World" not in data["anomaly_detection"]
+
     def test_perform_scan_with_scanner_5_fully_looted(self) -> None:
         """perform_scan should flag bodies with poi_count == 0 as fully looted when scanner >= 5."""
         state = new_game(seed=42)

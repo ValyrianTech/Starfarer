@@ -189,6 +189,8 @@ def get_scanner_tier_data(state: GameState, system: StarSystem) -> dict:
 
     if scanner >= 4:
         for body in system.bodies:
+            if scanner >= 5 and body.poi_count == 0:
+                continue  # L5 block handles this case
             if _body_has_anomaly(state, system, body):
                 anomaly_detection.append(body.name)
 
