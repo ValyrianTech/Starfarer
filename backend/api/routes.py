@@ -22,6 +22,7 @@ from backend.game.manager import (
 from backend.generation.events import trigger_event, resolve_event as resolve_event_func, decrement_cooldowns
 from backend.game.engine import (
     can_jump, perform_jump, perform_scan, get_nearby_systems,
+    get_scanner_tier_data,
     land_on_body, explore_surface,
     activate_distress_beacon, perform_salvage, emergency_craft,
 )
@@ -284,6 +285,7 @@ def api_scan(game_id: str) -> dict:
         "result": result,
         "system": current.to_dict() if current else None,
         "ship": state.ship.to_dict(),
+        "scanner_tier_data": get_scanner_tier_data(state, current) if current else None,
         "pending_event": event.to_dict() if event and not event.resolved else None,
     }
 

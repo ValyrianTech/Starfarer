@@ -11,7 +11,7 @@ from backend.main import app
 from backend.database import init_db
 from backend.game.manager import GAME_STORE, new_game, game_save
 from backend.game.engine import get_nearby_systems, land_on_body
-from backend.game.trading import perform_bulk_sell
+from backend.game.trading import perform_bulk_sell, purchase_upgrade
 from backend.models.game_state import GameState
 
 client = TestClient(app)
@@ -105,6 +105,46 @@ class TestAPIGameFlow:
         resp = client.post(f"/api/game/{game_id}/load")
         assert resp.status_code == 200
         assert "loaded" in resp.json()["result"].lower() or "Loaded" in resp.json()["result"]
+
+    def test_scan_response_includes_scanner_tier_data(self) -> None:
+        """Scan response should include scanner_tier_data with the expected structure."""
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+        resp = client.post(f"/api/game/{game_id}/scan")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "scanner_tier_data" in data
+        tier_data = data["scanner_tier_data"]
+        assert "value_estimation" in tier_data
+        assert "anomaly_detection" in tier_data
+        assert "resource_mapping" in tier_data
+
+    def test_scan_response_scanner_tier_data_empty_at_l1(self) -> None:
+        """At scanner L1 the scanner_tier_data lists should all be empty."""
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+        GAME_STORE[game_id].ship.scanner = 1
+        resp = client.post(f"/api/game/{game_id}/scan")
+        assert resp.status_code == 200
+        tier_data = resp.json()["scanner_tier_data"]
+        assert tier_data["value_estimation"] == []
+        assert tier_data["anomaly_detection"] == []
+        assert tier_data["resource_mapping"] == []
+
+    def test_scan_response_scanner_tier_data_at_l3(self) -> None:
+        """After upgrading scanner to L3, scan should return value_estimation entries."""
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        state.ship.credits = 10000
+        while state.ship.scanner < 3:
+            ok, msg = purchase_upgrade(state, "scanner")
+            assert ok is True, msg
+        assert state.ship.scanner == 3
+        resp = client.post(f"/api/game/{game_id}/scan")
+        assert resp.status_code == 200
+        tier_data = resp.json()["scanner_tier_data"]
+        assert len(tier_data["value_estimation"]) > 0
 
 
 class TestAPIEdgeCases:
