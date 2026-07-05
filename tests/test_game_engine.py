@@ -4588,6 +4588,16 @@ class TestBodyModelNewFields:
         restored = Body.from_dict(d)
         assert restored.sub_surface_explored is True
 
+    def test_atmospheric_scan_count_default(self):
+        body = Body(id="b1", name="Test", body_type="planet", size=3, distance_from_star=0.5)
+        assert body.atmospheric_scan_count == 0
+
+    def test_atmospheric_scan_count_roundtrip(self):
+        body = Body(id="b1", name="Test", body_type="planet", size=3, distance_from_star=0.5, atmospheric_scan_count=3)
+        d = body.to_dict()
+        restored = Body.from_dict(d)
+        assert restored.atmospheric_scan_count == 3
+
 
 class TestAtmosphericScan:
     """Tests for perform_atmospheric_scan."""
@@ -4641,6 +4651,30 @@ class TestAtmosphericScan:
         fuel_before = state.ship.fuel
         perform_atmospheric_scan(state)
         assert state.ship.fuel == fuel_before - ATMOSPHERIC_SCAN_FUEL_COST
+
+    def test_atmospheric_scan_increments_counter(self):
+        state, body = self._make_state("gas_giant")
+        assert body.atmospheric_scan_count == 0
+        perform_atmospheric_scan(state)
+        assert body.atmospheric_scan_count == 1
+
+    def test_atmospheric_scan_limited_to_three(self):
+        state, body = self._make_state("gas_giant")
+        for i in range(3):
+            state.ship.fuel = 100
+            discoveries = perform_atmospheric_scan(state)
+            assert len(discoveries) > 0, f"Scan {i+1} should succeed"
+        state.ship.fuel = 100
+        discoveries = perform_atmospheric_scan(state)
+        assert discoveries == []
+        assert body.atmospheric_scan_count == 3
+
+    def test_atmospheric_scan_counter_survives_serialization(self):
+        state, body = self._make_state("gas_giant")
+        perform_atmospheric_scan(state)
+        d = body.to_dict()
+        restored = Body.from_dict(d)
+        assert restored.atmospheric_scan_count == 1
 
 
 class TestSubSurfaceExploration:

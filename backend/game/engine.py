@@ -482,6 +482,9 @@ def perform_atmospheric_scan(state: GameState) -> list[Discovery]:
     if body.biome not in ("gas_giant", "volcanic", "ocean"):
         return []
 
+    if body.atmospheric_scan_count >= 3:
+        return []
+
     ship.fuel -= ATMOSPHERIC_SCAN_FUEL_COST
 
     discoveries = []
@@ -492,6 +495,8 @@ def perform_atmospheric_scan(state: GameState) -> list[Discovery]:
         disc = _generate_discovery(item_rng, "atmospheric_phenomena", body, system)
         discoveries.append(disc)
         state.discoveries.append(disc)
+
+    body.atmospheric_scan_count += 1
 
     state.add_log("exploration", f"Atmospheric scan of {body.name} complete. Found {len(discoveries)} atmospheric phenomena.", category="exploration", title="Atmospheric Scan", system=system.name, body=body.name, fuel_change=-ATMOSPHERIC_SCAN_FUEL_COST)
 

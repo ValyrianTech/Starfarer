@@ -53,6 +53,7 @@ class Body:
     explored: bool = False
     exploration_count: int = 0
     sub_surface_explored: bool = False
+    atmospheric_scan_count: int = 0
 
     def to_dict(self) -> dict:
         """Serialize the body to a dictionary.
@@ -72,6 +73,7 @@ class Body:
             "explored": self.explored,
             "exploration_count": self.exploration_count,
             "sub_surface_explored": self.sub_surface_explored,
+            "atmospheric_scan_count": self.atmospheric_scan_count,
         }
 
     @classmethod
@@ -95,6 +97,7 @@ class Body:
             explored=d.get("explored", False),
             exploration_count=d.get("exploration_count", 0),
             sub_surface_explored=d.get("sub_surface_explored", False),
+            atmospheric_scan_count=d.get("atmospheric_scan_count", 0),
         )
 
 
