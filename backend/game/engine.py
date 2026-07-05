@@ -245,10 +245,16 @@ def perform_scan(state: GameState) -> str:
     if scanner >= 5:
         for body in system.bodies:
             if body.poi_count == 0:
-                lines.append(
-                    f"{body.name} ({body.biome or 'unknown'}): "
-                    f"No remaining POIs of interest — fully looted"
-                )
+                if _body_has_anomaly(state, system, body):
+                    lines.append(
+                        f"{body.name} ({body.biome or 'unknown'}): "
+                        f"No surface POIs remain, but anomaly signatures detected"
+                    )
+                else:
+                    lines.append(
+                        f"{body.name} ({body.biome or 'unknown'}): "
+                        f"No remaining POIs of interest — fully looted"
+                    )
                 continue
             categories = _categories_for_biome(body.biome)
             labels = {

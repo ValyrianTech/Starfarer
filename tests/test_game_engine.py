@@ -4475,6 +4475,25 @@ class TestScannerTierFeatures:
         result = perform_scan(state)
         assert "fully looted" in result
 
+    def test_perform_scan_with_scanner_5_fully_looted_with_anomaly(self) -> None:
+        """perform_scan should not say 'fully looted' for a body with poi_count==0 but with an anomaly (lore fragment)."""
+        from backend.models.discovery import LoreFragment
+        state = new_game(seed=42)
+        state.ship.scanner = 5
+        system = state.get_current_system()
+        assert system is not None
+        body = Body(id="b1", name="Mystery World", body_type="planet", size=3, distance_from_star=1.0, biome="crystal", poi_count=0)
+        system.bodies = [body]
+        # Attach a lore fragment to this body so _body_has_anomaly returns True
+        frag = LoreFragment(
+            id="lore_scan_test", arc="test", title="Test Fragment", text="secret",
+            discovery_id=f"{system.id}::{body.id}",
+        )
+        state.lore_fragments.append(frag)
+        result = perform_scan(state)
+        assert "fully looted" not in result, f"Should not say 'fully looted' when anomaly present: {result}"
+        assert "anomaly signatures detected" in result, f"Should mention anomaly signatures: {result}"
+
     def test_perform_scan_with_scanner_5_no_mineral_deposits(self) -> None:
         """perform_scan should note no mineral deposits for non-mineral biomes when scanner >= 5."""
         state = new_game(seed=42)
