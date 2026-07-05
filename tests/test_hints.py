@@ -738,3 +738,76 @@ class TestHintsEdgeCases:
         )
         state.events.append(crisis)
         assert _first_crisis(state, state.systems) is False
+
+
+class TestNewMissionHints:
+    def test_missions_available_true(self):
+        from backend.hints import _missions_available
+        state = _make_game()
+        state.systems_visited = 2
+        current = state.get_current_system()
+        current.has_trading_station = True
+        assert _missions_available(state, state.systems) is True
+    def test_mission_pending_true(self):
+        from backend.hints import _mission_pending
+        state = _make_game()
+        state.accepted_missions["test"] = {"faction_id": "test"}
+        current = state.get_current_system()
+        current.has_trading_station = True
+        assert _mission_pending(state, state.systems) is True
+
+
+class TestNewMissionHintsExtra:
+    def test_missions_available_systems_visited_too_low(self):
+        from backend.hints import _missions_available
+        state = _make_game()
+        state.systems_visited = 1
+        assert _missions_available(state, state.systems) is False
+    def test_missions_available_has_accepted_missions(self):
+        from backend.hints import _missions_available
+        state = _make_game()
+        state.systems_visited = 2
+        state.accepted_missions["test"] = {"faction_id": "test"}
+        current = state.get_current_system()
+        current.has_trading_station = True
+        assert _missions_available(state, state.systems) is False
+    def test_missions_available_no_station(self):
+        from backend.hints import _missions_available
+        state = _make_game()
+        state.systems_visited = 2
+        current = state.get_current_system()
+        current.has_trading_station = False
+        assert _missions_available(state, state.systems) is False
+    def test_mission_pending_no_accepted(self):
+        from backend.hints import _mission_pending
+        state = _make_game()
+        current = state.get_current_system()
+        current.has_trading_station = True
+        assert _mission_pending(state, state.systems) is False
+    def test_mission_pending_no_station(self):
+        from backend.hints import _mission_pending
+        state = _make_game()
+        state.accepted_missions["test"] = {"faction_id": "test"}
+        current = state.get_current_system()
+        current.has_trading_station = False
+        assert _mission_pending(state, state.systems) is False
+    def test_mission_high_tier_true(self):
+        from backend.hints import _mission_high_tier
+        state = _make_game()
+        state.systems_visited = 2
+        current = state.get_current_system()
+        current.has_trading_station = True
+        state.modify_faction_reputation("stellar_cartographers", 15)
+        assert _mission_high_tier(state, state.systems) is True
+    def test_mission_high_tier_systems_visited_too_low(self):
+        from backend.hints import _mission_high_tier
+        state = _make_game()
+        state.systems_visited = 1
+        assert _mission_high_tier(state, state.systems) is False
+    def test_mission_high_tier_no_station(self):
+        from backend.hints import _mission_high_tier
+        state = _make_game()
+        state.systems_visited = 2
+        current = state.get_current_system()
+        current.has_trading_station = False
+        assert _mission_high_tier(state, state.systems) is False

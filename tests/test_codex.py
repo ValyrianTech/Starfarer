@@ -163,6 +163,63 @@ class TestGetCodex:
         for entry in entries:
             assert entry["value_rating"] is not None
 
+    def test_scanner_l3_common_discovery_types(self) -> None:
+        state = _make_game()
+        state.ship.scanner = 3
+        entries = get_codex(state)
+        by_id = {b["biome_id"]: b for b in BIOME_CODEX_DATA}
+        for entry in entries:
+            assert "common_discovery_types" in entry
+            assert entry["common_discovery_types"] == by_id[entry["biome_id"]]["common_discoveries"]
+
+    def test_scanner_l3_common_discovery_types_hidden_at_l2(self) -> None:
+        state = _make_game()
+        state.ship.scanner = 2
+        entries = get_codex(state)
+        for entry in entries:
+            assert "common_discovery_types" not in entry
+
+    def test_scanner_l4_rare_discovery_types(self) -> None:
+        state = _make_game()
+        state.ship.scanner = 4
+        entries = get_codex(state)
+        by_id = {b["biome_id"]: b for b in BIOME_CODEX_DATA}
+        for entry in entries:
+            assert "rare_discovery_types" in entry
+            assert entry["rare_discovery_types"] == by_id[entry["biome_id"]]["rare_discoveries"]
+
+    def test_scanner_l4_rare_discovery_types_hidden_at_l3(self) -> None:
+        state = _make_game()
+        state.ship.scanner = 3
+        entries = get_codex(state)
+        for entry in entries:
+            assert "rare_discovery_types" not in entry
+
+    def test_scanner_l5_unique_discovery_locations(self) -> None:
+        state = _make_game()
+        state.ship.scanner = 5
+        entries = get_codex(state)
+        by_id = {b["biome_id"]: b for b in BIOME_CODEX_DATA}
+        for entry in entries:
+            assert "unique_discovery_locations" in entry
+            assert entry["unique_discovery_locations"] == by_id[entry["biome_id"]]["unique_locations"]
+
+    def test_scanner_l5_unique_discovery_locations_hidden_at_l4(self) -> None:
+        state = _make_game()
+        state.ship.scanner = 4
+        entries = get_codex(state)
+        for entry in entries:
+            assert "unique_discovery_locations" not in entry
+
+    def test_scanner_l3_l4_l5_all_visible_at_l5(self) -> None:
+        state = _make_game()
+        state.ship.scanner = 5
+        entries = get_codex(state)
+        for entry in entries:
+            assert "common_discovery_types" in entry
+            assert "rare_discovery_types" in entry
+            assert "unique_discovery_locations" in entry
+
 
 class TestRecordBiomeVisit:
     def test_record_biome_visit_adds_to_set(self) -> None:

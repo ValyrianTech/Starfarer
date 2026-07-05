@@ -2775,3 +2775,116 @@ def test_api_complete_mission_old_format_accepted() -> None:
     assert data["mission"]["id"] == "mission_old_format"
     assert "rewards" in data
     assert "ship" in data
+
+
+class TestMissionSummary:
+    """Tests for mission summary and generate_summary."""
+
+    def test_mission_generate_summary(self):
+        from backend.missions import FactionMission
+        mission = FactionMission(
+            id="test_mission",
+            faction_id="stellar_cartographers",
+            tier=1,
+            title="Test Mission",
+            description="A test mission",
+            objective_type="courier",
+            objective_target="target_system",
+            fuel_cost=3,
+            credit_cost=10,
+            credit_reward=50,
+            reputation_reward=5,
+        )
+        summary = mission.generate_summary()
+        assert isinstance(summary, str)
+        assert len(summary) > 0
+        assert "Tier 1" in summary
+        assert "Test Mission" in summary
+
+    def test_mission_to_dict_includes_summary(self):
+        from backend.missions import FactionMission
+        mission = FactionMission(
+            id="test_mission2",
+            faction_id="void_traders",
+            tier=2,
+            title="Deep Exploration",
+            description="Explore deep space",
+            objective_type="exploration",
+            objective_target="nebula_x",
+            fuel_cost=6,
+            credit_cost=25,
+            credit_reward=200,
+            reputation_reward=12,
+        )
+        d = mission.to_dict()
+        assert "summary" in d
+        assert isinstance(d["summary"], str)
+        assert len(d["summary"]) > 0
+        assert "Tier 2" in d["summary"]
+
+    def test_get_missions_summary_with_station(self):
+        from backend.missions import get_missions_summary
+        from backend.game.manager import new_game
+        state = new_game(seed=42)
+        current = state.get_current_system()
+        current.has_trading_station = True
+        summary = get_missions_summary(state, current)
+        assert summary["count"] > 0
+        assert summary["highest_tier"] >= 1
+        assert isinstance(summary["daily_available"], bool)
+        assert summary["available"] is True
+
+    def test_get_missions_summary_no_station(self):
+        from backend.missions import get_missions_summary
+        from backend.game.manager import new_game
+        state = new_game(seed=42)
+        current = state.get_current_system()
+        current.has_trading_station = False
+        summary = get_missions_summary(state, current)
+        assert summary["count"] == 0
+        assert summary["highest_tier"] == 0
+        assert summary["daily_available"] is False
+        assert summary["available"] is False
+
+    def test_get_missions_summary_none_system(self):
+        from backend.missions import get_missions_summary
+        from backend.game.manager import new_game
+        state = new_game(seed=42)
+        summary = get_missions_summary(state, None)
+        assert summary["count"] == 0
+        assert summary["highest_tier"] == 0
+        assert summary["daily_available"] is False
+
+    def test_get_missions_summary_only_daily(self):
+        """When only a daily mission exists (no standard missions), available should be False
+        and count should be 0, matching the fix in Option A."""
+        from backend.missions import get_missions_summary, FactionMission, generate_missions
+        from backend.game.manager import new_game
+        from unittest.mock import patch
+        state = new_game(seed=42)
+        current = state.get_current_system()
+        current.has_trading_station = True
+        
+        # Patch generate_missions to return only a daily mission (no standard missions)
+        daily_only = [
+            FactionMission(
+                id="mission_daily_only",
+                faction_id="stellar_cartographers",
+                tier=1,
+                title="Daily Only",
+                description="Only a daily mission is available.",
+                objective_type="daily",
+                objective_target=current.id,
+                fuel_cost=0,
+                credit_cost=0,
+                credit_reward=50,
+                reputation_reward=5,
+            )
+        ]
+        with patch("backend.missions.generate_missions", return_value=daily_only):
+            summary = get_missions_summary(state, current)
+        assert summary["available"] is False, "available should be False when only daily missions exist"
+        assert summary["count"] == 0, "count should be 0 when only daily missions exist"
+        assert summary["daily_available"] is True, "daily_available should still be True"
+        assert summary["highest_tier"] == 0, "highest_tier should be 0 when no standard missions"
+        assert summary["tiers"] == [], "tiers should be empty when no standard missions"

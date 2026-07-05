@@ -110,11 +110,114 @@ def perform_jump(state: GameState, target_system: StarSystem, fuel_cost: int) ->
     return f"Jumped to {target_system.name}."
 
 
+#: Discovery value range per discovery, from ``_generate_discovery``.
+DISCOVERY_VALUE_MIN = 10
+DISCOVERY_VALUE_MAX = 200
+
+#: Discovery categories available per biome, used for scanner L5 resource mapping.
+BIOME_DISCOVERY_CATEGORIES = {
+    "jungle": ["artifact", "lifeform", "ruin"],
+    "ocean": ["artifact", "ruin", "lifeform"],
+    "desert": ["artifact", "ruin", "mineral"],
+    "tundra": ["artifact", "mineral", "lifeform"],
+    "volcanic": ["mineral", "artifact", "lifeform"],
+    "crystal": ["mineral", "artifact", "lifeform"],
+    "barren": ["mineral"],
+    "gas_giant": ["lifeform", "signal"],
+}
+
+#: Default categories when a biome is unknown or unmapped.
+DEFAULT_DISCOVERY_CATEGORIES = ["mineral", "artifact", "lifeform", "signal", "ruin"]
+
+#: All discovery categories.
+ALL_DISCOVERY_CATEGORIES = ["mineral", "artifact", "lifeform", "signal", "ruin"]
+
+_RESOURCE_LABELS = {
+    "mineral": "Minerals",
+    "artifact": "Artifacts",
+    "lifeform": "Lifeforms",
+    "signal": "Signals",
+    "ruin": "Ruins",
+}
+
+
+def _categories_for_biome(biome: Optional[str]) -> list[str]:
+    """Return the discovery categories available for a given biome."""
+    return BIOME_DISCOVERY_CATEGORIES.get(biome or "", DEFAULT_DISCOVERY_CATEGORIES)
+
+
+def _body_has_anomaly(state: GameState, system: StarSystem, body: Body) -> bool:
+    """Determine whether a body contains a rare/unique anomaly (scanner L4)."""
+    lore_frag = get_fragment_for_body(system.id, body.id, state.lore_fragments)
+    if lore_frag is not None:
+        return True
+    return body.poi_count >= 3
+
+
+def get_scanner_tier_data(state: GameState, system: StarSystem) -> dict:
+    """Build scanner-tier-gated structured data for a scanned system.
+
+    Returns tier-specific information based on the ship's effective
+    scanner level:
+
+    - L3 (``value_estimation``): estimated discovery value ranges per body.
+    - L4 (``anomaly_detection``): bodies detected to contain anomalies.
+    - L5 (``resource_mapping``): discovery categories available per body.
+
+    :param state: The current game state.
+    :type state: GameState
+    :param system: The star system to build tier data for.
+    :type system: StarSystem
+    :returns: A dict with ``value_estimation``, ``anomaly_detection``,
+        and ``resource_mapping`` keys.
+    :rtype: dict
+    """
+    scanner = state.ship.scanner
+    value_estimation: list[dict] = []
+    anomaly_detection: list[str] = []
+    resource_mapping: list[dict] = []
+
+    if scanner >= 3:
+        for body in system.bodies:
+            value_estimation.append({
+                "name": body.name,
+                "biome": body.biome,
+                "poi_count": body.poi_count,
+                "value_range_min": DISCOVERY_VALUE_MIN,
+                "value_range_max": DISCOVERY_VALUE_MAX,
+            })
+
+    if scanner >= 4:
+        for body in system.bodies:
+            if scanner >= 5 and body.poi_count == 0:
+                continue  # L5 block handles this case
+            if _body_has_anomaly(state, system, body):
+                anomaly_detection.append(body.name)
+
+    if scanner >= 5:
+        for body in system.bodies:
+            resource_mapping.append({
+                "name": body.name,
+                "categories": _categories_for_biome(body.biome),
+            })
+
+    return {
+        "value_estimation": value_estimation,
+        "anomaly_detection": anomaly_detection,
+        "resource_mapping": resource_mapping,
+    }
+
+
 def perform_scan(state: GameState) -> str:
     """Scan the current star system for orbital bodies.
 
     Deducts scan fuel cost, marks the current system as scanned,
-    and logs the number of bodies detected.
+    and logs the number of bodies detected. Higher scanner tiers
+    append additional tier-specific information to the result:
+
+    - L3: estimated discovery value ranges per body.
+    - L4: anomaly detection for bodies with rare/unique POIs.
+    - L5: resource mapping of discovery categories per body.
 
     :param state: The current game state.
     :type state: GameState
@@ -131,8 +234,50 @@ def perform_scan(state: GameState) -> str:
     system.scanned = True
     state.add_log("exploration", f"Scanned {system.name}. {len(system.bodies)} orbital bodies detected.", category="scan", title="System Scan", system=system.name, fuel_change=-SCAN_FUEL_COST)
 
+    lines = [f"Scan complete. {len(system.bodies)} bodies found."]
+    scanner = ship.scanner
 
-    return f"Scan complete. {len(system.bodies)} bodies found."
+    if scanner >= 3:
+        for body in system.bodies:
+            lines.append(
+                f"{body.name} ({body.biome or 'unknown'}): {body.poi_count} POIs — "
+                f"estimated value range: {DISCOVERY_VALUE_MIN}-{DISCOVERY_VALUE_MAX}cr per discovery"
+            )
+
+    if scanner >= 4:
+        for body in system.bodies:
+            if scanner >= 5 and body.poi_count == 0:
+                continue  # L5 block handles this case
+            if _body_has_anomaly(state, system, body):
+                lines.append(
+                    f"{body.name} ({body.biome or 'unknown'}): {body.poi_count} POIs — "
+                    f"ANOMALY DETECTED: possible lore fragment or unique artifact"
+                )
+
+    if scanner >= 5:
+        for body in system.bodies:
+            if body.poi_count == 0:
+                if _body_has_anomaly(state, system, body):
+                    lines.append(
+                        f"{body.name} ({body.biome or 'unknown'}): "
+                        f"No surface POIs remain, but anomaly signatures detected"
+                    )
+                else:
+                    lines.append(
+                        f"{body.name} ({body.biome or 'unknown'}): "
+                        f"No remaining POIs of interest — fully looted"
+                    )
+                continue
+            categories = _categories_for_biome(body.biome)
+            available = ", ".join(_RESOURCE_LABELS[c] for c in categories)
+            if "mineral" in categories:
+                lines.append(f"{body.name} ({body.biome or 'unknown'}): {available}")
+            else:
+                lines.append(
+                    f"{body.name} ({body.biome or 'unknown'}): {available} — no mineral deposits detected"
+                )
+
+    return "\n".join(lines)
 
 
 def get_nearby_systems(state: GameState) -> list[dict]:

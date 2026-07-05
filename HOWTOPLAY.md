@@ -105,6 +105,11 @@ POST /api/game/{game_id}/scan
 
 Costs 5 fuel. Reveals all orbital bodies (planets, moons, asteroid belts) and their biomes. A system only needs to be scanned once.
 
+Higher scanner levels unlock progressively richer scan output, both in the `result` message and in a structured `scanner_tier_data` field on the response:
+- **L3** (`value_estimation`) — estimated discovery value ranges per body (10–200 cr)
+- **L4** (`anomaly_detection`) — bodies flagged as containing an anomaly (a lore fragment or 3+ points of interest)
+- **L5** (`resource_mapping`) — the discovery categories available per body, based on its biome
+
 ### 3.5 View System Details
 
 ```http
@@ -167,12 +172,20 @@ Choices have outcomes that modify stats: `fuel`, `hull`, `morale`, `credits`, `c
 | Hazard Event (Solar Flare) | Take cover behind nearest planet | Minimal hull damage and fuel cost |
 | Hazard Event (Micrometeorite Storm) | Activate point defense lasers | Fuel cost only, no hull damage |
 | Hazard Event (Quantum Fluctuation) | Record the anomaly | High credit reward with no damage |
-| Nebula Event (Ion Storm) | Power down non-essential systems | Cargo loss but no hull damage |
+| Nebula Event (Ion Storm) | Power down and drift through | Fuel cost only, no hull damage |
+| Nebula Event (Nebula Nursery) | Navigate carefully through | Best payout (rare protoplanet, credits) |
+| Nebula Event (Precursor Nebula Beacon) | Follow the signal to its source | Morale boost + potential lore fragment |
 | Nebula Event (Protostar Formation) | Collect samples | Minor hull damage but yields valuable mineral samples |
 | Nebula Event (Nebula Navigation Puzzle) | Follow the clearing current | Gains fuel by finding a shortcut |
+| Pulsar Event (Pulsar Beam Sweep) | Raise shields and ride it out | Gains a temporary shield buff, no lasting damage |
+| Pulsar Event (Pulsar Timing Anomaly) | Investigate the anomaly | Highest credit reward (hidden neutron star) |
+| Pulsar Event (Magnetar Flare) | Emergency shutdown of all systems | Fuel cost only, avoids hull damage |
 | Pulsar Event (Radiation Pulse) | Dive behind asteroid/moon | Avoids hull damage at fuel cost |
 | Pulsar Event (Pulsar Timing Signal) | Decode the signal pattern | Credits and potential lore fragment |
 | Pulsar Event (Neutron Star Proximity) | Safe orbital scan | No hull damage, still yields data |
+| Binary Star Event (Binary Eclipse) | Search for eclipse-watching structures | Morale boost (ancient observatory) |
+| Binary Star Event (Lagrange Point Cache) | Search the debris field thoroughly | Most cargo (salvage + artifacts) |
+| Binary Star Event (Tidal Lock World) | Land on the twilight zone | Highest reward (unique biome discoveries) |
 | Binary Star Event (Orbital Mechanics Challenge) | Calculate perfect trajectory | Fuel-efficient gravity assist + credits |
 | Binary Star Event (Lagrange Point Discovery) | Investigate the satellite | Most valuable outcome (credits + data) |
 | Black Hole Event | Depends on situation | Time Dilation: study for credits. Hawking Radiation: harvest for fuel. Spaghettification: gravity assist for fuel. Accretion Disk: probe for credits. Gravitational Lens: study for credits+morale. |
@@ -490,7 +503,7 @@ Everything you've found, organized by category with credit values.
 GET /api/game/{game_id}?sort=value&order=desc
 ```
 
-Complete state dump: ship, current system, pending events, discoveries, log entries, fuel status, active contextual hints, reputation summary, biomes visited, and cargo details. Accepts optional `sort` (`"value"` or `"name"`) and `order` (`"asc"` or `"desc"`) query parameters for sorting cargo items in the response. The response includes `total_value` (sum of all cargo credit values), `top3_ids` (the 3 most valuable cargo item IDs), `hints` (active contextual hint objects with `id`, `severity`, `message`, and optional `command`), `biomes_visited` (list of biome type strings the player has visited), and `biomes_visited_count` (count of unique biomes visited) fields.
+Complete state dump: ship, current system, pending events, discoveries, log entries, fuel status, active contextual hints, reputation summary, biomes visited, and cargo details. Accepts optional `sort` (`"value"` or `"name"`) and `order` (`"asc"` or `"desc"`) query parameters for sorting cargo items in the response. The response includes `total_value` (sum of all cargo credit values), `top3_ids` (the 3 most valuable cargo item IDs), `hints` (active contextual hint objects with `id`, `severity`, `message`, and optional `command`), `missions_available` (a summary of missions offered at the current station, with `available`, `count`, `tiers`, `highest_tier`, and `daily_available`), `biomes_visited` (list of biome type strings the player has visited), and `biomes_visited_count` (count of unique biomes visited) fields.
 
 ### Cargo Hold
 
@@ -535,13 +548,16 @@ Lore fragments are found during exploration when you land on the right body. Hin
 GET /api/game/{game_id}/codex
 ```
 
-Returns a codex of planetary biome knowledge that grows as you explore the galaxy. The codex covers 8 biome types: ocean, jungle, crystal, volcanic, desert, tundra, barren, and gas_giant. Knowledge is revealed progressively in 3 tiers based on your ship's scanner level:
+Returns a codex of planetary biome knowledge that grows as you explore the galaxy. The codex covers 8 biome types: ocean, jungle, crystal, volcanic, desert, tundra, barren, and gas_giant. Knowledge is revealed progressively based on your ship's scanner level:
 
 | Scanner Level | Knowledge Unlocked |
 |---------------|-------------------|
 | 0+ (Tier 1) | Biome name, description (if visited, otherwise "???"), and a general hint about what to expect |
 | 1+ (Tier 2) | Value rating (1–5 stars) indicating how valuable discoveries in that biome tend to be |
 | 2+ (Tier 3) | Specific discovery types commonly found in that biome (only shown for biomes you've visited) |
+| 3+ (L3) | `common_discovery_types` — common discovery types per biome (clarified naming) |
+| 4+ (L4) | `rare_discovery_types` — rarer discovery types per biome |
+| 5+ (L5) | `unique_discovery_locations` — named unique locations to seek out per biome |
 
 **Biomes visited tracking:** Biomes are recorded automatically when you land on a body or explore its surface. The `biomes_visited` set on the game state tracks which biomes you've encountered. A biome's entry in the codex is marked as `"unlocked"` if you've visited it, and `"locked"` otherwise. Locked biomes show limited information but their hints are always visible so you know what to look for.
 
@@ -552,6 +568,9 @@ Each codex entry includes:
 - `value_rating` — star rating 1–5 (or `null` if scanner below level 1)
 - `hint` — general tip about the biome's discovery potential
 - `common_discoveries` — list of discovery type names commonly found (or empty list if not unlocked or scanner below level 2)
+- `common_discovery_types` — common discovery types (present at scanner L3+)
+- `rare_discovery_types` — rarer discovery types (present at scanner L4+)
+- `unique_discovery_locations` — named unique locations to seek out (present at scanner L5+)
 - `unlocked` — boolean indicating whether you've visited this biome
 
 ### Faction Relations
@@ -691,11 +710,11 @@ The game persists all state to SQLite. Save frequently — especially before ris
 |--------|----------|-------------|
 | GET | `/api/health` | Server health check |
 | POST | `/api/game/new` | Create new game |
-| GET | `/api/game/{id}?sort={value\|name}&order={asc\|desc}` | Full game state (ship, system, events, log, fuel_status, hints, reputation, shared_universe, total_value, top3_ids) |
+| GET | `/api/game/{id}?sort={value\|name}&order={asc\|desc}` | Full game state (ship, system, events, log, fuel_status, hints, missions_available, reputation, shared_universe, total_value, top3_ids) |
 | GET | `/api/game/{id}/galaxy` | Galaxy map data |
 | GET | `/api/game/{id}/system/{sid}` | System details |
 | POST | `/api/game/{id}/jump/{sid}` | Jump to system |
-| POST | `/api/game/{id}/scan` | Scan current system |
+| POST | `/api/game/{id}/scan` | Scan current system (response includes `scanner_tier_data` at scanner L3+) |
 | POST | `/api/game/{id}/land/{bid}` | Land on body |
 | POST | `/api/game/{id}/explore` | Explore surface |
 | POST | `/api/game/{id}/event/{eid}/resolve` | Resolve event |

@@ -8,14 +8,16 @@ from backend.game.engine import (
     can_jump, perform_jump, perform_scan, get_nearby_systems,
     land_on_body, explore_surface,
     activate_distress_beacon, perform_salvage, emergency_craft,
+    get_scanner_tier_data, _body_has_anomaly, _categories_for_biome,
+    DEFAULT_DISCOVERY_CATEGORIES, BIOME_DISCOVERY_CATEGORIES,
 )
 from backend.game.trading import get_upgrade_info, purchase_upgrade, perform_trade, perform_bulk_sell, calculate_fuel_price, round_half_up
 from backend.game.manager import new_game, get_galaxy, get_system_detail, game_save, load_or_create, get_game_state, _state_from_dict
 from backend.generation.events import trigger_event, resolve_event, EVENT_TEMPLATES, _get_eligible_templates, _apply_cooldown_fallback
 from backend.config import SCAN_FUEL_COST
 from backend.models.game_state import GameState
-from backend.models.discovery import Discovery
-from backend.models.system import StarSystem
+from backend.models.discovery import Discovery, LoreFragment
+from backend.models.system import StarSystem, Body
 
 
 class TestGameManager:
@@ -3543,19 +3545,19 @@ class TestPhenomenonEvents:
     """Tests for phenomenon-specific events (nebula, pulsar, binary star)."""
 
     def test_nebula_events_exist(self) -> None:
-        """Verify 4 nebula events exist in EVENT_TEMPLATES with trigger_conditions {'phenomenon': 'nebula'}."""
+        """Verify 6 nebula events exist in EVENT_TEMPLATES with trigger_conditions {'phenomenon': 'nebula'}."""
         nebula_events = [t for t in EVENT_TEMPLATES if t.get("trigger_conditions", {}).get("phenomenon") == "nebula"]
-        assert len(nebula_events) == 4, f"Expected 4 nebula events, got {len(nebula_events)}"
+        assert len(nebula_events) == 6, f"Expected 6 nebula events, got {len(nebula_events)}"
 
     def test_pulsar_events_exist(self) -> None:
-        """Verify 3 pulsar events exist with trigger_conditions {'phenomenon': 'pulsar'}."""
+        """Verify 6 pulsar events exist with trigger_conditions {'phenomenon': 'pulsar'}."""
         pulsar_events = [t for t in EVENT_TEMPLATES if t.get("trigger_conditions", {}).get("phenomenon") == "pulsar"]
-        assert len(pulsar_events) == 3, f"Expected 3 pulsar events, got {len(pulsar_events)}"
+        assert len(pulsar_events) == 6, f"Expected 6 pulsar events, got {len(pulsar_events)}"
 
     def test_binary_star_events_exist(self) -> None:
-        """Verify 2 binary star events exist with trigger_conditions {'phenomenon': 'binary_star'}."""
+        """Verify 5 binary star events exist with trigger_conditions {'phenomenon': 'binary_star'}."""
         binary_star_events = [t for t in EVENT_TEMPLATES if t.get("trigger_conditions", {}).get("phenomenon") == "binary_star"]
-        assert len(binary_star_events) == 2, f"Expected 2 binary star events, got {len(binary_star_events)}"
+        assert len(binary_star_events) == 5, f"Expected 5 binary star events, got {len(binary_star_events)}"
 
     def test_phenomenon_events_have_correct_structure(self) -> None:
         """Each phenomenon event should have title, flavor, type, choices, and trigger_conditions."""
@@ -3583,22 +3585,22 @@ class TestPhenomenonEvents:
         system.phenomenon = "nebula"
         eligible = _get_eligible_templates(state, EVENT_TEMPLATES)
         nebula_eligible = [t for t in eligible if t.get("trigger_conditions", {}).get("phenomenon") == "nebula"]
-        assert len(nebula_eligible) == 4, \
-            f"Expected 4 nebula events eligible in nebula system, got {len(nebula_eligible)}"
+        assert len(nebula_eligible) == 6, \
+            f"Expected 6 nebula events eligible in nebula system, got {len(nebula_eligible)}"
 
         # Test pulsar
         system.phenomenon = "pulsar"
         eligible = _get_eligible_templates(state, EVENT_TEMPLATES)
         pulsar_eligible = [t for t in eligible if t.get("trigger_conditions", {}).get("phenomenon") == "pulsar"]
-        assert len(pulsar_eligible) == 3, \
-            f"Expected 3 pulsar events eligible in pulsar system, got {len(pulsar_eligible)}"
+        assert len(pulsar_eligible) == 6, \
+            f"Expected 6 pulsar events eligible in pulsar system, got {len(pulsar_eligible)}"
 
         # Test binary star
         system.phenomenon = "binary_star"
         eligible = _get_eligible_templates(state, EVENT_TEMPLATES)
         binary_eligible = [t for t in eligible if t.get("trigger_conditions", {}).get("phenomenon") == "binary_star"]
-        assert len(binary_eligible) == 2, \
-            f"Expected 2 binary star events eligible in binary star system, got {len(binary_eligible)}"
+        assert len(binary_eligible) == 5, \
+            f"Expected 5 binary star events eligible in binary star system, got {len(binary_eligible)}"
 
     def test_phenomenon_events_not_eligible_in_other_systems(self) -> None:
         """Nebula events not eligible in pulsar systems, etc."""
@@ -3700,9 +3702,9 @@ class TestPhenomenonEvents:
                 assert isinstance(extra["effects"], dict)
 
     def test_nebula_events_have_valid_event_types(self) -> None:
-        """Nebula events use hazard, discovery, encounter types."""
+        """Nebula events use hazard, discovery, encounter, exploration types."""
         nebula_events = [t for t in EVENT_TEMPLATES if t.get("trigger_conditions", {}).get("phenomenon") == "nebula"]
-        valid_types = {"hazard", "discovery", "encounter"}
+        valid_types = {"hazard", "discovery", "encounter", "exploration"}
         for event in nebula_events:
             assert event["type"] in valid_types, \
                 f"Nebula event '{event['title']}' has invalid type: {event['type']}"
@@ -3720,9 +3722,9 @@ class TestPhenomenonEvents:
         assert actual_types.issubset(valid_types), f"Pulsar events have unexpected types: {actual_types - valid_types}"
 
     def test_binary_star_events_have_valid_event_types(self) -> None:
-        """Binary star events use encounter, discovery types."""
+        """Binary star events use encounter, discovery, exploration types."""
         binary_star_events = [t for t in EVENT_TEMPLATES if t.get("trigger_conditions", {}).get("phenomenon") == "binary_star"]
-        valid_types = {"encounter", "discovery"}
+        valid_types = {"encounter", "discovery", "exploration"}
         for event in binary_star_events:
             assert event["type"] in valid_types, \
                 f"Binary star event '{event['title']}' has invalid type: {event['type']}"
@@ -3730,12 +3732,12 @@ class TestPhenomenonEvents:
         assert actual_types.issubset(valid_types), f"Binary star events have unexpected types: {actual_types - valid_types}"
 
     def test_all_phenomenon_events_count(self) -> None:
-        """Total phenomenon events = 9 (4 nebula + 3 pulsar + 2 binary)."""
+        """Total phenomenon events = 17 (6 nebula + 6 pulsar + 5 binary)."""
         nebula_events = [t for t in EVENT_TEMPLATES if t.get("trigger_conditions", {}).get("phenomenon") == "nebula"]
         pulsar_events = [t for t in EVENT_TEMPLATES if t.get("trigger_conditions", {}).get("phenomenon") == "pulsar"]
         binary_events = [t for t in EVENT_TEMPLATES if t.get("trigger_conditions", {}).get("phenomenon") == "binary_star"]
         total = len(nebula_events) + len(pulsar_events) + len(binary_events)
-        assert total == 9, f"Expected 9 total phenomenon events, got {total} (nebula={len(nebula_events)}, pulsar={len(pulsar_events)}, binary={len(binary_events)})"
+        assert total == 17, f"Expected 17 total phenomenon events, got {total} (nebula={len(nebula_events)}, pulsar={len(pulsar_events)}, binary={len(binary_events)})"
 
 
 class TestEventCooldowns:
@@ -4305,4 +4307,217 @@ class TestCrisisCooldown:
                 assert extra["title"] == template["title"]
                 assert extra["chosen_text"] == event.choices[i].text
                 assert isinstance(extra["effects"], dict)
+
+
+class TestScannerTierFeatures:
+    """Tests for scanner tier features (L3 value estimation, L4 anomaly
+    detection, L5 resource mapping) in the game engine."""
+
+    @staticmethod
+    def _make_system(bodies: list[Body], sys_id: str = "sys_test") -> StarSystem:
+        """Build a minimal StarSystem containing the given bodies."""
+        return StarSystem(
+            id=sys_id, name="Testaris", x=0.0, y=0.0,
+            star_type="G", star_color="#ffffff", phenomenon="none",
+            phenomenon_desc="", bodies=bodies,
+        )
+
+    def test_get_scanner_tier_data_l3_value_estimation(self) -> None:
+        """Scanner L3 should produce value_estimation entries per body."""
+        state = new_game(seed=42)
+        state.ship.scanner = 3
+        bodies = [
+            Body(id="b1", name="Alpha", body_type="planet", size=3, distance_from_star=1.0, biome="jungle", poi_count=2),
+            Body(id="b2", name="Beta", body_type="moon", size=1, distance_from_star=2.0, biome="barren", poi_count=0),
+        ]
+        system = self._make_system(bodies)
+        data = get_scanner_tier_data(state, system)
+        assert len(data["value_estimation"]) == len(bodies)
+        for entry, body in zip(data["value_estimation"], bodies):
+            assert entry["name"] == body.name
+            assert entry["biome"] == body.biome
+            assert entry["poi_count"] == body.poi_count
+            assert entry["value_range_min"] == 10
+            assert entry["value_range_max"] == 200
+
+    def test_get_scanner_tier_data_l4_anomaly_detection(self) -> None:
+        """Scanner L4 should list bodies with poi_count >= 3 as anomalies."""
+        state = new_game(seed=42)
+        state.ship.scanner = 4
+        body = Body(id="anom1", name="Anomaly World", body_type="planet", size=4, distance_from_star=2.0, biome="crystal", poi_count=3)
+        system = self._make_system([body])
+        data = get_scanner_tier_data(state, system)
+        assert "Anomaly World" in data["anomaly_detection"]
+
+    def test_get_scanner_tier_data_l5_resource_mapping(self) -> None:
+        """Scanner L5 should map discovery categories per body by biome."""
+        state = new_game(seed=42)
+        state.ship.scanner = 5
+        bodies = [
+            Body(id="b1", name="Jungle World", body_type="planet", size=3, distance_from_star=1.0, biome="jungle", poi_count=2),
+            Body(id="b2", name="Rock World", body_type="planet", size=2, distance_from_star=2.0, biome="barren", poi_count=1),
+        ]
+        system = self._make_system(bodies)
+        data = get_scanner_tier_data(state, system)
+        assert len(data["resource_mapping"]) == len(bodies)
+        for entry, body in zip(data["resource_mapping"], bodies):
+            assert entry["name"] == body.name
+            assert entry["categories"] == _categories_for_biome(body.biome)
+
+    def test_get_scanner_tier_data_l2_no_data(self) -> None:
+        """Scanner L2 should produce no tier-specific data."""
+        state = new_game(seed=42)
+        state.ship.scanner = 2
+        body = Body(id="b1", name="Alpha", body_type="planet", size=3, distance_from_star=1.0, biome="jungle", poi_count=3)
+        system = self._make_system([body])
+        data = get_scanner_tier_data(state, system)
+        assert data["value_estimation"] == []
+        assert data["anomaly_detection"] == []
+        assert data["resource_mapping"] == []
+
+    def test_body_has_anomaly_with_lore_fragment(self) -> None:
+        """A body with an attached lore fragment should be an anomaly."""
+        state = new_game(seed=42)
+        body = Body(id="loreb", name="Lore World", body_type="planet", size=3, distance_from_star=1.0, biome="ocean", poi_count=1)
+        system = self._make_system([body], sys_id="sys_lore")
+        frag = LoreFragment(
+            id="lore_test_1", arc="test", title="Test Fragment", text="secret",
+            discovery_id=f"{system.id}::{body.id}",
+        )
+        state.lore_fragments.append(frag)
+        assert _body_has_anomaly(state, system, body) is True
+
+    def test_body_has_anomaly_with_high_poi_count(self) -> None:
+        """A body with poi_count >= 3 should be an anomaly."""
+        state = new_game(seed=42)
+        body = Body(id="b1", name="Busy World", body_type="planet", size=3, distance_from_star=1.0, biome="desert", poi_count=3)
+        system = self._make_system([body])
+        assert _body_has_anomaly(state, system, body) is True
+
+    def test_body_has_anomaly_no_anomaly(self) -> None:
+        """A body with poi_count < 3 and no lore fragment is not an anomaly."""
+        state = new_game(seed=42)
+        body = Body(id="b1", name="Quiet World", body_type="planet", size=3, distance_from_star=1.0, biome="barren", poi_count=2)
+        system = self._make_system([body])
+        assert _body_has_anomaly(state, system, body) is False
+
+    def test_categories_for_biome(self) -> None:
+        """_categories_for_biome should map known biomes and default otherwise."""
+        assert _categories_for_biome("jungle") == BIOME_DISCOVERY_CATEGORIES["jungle"]
+        assert _categories_for_biome("barren") == BIOME_DISCOVERY_CATEGORIES["barren"]
+        assert _categories_for_biome("gas_giant") == BIOME_DISCOVERY_CATEGORIES["gas_giant"]
+        assert _categories_for_biome("not_a_real_biome") == DEFAULT_DISCOVERY_CATEGORIES
+        assert _categories_for_biome(None) == DEFAULT_DISCOVERY_CATEGORIES
+
+    def test_perform_scan_with_scanner_3(self) -> None:
+        """perform_scan should include value estimation lines when scanner >= 3."""
+        state = new_game(seed=42)
+        state.ship.scanner = 3
+        system = state.get_current_system()
+        assert system is not None
+        system.bodies = [Body(id="b1", name="Alpha", body_type="planet", size=3, distance_from_star=1.0, biome="jungle", poi_count=2)]
+        result = perform_scan(state)
+        assert "estimated value range" in result
+
+    def test_perform_scan_with_scanner_4(self) -> None:
+        """perform_scan should include anomaly detection lines when scanner >= 4."""
+        state = new_game(seed=42)
+        state.ship.scanner = 4
+        system = state.get_current_system()
+        assert system is not None
+        system.bodies = [Body(id="b1", name="Anomaly World", body_type="planet", size=3, distance_from_star=1.0, biome="crystal", poi_count=3)]
+        result = perform_scan(state)
+        assert "ANOMALY DETECTED" in result
+
+    def test_perform_scan_with_scanner_5(self) -> None:
+        """perform_scan should include resource mapping lines when scanner >= 5."""
+        state = new_game(seed=42)
+        state.ship.scanner = 5
+        system = state.get_current_system()
+        assert system is not None
+        system.bodies = [Body(id="b1", name="Rock World", body_type="planet", size=3, distance_from_star=1.0, biome="barren", poi_count=2)]
+        result = perform_scan(state)
+        assert "Minerals" in result
+
+    def test_perform_scan_with_scanner_1(self) -> None:
+        """perform_scan should not include tier-specific lines when scanner < 3."""
+        state = new_game(seed=42)
+        state.ship.scanner = 1
+        system = state.get_current_system()
+        assert system is not None
+        system.bodies = [Body(id="b1", name="Alpha", body_type="planet", size=3, distance_from_star=1.0, biome="jungle", poi_count=3)]
+        result = perform_scan(state)
+        assert "Scan complete" in result
+        assert "estimated value range" not in result
+        assert "ANOMALY DETECTED" not in result
+
+    def test_get_scanner_tier_data_l4_anomaly_detection_lore_fragment(self) -> None:
+        """Scanner L4 should flag a body with a lore fragment even if poi_count < 3."""
+        state = new_game(seed=42)
+        state.ship.scanner = 4
+        body = Body(id="loreb", name="Lore World", body_type="planet", size=3, distance_from_star=1.0, biome="ocean", poi_count=1)
+        system = self._make_system([body], sys_id="sys_lore")
+        frag = LoreFragment(
+            id="lore_test_2", arc="test", title="Test Fragment", text="secret",
+            discovery_id=f"{system.id}::{body.id}",
+        )
+        state.lore_fragments.append(frag)
+        data = get_scanner_tier_data(state, system)
+        assert "Lore World" in data["anomaly_detection"]
+
+    def test_get_scanner_tier_data_l4_suppressed_when_scanner_5_and_poi_zero(self) -> None:
+        """Scanner L4 anomaly_detection should suppress bodies with poi_count==0 when scanner >= 5."""
+        state = new_game(seed=42)
+        state.ship.scanner = 5
+        body = Body(id="loreb", name="Lore World", body_type="planet", size=3, distance_from_star=1.0, biome="ocean", poi_count=0)
+        system = self._make_system([body], sys_id="sys_lore_suppress")
+        frag = LoreFragment(
+            id="lore_suppress_test", arc="test", title="Test Fragment", text="secret",
+            discovery_id=f"{system.id}::{body.id}",
+        )
+        state.lore_fragments.append(frag)
+        # _body_has_anomaly returns True (lore fragment), but scanner >= 5 and poi_count == 0
+        # so the body should be suppressed from anomaly_detection
+        assert _body_has_anomaly(state, system, body) is True
+        data = get_scanner_tier_data(state, system)
+        assert "Lore World" not in data["anomaly_detection"]
+
+    def test_perform_scan_with_scanner_5_fully_looted(self) -> None:
+        """perform_scan should flag bodies with poi_count == 0 as fully looted when scanner >= 5."""
+        state = new_game(seed=42)
+        state.ship.scanner = 5
+        system = state.get_current_system()
+        assert system is not None
+        system.bodies = [Body(id="b1", name="Empty World", body_type="planet", size=3, distance_from_star=1.0, biome="barren", poi_count=0)]
+        result = perform_scan(state)
+        assert "fully looted" in result
+
+    def test_perform_scan_with_scanner_5_fully_looted_with_anomaly(self) -> None:
+        """perform_scan should not say 'fully looted' for a body with poi_count==0 but with an anomaly (lore fragment)."""
+        from backend.models.discovery import LoreFragment
+        state = new_game(seed=42)
+        state.ship.scanner = 5
+        system = state.get_current_system()
+        assert system is not None
+        body = Body(id="b1", name="Mystery World", body_type="planet", size=3, distance_from_star=1.0, biome="crystal", poi_count=0)
+        system.bodies = [body]
+        # Attach a lore fragment to this body so _body_has_anomaly returns True
+        frag = LoreFragment(
+            id="lore_scan_test", arc="test", title="Test Fragment", text="secret",
+            discovery_id=f"{system.id}::{body.id}",
+        )
+        state.lore_fragments.append(frag)
+        result = perform_scan(state)
+        assert "fully looted" not in result, f"Should not say 'fully looted' when anomaly present: {result}"
+        assert "anomaly signatures detected" in result, f"Should mention anomaly signatures: {result}"
+
+    def test_perform_scan_with_scanner_5_no_mineral_deposits(self) -> None:
+        """perform_scan should note no mineral deposits for non-mineral biomes when scanner >= 5."""
+        state = new_game(seed=42)
+        state.ship.scanner = 5
+        system = state.get_current_system()
+        assert system is not None
+        system.bodies = [Body(id="b1", name="Gas World", body_type="planet", size=5, distance_from_star=3.0, biome="gas_giant", poi_count=2)]
+        result = perform_scan(state)
+        assert "no mineral deposits detected" in result
 

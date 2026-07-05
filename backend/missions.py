@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from backend.utils import deterministic_hash, seeded_random
-from backend.models.faction import get_faction
+from backend.models.faction import get_faction, FACTION_DEFINITIONS
 from backend.models.game_state import GameState
 from backend.models.system import StarSystem
 
@@ -36,6 +36,25 @@ class FactionMission:
     reputation_reward: int
     item_reward: Optional[str] = None
 
+    def generate_summary(self) -> str:
+        """Build a short, human-readable one-line summary of the mission.
+
+        The summary condenses the tier, title, objective, and reward
+        into a single string suitable for surfacing in log entries,
+        notifications, and compact API responses.
+
+        :returns: A concise summary string describing the mission.
+        :rtype: str
+        """
+        reward_parts = [f"{self.credit_reward}cr", f"+{self.reputation_reward} rep"]
+        if self.item_reward:
+            reward_parts.append(self.item_reward)
+        reward = ", ".join(reward_parts)
+        return (
+            f"[Tier {self.tier}] {self.title} — {self.objective_type} at "
+            f"{self.objective_target} (reward: {reward})"
+        )
+
     def to_dict(self) -> dict:
         """Serialize the mission to a dictionary for API responses.
 
@@ -55,6 +74,7 @@ class FactionMission:
             "credit_reward": self.credit_reward,
             "reputation_reward": self.reputation_reward,
             "item_reward": self.item_reward,
+            "summary": self.generate_summary(),
         }
 
 
@@ -387,4 +407,79 @@ def complete_mission(state: GameState, mission: FactionMission) -> dict:
         "credit_reward": mission.credit_reward,
         "reputation_reward": mission.reputation_reward,
         "new_reputation": state.get_faction_reputation(mission.faction_id),
+    }
+
+
+def get_primary_faction_id(state: GameState, system: StarSystem) -> str:
+    """Return the dominant faction id offering missions at a system.
+
+    The dominant faction is chosen deterministically from the seed
+    and system id, matching the behavior of the mission API endpoints.
+
+    :param state: The current game state.
+    :type state: GameState
+    :param system: The star system in question.
+    :type system: StarSystem
+    :returns: The identifier of the system's dominant faction.
+    :rtype: str
+    """
+    faction_ids = list(FACTION_DEFINITIONS.keys())
+    faction_idx = deterministic_hash(state.seed, system.id, "primary_faction") % len(faction_ids)
+    return faction_ids[faction_idx]
+
+
+def get_missions_summary(state: GameState, system: Optional[StarSystem]) -> dict:
+    """Summarize the missions available at a system for quick surfacing.
+
+    Produces a compact overview of the missions offered at the given
+    system without returning the full mission objects. This is used to
+    surface mission availability in the full game state response and in
+    contextual notifications (e.g. after a jump).
+
+    :param state: The current game state.
+    :type state: GameState
+    :param system: The star system to inspect, or ``None``.
+    :type system: StarSystem or None
+    :returns: A dictionary describing mission availability, including
+        ``available``, ``count``, ``tiers``, ``highest_tier``,
+        ``daily_available``, and the dominant faction.
+    :rtype: dict
+    """
+    empty = {
+        "available": False,
+        "system_id": system.id if system else None,
+        "system_name": system.name if system else None,
+        "faction_id": None,
+        "faction_name": None,
+        "count": 0,
+        "tiers": [],
+        "highest_tier": 0,
+        "daily_available": False,
+    }
+
+    if system is None or not system.has_trading_station:
+        return empty
+
+    faction_id = get_primary_faction_id(state, system)
+    faction = get_faction(faction_id)
+
+    faction_completed_count = sum(
+        1 for m in state.completed_missions if m.get("faction_id") == faction_id
+    )
+    missions = generate_missions(state, system, faction_id, faction_completed_count)
+
+    standard = [m for m in missions if m.objective_type != "daily"]
+    daily_available = any(m.objective_type == "daily" for m in missions)
+    tiers = sorted({m.tier for m in standard})
+
+    return {
+        "available": len(standard) > 0,
+        "system_id": system.id,
+        "system_name": system.name,
+        "faction_id": faction_id,
+        "faction_name": faction.name if faction else faction_id,
+        "count": len(standard),
+        "tiers": tiers,
+        "highest_tier": max(tiers) if tiers else 0,
+        "daily_available": daily_available,
     }

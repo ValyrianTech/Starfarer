@@ -1,5 +1,6 @@
 import sys
 import os
+import json
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 import pytest
@@ -11,7 +12,7 @@ from backend.main import app
 from backend.database import init_db
 from backend.game.manager import GAME_STORE, new_game, game_save
 from backend.game.engine import get_nearby_systems, land_on_body
-from backend.game.trading import perform_bulk_sell
+from backend.game.trading import perform_bulk_sell, purchase_upgrade
 from backend.models.game_state import GameState
 
 client = TestClient(app)
@@ -105,6 +106,46 @@ class TestAPIGameFlow:
         resp = client.post(f"/api/game/{game_id}/load")
         assert resp.status_code == 200
         assert "loaded" in resp.json()["result"].lower() or "Loaded" in resp.json()["result"]
+
+    def test_scan_response_includes_scanner_tier_data(self) -> None:
+        """Scan response should include scanner_tier_data with the expected structure."""
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+        resp = client.post(f"/api/game/{game_id}/scan")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "scanner_tier_data" in data
+        tier_data = data["scanner_tier_data"]
+        assert "value_estimation" in tier_data
+        assert "anomaly_detection" in tier_data
+        assert "resource_mapping" in tier_data
+
+    def test_scan_response_scanner_tier_data_empty_at_l1(self) -> None:
+        """At scanner L1 the scanner_tier_data lists should all be empty."""
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+        GAME_STORE[game_id].ship.scanner = 1
+        resp = client.post(f"/api/game/{game_id}/scan")
+        assert resp.status_code == 200
+        tier_data = resp.json()["scanner_tier_data"]
+        assert tier_data["value_estimation"] == []
+        assert tier_data["anomaly_detection"] == []
+        assert tier_data["resource_mapping"] == []
+
+    def test_scan_response_scanner_tier_data_at_l3(self) -> None:
+        """After upgrading scanner to L3, scan should return value_estimation entries."""
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        state.ship.credits = 10000
+        while state.ship.scanner < 3:
+            ok, msg = purchase_upgrade(state, "scanner")
+            assert ok is True, msg
+        assert state.ship.scanner == 3
+        resp = client.post(f"/api/game/{game_id}/scan")
+        assert resp.status_code == 200
+        tier_data = resp.json()["scanner_tier_data"]
+        assert len(tier_data["value_estimation"]) > 0
 
 
 class TestAPIEdgeCases:
@@ -781,6 +822,36 @@ class TestAPIEventTriggerPaths:
         assert resp.status_code == 200
         data = resp.json()
         assert "discoveries" in data
+
+    def test_jump_with_none_current_system(self) -> None:
+        """Jump should succeed even if get_current_system returns None after the jump."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "jump-none-curr"})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        state.ship.morale = 20  # Force event trigger
+        nearby = get_nearby_systems(state)
+        target_id = nearby[0]["id"]
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        # Return the real system for the pre-jump check (api_jump requires a
+        # current system to proceed), then None for every subsequent call so
+        # that the `if current_system is None:` branch after the jump is hit.
+        real_system = state.get_current_system()
+        calls = {"n": 0}
+
+        def mock_get_current_system():
+            calls["n"] += 1
+            return real_system if calls["n"] == 1 else None
+
+        with patch.object(state, "get_current_system", side_effect=mock_get_current_system):
+            resp = client.post(f"/api/game/{game_id}/jump/{target_id}")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert "result" in data
+            assert data["current_system"] is None
 
     def test_lifespan_init(self) -> None:
         """Lifespan context manager should initialize DB and directories."""
@@ -3468,3 +3539,416 @@ class TestAPICompleteMissionResourceChecks:
         })
         assert resp.status_code == 400
         assert "credits" in resp.json()["detail"].lower()
+
+
+class TestAPIMissionsAvailable:
+    """Tests for missions_available in game state response."""
+
+    def test_full_state_response_has_missions_available(self):
+        from backend.api.routes import _full_state_response
+        from backend.game.manager import new_game
+        state = new_game(seed=42)
+        resp = _full_state_response(state)
+        assert "missions_available" in resp
+        assert resp["missions_available"]["count"] > 0
+
+    def test_full_state_response_missions_available_no_system(self):
+        from backend.api.routes import _full_state_response
+        from backend.game.manager import new_game
+        state = new_game(seed=42)
+        state.ship.current_system_id = "nonexistent"
+        resp = _full_state_response(state)
+        assert "missions_available" in resp
+        assert resp["missions_available"]["count"] == 0
+
+    def test_get_game_includes_missions_available(self):
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+        resp = client.get(f"/api/game/{game_id}")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "missions_available" in data
+        assert isinstance(data["missions_available"], dict)
+        assert "count" in data["missions_available"]
+        assert "highest_tier" in data["missions_available"]
+        assert "daily_available" in data["missions_available"]
+
+    def test_jump_adds_mission_notification_logs(self):
+        from backend.game.manager import GAME_STORE
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "jump-mission-notif"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        nearby = client.get(f"/api/game/{game_id}/nearby").json()
+        reachable = [n for n in nearby["nearby"] if n["reachable"]]
+        if reachable:
+            target = reachable[0]
+            resp = client.post(f"/api/game/" + game_id + "/jump/" + target["id"])
+            assert resp.status_code == 200
+            resp = client.get(f"/api/game/{game_id}/log")
+            assert resp.status_code == 200
+            entries = resp.json()["entries"]
+            titles = [e.get("title", "") for e in entries]
+            has_mission_notif = any("Missions Available" in t for t in titles)
+            has_daily_notif = any("Daily Mission" in t for t in titles)
+            assert has_mission_notif or has_daily_notif, f"Expected mission notification in log titles: {titles}"
+
+
+class TestSpectateGetState:
+    def test_get_state_from_store(self) -> None:
+        """_get_state should return the live object from GAME_STORE."""
+        from backend.api.spectate import _get_state
+        state = new_game(seed=42, ship_name="SpecStore")
+        try:
+            GAME_STORE[state.id] = state
+            result = _get_state(state.id)
+            assert result is state
+        finally:
+            GAME_STORE.pop(state.id, None)
+
+    def test_get_state_from_db(self) -> None:
+        """_get_state should load from DB and cache when not in memory."""
+        from backend.api.spectate import _get_state
+        state = new_game(seed=42, ship_name="SpecDB")
+        GAME_STORE[state.id] = state
+        game_save(state)
+        GAME_STORE.pop(state.id, None)
+        try:
+            result = _get_state(state.id)
+            assert result is not None
+            assert result.id == state.id
+            assert state.id in GAME_STORE
+        finally:
+            GAME_STORE.pop(state.id, None)
+
+    def test_get_state_not_found(self) -> None:
+        """_get_state should return None for an unknown game id."""
+        from backend.api.spectate import _get_state
+        GAME_STORE.pop("spectate-nonexistent-id", None)
+        assert _get_state("spectate-nonexistent-id") is None
+
+
+class TestSpectateBuildPayload:
+    def test_build_payload_keys(self) -> None:
+        """_build_payload should return the expected payload structure."""
+        from backend.api.spectate import _build_payload
+        state = new_game(seed=42, ship_name="SpecPayload")
+        payload, last_log_id = _build_payload(state, 0)
+        assert set(payload.keys()) == {
+            "summary", "pending_events", "new_log_entries", "last_log_id"
+        }
+        assert payload["summary"]["game_id"] == state.id
+        assert isinstance(payload["pending_events"], list)
+        assert isinstance(payload["new_log_entries"], list)
+        assert payload["last_log_id"] == last_log_id
+
+    def test_build_payload_since_filters_entries(self) -> None:
+        """_build_payload should only include log entries newer than since_log_id."""
+        from backend.api.spectate import _build_payload
+        state = new_game(seed=42, ship_name="SpecSince")
+        all_ids = [e["id"] for e in state.log_entries if isinstance(e.get("id"), int)]
+        assert all_ids
+        cutoff = all_ids[0]
+        payload, last_log_id = _build_payload(state, cutoff)
+        returned_ids = [e["id"] for e in payload["new_log_entries"]]
+        assert all(i > cutoff for i in returned_ids)
+        assert cutoff not in returned_ids
+        assert last_log_id == max(all_ids)
+
+    def test_build_payload_no_new_entries(self) -> None:
+        """_build_payload should return last_log_id unchanged when nothing is new."""
+        from backend.api.spectate import _build_payload
+        state = new_game(seed=42, ship_name="SpecNone")
+        max_id = max(e["id"] for e in state.log_entries if isinstance(e.get("id"), int))
+        payload, last_log_id = _build_payload(state, max_id)
+        assert payload["new_log_entries"] == []
+        assert last_log_id == max_id
+
+    def test_build_payload_pending_events_exclude_resolved(self) -> None:
+        """_build_payload should only include unresolved events."""
+        from backend.api.spectate import _build_payload
+        from backend.generation.events import _create_event, EVENT_TEMPLATES
+        state = new_game(seed=42, ship_name="SpecEvents")
+        event = _create_event(EVENT_TEMPLATES[0], state.ship.current_system_id)
+        state.events.append(event)
+        for e in state.events:
+            e.resolved = True
+        payload, _ = _build_payload(state, 0)
+        assert payload["pending_events"] == []
+
+
+class TestSpectateStateSignature:
+    def test_signature_stable(self) -> None:
+        """_state_signature should be stable across calls when nothing changes."""
+        from backend.api.spectate import _state_signature
+        state = new_game(seed=42, ship_name="SpecSig")
+        assert _state_signature(state) == _state_signature(state)
+
+    def test_signature_changes_on_log(self) -> None:
+        """_state_signature should change when a new log entry is added."""
+        from backend.api.spectate import _state_signature
+        state = new_game(seed=42, ship_name="SpecSigLog")
+        before = _state_signature(state)
+        state.add_log("system", "A new event happened.")
+        assert _state_signature(state) != before
+
+    def test_signature_changes_on_ship_stats(self) -> None:
+        """_state_signature should change when ship stats change."""
+        from backend.api.spectate import _state_signature
+        state = new_game(seed=42, ship_name="SpecSigShip")
+        before = _state_signature(state)
+        state.ship.fuel -= 1
+        assert _state_signature(state) != before
+
+    def test_signature_is_hashable(self) -> None:
+        """_state_signature should return a hashable tuple."""
+        from backend.api.spectate import _state_signature
+        state = new_game(seed=42, ship_name="SpecSigHash")
+        sig = _state_signature(state)
+        assert isinstance(sig, tuple)
+        assert hash(sig) is not None
+
+
+class TestSpectateGamesEndpoint:
+    def test_list_games(self) -> None:
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "spectate-list-game"})
+        assert resp.status_code == 200
+        try:
+            resp = client.get("/api/spectate/games")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert "games" in data
+            assert isinstance(data["games"], list)
+            ids = [g["game_id"] for g in data["games"]]
+            assert "spectate-list-game" in ids
+        finally:
+            GAME_STORE.pop("spectate-list-game", None)
+
+    def test_game_fields(self) -> None:
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "spectate-fields-game"})
+        assert resp.status_code == 200
+        try:
+            data = client.get("/api/spectate/games").json()
+            game = next(g for g in data["games"] if g["game_id"] == "spectate-fields-game")
+            assert set(game.keys()) == {
+                "game_id", "ship_name", "seed", "updated_at",
+                "systems_visited", "credits", "active",
+            }
+        finally:
+            GAME_STORE.pop("spectate-fields-game", None)
+
+    def test_active_flag_for_in_memory_game(self) -> None:
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "spectate-active-game"})
+        assert resp.status_code == 200
+        try:
+            data = client.get("/api/spectate/games").json()
+            game = next(g for g in data["games"] if g["game_id"] == "spectate-active-game")
+            assert game["active"] is True
+        finally:
+            GAME_STORE.pop("spectate-active-game", None)
+
+    def test_in_memory_only_game_included(self) -> None:
+        """A game only in GAME_STORE (never persisted) should still be listed."""
+        state = new_game(seed=42, ship_name="SpecMemOnly")
+        GAME_STORE[state.id] = state
+        try:
+            data = client.get("/api/spectate/games").json()
+            game = next(g for g in data["games"] if g["game_id"] == state.id)
+            assert game["active"] is True
+            assert game["ship_name"] == "SpecMemOnly"
+        finally:
+            GAME_STORE.pop(state.id, None)
+
+    def test_limit_clamped(self) -> None:
+        resp = client.get("/api/spectate/games?limit=0")
+        assert resp.status_code == 200
+        assert isinstance(resp.json()["games"], list)
+        resp = client.get("/api/spectate/games?limit=9999")
+        assert resp.status_code == 200
+        assert isinstance(resp.json()["games"], list)
+
+
+class TestSpectateStreamEndpoint:
+    def test_stream_not_found(self) -> None:
+        GAME_STORE.pop("spectate-stream-missing", None)
+        resp = client.get("/api/spectate/spectate-stream-missing/stream")
+        assert resp.status_code == 404
+
+    def test_stream_initial_snapshot(self) -> None:
+        import asyncio
+        from backend.api.spectate import api_spectate_stream
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "spectate-stream-game"})
+        assert resp.status_code == 200
+        try:
+            async def first_chunk() -> str:
+                response = await api_spectate_stream("spectate-stream-game")
+                assert response.media_type == "text/event-stream"
+                agen = response.body_iterator
+                try:
+                    chunk = await agen.__anext__()
+                finally:
+                    await agen.aclose()
+                return chunk if isinstance(chunk, str) else chunk.decode()
+
+            chunk = asyncio.run(first_chunk())
+            assert "event: state" in chunk
+            data_line = next(
+                l for l in chunk.splitlines() if l.startswith("data:")
+            )
+            payload = json.loads(data_line[len("data:"):].strip())
+            assert payload["summary"]["game_id"] == "spectate-stream-game"
+            assert "new_log_entries" in payload
+        finally:
+            GAME_STORE.pop("spectate-stream-game", None)
+
+    def test_stream_not_found_direct(self) -> None:
+        import asyncio
+        from fastapi import HTTPException
+        from backend.api.spectate import api_spectate_stream
+        GAME_STORE.pop("spectate-stream-direct-missing", None)
+        with pytest.raises(HTTPException) as exc:
+            asyncio.run(api_spectate_stream("spectate-stream-direct-missing"))
+        assert exc.value.status_code == 404
+
+    def test_stream_many_log_entries(self) -> None:
+        import asyncio
+        from backend.api.spectate import api_spectate_stream, INITIAL_LOG_ENTRIES
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "spectate-stream-manylog"})
+        assert resp.status_code == 200
+        try:
+            state = GAME_STORE["spectate-stream-manylog"]
+            state.log_entries.clear()
+            state._next_log_id = 1
+            for i in range(INITIAL_LOG_ENTRIES + 5):
+                state.add_log("navigation", f"entry {i}")
+
+            async def first_chunk() -> str:
+                response = await api_spectate_stream("spectate-stream-manylog")
+                agen = response.body_iterator
+                try:
+                    chunk = await agen.__anext__()
+                finally:
+                    await agen.aclose()
+                return chunk if isinstance(chunk, str) else chunk.decode()
+
+            chunk = asyncio.run(first_chunk())
+            data_line = next(
+                l for l in chunk.splitlines() if l.startswith("data:")
+            )
+            payload = json.loads(data_line[len("data:"):].strip())
+            assert len(payload["new_log_entries"]) == INITIAL_LOG_ENTRIES
+        finally:
+            GAME_STORE.pop("spectate-stream-manylog", None)
+
+    def test_stream_state_change(self) -> None:
+        import asyncio
+        from backend.api.spectate import api_spectate_stream
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "spectate-stream-change"})
+        assert resp.status_code == 200
+        try:
+            async def run() -> str:
+                response = await api_spectate_stream("spectate-stream-change")
+                agen = response.body_iterator
+                try:
+                    await agen.__anext__()
+                    state = GAME_STORE["spectate-stream-change"]
+                    state.add_log("navigation", "state changed")
+                    await asyncio.sleep(1.1)
+                    chunk = await agen.__anext__()
+                finally:
+                    await agen.aclose()
+                return chunk if isinstance(chunk, str) else chunk.decode()
+
+            chunk = asyncio.run(run())
+            assert "event: state" in chunk
+            data_line = next(
+                l for l in chunk.splitlines() if l.startswith("data:")
+            )
+            payload = json.loads(data_line[len("data:"):].strip())
+            assert any(
+                e.get("message") == "state changed"
+                for e in payload["new_log_entries"]
+            )
+        finally:
+            GAME_STORE.pop("spectate-stream-change", None)
+
+    def test_stream_end_on_eviction(self) -> None:
+        import asyncio
+        from backend.api.spectate import api_spectate_stream
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "spectate-stream-evict"})
+        assert resp.status_code == 200
+        try:
+            async def run() -> str:
+                response = await api_spectate_stream("spectate-stream-evict")
+                agen = response.body_iterator
+                try:
+                    await agen.__anext__()
+                    GAME_STORE.pop("spectate-stream-evict", None)
+                    await asyncio.sleep(1.1)
+                    chunk = await agen.__anext__()
+                    with pytest.raises(StopAsyncIteration):
+                        await agen.__anext__()
+                finally:
+                    await agen.aclose()
+                return chunk if isinstance(chunk, str) else chunk.decode()
+
+            chunk = asyncio.run(run())
+            assert "event: end" in chunk
+        finally:
+            GAME_STORE.pop("spectate-stream-evict", None)
+
+    def test_stream_heartbeat_and_reset(self) -> None:
+        import asyncio
+        from backend.api import spectate
+        from backend.api.spectate import api_spectate_stream
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "spectate-stream-heartbeat"})
+        assert resp.status_code == 200
+        old_poll = spectate.POLL_INTERVAL_SECONDS
+        old_hb = spectate.HEARTBEAT_INTERVAL_SECONDS
+        spectate.POLL_INTERVAL_SECONDS = 0.01
+        spectate.HEARTBEAT_INTERVAL_SECONDS = 0.02
+        try:
+            async def run() -> list[str]:
+                response = await api_spectate_stream("spectate-stream-heartbeat")
+                agen = response.body_iterator
+                chunks = []
+                try:
+                    await agen.__anext__()
+                    state = GAME_STORE["spectate-stream-heartbeat"]
+                    state.add_log("navigation", "change one")
+                    chunks.append(await agen.__anext__())
+                    for _ in range(5):
+                        chunks.append(await agen.__anext__())
+                finally:
+                    await agen.aclose()
+                return [c if isinstance(c, str) else c.decode() for c in chunks]
+
+            chunks = asyncio.run(run())
+            assert any("event: state" in c for c in chunks)
+            assert any(c.startswith(": ping") for c in chunks)
+        finally:
+            spectate.POLL_INTERVAL_SECONDS = old_poll
+            spectate.HEARTBEAT_INTERVAL_SECONDS = old_hb
+            GAME_STORE.pop("spectate-stream-heartbeat", None)
+
+    def test_games_skips_invalid_state_json(self) -> None:
+        from datetime import datetime, timezone
+        from backend.database import get_db
+        now = datetime.now(timezone.utc).isoformat()
+        conn = get_db()
+        try:
+            conn.execute(
+                "INSERT OR REPLACE INTO games (id, seed, ship_name, created_at, updated_at, state_json) VALUES (?, ?, ?, ?, ?, ?)",
+                ("spectate-bad-json", 42, "BadShip", now, now, "not valid json"),
+            )
+            conn.execute(
+                "INSERT OR REPLACE INTO games (id, seed, ship_name, created_at, updated_at, state_json) VALUES (?, ?, ?, ?, ?, ?)",
+                ("spectate-nondict-json", 42, "ListShip", now, now, "[1, 2, 3]"),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        resp = client.get("/api/spectate/games?limit=100")
+        assert resp.status_code == 200
+        ids = {g["game_id"] for g in resp.json()["games"]}
+        assert "spectate-bad-json" not in ids
+        assert "spectate-nondict-json" not in ids
