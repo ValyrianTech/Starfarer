@@ -227,6 +227,8 @@
 - `total_pages` in ghost and messages paginated responses now returns 0 instead of 1 when there are 0 entries (removed `max(1, ...)` wrapper), matching the behavior of the paginated log endpoint.
 - Test isolation: `get_recent_messages_paginated` tests now properly clean up messages from previous tests instead of asserting exact total counts without cleanup.
 - Weak test: `test_get_recent_messages_paginated_per_page_capped` now passes correctly with an empty database instead of passing vacuously.
+- `get_missions_summary` no longer called twice on jump — deduplicated the call in `api_jump` to avoid redundant processing
+- `get_missions_summary` now safely handles `system=None` in `_full_state_response` — returns an empty summary instead of crashing when the current system is unavailable
 
 ### Removed
 - Unused `Optional` import from `backend/codex.py`
