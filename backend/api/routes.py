@@ -224,11 +224,8 @@ def api_jump(game_id: str, sys_id: str) -> dict:
         state.events.append(event)
 
     current_system = state.get_current_system()
-    if current_system is None:
-        # Edge case: no current system after jump (shouldn't normally happen)
-        missions_summary = get_missions_summary(state, None)
-    elif current_system.has_trading_station:
-        missions_summary = get_missions_summary(state, current_system)
+    missions_summary = get_missions_summary(state, current_system)
+    if current_system is not None and current_system.has_trading_station:
         if missions_summary["available"] and missions_summary["count"] > 0:
             tier_note = (
                 f" (up to tier {missions_summary['highest_tier']})"
@@ -255,6 +252,7 @@ def api_jump(game_id: str, sys_id: str) -> dict:
         "current_system": current_system.to_dict() if current_system else None,
         "ship": state.ship.to_dict(),
         "pending_event": event.to_dict() if event and not event.resolved else None,
+        "missions_available": missions_summary,
     }
 
 
