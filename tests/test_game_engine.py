@@ -4813,7 +4813,7 @@ class TestMotherlodeDiscoveries:
         state = new_game(seed=42)
         system = state.get_current_system()
         assert system is not None
-        body = Body(id="b_ml", name="MLWorld", body_type="planet", biome="desert", size=5, distance_from_star=0.5, poi_count=5)
+        body = Body(id="b_ml", name="MLWorld", body_type="planet", biome="desert", size=5, distance_from_star=0.5, poi_count=5, initial_poi_count=5)
         rng = rnd_mod.Random(42)
         with mock.patch.object(rng, "random", return_value=0.01):
             disc = _generate_discovery(rng, "mineral", body, system)
@@ -4826,12 +4826,39 @@ class TestMotherlodeDiscoveries:
         state = new_game(seed=42)
         system = state.get_current_system()
         assert system is not None
-        body = Body(id="b_ml2", name="LowPOI", body_type="planet", biome="desert", size=5, distance_from_star=0.5, poi_count=2)
+        body = Body(id="b_ml2", name="LowPOI", body_type="planet", biome="desert", size=5, distance_from_star=0.5, poi_count=2, initial_poi_count=2)
         rng = rnd_mod.Random(42)
         with mock.patch.object(rng, "random", return_value=0.01):
             disc = _generate_discovery(rng, "mineral", body, system)
         assert "MOTHERLODE" not in disc.name
         assert disc.value <= 200
+
+    def test_motherlode_uses_initial_poi_count(self):
+        import random as rnd_mod
+        import unittest.mock as mock
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        body = Body(id="b_ml3", name="InitialPOI", body_type="planet", biome="desert", size=5, distance_from_star=0.5, poi_count=2, initial_poi_count=5)
+        rng = rnd_mod.Random(42)
+        with mock.patch.object(rng, "random", return_value=0.01):
+            disc = _generate_discovery(rng, "mineral", body, system)
+        assert "MOTHERLODE" in disc.name
+        assert disc.value > 200
+
+    def test_motherlode_still_works_after_exploration(self):
+        import random as rnd_mod
+        import unittest.mock as mock
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        body = Body(id="b_ml4", name="ExploredWorld", body_type="planet", biome="desert", size=5, distance_from_star=0.5, poi_count=5, initial_poi_count=5)
+        body.poi_count = 3
+        rng = rnd_mod.Random(42)
+        with mock.patch.object(rng, "random", return_value=0.01):
+            disc = _generate_discovery(rng, "mineral", body, system)
+        assert "MOTHERLODE" in disc.name
+        assert disc.value > 200
 
 
 class TestAtmosphericScanAdditional:

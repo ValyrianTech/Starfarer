@@ -654,7 +654,7 @@ def _generate_discovery(rng: random.Random, category: str, body: Body, system: S
     else:
         value = rng.randint(10, 200)
     # Motherlode chance on high-POI bodies
-    if body.poi_count >= 4 and rng.random() < MOTHERLODE_CHANCE:
+    if body.initial_poi_count >= 4 and rng.random() < MOTHERLODE_CHANCE:
         multiplier = rng.randint(MOTHERLODE_VALUE_MULTIPLIER[0], MOTHERLODE_VALUE_MULTIPLIER[1])
         value = value * multiplier
         name = f"*** MOTHERLODE: {name} ({value}cr) ***"

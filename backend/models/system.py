@@ -50,6 +50,7 @@ class Body:
     biome: Optional[str] = None
     description: str = ""
     poi_count: int = 0
+    initial_poi_count: int = 0
     explored: bool = False
     exploration_count: int = 0
     sub_surface_explored: bool = False
@@ -70,6 +71,7 @@ class Body:
             "distance_from_star": self.distance_from_star,
             "description": self.description,
             "poi_count": self.poi_count,
+            "initial_poi_count": self.initial_poi_count,
             "explored": self.explored,
             "exploration_count": self.exploration_count,
             "sub_surface_explored": self.sub_surface_explored,
@@ -94,6 +96,7 @@ class Body:
             distance_from_star=d["distance_from_star"],
             description=d.get("description", ""),
             poi_count=d.get("poi_count", 0),
+            initial_poi_count=d.get("initial_poi_count", 0),
             explored=d.get("explored", False),
             exploration_count=d.get("exploration_count", 0),
             sub_surface_explored=d.get("sub_surface_explored", False),
