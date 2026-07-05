@@ -4971,6 +4971,28 @@ class TestAtmosphericScanAdditional:
         assert body1.atmospheric_scan_count == 3, "First body should remain exhausted"
         assert body2.atmospheric_scan_count == 1, "Second body's scan count should increment"
 
+    def test_atmospheric_scan_landed_on_exhausted_body_logs_message(self):
+        """When landed on a body with atmospheric_scan_count >= 3, a log entry should be created explaining why."""
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        body = Body(id="b_exhausted_landed", name="Exhausted Giant", body_type="planet", biome="gas_giant", size=5, distance_from_star=1.0, poi_count=1, atmospheric_scan_count=3)
+        system.bodies = [body]
+        state.ship.current_body_id = body.id
+        state.ship.fuel = 100
+
+        log_count_before = len(state.log_entries)
+        discoveries = perform_atmospheric_scan(state)
+
+        assert discoveries == []
+        assert len(state.log_entries) == log_count_before + 1
+        log_entry = state.log_entries[-1]
+        assert "Atmospheric scan not possible" in log_entry["message"]
+        assert "Exhausted Giant" in log_entry["message"]
+        assert "3/3 scans completed" in log_entry["message"]
+        assert log_entry["category"] == "exploration"
+        assert log_entry["title"] == "Atmospheric Scan Exhausted"
+
 
 class TestSubSurfaceAdditional:
     """Additional tests for sub-surface exploration edge cases."""
