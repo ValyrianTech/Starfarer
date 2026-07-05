@@ -400,31 +400,33 @@ def explore_surface(state: GameState) -> list[Discovery]:
         return []
     num_finds = min(body.poi_count, item_rng.randint(1, 3))
     if body.exploration_count == 1:
-        num_finds = max(1, num_finds // 2)
+        num_finds = num_finds // 2
     elif body.exploration_count == 2:
-        num_finds = max(1, num_finds // 4)
+        num_finds = num_finds // 4
+
+    if num_finds == 0:
+        return []
 
     lore_frag = get_fragment_for_body(system.id, body.id, state.lore_fragments)
     lore_linked = False
 
-    if num_finds > 0:
-        for i in range(num_finds):
-            cat = item_rng.choice(["mineral", "artifact", "lifeform", "signal", "ruin"])
-            disc = _generate_discovery(item_rng, cat, body, system)
+    for i in range(num_finds):
+        cat = item_rng.choice(["mineral", "artifact", "lifeform", "signal", "ruin"])
+        disc = _generate_discovery(item_rng, cat, body, system)
 
-            if lore_frag and not lore_frag.discovered and not lore_linked:
-                disc.lore_fragment_id = lore_frag.id
-                lore_frag.discovered = True
-                lore_frag.discovery_timestamp = datetime.now(timezone.utc).isoformat()
-                lore_linked = True
-                state.add_log("lore", f"Discovered lore fragment: {lore_frag.title} ({lore_frag.id}).", category="discovery", title="Lore Fragment Discovered", system=system.name, body=body.name)
+        if lore_frag and not lore_frag.discovered and not lore_linked:
+            disc.lore_fragment_id = lore_frag.id
+            lore_frag.discovered = True
+            lore_frag.discovery_timestamp = datetime.now(timezone.utc).isoformat()
+            lore_linked = True
+            state.add_log("lore", f"Discovered lore fragment: {lore_frag.title} ({lore_frag.id}).", category="discovery", title="Lore Fragment Discovered", system=system.name, body=body.name)
 
-            elif lore_frag and lore_frag.discovered and not lore_linked:
-                logger.debug(f"Lore fragment {lore_frag.id} ({lore_frag.title}) already discovered but found on body {body.id}.")
-                lore_linked = True
+        elif lore_frag and lore_frag.discovered and not lore_linked:
+            logger.debug(f"Lore fragment {lore_frag.id} ({lore_frag.title}) already discovered but found on body {body.id}.")
+            lore_linked = True
 
-            discoveries.append(disc)
-            state.discoveries.append(disc)
+        discoveries.append(disc)
+        state.discoveries.append(disc)
 
     ship.fuel -= EXPLORE_FUEL_COST
 
