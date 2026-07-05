@@ -70,6 +70,15 @@ export class ShipMarker {
     return this.group.position;
   }
 
+  get isJumping() {
+    return this.jump !== null;
+  }
+
+  /** Ease toward a target without restarting the trail (per-frame follow). */
+  follow(vec3, dt) {
+    this.group.position.lerp(vec3, 1 - Math.exp(-dt * 2.5));
+  }
+
   _resetTrail(vec3) {
     for (let i = 0; i < TRAIL_POINTS; i++) {
       this.trailPositions[i * 3] = vec3.x;

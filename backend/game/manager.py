@@ -145,6 +145,8 @@ def get_galaxy(state: GameState) -> dict:
             "visited": sys_data.visited,
             "scanned": sys_data.scanned,
             "body_count": len(sys_data.bodies),
+            "has_trading_station": sys_data.has_trading_station,
+            "system_type": sys_data.system_type,
             "is_current": sys_id == state.ship.current_system_id,
         })
     return {

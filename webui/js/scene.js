@@ -29,6 +29,8 @@ export class SpectatorScene {
     this.orbitAngle = 0;
     this.orbitRadius = 210;
     this.orbitHeight = 110;
+    this.desiredOrbitRadius = 210;
+    this.desiredOrbitHeight = 110;
 
     this.scene.add(new THREE.AmbientLight(0x30405f, 1.4));
 
@@ -82,6 +84,12 @@ export class SpectatorScene {
     this.desiredTarget.copy(vec3);
   }
 
+  /** Set the desired camera orbit distance and height (eased). */
+  setZoom(radius, height) {
+    this.desiredOrbitRadius = radius;
+    this.desiredOrbitHeight = height;
+  }
+
   _onResize() {
     this.camera.aspect = window.innerWidth / window.innerHeight;
     this.camera.updateProjectionMatrix();
@@ -98,9 +106,14 @@ export class SpectatorScene {
     // Ease the orbit target toward the focus point.
     this.cameraTarget.lerp(this.desiredTarget, 1 - Math.exp(-dt * 1.5));
 
+    // Ease the zoom level toward the desired orbit distance.
+    const zoomEase = 1 - Math.exp(-dt * 1.2);
+    this.orbitRadius += (this.desiredOrbitRadius - this.orbitRadius) * zoomEase;
+    this.orbitHeight += (this.desiredOrbitHeight - this.orbitHeight) * zoomEase;
+
     // Slow auto-orbit with a gentle vertical breathing motion.
     this.orbitAngle += dt * 0.06;
-    const bob = Math.sin(t * 0.11) * 20;
+    const bob = Math.sin(t * 0.11) * (this.orbitRadius / 210) * 20;
     this.camera.position.set(
       this.cameraTarget.x + Math.cos(this.orbitAngle) * this.orbitRadius,
       this.cameraTarget.y + this.orbitHeight + bob,

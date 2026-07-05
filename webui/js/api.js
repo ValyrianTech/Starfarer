@@ -22,6 +22,10 @@ export function fetchFullState(gameId) {
   return fetchJSON(`/game/${gameId}`);
 }
 
+export function fetchSystemDetail(gameId, sysId) {
+  return fetchJSON(`/game/${gameId}/system/${sysId}`);
+}
+
 /**
  * Connect to the SSE spectator stream for a game.
  * EventSource reconnects automatically; onReconnect fires when the

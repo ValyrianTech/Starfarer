@@ -30,6 +30,7 @@
   <div id="hud" class="hidden">
 
     <header id="hud-top">
+      <div id="hud-left">
       <div id="ship-panel" class="panel">
         <div class="panel-header">
           <span id="ship-name">—</span>
@@ -61,6 +62,30 @@
         </div>
       </div>
 
+      <div id="system-panel" class="panel hidden">
+        <div class="panel-header">
+          <span id="system-name">—</span>
+          <span id="system-type" class="muted">—</span>
+        </div>
+        <div id="system-tags"></div>
+        <p id="system-phenomenon" class="system-desc hidden">—</p>
+        <div id="body-list"></div>
+      </div>
+
+      <div id="inspect-panel" class="panel hidden">
+        <div class="panel-header">
+          <span id="inspect-name">—</span>
+          <span class="inspect-header-right">
+            <span id="inspect-type" class="muted">—</span>
+            <button id="inspect-close" title="Return to ship (Esc)">✕</button>
+          </span>
+        </div>
+        <div id="inspect-tags"></div>
+        <p id="inspect-phenomenon" class="system-desc hidden">—</p>
+        <div id="inspect-body-list"></div>
+      </div>
+      </div>
+
       <div id="title-panel">
         <div id="conn-status" class="conn connecting">CONNECTING</div>
       </div>
@@ -90,6 +115,10 @@
       <div id="log-panel" class="panel">
         <div class="panel-header"><span>SHIP LOG</span></div>
         <div id="log-feed"></div>
+      </div>
+      <div id="discovery-ticker" class="panel hidden">
+        <div class="panel-header"><span>LATEST FIND</span></div>
+        <p id="discovery-text">—</p>
       </div>
     </footer>
 

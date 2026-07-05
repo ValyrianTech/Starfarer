@@ -32,9 +32,11 @@ export class Hud {
   update(payload) {
     const summary = payload.summary;
     this._updateShip(summary);
+    this._updateSystemPanel(summary);
     this._updateExpedition(summary);
     this._updateFactions(summary);
     this._updateEventCard(payload.pending_events);
+    this._updateDiscoveryTicker(payload.new_log_entries);
     this._appendLogEntries(payload.new_log_entries);
   }
 
@@ -42,7 +44,12 @@ export class Hud {
     const ship = summary.ship;
     $("ship-name").textContent = ship.name.toUpperCase();
     const sys = summary.current_system;
-    $("ship-location").textContent = sys ? sys.name : "Deep space";
+    let location = sys ? sys.name : "Deep space";
+    if (sys && ship.current_body_id) {
+      const body = (sys.bodies || []).find((b) => b.id === ship.current_body_id);
+      if (body) location += ` › ${body.name}`;
+    }
+    $("ship-location").textContent = location;
 
     this._setBar("fuel", ship.fuel, ship.max_fuel);
     this._setBar("hull", ship.hull, ship.max_hull);
@@ -58,6 +65,128 @@ export class Hud {
     bar.style.width = `${pct}%`;
     bar.classList.toggle("low", pct <= 20);
     $(`val-${name}`).textContent = `${value}/${max}`;
+  }
+
+  _updateSystemPanel(summary) {
+    const panel = $("system-panel");
+    const sys = summary.current_system;
+    if (!sys) {
+      panel.classList.add("hidden");
+      return;
+    }
+    panel.classList.remove("hidden");
+    $("system-name").textContent = sys.name.toUpperCase();
+    $("system-type").textContent = (sys.system_type || "").replace(/_/g, " ");
+
+    const tags = $("system-tags");
+    tags.innerHTML = "";
+    if (sys.phenomenon && sys.phenomenon !== "none") {
+      tags.appendChild(this._makeTag(sys.phenomenon.replace(/_/g, " "), "phenomenon"));
+    }
+    if (sys.has_trading_station) {
+      tags.appendChild(this._makeTag("trading station", "station"));
+    }
+
+    const desc = $("system-phenomenon");
+    if (sys.phenomenon_desc) {
+      desc.textContent = sys.phenomenon_desc;
+      desc.classList.remove("hidden");
+    } else {
+      desc.classList.add("hidden");
+    }
+
+    this._renderBodyList($("body-list"), sys, summary.ship.current_body_id);
+  }
+
+  /** Populate the inspect panel with full system detail (click-to-inspect). */
+  showInspect(sys, currentBodyId = null) {
+    $("inspect-name").textContent = sys.name.toUpperCase();
+    $("inspect-type").textContent = (sys.system_type || "").replace(/_/g, " ");
+
+    const tags = $("inspect-tags");
+    tags.innerHTML = "";
+    if (sys.phenomenon && sys.phenomenon !== "none") {
+      tags.appendChild(this._makeTag(sys.phenomenon.replace(/_/g, " "), "phenomenon"));
+    }
+    if (sys.has_trading_station) {
+      tags.appendChild(this._makeTag("trading station", "station"));
+    }
+    if (!sys.visited) {
+      tags.appendChild(this._makeTag("scanned only", "scanned"));
+    }
+
+    const desc = $("inspect-phenomenon");
+    if (sys.phenomenon_desc) {
+      desc.textContent = sys.phenomenon_desc;
+      desc.classList.remove("hidden");
+    } else {
+      desc.classList.add("hidden");
+    }
+
+    this._renderBodyList($("inspect-body-list"), sys, currentBodyId);
+    $("inspect-panel").classList.remove("hidden");
+  }
+
+  hideInspect() {
+    $("inspect-panel").classList.add("hidden");
+  }
+
+  _makeTag(text, cls) {
+    const span = document.createElement("span");
+    span.className = `sys-tag ${cls}`;
+    span.textContent = text;
+    return span;
+  }
+
+  _renderBodyList(list, sys, currentBodyId) {
+    list.innerHTML = "";
+    const bodies = sys.bodies || [];
+    for (const body of bodies) {
+      const row = document.createElement("div");
+      row.className = "body-row";
+      if (body.id === currentBodyId) row.classList.add("landed");
+
+      const status = document.createElement("span");
+      status.className = "body-status";
+      if (body.id === currentBodyId) {
+        status.textContent = "▼";
+        status.title = "Ship landed here";
+      } else if (body.explored) {
+        status.textContent = "✓";
+        status.title = "Explored";
+      } else {
+        status.textContent = "·";
+        status.title = "Unexplored";
+      }
+
+      const name = document.createElement("span");
+      name.className = "body-name";
+      name.textContent = body.name;
+
+      const meta = document.createElement("span");
+      meta.className = "body-meta";
+      const parts = [body.biome || body.body_type];
+      if (body.poi_count > 0) parts.push(`${body.poi_count} POI`);
+      meta.textContent = parts.join(" · ");
+
+      row.append(status, name, meta);
+      list.appendChild(row);
+    }
+  }
+
+  _updateDiscoveryTicker(entries) {
+    if (!entries || entries.length === 0) return;
+    const finds = entries.filter(
+      (e) => e.type === "discovery" || e.type === "lore" || e.category === "discovery",
+    );
+    if (finds.length === 0) return;
+    const latest = finds[finds.length - 1];
+    $("discovery-text").textContent = latest.message;
+    const ticker = $("discovery-ticker");
+    ticker.classList.remove("hidden");
+    ticker.classList.remove("flash");
+    void ticker.offsetWidth; // restart animation
+    ticker.classList.add("flash");
   }
 
   _updateExpedition(summary) {

@@ -41,7 +41,7 @@ function makeGlowTexture(inner = "rgba(255,255,255,1)") {
   return new THREE.CanvasTexture(canvas);
 }
 
-function makeLabelSprite(text, color = "#cdd8f5") {
+export function makeLabelSprite(text, color = "#cdd8f5") {
   const pad = 8;
   const fontSize = 26;
   const canvas = document.createElement("canvas");
@@ -117,10 +117,39 @@ export class Galaxy {
     label.position.y = 6.5;
     node.add(label);
 
+    // Body count sub-label, revealed once the system is scanned or visited.
+    let subLabel = null;
+    if (sys.body_count > 0) {
+      subLabel = makeLabelSprite(`${sys.body_count} ${sys.body_count === 1 ? "body" : "bodies"}`, "#6b7a9e");
+      subLabel.scale.multiplyScalar(0.75);
+      subLabel.position.y = 4.6;
+      node.add(subLabel);
+    }
+
+    // Trading station marker, revealed once known.
+    let station = null;
+    if (sys.has_trading_station) {
+      station = new THREE.Mesh(
+        new THREE.OctahedronGeometry(0.7),
+        new THREE.MeshBasicMaterial({ color: 0xffb347, wireframe: true }),
+      );
+      station.position.set(3.2, 2.2, 0);
+      node.add(station);
+      this.pulsing.push({ spinner: station, speed: 0.9 });
+    }
+
     this._addPhenomenon(node, sys, color);
 
-    const record = { sys, node, core, glow, glowMat, label, ring: null };
-    this._applyVisitedStyle(record, sys.visited);
+    // Invisible, oversized sphere so clicks don't need pixel precision.
+    const pick = new THREE.Mesh(
+      new THREE.SphereGeometry(4.5, 8, 8),
+      new THREE.MeshBasicMaterial({ visible: false }),
+    );
+    pick.userData.systemId = sys.id;
+    node.add(pick);
+
+    const record = { sys, node, core, glow, glowMat, label, subLabel, station, pick, ring: null };
+    this._applyKnowledgeStyle(record);
     this.stars.set(sys.id, record);
     this.group.add(node);
   }
@@ -227,33 +256,56 @@ export class Galaxy {
     }
   }
 
-  _applyVisitedStyle(record, visited) {
-    const { core, glowMat, label } = record;
-    if (visited) {
-      core.material.color.set(record.sys.star_color || "#ffffff");
+  _applyKnowledgeStyle(record) {
+    const { core, glowMat, label, subLabel, station, sys } = record;
+    const baseColor = new THREE.Color(sys.star_color || "#ffffff");
+    if (sys.visited) {
+      core.material.color.copy(baseColor);
       glowMat.opacity = 0.95;
       record.glow.scale.setScalar(14);
       label.material.opacity = 0.9;
+    } else if (sys.scanned) {
+      core.material.color.copy(baseColor.clone().multiplyScalar(0.65));
+      glowMat.opacity = 0.55;
+      record.glow.scale.setScalar(11);
+      label.material.opacity = 0.55;
     } else {
-      const dim = new THREE.Color(record.sys.star_color || "#ffffff").multiplyScalar(0.35);
-      core.material.color.copy(dim);
+      core.material.color.copy(baseColor.clone().multiplyScalar(0.35));
       glowMat.opacity = 0.28;
       record.glow.scale.setScalar(9);
       label.material.opacity = 0.22;
     }
+    // Details are only revealed once the system is scanned or visited.
+    const known = sys.visited || sys.scanned;
+    if (subLabel) {
+      subLabel.visible = known;
+      subLabel.material.opacity = sys.visited ? 0.65 : 0.4;
+    }
+    if (station) station.visible = known;
   }
 
   markVisited(systemId) {
     const record = this.stars.get(systemId);
     if (record && !record.sys.visited) {
       record.sys.visited = true;
-      this._applyVisitedStyle(record, true);
+      this._applyKnowledgeStyle(record);
     }
   }
 
   getPosition(systemId) {
     const record = this.stars.get(systemId);
     return record ? record.node.position.clone() : null;
+  }
+
+  /** Meshes to raycast against for click-to-inspect. */
+  getPickables() {
+    return [...this.stars.values()].map((r) => r.pick);
+  }
+
+  /** Galaxy summary data (visited/scanned flags etc.) for a system. */
+  getSystem(systemId) {
+    const record = this.stars.get(systemId);
+    return record ? record.sys : null;
   }
 
   /** Per-frame animation for phenomena. */
