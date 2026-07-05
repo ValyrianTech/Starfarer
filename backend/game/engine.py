@@ -486,11 +486,12 @@ def perform_atmospheric_scan(state: GameState) -> list[Discovery]:
         discoveries.append(disc)
         state.discoveries.append(disc)
 
-    ship.fuel -= ATMOSPHERIC_SCAN_FUEL_COST
+    if discoveries:
+        ship.fuel -= ATMOSPHERIC_SCAN_FUEL_COST
 
-    body.atmospheric_scan_count += 1
+        body.atmospheric_scan_count += 1
 
-    state.add_log("exploration", f"Atmospheric scan of {body.name} complete. Found {len(discoveries)} atmospheric phenomena.", category="exploration", title="Atmospheric Scan", system=system.name, body=body.name, fuel_change=-ATMOSPHERIC_SCAN_FUEL_COST)
+        state.add_log("exploration", f"Atmospheric scan of {body.name} complete. Found {len(discoveries)} atmospheric phenomena.", category="exploration", title="Atmospheric Scan", system=system.name, body=body.name, fuel_change=-ATMOSPHERIC_SCAN_FUEL_COST)
 
     return discoveries
 
@@ -550,12 +551,13 @@ def perform_sub_surface_exploration(state: GameState) -> list[Discovery]:
         discoveries.append(disc)
         state.discoveries.append(disc)
 
-    ship.fuel -= SUB_SURFACE_FUEL_COST
-    ship.crew -= SUB_SURFACE_CREW_COST
-    body.sub_surface_explored = True
+    if discoveries:
+        ship.fuel -= SUB_SURFACE_FUEL_COST
+        ship.crew -= SUB_SURFACE_CREW_COST
+        body.sub_surface_explored = True
 
-    biome_label = "cave systems" if body.biome in cave_biomes else "ocean depths"
-    state.add_log("exploration", f"Sub-surface exploration of {body.name} complete. Explored {biome_label} and found {len(discoveries)} discoveries.", category="exploration", title="Sub-Surface Exploration", system=system.name, body=body.name, fuel_change=-SUB_SURFACE_FUEL_COST)
+        biome_label = "cave systems" if body.biome in cave_biomes else "ocean depths"
+        state.add_log("exploration", f"Sub-surface exploration of {body.name} complete. Explored {biome_label} and found {len(discoveries)} discoveries.", category="exploration", title="Sub-Surface Exploration", system=system.name, body=body.name, fuel_change=-SUB_SURFACE_FUEL_COST)
 
     return discoveries
 
