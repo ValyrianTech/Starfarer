@@ -175,6 +175,21 @@ async def api_spectate_stream(game_id: str) -> StreamingResponse:
         raise HTTPException(status_code=404, detail="Game not found")
 
     async def event_stream():
+        """Yield Server-Sent Events for a spectator watching a game.
+
+        Sends an initial snapshot with recent log entries and the current
+        state summary, then polls for changes on a fixed interval. When
+        the state changes, a new ``state`` event is yielded containing
+        the updated summary and any log entries added since the last
+        push. While the state remains unchanged, a comment heartbeat is
+        emitted periodically to keep the connection alive. If the game is
+        evicted from the in-memory store, an ``end`` event is sent to
+        signal the client to reconnect.
+
+        :yields: SSE-formatted strings: ``state`` events with a JSON
+            payload, ``end`` events when the game is gone, and comment
+            heartbeats (``: ping``) while idle.
+        """
         state = _get_state(game_id)
         # Initial snapshot: include only the most recent log entries.
         initial_since = 0
