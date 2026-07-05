@@ -465,7 +465,7 @@ def perform_atmospheric_scan(state: GameState) -> list[Discovery]:
                 break
     if not body:
         for b in system.bodies:
-            if b.biome in ("gas_giant", "volcanic", "ocean"):
+            if b.biome in ("gas_giant", "volcanic", "ocean") and b.atmospheric_scan_count < 3:
                 body = b
                 break
     if not body:
