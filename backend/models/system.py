@@ -51,6 +51,8 @@ class Body:
     description: str = ""
     poi_count: int = 0
     explored: bool = False
+    exploration_count: int = 0
+    sub_surface_explored: bool = False
 
     def to_dict(self) -> dict:
         """Serialize the body to a dictionary.
@@ -68,6 +70,8 @@ class Body:
             "description": self.description,
             "poi_count": self.poi_count,
             "explored": self.explored,
+            "exploration_count": self.exploration_count,
+            "sub_surface_explored": self.sub_surface_explored,
         }
 
     @classmethod
@@ -89,6 +93,8 @@ class Body:
             description=d.get("description", ""),
             poi_count=d.get("poi_count", 0),
             explored=d.get("explored", False),
+            exploration_count=d.get("exploration_count", 0),
+            sub_surface_explored=d.get("sub_surface_explored", False),
         )
 
 
