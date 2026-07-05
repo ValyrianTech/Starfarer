@@ -11,3 +11,4 @@ data/save/
 *.py,cover
 
 .coverage
+.idea/
