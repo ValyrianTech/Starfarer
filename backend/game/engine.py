@@ -13,17 +13,8 @@ from typing import Any, Callable, List, NamedTuple, Optional
 from backend.config import (
     JUMP_FUEL_COST_PER_LY, SCAN_FUEL_COST, EXPLORE_FUEL_COST,
     MORALE_DECAY_PER_JUMP,
+    ATMOSPHERIC_SCAN_FUEL_COST, SUB_SURFACE_FUEL_COST, SUB_SURFACE_CREW_COST,
 )
-
-
-#: Fuel cost for atmospheric scan.
-ATMOSPHERIC_SCAN_FUEL_COST = 1
-
-#: Fuel cost for sub-surface exploration.
-SUB_SURFACE_FUEL_COST = 3
-
-#: Crew cost for sub-surface exploration.
-SUB_SURFACE_CREW_COST = 1
 from backend.models.game_state import GameState
 from backend.models.ship import Ship
 from backend.models.system import StarSystem, Body
