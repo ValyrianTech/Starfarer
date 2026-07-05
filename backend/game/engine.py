@@ -393,6 +393,7 @@ def explore_surface(state: GameState) -> list[Discovery]:
         return []
 
     discoveries = []
+    # Include len(state.discoveries) in the seed so that repeated calls produce different results (the discovery count changes between calls).
     item_rng = random.Random(state.seed + len(state.discoveries) + deterministic_hash(body.id))
 
     # Diminishing returns based on exploration count
@@ -481,6 +482,7 @@ def perform_atmospheric_scan(state: GameState) -> list[Discovery]:
         return []
 
     discoveries = []
+    # Include len(state.discoveries) in the seed so that repeated calls produce different results (the discovery count changes between calls).
     item_rng = random.Random(state.seed + len(state.discoveries) + deterministic_hash(body.id) + 999)
     num_finds = item_rng.randint(1, 2)
 
@@ -546,6 +548,7 @@ def perform_sub_surface_exploration(state: GameState) -> list[Discovery]:
         return []
 
     discoveries = []
+    # Include len(state.discoveries) in the seed so that repeated calls produce different results (the discovery count changes between calls).
     item_rng = random.Random(state.seed + len(state.discoveries) + deterministic_hash(body.id) + 777)
     num_finds = item_rng.randint(1, 2)
 
