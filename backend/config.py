@@ -116,3 +116,10 @@ UPGRADE_MAX_LEVELS = {
     "fuel_tanks": 3,
     "life_support": 3,
 }
+
+# Exploration depth and variety constants
+ATMOSPHERIC_SCAN_FUEL_COST = 1
+SUB_SURFACE_FUEL_COST = 3
+SUB_SURFACE_CREW_COST = 1
+MOTHERLODE_CHANCE = 0.05
+MOTHERLODE_VALUE_MULTIPLIER = 4

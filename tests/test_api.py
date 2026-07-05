@@ -3952,3 +3952,66 @@ class TestSpectateStreamEndpoint:
         ids = {g["game_id"] for g in resp.json()["games"]}
         assert "spectate-bad-json" not in ids
         assert "spectate-nondict-json" not in ids
+
+
+class TestApiNewEndpoints:
+    """Tests for the new atmospheric-scan and sub-surface-explore endpoints."""
+
+    def test_atmospheric_scan_not_found(self):
+        resp = client.post("/api/game/nonexistent/atmospheric-scan")
+        assert resp.status_code == 404
+
+    def test_atmospheric_scan_not_possible(self):
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+        # Not landed, scan should fail
+        resp = client.post(f"/api/game/{game_id}/atmospheric-scan")
+        assert resp.status_code == 400
+
+    def test_sub_surface_not_found(self):
+        resp = client.post("/api/game/nonexistent/sub-surface-explore")
+        assert resp.status_code == 404
+
+    def test_sub_surface_not_possible(self):
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+        # Not landed, sub-surface should fail
+        resp = client.post(f"/api/game/{game_id}/sub-surface-explore")
+        assert resp.status_code == 400
+
+    def test_atmospheric_scan_success(self):
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "atmo-scan-success"})
+        game_id = resp.json()["game_id"]
+        # Force a volcanic body to exist
+        from backend.game.manager import GAME_STORE
+        state = GAME_STORE[game_id]
+        system = state.get_current_system()
+        from backend.models.system import Body
+        volc_body = Body(id="volc_test", name="VolcTest", body_type="planet", biome="volcanic", size=5, distance_from_star=0.5, poi_count=3)
+        system.bodies.append(volc_body)
+        GAME_STORE[game_id] = state
+        # Land on the volcanic body and scan
+        client.post(f"/api/game/{game_id}/land/volc_test")
+        resp = client.post(f"/api/game/{game_id}/atmospheric-scan")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "discoveries" in data
+        assert len(data["discoveries"]) > 0
+
+    def test_sub_surface_success(self):
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+        state_resp = client.get(f"/api/game/{game_id}")
+        system = state_resp.json()["current_system"]
+        # Find first eligible body (volcanic, desert, tundra, or ocean)
+        target = None
+        for body in system["bodies"]:
+            if body["biome"] in ("volcanic", "desert", "tundra", "ocean"):
+                target = body
+                break
+        if target:
+            client.post(f"/api/game/{game_id}/land/{target['id']}")
+            resp = client.post(f"/api/game/{game_id}/sub-surface-explore")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert "discoveries" in data

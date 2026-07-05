@@ -10,11 +10,12 @@ from backend.game.engine import (
     activate_distress_beacon, perform_salvage, emergency_craft,
     get_scanner_tier_data, _body_has_anomaly, _categories_for_biome,
     DEFAULT_DISCOVERY_CATEGORIES, BIOME_DISCOVERY_CATEGORIES,
+    _generate_discovery, perform_atmospheric_scan, perform_sub_surface_exploration,
 )
 from backend.game.trading import get_upgrade_info, purchase_upgrade, perform_trade, perform_bulk_sell, calculate_fuel_price, round_half_up
 from backend.game.manager import new_game, get_galaxy, get_system_detail, game_save, load_or_create, get_game_state, _state_from_dict
 from backend.generation.events import trigger_event, resolve_event, EVENT_TEMPLATES, _get_eligible_templates, _apply_cooldown_fallback
-from backend.config import SCAN_FUEL_COST
+from backend.config import SCAN_FUEL_COST, ATMOSPHERIC_SCAN_FUEL_COST, SUB_SURFACE_FUEL_COST, SUB_SURFACE_CREW_COST, MOTHERLODE_CHANCE, MOTHERLODE_VALUE_MULTIPLIER
 from backend.models.game_state import GameState
 from backend.models.discovery import Discovery, LoreFragment
 from backend.models.system import StarSystem, Body
@@ -4521,3 +4522,357 @@ class TestScannerTierFeatures:
         result = perform_scan(state)
         assert "no mineral deposits detected" in result
 
+
+
+class TestNewDiscoveryCategories:
+    """Tests for _generate_discovery with new categories."""
+    def test_generate_atmospheric_phenomena(self):
+        import random as rnd_mod
+        rng = rnd_mod.Random(42)
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        body = system.bodies[0] if system.bodies else None
+        assert body is not None
+        disc = _generate_discovery(rng, "atmospheric_phenomena", body, system)
+        assert disc.category == "atmospheric_phenomena"
+        assert disc.name in ["Storm Cell", "Gas Vent", "Aurora Display", "Cloud Vortex", "Plasma Sheath"]
+        assert disc.value > 0
+        assert disc.system_id == system.id
+        assert disc.body_id == body.id
+
+    def test_generate_geological_formation(self):
+        import random as rnd_mod
+        rng = rnd_mod.Random(99)
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        body = system.bodies[0] if system.bodies else None
+        assert body is not None
+        disc = _generate_discovery(rng, "geological_formation", body, system)
+        assert disc.category == "geological_formation"
+        assert disc.name in ["Crystal Cave", "Lava Tube", "Ice Geyser", "Impact Crater", "Obsidian Arch"]
+
+    def test_generate_biological_specimen(self):
+        import random as rnd_mod
+        rng = rnd_mod.Random(123)
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        body = system.bodies[0] if system.bodies else None
+        assert body is not None
+        disc = _generate_discovery(rng, "biological_specimen", body, system)
+        assert disc.category == "biological_specimen"
+        assert disc.name in ["Glowfrond", "Crystal Mite Swarm", "Void Blossom", "Plasma Eel", "Singing Lichen"]
+
+
+class TestBodyModelNewFields:
+    """Tests for new Body model fields."""
+    def test_exploration_count_default(self):
+        body = Body(id="b1", name="Test", body_type="planet", size=3, distance_from_star=0.5)
+        assert body.exploration_count == 0
+
+    def test_sub_surface_explored_default(self):
+        body = Body(id="b1", name="Test", body_type="planet", size=3, distance_from_star=0.5)
+        assert body.sub_surface_explored is False
+
+    def test_exploration_count_roundtrip(self):
+        body = Body(id="b1", name="Test", body_type="planet", size=3, distance_from_star=0.5, exploration_count=5)
+        d = body.to_dict()
+        restored = Body.from_dict(d)
+        assert restored.exploration_count == 5
+
+    def test_sub_surface_explored_roundtrip(self):
+        body = Body(id="b1", name="Test", body_type="planet", size=3, distance_from_star=0.5, sub_surface_explored=True)
+        d = body.to_dict()
+        restored = Body.from_dict(d)
+        assert restored.sub_surface_explored is True
+
+
+class TestAtmosphericScan:
+    """Tests for perform_atmospheric_scan."""
+    def _make_state(self, biome, landed=True):
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        body = Body(id="b_atmo", name="AtmoWorld", body_type="planet", biome=biome, size=5, distance_from_star=0.5, poi_count=3)
+        system.bodies = [body]
+        if landed:
+            state.ship.current_body_id = body.id
+        return state, body
+
+    def test_atmospheric_scan_gas_giant(self):
+        state, body = self._make_state("gas_giant")
+        discoveries = perform_atmospheric_scan(state)
+        assert len(discoveries) > 0
+        for d in discoveries:
+            assert d.category == "atmospheric_phenomena"
+            assert 20 <= d.value <= 60
+
+    def test_atmospheric_scan_volcanic(self):
+        state, body = self._make_state("volcanic")
+        discoveries = perform_atmospheric_scan(state)
+        assert len(discoveries) > 0
+
+    def test_atmospheric_scan_ocean(self):
+        state, body = self._make_state("ocean")
+        discoveries = perform_atmospheric_scan(state)
+        assert len(discoveries) > 0
+
+    def test_atmospheric_scan_wrong_biome(self):
+        state, body = self._make_state("desert")
+        discoveries = perform_atmospheric_scan(state)
+        assert discoveries == []
+
+    def test_atmospheric_scan_no_fuel(self):
+        state, body = self._make_state("gas_giant")
+        state.ship.fuel = 0
+        discoveries = perform_atmospheric_scan(state)
+        assert discoveries == []
+
+    def test_atmospheric_scan_no_system(self):
+        state, body = self._make_state("gas_giant")
+        state.ship.current_system_id = "nonexistent"
+        discoveries = perform_atmospheric_scan(state)
+        assert discoveries == []
+
+    def test_atmospheric_scan_deducts_fuel(self):
+        state, body = self._make_state("gas_giant")
+        fuel_before = state.ship.fuel
+        perform_atmospheric_scan(state)
+        assert state.ship.fuel == fuel_before - ATMOSPHERIC_SCAN_FUEL_COST
+
+
+class TestSubSurfaceExploration:
+    """Tests for perform_sub_surface_exploration."""
+    def _make_state(self, biome):
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        body = Body(id="b_sub", name="SubWorld", body_type="planet", biome=biome, size=5, distance_from_star=0.5, poi_count=3)
+        system.bodies = [body]
+        state.ship.current_body_id = body.id
+        state.ship.crew = 5
+        return state, body
+
+    def test_sub_surface_volcanic(self):
+        state, body = self._make_state("volcanic")
+        discoveries = perform_sub_surface_exploration(state)
+        assert len(discoveries) > 0
+        for d in discoveries:
+            assert d.category == "geological_formation"
+
+    def test_sub_surface_desert(self):
+        state, body = self._make_state("desert")
+        discoveries = perform_sub_surface_exploration(state)
+        assert len(discoveries) > 0
+        for d in discoveries:
+            assert d.category == "geological_formation"
+
+    def test_sub_surface_tundra(self):
+        state, body = self._make_state("tundra")
+        discoveries = perform_sub_surface_exploration(state)
+        assert len(discoveries) > 0
+        for d in discoveries:
+            assert d.category == "geological_formation"
+
+    def test_sub_surface_ocean(self):
+        state, body = self._make_state("ocean")
+        discoveries = perform_sub_surface_exploration(state)
+        assert len(discoveries) > 0
+        for d in discoveries:
+            assert d.category == "biological_specimen"
+
+    def test_sub_surface_wrong_biome(self):
+        state, body = self._make_state("jungle")
+        discoveries = perform_sub_surface_exploration(state)
+        assert discoveries == []
+
+    def test_sub_surface_no_fuel(self):
+        state, body = self._make_state("volcanic")
+        state.ship.fuel = 0
+        discoveries = perform_sub_surface_exploration(state)
+        assert discoveries == []
+
+    def test_sub_surface_no_crew(self):
+        state, body = self._make_state("volcanic")
+        state.ship.crew = 0
+        discoveries = perform_sub_surface_exploration(state)
+        assert discoveries == []
+
+    def test_sub_surface_already_explored(self):
+        state, body = self._make_state("volcanic")
+        body.sub_surface_explored = True
+        discoveries = perform_sub_surface_exploration(state)
+        assert discoveries == []
+
+    def test_sub_surface_deducts_fuel_and_crew(self):
+        state, body = self._make_state("volcanic")
+        fuel_before = state.ship.fuel
+        crew_before = state.ship.crew
+        perform_sub_surface_exploration(state)
+        assert state.ship.fuel == fuel_before - SUB_SURFACE_FUEL_COST
+        assert state.ship.crew == crew_before - SUB_SURFACE_CREW_COST
+
+    def test_sub_surface_sets_explored_flag(self):
+        state, body = self._make_state("volcanic")
+        assert body.sub_surface_explored is False
+        perform_sub_surface_exploration(state)
+        assert body.sub_surface_explored is True
+
+
+class TestDiminishingReturns:
+    """Tests for diminishing returns in explore_surface."""
+    def _make_state(self):
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        body = Body(id="b_dim", name="DimWorld", body_type="planet", biome="desert", size=5, distance_from_star=0.5, poi_count=10)
+        system.bodies = [body]
+        state.ship.current_body_id = body.id
+        state.ship.fuel = 100
+        return state, body
+
+    def test_first_exploration_full_yield(self):
+        state, body = self._make_state()
+        discoveries = explore_surface(state)
+        assert len(discoveries) > 0
+        assert body.exploration_count == 1
+
+    def test_second_exploration_reduced(self):
+        state, body = self._make_state()
+        state.ship.fuel = 100
+        explore_surface(state)
+        state.ship.fuel = 100
+        discoveries2 = explore_surface(state)
+        assert body.exploration_count == 2
+
+    def test_third_exploration_further_reduced(self):
+        state, body = self._make_state()
+        state.ship.fuel = 100
+        explore_surface(state)
+        state.ship.fuel = 100
+        explore_surface(state)
+        state.ship.fuel = 100
+        discoveries3 = explore_surface(state)
+        assert body.exploration_count == 3
+
+    def test_fourth_exploration_empty(self):
+        state, body = self._make_state()
+        state.ship.fuel = 100
+        explore_surface(state)
+        state.ship.fuel = 100
+        explore_surface(state)
+        state.ship.fuel = 100
+        explore_surface(state)
+        state.ship.fuel = 100
+        discoveries4 = explore_surface(state)
+        assert discoveries4 == []
+        assert body.exploration_count == 3
+
+
+class TestMotherlodeDiscoveries:
+    """Tests for motherlode discoveries."""
+    def test_motherlode_on_high_poi_body(self):
+        import random as rnd_mod
+        import unittest.mock as mock
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        body = Body(id="b_ml", name="MLWorld", body_type="planet", biome="desert", size=5, distance_from_star=0.5, poi_count=5)
+        rng = rnd_mod.Random(42)
+        with mock.patch.object(rng, "random", return_value=0.01):
+            disc = _generate_discovery(rng, "mineral", body, system)
+        assert "MOTHERLODE" in disc.name
+        assert disc.value > 200
+
+    def test_motherlode_not_on_low_poi_body(self):
+        import random as rnd_mod
+        import unittest.mock as mock
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        body = Body(id="b_ml2", name="LowPOI", body_type="planet", biome="desert", size=5, distance_from_star=0.5, poi_count=2)
+        rng = rnd_mod.Random(42)
+        with mock.patch.object(rng, "random", return_value=0.01):
+            disc = _generate_discovery(rng, "mineral", body, system)
+        assert "MOTHERLODE" not in disc.name
+        assert disc.value <= 200
+
+
+class TestAtmosphericScanAdditional:
+    """Additional tests for atmospheric scan edge cases."""
+    def test_atmospheric_scan_not_landed_no_eligible_body(self):
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        system.bodies = [Body(id="b_barren", name="Barren", body_type="planet", biome="barren", size=3, distance_from_star=0.5, poi_count=1)]
+        state.ship.current_body_id = None
+        discoveries = perform_atmospheric_scan(state)
+        assert discoveries == []
+
+    def test_atmospheric_scan_landed_wrong_biome(self):
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        body = Body(id="b_jungle", name="Jungle", body_type="planet", biome="jungle", size=3, distance_from_star=0.5, poi_count=1)
+        system.bodies = [body]
+        state.ship.current_body_id = body.id
+        discoveries = perform_atmospheric_scan(state)
+        assert discoveries == []
+
+    def test_atmospheric_scan_not_landed_finds_eligible(self):
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        body = Body(id="b_ocean", name="Ocean", body_type="planet", biome="ocean", size=3, distance_from_star=0.5, poi_count=1)
+        system.bodies = [body]
+        state.ship.current_body_id = None
+        discoveries = perform_atmospheric_scan(state)
+        assert len(discoveries) > 0
+
+
+class TestSubSurfaceAdditional:
+    """Additional tests for sub-surface exploration edge cases."""
+    def test_sub_surface_no_body_found(self):
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        state.ship.current_body_id = "nonexistent"
+        state.ship.crew = 5
+        discoveries = perform_sub_surface_exploration(state)
+        assert discoveries == []
+
+    def test_sub_surface_no_current_body(self):
+        state = new_game(seed=42)
+        state.ship.current_body_id = None
+        state.ship.crew = 5
+        discoveries = perform_sub_surface_exploration(state)
+        assert discoveries == []
+
+
+class TestApiEndpoints:
+    """Tests for the new API endpoints via test client."""
+    def test_atmospheric_scan_endpoint(self):
+        from backend.main import app
+        from fastapi.testclient import TestClient
+        client = TestClient(app)
+        resp = client.post("/api/game/nonexistent/atmospheric-scan")
+        assert resp.status_code == 404
+
+    def test_sub_surface_endpoint(self):
+        from backend.main import app
+        from fastapi.testclient import TestClient
+        client = TestClient(app)
+        resp = client.post("/api/game/nonexistent/sub-surface-explore")
+        assert resp.status_code == 404
+
+
+class TestSubSurfaceNoSystem:
+    """Test sub-surface with no system."""
+    def test_sub_surface_no_system(self):
+        state = new_game(seed=42)
+        state.ship.current_system_id = "nonexistent"
+        state.ship.crew = 5
+        discoveries = perform_sub_surface_exploration(state)
+        assert discoveries == []
