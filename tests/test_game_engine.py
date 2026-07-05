@@ -4781,28 +4781,90 @@ class TestDiminishingReturns:
         discoveries2 = explore_surface(state)
         assert body.exploration_count == 2
 
-    def test_third_exploration_further_reduced(self):
+    def test_third_exploration_further_reduced(self) -> None:
+        """Third exploration should have further reduced yield (at least 1 find when num_finds >= 4)."""
+        import unittest.mock as mock
         state, body = self._make_state()
         state.ship.fuel = 100
-        explore_surface(state)
+        # First exploration: randint returns 4 so we get 4 finds
+        with mock.patch("random.Random.randint", return_value=4):
+            explore_surface(state)
+        assert body.exploration_count == 1
+        # Second exploration: randint returns 4, 4 // 2 == 2 finds
         state.ship.fuel = 100
-        explore_surface(state)
+        with mock.patch("random.Random.randint", return_value=4):
+            explore_surface(state)
+        assert body.exploration_count == 2
+        # Third exploration: randint returns 4, 4 // 4 == 1 find
         state.ship.fuel = 100
-        discoveries3 = explore_surface(state)
+        with mock.patch("random.Random.randint", return_value=4):
+            discoveries3 = explore_surface(state)
+        assert len(discoveries3) == 1
         assert body.exploration_count == 3
 
-    def test_fourth_exploration_empty(self):
+    def test_fourth_exploration_empty(self) -> None:
+        """Fourth exploration should return empty (exploration_count >= 3)."""
+        import unittest.mock as mock
         state, body = self._make_state()
         state.ship.fuel = 100
-        explore_surface(state)
+        # First exploration
+        with mock.patch("random.Random.randint", return_value=4):
+            explore_surface(state)
+        # Second exploration
         state.ship.fuel = 100
-        explore_surface(state)
+        with mock.patch("random.Random.randint", return_value=4):
+            explore_surface(state)
+        # Third exploration
         state.ship.fuel = 100
-        explore_surface(state)
+        with mock.patch("random.Random.randint", return_value=4):
+            explore_surface(state)
+        assert body.exploration_count == 3
+        # Fourth exploration should return empty due to >= 3 check
         state.ship.fuel = 100
         discoveries4 = explore_surface(state)
         assert discoveries4 == []
         assert body.exploration_count == 3
+
+    def test_second_exploration_zero_finds_early_return(self) -> None:
+        """When second exploration yields 0 finds after diminishing returns, return early."""
+        import unittest.mock as mock
+        state, body = self._make_state()
+        state.ship.fuel = 100
+        # First exploration: seed RNG so randint returns something > 1 so first exploration works
+        with mock.patch("random.Random.randint", return_value=2):
+            explore_surface(state)
+        assert body.exploration_count == 1
+        # Second exploration: seed RNG so randint returns 1, then 1 // 2 == 0
+        state.ship.fuel = 100
+        with mock.patch("random.Random.randint", return_value=1):
+            discoveries = explore_surface(state)
+        assert discoveries == []
+        # Fuel should NOT be deducted when we return early
+        assert state.ship.fuel == 100
+        # exploration_count should NOT be incremented
+        assert body.exploration_count == 1
+
+    def test_third_exploration_zero_finds_early_return(self) -> None:
+        """When third exploration yields 0 finds after diminishing returns, return early."""
+        import unittest.mock as mock
+        state, body = self._make_state()
+        state.ship.fuel = 100
+        # First exploration
+        with mock.patch("random.Random.randint", return_value=2):
+            explore_surface(state)
+        assert body.exploration_count == 1
+        # Second exploration
+        state.ship.fuel = 100
+        with mock.patch("random.Random.randint", return_value=2):
+            explore_surface(state)
+        assert body.exploration_count == 2
+        # Third exploration: randint returns 1, 2, or 3 -> 1 // 4 == 0, 2 // 4 == 0, 3 // 4 == 0
+        state.ship.fuel = 100
+        with mock.patch("random.Random.randint", return_value=1):
+            discoveries = explore_surface(state)
+        assert discoveries == []
+        assert state.ship.fuel == 100
+        assert body.exploration_count == 2
 
 
 class TestMotherlodeDiscoveries:
