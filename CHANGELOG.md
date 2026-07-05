@@ -3,6 +3,14 @@
 ## [Unreleased]
 
 ### Added
+- **Exploration Depth & Variety**: Three new discovery categories (`atmospheric_phenomena`, `geological_formation`, `biological_specimen`) with names, descriptions, and value ranges — atmospheric phenomena (20–60 cr), geological formations (50–120 cr), biological specimens (80–200 cr). Added to `BIOME_DISCOVERY_CATEGORIES`, `ALL_DISCOVERY_CATEGORIES`, and `_RESOURCE_LABELS` in `backend/game/engine.py`.
+- **Atmospheric Scan** (`perform_atmospheric_scan` in `backend/game/engine.py`): New exploration action costing 1 fuel, available on `gas_giant`, `volcanic`, and `ocean` biomes. Yields 1–2 atmospheric phenomena discoveries. Capped at 3 scans per body.
+- **Sub-Surface Exploration** (`perform_sub_surface_exploration` in `backend/game/engine.py`): New exploration action costing 3 fuel + 1 crew. Works on volcanic/desert/tundra (cave systems → `geological_formation`) and ocean (ocean depths → `biological_specimen`) biomes. One-time per body.
+- **Motherlode Finds**: Bodies with `poi_count >= 4` have an 8% chance per discovery to generate a motherlode (3–5x value multiplier).
+- **Diminishing Returns on Surface Exploration**: `explore_surface` now tracks `exploration_count` per body. After 3 explorations it returns empty; the second exploration yields half the finds and the third yields a quarter.
+- New `Body` fields: `exploration_count`, `sub_surface_explored`, and `atmospheric_scan_count` on the `Body` dataclass (`backend/models/system.py`), with serialization/deserialization support.
+- New config constants: `ATMOSPHERIC_SCAN_FUEL_COST`, `SUB_SURFACE_FUEL_COST`, `SUB_SURFACE_CREW_COST`, `MOTHERLODE_CHANCE`, and `MOTHERLODE_VALUE_MULTIPLIER` in `backend/config.py`.
+- New API endpoints: `POST /api/game/{id}/atmospheric-scan` and `POST /api/game/{id}/sub-surface-explore`, each returning `result`, `discoveries`, and `ship`.
 - Scanner tier data (`get_scanner_tier_data(state, system)` in `backend/game/engine.py`): returns tier-specific structured data gated by scanner level — L3 (`value_estimation`: estimated discovery value ranges per body, 10–200 cr), L4 (`anomaly_detection`: bodies with anomalies — a lore fragment or `poi_count >= 3`), and L5 (`resource_mapping`: discovery categories available per body by biome)
 - `scanner_tier_data` field in the `POST /api/game/{id}/scan` response, containing `value_estimation`, `anomaly_detection`, and `resource_mapping`
 - `perform_scan()` now appends detailed tier-specific information to the scan result message at scanner L3/L4/L5
@@ -113,6 +121,11 @@
 - Black hole event count raised from 5 to 8 (from the original 5 plus the 3 new events above)
 - Hawking Radiation Harvest cooldown changed from 6 to 8 (to disambiguate from the new 'Hawking Radiation Harvest (Deep Scan)' event)
 ### Fixed
+- Atmospheric scan auto-select now correctly selects the next eligible body when the first eligible body is exhausted (`atmospheric_scan_count >= 3`), instead of returning empty results.
+- Fuel (and crew) is now deducted after discovery generation in atmospheric scan and sub-surface exploration (was deducted before, causing resources to be spent even when no discoveries were generated).
+- Duplicate exploration cost constants in `engine.py` that shadowed `config.py` definitions have been removed; `ATMOSPHERIC_SCAN_FUEL_COST`, `SUB_SURFACE_FUEL_COST`, and `SUB_SURFACE_CREW_COST` are now imported from `config.py`.
+- `MOTHERLODE_CHANCE` and `MOTHERLODE_VALUE_MULTIPLIER` in `config.py` are no longer dead code — `_generate_discovery` now uses them instead of hard-coded literals.
+- Atmospheric scan can no longer be repeated infinitely on the same body — capped at 3 scans per body via the new `atmospheric_scan_count` field.
 - Scanner anomaly messaging: when scanner >= 5 and a body's `poi_count == 0`, the L4 anomaly message is suppressed so the L5 block handles it, and the L5 block shows appropriate messages for `poi_count == 0` bodies
 - `get_pending_ripples` performance: now uses database-level filtering (`get_pending_ripples_for_system`) instead of loading all ripples from the database and filtering in Python.
 - `api_ripples` no longer acquires the game lock since ripple data is read from the database, not from in-memory game state.
