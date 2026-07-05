@@ -473,7 +473,7 @@ def get_missions_summary(state: GameState, system: Optional[StarSystem]) -> dict
     tiers = sorted({m.tier for m in standard})
 
     return {
-        "available": len(missions) > 0,
+        "available": len(standard) > 0,
         "system_id": system.id,
         "system_name": system.name,
         "faction_id": faction_id,

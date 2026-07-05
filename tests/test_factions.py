@@ -2854,3 +2854,37 @@ class TestMissionSummary:
         assert summary["count"] == 0
         assert summary["highest_tier"] == 0
         assert summary["daily_available"] is False
+
+    def test_get_missions_summary_only_daily(self):
+        """When only a daily mission exists (no standard missions), available should be False
+        and count should be 0, matching the fix in Option A."""
+        from backend.missions import get_missions_summary, FactionMission, generate_missions
+        from backend.game.manager import new_game
+        from unittest.mock import patch
+        state = new_game(seed=42)
+        current = state.get_current_system()
+        current.has_trading_station = True
+        
+        # Patch generate_missions to return only a daily mission (no standard missions)
+        daily_only = [
+            FactionMission(
+                id="mission_daily_only",
+                faction_id="stellar_cartographers",
+                tier=1,
+                title="Daily Only",
+                description="Only a daily mission is available.",
+                objective_type="daily",
+                objective_target=current.id,
+                fuel_cost=0,
+                credit_cost=0,
+                credit_reward=50,
+                reputation_reward=5,
+            )
+        ]
+        with patch("backend.missions.generate_missions", return_value=daily_only):
+            summary = get_missions_summary(state, current)
+        assert summary["available"] is False, "available should be False when only daily missions exist"
+        assert summary["count"] == 0, "count should be 0 when only daily missions exist"
+        assert summary["daily_available"] is True, "daily_available should still be True"
+        assert summary["highest_tier"] == 0, "highest_tier should be 0 when no standard missions"
+        assert summary["tiers"] == [], "tiers should be empty when no standard missions"
