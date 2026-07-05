@@ -3577,7 +3577,7 @@ class TestAPIMissionsAvailable:
         from backend.game.manager import GAME_STORE
         resp = client.post("/api/game/new", json={"seed": 42, "game_id": "jump-mission-notif"})
         game_id = resp.json()["game_id"]
-        state = GAME_STORE[game_id]
+        _state = GAME_STORE[game_id]
         nearby = client.get(f"/api/game/{game_id}/nearby").json()
         reachable = [n for n in nearby["nearby"] if n["reachable"]]
         if reachable:
@@ -3792,7 +3792,7 @@ class TestSpectateStreamEndpoint:
             chunk = asyncio.run(first_chunk())
             assert "event: state" in chunk
             data_line = next(
-                l for l in chunk.splitlines() if l.startswith("data:")
+                line for line in chunk.splitlines() if line.startswith("data:")
             )
             payload = json.loads(data_line[len("data:"):].strip())
             assert payload["summary"]["game_id"] == "spectate-stream-game"
@@ -3832,7 +3832,7 @@ class TestSpectateStreamEndpoint:
 
             chunk = asyncio.run(first_chunk())
             data_line = next(
-                l for l in chunk.splitlines() if l.startswith("data:")
+                line for line in chunk.splitlines() if line.startswith("data:")
             )
             payload = json.loads(data_line[len("data:"):].strip())
             assert len(payload["new_log_entries"]) == INITIAL_LOG_ENTRIES
@@ -3861,7 +3861,7 @@ class TestSpectateStreamEndpoint:
             chunk = asyncio.run(run())
             assert "event: state" in chunk
             data_line = next(
-                l for l in chunk.splitlines() if l.startswith("data:")
+                line for line in chunk.splitlines() if line.startswith("data:")
             )
             payload = json.loads(data_line[len("data:"):].strip())
             assert any(
