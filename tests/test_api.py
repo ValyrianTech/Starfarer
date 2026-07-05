@@ -3582,7 +3582,7 @@ class TestAPIMissionsAvailable:
         reachable = [n for n in nearby["nearby"] if n["reachable"]]
         if reachable:
             target = reachable[0]
-            resp = client.post(f"/api/game/" + game_id + "/jump/" + target["id"])
+            resp = client.post("/api/game/" + game_id + "/jump/" + target["id"])
             assert resp.status_code == 200
             resp = client.get(f"/api/game/{game_id}/log")
             assert resp.status_code == 200
