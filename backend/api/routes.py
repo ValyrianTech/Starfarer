@@ -224,7 +224,10 @@ def api_jump(game_id: str, sys_id: str) -> dict:
         state.events.append(event)
 
     current_system = state.get_current_system()
-    if current_system and current_system.has_trading_station:
+    if current_system is None:
+        # Edge case: no current system after jump (shouldn't normally happen)
+        missions_summary = get_missions_summary(state, None)
+    elif current_system.has_trading_station:
         missions_summary = get_missions_summary(state, current_system)
         if missions_summary["available"] and missions_summary["count"] > 0:
             tier_note = (

@@ -823,6 +823,36 @@ class TestAPIEventTriggerPaths:
         data = resp.json()
         assert "discoveries" in data
 
+    def test_jump_with_none_current_system(self) -> None:
+        """Jump should succeed even if get_current_system returns None after the jump."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "jump-none-curr"})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        state.ship.morale = 20  # Force event trigger
+        nearby = get_nearby_systems(state)
+        target_id = nearby[0]["id"]
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        # Return the real system for the pre-jump check (api_jump requires a
+        # current system to proceed), then None for every subsequent call so
+        # that the `if current_system is None:` branch after the jump is hit.
+        real_system = state.get_current_system()
+        calls = {"n": 0}
+
+        def mock_get_current_system():
+            calls["n"] += 1
+            return real_system if calls["n"] == 1 else None
+
+        with patch.object(state, "get_current_system", side_effect=mock_get_current_system):
+            resp = client.post(f"/api/game/{game_id}/jump/{target_id}")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert "result" in data
+            assert data["current_system"] is None
+
     def test_lifespan_init(self) -> None:
         """Lifespan context manager should initialize DB and directories."""
         import asyncio
