@@ -476,8 +476,6 @@ def perform_atmospheric_scan(state: GameState) -> list[Discovery]:
     if body.atmospheric_scan_count >= 3:
         return []
 
-    ship.fuel -= ATMOSPHERIC_SCAN_FUEL_COST
-
     discoveries = []
     item_rng = random.Random(state.seed + len(state.discoveries) + deterministic_hash(body.id) + 999)
     num_finds = item_rng.randint(1, 2)
@@ -486,6 +484,8 @@ def perform_atmospheric_scan(state: GameState) -> list[Discovery]:
         disc = _generate_discovery(item_rng, "atmospheric_phenomena", body, system)
         discoveries.append(disc)
         state.discoveries.append(disc)
+
+    ship.fuel -= ATMOSPHERIC_SCAN_FUEL_COST
 
     body.atmospheric_scan_count += 1
 
@@ -540,10 +540,6 @@ def perform_sub_surface_exploration(state: GameState) -> list[Discovery]:
     if category is None:
         return []
 
-    ship.fuel -= SUB_SURFACE_FUEL_COST
-    ship.crew -= SUB_SURFACE_CREW_COST
-    body.sub_surface_explored = True
-
     discoveries = []
     item_rng = random.Random(state.seed + len(state.discoveries) + deterministic_hash(body.id) + 777)
     num_finds = item_rng.randint(1, 2)
@@ -552,6 +548,10 @@ def perform_sub_surface_exploration(state: GameState) -> list[Discovery]:
         disc = _generate_discovery(item_rng, category, body, system)
         discoveries.append(disc)
         state.discoveries.append(disc)
+
+    ship.fuel -= SUB_SURFACE_FUEL_COST
+    ship.crew -= SUB_SURFACE_CREW_COST
+    body.sub_surface_explored = True
 
     biome_label = "cave systems" if body.biome in cave_biomes else "ocean depths"
     state.add_log("exploration", f"Sub-surface exploration of {body.name} complete. Explored {biome_label} and found {len(discoveries)} discoveries.", category="exploration", title="Sub-Surface Exploration", system=system.name, body=body.name, fuel_change=-SUB_SURFACE_FUEL_COST)
