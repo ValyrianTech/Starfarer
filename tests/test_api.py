@@ -3636,7 +3636,10 @@ class TestSpectateBuildPayload:
     def test_build_payload_pending_events_exclude_resolved(self) -> None:
         """_build_payload should only include unresolved events."""
         from backend.api.spectate import _build_payload
+        from backend.generation.events import _create_event, EVENT_TEMPLATES
         state = new_game(seed=42, ship_name="SpecEvents")
+        event = _create_event(EVENT_TEMPLATES[0], state.ship.current_system_id)
+        state.events.append(event)
         for e in state.events:
             e.resolved = True
         payload, _ = _build_payload(state, 0)
