@@ -526,9 +526,6 @@ def perform_sub_surface_exploration(state: GameState) -> list[Discovery]:
     if not body:
         return []
 
-    if body.sub_surface_explored:
-        return []
-
     # Determine which biomes support sub-surface exploration
     cave_biomes = {"volcanic", "desert", "tundra"}
     ocean_biomes = {"ocean"}
@@ -540,6 +537,9 @@ def perform_sub_surface_exploration(state: GameState) -> list[Discovery]:
         category = "biological_specimen"
 
     if category is None:
+        return []
+
+    if body.sub_surface_explored:
         return []
 
     discoveries = []
