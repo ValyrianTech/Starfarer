@@ -14,6 +14,7 @@ from backend.config import (
     JUMP_FUEL_COST_PER_LY, SCAN_FUEL_COST, EXPLORE_FUEL_COST,
     MORALE_DECAY_PER_JUMP,
     ATMOSPHERIC_SCAN_FUEL_COST, SUB_SURFACE_FUEL_COST, SUB_SURFACE_CREW_COST,
+    MOTHERLODE_CHANCE, MOTHERLODE_VALUE_MULTIPLIER,
 )
 from backend.models.game_state import GameState
 from backend.models.ship import Ship
@@ -651,8 +652,8 @@ def _generate_discovery(rng: random.Random, category: str, body: Body, system: S
     else:
         value = rng.randint(10, 200)
     # Motherlode chance on high-POI bodies
-    if body.poi_count >= 4 and rng.random() < 0.08:
-        multiplier = rng.randint(3, 5)
+    if body.poi_count >= 4 and rng.random() < MOTHERLODE_CHANCE:
+        multiplier = rng.randint(MOTHERLODE_VALUE_MULTIPLIER[0], MOTHERLODE_VALUE_MULTIPLIER[1])
         value = value * multiplier
         name = f"*** MOTHERLODE: {name} ({value}cr) ***"
     return Discovery(
