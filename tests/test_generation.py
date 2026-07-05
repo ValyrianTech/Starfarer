@@ -2019,11 +2019,11 @@ class TestNewHazardEvents:
         template = next(t for t in EVENT_TEMPLATES if t["title"] == "Ion Storm")
         assert template["type"] == "hazard"
         assert template["rarity"] == "uncommon"
-        assert "Electromagnetic interference" in template["flavor"]
+        assert "An electrical storm disrupts" in template["flavor"]
         choices_text = {c["text"] for c in template["choices"]}
-        assert "Power down non-essential systems" in choices_text
+        assert "Power down and drift through" in choices_text
         assert "Push through with emergency power" in choices_text
-        assert "Wait it out" in choices_text
+        assert "Use the storm to recharge capacitors" in choices_text
 
     def test_new_events_have_cooldowns(self) -> None:
         """Micrometeorite Storm and Quantum Fluctuation should have cooldowns."""
