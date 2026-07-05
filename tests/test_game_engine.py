@@ -4865,6 +4865,23 @@ class TestAtmosphericScanAdditional:
         discoveries = perform_atmospheric_scan(state)
         assert len(discoveries) > 0
 
+    def test_atmospheric_scan_skips_exhausted_body(self):
+        """When auto-selecting a body, skip those with atmospheric_scan_count >= 3."""
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        # First eligible body is exhausted
+        body1 = Body(id="b_exhausted", name="Exhausted Giant", body_type="planet", biome="gas_giant", size=5, distance_from_star=1.0, poi_count=1, atmospheric_scan_count=3)
+        # Second eligible body has remaining scans
+        body2 = Body(id="b_fresh", name="Fresh Giant", body_type="planet", biome="gas_giant", size=5, distance_from_star=2.0, poi_count=1, atmospheric_scan_count=0)
+        system.bodies = [body1, body2]
+        state.ship.current_body_id = None
+        discoveries = perform_atmospheric_scan(state)
+        assert len(discoveries) > 0, "Should find discoveries on the second eligible body"
+        # The scan should have been performed on body2
+        assert body1.atmospheric_scan_count == 3, "First body should remain exhausted"
+        assert body2.atmospheric_scan_count == 1, "Second body's scan count should increment"
+
 
 class TestSubSurfaceAdditional:
     """Additional tests for sub-surface exploration edge cases."""
