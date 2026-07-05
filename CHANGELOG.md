@@ -121,11 +121,15 @@
 - Black hole event count raised from 5 to 8 (from the original 5 plus the 3 new events above)
 - Hawking Radiation Harvest cooldown changed from 6 to 8 (to disambiguate from the new 'Hawking Radiation Harvest (Deep Scan)' event)
 ### Fixed
-- Atmospheric scan auto-select now correctly selects the next eligible body when the first eligible body is exhausted (`atmospheric_scan_count >= 3`), instead of returning empty results.
+- Atmospheric scan auto-select now correctly selects the next eligible body when the first eligible body is exhausted (`atmospheric_scan_count >= 3`), instead of returning empty results. Also when landed on an exhausted body, a log entry is now created explaining why the scan failed.
 - Fuel (and crew) is now deducted after discovery generation in atmospheric scan and sub-surface exploration (was deducted before, causing resources to be spent even when no discoveries were generated).
 - Duplicate exploration cost constants in `engine.py` that shadowed `config.py` definitions have been removed; `ATMOSPHERIC_SCAN_FUEL_COST`, `SUB_SURFACE_FUEL_COST`, and `SUB_SURFACE_CREW_COST` are now imported from `config.py`.
 - `MOTHERLODE_CHANCE` and `MOTHERLODE_VALUE_MULTIPLIER` in `config.py` are no longer dead code — `_generate_discovery` now uses them instead of hard-coded literals.
 - Atmospheric scan can no longer be repeated infinitely on the same body — capped at 3 scans per body via the new `atmospheric_scan_count` field.
+- Motherlode threshold now uses `initial_poi_count` instead of `poi_count`: The `_generate_discovery` function for motherlode discoveries was using `body.poi_count >= 4` as the threshold, but `poi_count` decreases with each exploration. Added `initial_poi_count` field to the `Body` dataclass and use that for the motherlode threshold check instead.
+- Missing early return when `num_finds == 0` in `explore_surface` after diminishing returns: When diminishing returns reduce `num_finds` to 0, the function now returns early instead of continuing with 0 discoveries. Fuel is no longer deducted and `exploration_count` is no longer incremented when no discoveries are generated.
+- `perform_sub_surface_exploration` biome check order: The biome check is now performed before the `sub_surface_explored` check, so that an error message is returned for unsupported biomes even if the body has already been explored.
+- RNG seed includes discovery count: The RNG seed for `explore_surface`, `perform_atmospheric_scan`, and `perform_sub_surface_exploration` now includes `len(state.discoveries)` so that repeated calls produce different results.
 - Scanner anomaly messaging: when scanner >= 5 and a body's `poi_count == 0`, the L4 anomaly message is suppressed so the L5 block handles it, and the L5 block shows appropriate messages for `poi_count == 0` bodies
 - `get_pending_ripples` performance: now uses database-level filtering (`get_pending_ripples_for_system`) instead of loading all ripples from the database and filtering in Python.
 - `api_ripples` no longer acquires the game lock since ripple data is read from the database, not from in-memory game state.
