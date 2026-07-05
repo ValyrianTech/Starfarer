@@ -477,6 +477,7 @@ def perform_atmospheric_scan(state: GameState) -> list[Discovery]:
         return []
 
     if body.atmospheric_scan_count >= 3:
+        state.add_log("exploration", f"Atmospheric scan not possible on {body.name} — this body has already been fully scanned (3/3 scans completed).", category="exploration", title="Atmospheric Scan Exhausted", system=system.name, body=body.name)
         return []
 
     discoveries = []
