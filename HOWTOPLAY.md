@@ -145,7 +145,29 @@ The response also includes a `lore_fragments_discovered` field listing any lore 
 - `discovery_location` — where it was found (system name - body name)
 - `discovery_timestamp` — ISO format datetime of discovery
 
-### 3.8 Handle Events
+**Diminishing returns:** Each body tracks how many times it has been explored (`exploration_count`). Your first exploration yields the most finds; the second yields about half, the third about a quarter, and after 3 explorations a body is exhausted and returns no further discoveries. Move on to fresh bodies to keep finding valuable discoveries. Bodies with a high `poi_count` (4+) also have a small chance of yielding a **motherlode** — a discovery worth 3–5x its normal value.
+
+### 3.8 Atmospheric Scan
+
+```http
+POST /api/game/{game_id}/atmospheric-scan
+```
+
+Costs 1 fuel. No landing required. Available on `gas_giant`, `volcanic`, and `ocean` biomes. If you are not landed on a body, the scan auto-selects the first eligible body in the system that has not yet been scanned 3 times. Yields 1–2 `atmospheric_phenomena` discoveries (20–60 cr each) — lower value, but cheap and repeatable. Capped at 3 scans per body. Returns HTTP 400 if no atmospheric scan is possible here.
+
+### 3.9 Sub-Surface Exploration
+
+```http
+POST /api/game/{game_id}/sub-surface-explore
+```
+
+Costs 3 fuel + 1 crew. Requires being landed on a body. Works on:
+- `volcanic`, `desert`, `tundra` — explores cave systems, yielding `geological_formation` discoveries (50–120 cr)
+- `ocean` — explores the ocean depths, yielding `biological_specimen` discoveries (80–200 cr)
+
+Yields 1–2 high-value discoveries. Can only be done **once per body** (`sub_surface_explored`). Returns HTTP 400 if sub-surface exploration is not possible here.
+
+### 3.10 Handle Events
 
 After jumping, scanning, or exploring, you may receive a `pending_event`. Events have 2-4 choices.
 
@@ -190,7 +212,7 @@ Choices have outcomes that modify stats: `fuel`, `hull`, `morale`, `credits`, `c
 | Binary Star Event (Lagrange Point Discovery) | Investigate the satellite | Most valuable outcome (credits + data) |
 | Black Hole Event | Depends on situation | Time Dilation: study for credits. Hawking Radiation: harvest for fuel. Spaghettification: gravity assist for fuel. Accretion Disk: probe for credits. Gravitational Lens: study for credits+morale. |
 
-### 3.9 Distress Beacon
+### 3.11 Distress Beacon
 
 When your ship is in danger — out of fuel or critically damaged (hull below 20% of max) — you can activate the distress beacon to call for help.
 
@@ -212,7 +234,7 @@ Costs 50 credits. Has a 60% chance of attracting a responder within 1-3 turns. I
 
 The distress beacon has a cooldown period after each activation. Use it only when truly stranded.
 
-### 3.10 Salvage & Emergency Crafting
+### 3.12 Salvage & Emergency Crafting
 
 When stranded with no fuel and landed on a body, you can salvage the area for resources.
 
@@ -717,6 +739,8 @@ The game persists all state to SQLite. Save frequently — especially before ris
 | POST | `/api/game/{id}/scan` | Scan current system (response includes `scanner_tier_data` at scanner L3+) |
 | POST | `/api/game/{id}/land/{bid}` | Land on body |
 | POST | `/api/game/{id}/explore` | Explore surface |
+| POST | `/api/game/{id}/atmospheric-scan` | Atmospheric scan (1 fuel, gas giants/volcanic/ocean) |
+| POST | `/api/game/{id}/sub-surface-explore` | Sub-surface exploration (3 fuel + 1 crew, cave systems/ocean depths) |
 | POST | `/api/game/{id}/event/{eid}/resolve` | Resolve event |
 | POST | `/api/game/{id}/distress` | Activate distress beacon |
 | POST | `/api/game/{id}/salvage` | Salvage area for resources |

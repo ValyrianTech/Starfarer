@@ -13,6 +13,7 @@ without mutating any state:
 import asyncio
 import json
 import logging
+from typing import AsyncGenerator
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
@@ -174,7 +175,7 @@ async def api_spectate_stream(game_id: str) -> StreamingResponse:
     if _get_state(game_id) is None:
         raise HTTPException(status_code=404, detail="Game not found")
 
-    async def event_stream():
+    async def event_stream() -> AsyncGenerator[str, None]:
         """Yield Server-Sent Events for a spectator watching a game.
 
         Sends an initial snapshot with recent log entries and the current
@@ -191,6 +192,7 @@ async def api_spectate_stream(game_id: str) -> StreamingResponse:
             heartbeats (``: ping``) while idle.
         """
         state = _get_state(game_id)
+        assert state is not None
         # Initial snapshot: include only the most recent log entries.
         initial_since = 0
         int_ids = [

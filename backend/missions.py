@@ -445,7 +445,7 @@ def get_missions_summary(state: GameState, system: Optional[StarSystem]) -> dict
         ``daily_available``, and the dominant faction.
     :rtype: dict
     """
-    empty = {
+    empty: dict = {
         "available": False,
         "system_id": system.id if system else None,
         "system_name": system.name if system else None,

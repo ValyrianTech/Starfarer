@@ -25,6 +25,7 @@ from backend.game.engine import (
     get_scanner_tier_data,
     land_on_body, explore_surface,
     activate_distress_beacon, perform_salvage, emergency_craft,
+    perform_atmospheric_scan, perform_sub_surface_exploration,
 )
 from backend.game.trading import get_upgrade_info, purchase_upgrade, perform_trade, perform_bulk_sell
 from backend.database import get_leaderboard
@@ -316,6 +317,64 @@ def api_land(game_id: str, body_id: str) -> dict:
         "result": msg,
         "ship": state.ship.to_dict(),
         "current_body_id": state.ship.current_body_id,
+    }
+
+
+@router.post("/game/{game_id}/atmospheric-scan")
+def api_atmospheric_scan(game_id: str) -> dict:
+    """Perform an atmospheric scan of the current body.
+
+    Costs 1 fuel, no landing required. Works on gas giants, volcanic,
+    and ocean biomes. Yields atmospheric phenomena discoveries.
+
+    :param game_id: The unique identifier of the game.
+    :type game_id: str
+    :returns: A dictionary with ``result`` message, ``discoveries``
+        list, and ``ship`` status.
+    :rtype: dict
+    :raises HTTPException: 404 if the game is not found; 400 if
+        atmospheric scan is not possible.
+    """
+    state = _get_state(game_id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Game not found")
+    discoveries = perform_atmospheric_scan(state)
+    if not discoveries:
+        raise HTTPException(status_code=400, detail="Atmospheric scan not possible here.")
+    game_save(state)
+    return {
+        "result": f"Atmospheric scan complete. Found {len(discoveries)} phenomena.",
+        "discoveries": [d.to_dict() for d in discoveries],
+        "ship": state.ship.to_dict(),
+    }
+
+
+@router.post("/game/{game_id}/sub-surface-explore")
+def api_sub_surface_explore(game_id: str) -> dict:
+    """Perform a sub-surface exploration of the current body.
+
+    Costs 3 fuel + 1 crew. Works on volcanic, desert, tundra (cave systems)
+    and ocean (ocean depths) biomes. Cannot be repeated on the same body.
+
+    :param game_id: The unique identifier of the game.
+    :type game_id: str
+    :returns: A dictionary with ``result`` message, ``discoveries``
+        list, and ``ship`` status.
+    :rtype: dict
+    :raises HTTPException: 404 if the game is not found; 400 if
+        sub-surface exploration is not possible.
+    """
+    state = _get_state(game_id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Game not found")
+    discoveries = perform_sub_surface_exploration(state)
+    if not discoveries:
+        raise HTTPException(status_code=400, detail="Sub-surface exploration not possible here.")
+    game_save(state)
+    return {
+        "result": f"Sub-surface exploration complete. Found {len(discoveries)} discoveries.",
+        "discoveries": [d.to_dict() for d in discoveries],
+        "ship": state.ship.to_dict(),
     }
 
 

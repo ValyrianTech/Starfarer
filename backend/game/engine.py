@@ -13,6 +13,8 @@ from typing import Any, Callable, List, NamedTuple, Optional
 from backend.config import (
     JUMP_FUEL_COST_PER_LY, SCAN_FUEL_COST, EXPLORE_FUEL_COST,
     MORALE_DECAY_PER_JUMP,
+    ATMOSPHERIC_SCAN_FUEL_COST, SUB_SURFACE_FUEL_COST, SUB_SURFACE_CREW_COST,
+    MOTHERLODE_CHANCE, MOTHERLODE_VALUE_MULTIPLIER,
 )
 from backend.models.game_state import GameState
 from backend.models.ship import Ship
@@ -116,21 +118,21 @@ DISCOVERY_VALUE_MAX = 200
 
 #: Discovery categories available per biome, used for scanner L5 resource mapping.
 BIOME_DISCOVERY_CATEGORIES = {
-    "jungle": ["artifact", "lifeform", "ruin"],
-    "ocean": ["artifact", "ruin", "lifeform"],
-    "desert": ["artifact", "ruin", "mineral"],
-    "tundra": ["artifact", "mineral", "lifeform"],
-    "volcanic": ["mineral", "artifact", "lifeform"],
-    "crystal": ["mineral", "artifact", "lifeform"],
+    "jungle": ["artifact", "lifeform", "ruin", "biological_specimen"],
+    "ocean": ["artifact", "ruin", "lifeform", "biological_specimen", "atmospheric_phenomena"],
+    "desert": ["artifact", "ruin", "mineral", "geological_formation"],
+    "tundra": ["artifact", "mineral", "lifeform", "geological_formation"],
+    "volcanic": ["mineral", "artifact", "lifeform", "geological_formation", "atmospheric_phenomena"],
+    "crystal": ["mineral", "artifact", "lifeform", "biological_specimen"],
     "barren": ["mineral"],
-    "gas_giant": ["lifeform", "signal"],
+    "gas_giant": ["lifeform", "signal", "atmospheric_phenomena"],
 }
 
 #: Default categories when a biome is unknown or unmapped.
 DEFAULT_DISCOVERY_CATEGORIES = ["mineral", "artifact", "lifeform", "signal", "ruin"]
 
 #: All discovery categories.
-ALL_DISCOVERY_CATEGORIES = ["mineral", "artifact", "lifeform", "signal", "ruin"]
+ALL_DISCOVERY_CATEGORIES = ["mineral", "artifact", "lifeform", "signal", "ruin", "atmospheric_phenomena", "geological_formation", "biological_specimen"]
 
 _RESOURCE_LABELS = {
     "mineral": "Minerals",
@@ -138,6 +140,9 @@ _RESOURCE_LABELS = {
     "lifeform": "Lifeforms",
     "signal": "Signals",
     "ruin": "Ruins",
+    "atmospheric_phenomena": "Atmospheric Phenomena",
+    "geological_formation": "Geological Formations",
+    "biological_specimen": "Biological Specimens",
 }
 
 
@@ -388,39 +393,177 @@ def explore_surface(state: GameState) -> list[Discovery]:
         return []
 
     discoveries = []
+    # Include len(state.discoveries) in the seed so that repeated calls produce different results (the discovery count changes between calls).
     item_rng = random.Random(state.seed + len(state.discoveries) + deterministic_hash(body.id))
 
+    # Diminishing returns based on exploration count
+    if body.exploration_count >= 3:
+        return []
     num_finds = min(body.poi_count, item_rng.randint(1, 3))
+    if body.exploration_count == 1:
+        num_finds = num_finds // 2
+    elif body.exploration_count == 2:
+        num_finds = num_finds // 4
+
+    if num_finds == 0:
+        return []
 
     lore_frag = get_fragment_for_body(system.id, body.id, state.lore_fragments)
     lore_linked = False
 
-    if num_finds > 0:
-        for i in range(num_finds):
-            cat = item_rng.choice(["mineral", "artifact", "lifeform", "signal", "ruin"])
-            disc = _generate_discovery(item_rng, cat, body, system)
+    for i in range(num_finds):
+        cat = item_rng.choice(["mineral", "artifact", "lifeform", "signal", "ruin"])
+        disc = _generate_discovery(item_rng, cat, body, system)
 
-            if lore_frag and not lore_frag.discovered and not lore_linked:
-                disc.lore_fragment_id = lore_frag.id
-                lore_frag.discovered = True
-                lore_frag.discovery_timestamp = datetime.now(timezone.utc).isoformat()
-                lore_linked = True
-                state.add_log("lore", f"Discovered lore fragment: {lore_frag.title} ({lore_frag.id}).", category="discovery", title="Lore Fragment Discovered", system=system.name, body=body.name)
+        if lore_frag and not lore_frag.discovered and not lore_linked:
+            disc.lore_fragment_id = lore_frag.id
+            lore_frag.discovered = True
+            lore_frag.discovery_timestamp = datetime.now(timezone.utc).isoformat()
+            lore_linked = True
+            state.add_log("lore", f"Discovered lore fragment: {lore_frag.title} ({lore_frag.id}).", category="discovery", title="Lore Fragment Discovered", system=system.name, body=body.name)
 
-            elif lore_frag and lore_frag.discovered and not lore_linked:
-                logger.debug(f"Lore fragment {lore_frag.id} ({lore_frag.title}) already discovered but found on body {body.id}.")
-                lore_linked = True
+        elif lore_frag and lore_frag.discovered and not lore_linked:
+            logger.debug(f"Lore fragment {lore_frag.id} ({lore_frag.title}) already discovered but found on body {body.id}.")
+            lore_linked = True
 
-            discoveries.append(disc)
-            state.discoveries.append(disc)
+        discoveries.append(disc)
+        state.discoveries.append(disc)
 
     ship.fuel -= EXPLORE_FUEL_COST
 
     state.add_log("exploration", f"Explored {body.name}. Found {len(discoveries)} points of interest.", category="exploration", title="Surface Exploration", system=system.name, body=body.name, fuel_change=-EXPLORE_FUEL_COST)
     body.poi_count = max(0, body.poi_count - num_finds)
+    body.exploration_count += 1
     if body.biome:
         state.record_biome_visit(body.biome)
 
+
+    return discoveries
+
+
+def perform_atmospheric_scan(state: GameState) -> list[Discovery]:
+    """Perform an atmospheric scan of the current body.
+
+    Only works on gas_giant, volcanic, and ocean biomes.
+    Costs 1 fuel, no landing required. Yields 1-2 atmospheric_phenomena discoveries.
+    Lower credit value (20-60cr) but very common.
+
+    :param state: The current game state.
+    :type state: GameState
+    :returns: A list of newly generated Discovery objects.
+    :rtype: list[Discovery]
+    """
+    system = state.get_current_system()
+    if not system:
+        return []
+    ship = state.ship
+    if ship.fuel < ATMOSPHERIC_SCAN_FUEL_COST:
+        return []
+
+    body = None
+    if ship.current_body_id:
+        for b in system.bodies:
+            if b.id == ship.current_body_id:
+                body = b
+                break
+    if not body:
+        for b in system.bodies:
+            if b.biome in ("gas_giant", "volcanic", "ocean") and b.atmospheric_scan_count < 3:
+                body = b
+                break
+    if not body:
+        return []
+
+    if body.biome not in ("gas_giant", "volcanic", "ocean"):
+        return []
+
+    if body.atmospheric_scan_count >= 3:
+        state.add_log("exploration", f"Atmospheric scan not possible on {body.name} — this body has already been fully scanned (3/3 scans completed).", category="exploration", title="Atmospheric Scan Exhausted", system=system.name, body=body.name)
+        return []
+
+    discoveries = []
+    # Include len(state.discoveries) in the seed so that repeated calls produce different results (the discovery count changes between calls).
+    item_rng = random.Random(state.seed + len(state.discoveries) + deterministic_hash(body.id) + 999)
+    num_finds = item_rng.randint(1, 2)
+
+    for i in range(num_finds):
+        disc = _generate_discovery(item_rng, "atmospheric_phenomena", body, system)
+        discoveries.append(disc)
+        state.discoveries.append(disc)
+
+    if discoveries:
+        ship.fuel -= ATMOSPHERIC_SCAN_FUEL_COST
+
+        body.atmospheric_scan_count += 1
+
+        state.add_log("exploration", f"Atmospheric scan of {body.name} complete. Found {len(discoveries)} atmospheric phenomena.", category="exploration", title="Atmospheric Scan", system=system.name, body=body.name, fuel_change=-ATMOSPHERIC_SCAN_FUEL_COST)
+
+    return discoveries
+
+
+def perform_sub_surface_exploration(state: GameState) -> list[Discovery]:
+    """Perform a sub-surface exploration of the current body.
+
+    Only works on volcanic, desert, tundra (cave systems -> geological_formation)
+    and ocean (ocean depths -> biological_specimen) biomes.
+    Costs 3 fuel + 1 crew. Yields 1-2 unique discoveries.
+    Cannot be repeated on the same body.
+
+    :param state: The current game state.
+    :type state: GameState
+    :returns: A list of newly generated Discovery objects.
+    :rtype: list[Discovery]
+    """
+    system = state.get_current_system()
+    if not system:
+        return []
+    ship = state.ship
+    if ship.fuel < SUB_SURFACE_FUEL_COST:
+        return []
+    if ship.crew < SUB_SURFACE_CREW_COST:
+        return []
+
+    body = None
+    for b in system.bodies:
+        if b.id == ship.current_body_id:
+            body = b
+            break
+    if not body:
+        return []
+
+    # Determine which biomes support sub-surface exploration
+    cave_biomes = {"volcanic", "desert", "tundra"}
+    ocean_biomes = {"ocean"}
+
+    category = None
+    if body.biome in cave_biomes:
+        category = "geological_formation"
+    elif body.biome in ocean_biomes:
+        category = "biological_specimen"
+
+    if category is None:
+        return []
+
+    if body.sub_surface_explored:
+        return []
+
+    discoveries = []
+    # Include len(state.discoveries) in the seed so that repeated calls produce different results (the discovery count changes between calls).
+    item_rng = random.Random(state.seed + len(state.discoveries) + deterministic_hash(body.id) + 777)
+    num_finds = item_rng.randint(1, 2)
+
+    for i in range(num_finds):
+        disc = _generate_discovery(item_rng, category, body, system)
+        discoveries.append(disc)
+        state.discoveries.append(disc)
+
+    if discoveries:
+        ship.fuel -= SUB_SURFACE_FUEL_COST
+        ship.crew -= SUB_SURFACE_CREW_COST
+        body.sub_surface_explored = True
+
+        biome_label = "cave systems" if body.biome in cave_biomes else "ocean depths"
+        state.add_log("exploration", f"Sub-surface exploration of {body.name} complete. Explored {biome_label} and found {len(discoveries)} discoveries.", category="exploration", title="Sub-Surface Exploration", system=system.name, body=body.name, fuel_change=-SUB_SURFACE_FUEL_COST)
 
     return discoveries
 
@@ -452,6 +595,9 @@ def _generate_discovery(rng: random.Random, category: str, body: Body, system: S
         "lifeform": ["Glowvine", "Crystal Mite", "Void Spore", "Plasma Jelly", "Singing Stone"],
         "signal": ["Distress Beacon", "Encrypted Transmission", "Nav Echo", "Subspace Ripple", "Ghost Signal"],
         "ruin": ["Weathered Pillar", "Sunken Chamber", "Broken Obelisk", "Overgrown Temple", "Fallen Tower"],
+        "atmospheric_phenomena": ["Storm Cell", "Gas Vent", "Aurora Display", "Cloud Vortex", "Plasma Sheath"],
+        "geological_formation": ["Crystal Cave", "Lava Tube", "Ice Geyser", "Impact Crater", "Obsidian Arch"],
+        "biological_specimen": ["Glowfrond", "Crystal Mite Swarm", "Void Blossom", "Plasma Eel", "Singing Lichen"],
     }
     descs = {
         "mineral": [
@@ -479,11 +625,45 @@ def _generate_discovery(rng: random.Random, category: str, body: Body, system: S
             "Crumbling walls hint at a once-great civilization.",
             "Strange symbols cover every surface.",
         ],
+        "atmospheric_phenomena": [
+            "A swirling atmospheric disturbance visible from orbit.",
+            "Pressurized gas vents release plumes of exotic particles.",
+            "Bioluminescent auroras dance across the upper atmosphere.",
+            "A massive vortex of charged plasma churns endlessly.",
+            "A sheath of superheated plasma envelops the upper atmosphere.",
+        ],
+        "geological_formation": [
+            "A vast cavern lined with rare crystalline formations.",
+            "An empty lava tube containing unique mineral deposits.",
+            "Pressurized water erupts through cracks in the ice sheet.",
+            "A massive impact crater with exposed strata.",
+            "A natural arch of volcanic glass spans a canyon.",
+        ],
+        "biological_specimen": [
+            "A bioluminescent plant that pulses with soft light.",
+            "A swarm of tiny crystalline organisms scuttling across the surface.",
+            "A rare flower that blooms only in vacuum-exposed environments.",
+            "An eel-like creature that swims through plasma currents.",
+            "A lichen that emits a harmonic resonance when touched.",
+        ],
     }
     d_id = f"{rng.getrandbits(48):012x}"
     name = rng.choice(names[category])
     desc = rng.choice(descs[category])
-    value = rng.randint(10, 200)
+    # Value ranges by category
+    if category == "atmospheric_phenomena":
+        value = rng.randint(20, 60)
+    elif category == "geological_formation":
+        value = rng.randint(50, 120)
+    elif category == "biological_specimen":
+        value = rng.randint(80, 200)
+    else:
+        value = rng.randint(10, 200)
+    # Motherlode chance on high-POI bodies
+    if body.initial_poi_count >= 4 and rng.random() < MOTHERLODE_CHANCE:
+        multiplier = rng.randint(MOTHERLODE_VALUE_MULTIPLIER[0], MOTHERLODE_VALUE_MULTIPLIER[1])
+        value = value * multiplier
+        name = f"*** MOTHERLODE: {name} ({value}cr) ***"
     return Discovery(
         id=d_id, category=category, name=name, description=desc,
         value=value, system_id=system.id, body_id=body.id,

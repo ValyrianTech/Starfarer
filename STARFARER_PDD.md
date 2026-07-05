@@ -115,6 +115,34 @@ Scanner (1-5): Detection range for anomalies. Upgradable
 
 Each step has a corresponding API endpoint for AI play.
 
+#### 3.3.1 Exploration Depth Mechanics
+
+**Atmospheric Scan:**
+- Available on gas_giant, volcanic, and ocean biomes
+- Costs 1 fuel (configurable via `ATMOSPHERIC_SCAN_FUEL_COST`)
+- No landing required; can be performed from orbit
+- Yields 1–2 atmospheric phenomena discoveries (20–60 credits each)
+- Capped at 3 scans per body (tracked by `atmospheric_scan_count`)
+
+**Sub-Surface Exploration:**
+- Available on volcanic, desert, and tundra biomes → yields cave systems and geological formations (50–120 credits each)
+- Available on ocean biomes → yields ocean depths and biological specimens (80–200 credits each)
+- Costs 3 fuel + 1 crew (configurable via `SUB_SURFACE_FUEL_COST` and `SUB_SURFACE_CREW_COST`)
+- Requires landing first; one-time only per body (tracked by `sub_surface_explored`)
+- Crew cost is non-refundable — the crew member joins the expedition and remains on the body
+
+**Motherlode Finds:**
+- Bodies with `initial_poi_count >= 4` have an 8% chance per discovery to generate a motherlode
+- Motherlodes apply a 3–5× value multiplier to the discovery value
+- Configurable via `MOTHERLODE_CHANCE` and `MOTHERLODE_VALUE_MULTIPLIER`
+
+**Diminishing Returns:**
+- Surface exploration tracks `exploration_count` per body
+- First exploration: full yield
+- Second exploration: half the normal number of finds (rounded up, minimum 1)
+- Third exploration: quarter the normal number of finds (rounded up, minimum 1)
+- After 3 explorations, surface exploration returns empty
+
 ### 3.4 Events System
 
 #### 3.4.1 Event Types
@@ -151,6 +179,9 @@ Each event has:
 - Lifeforms — unique flora and fauna on different planets
 - Artifacts — items with special properties (can be sold or kept)
 - Signal Sources — distress calls, broadcasts, mysterious transmissions
+- Atmospheric Phenomena — storm cells, gas vents, aurora displays, cloud vortices, plasma sheaths (20–60 cr)
+- Geological Formations — crystal caves, lava tubes, ice geysers, impact craters, obsidian arches (50–120 cr)
+- Biological Specimens — glowfrond, crystal mite swarms, void blossoms, plasma eels, singing lichen (80–200 cr)
 
 #### 3.5.2 Lore Fragments
 - Scattered across the universe, each fragment reveals a piece of a larger story
@@ -201,12 +232,12 @@ API Docs: Swagger UI at /docs and ReDoc at /redoc
 starfarer/
   backend/
     main.py                 # FastAPI app entry point
-    config.py               # Game constants, settings
+    config.py               # Game constants, settings (includes ATMOSPHERIC_SCAN_FUEL_COST, SUB_SURFACE_FUEL_COST, SUB_SURFACE_CREW_COST, MOTHERLODE_CHANCE, MOTHERLODE_VALUE_MULTIPLIER)
     database.py             # SQLite setup, migrations
     models/
       game_state.py       # GameState dataclass
       ship.py             # Ship dataclass
-      system.py           # StarSystem, Planet dataclasses
+      system.py           # StarSystem, Body dataclasses (includes exploration_depth tracking: exploration_count, sub_surface_explored, atmospheric_scan_count, initial_poi_count)
       event.py            # Event dataclass
       discovery.py        # Discovery, LoreFragment dataclasses
     generation/
@@ -278,6 +309,8 @@ POST /api/game/{id}/trade — Buy or sell at a station
 POST /api/game/{id}/upgrade — Purchase a ship upgrade
 GET /api/game/{id}/nearby — Nearby systems within jump range
 GET /api/leaderboard — Top AI players by discoveries and efficiency
+POST /api/game/{id}/atmospheric-scan — Atmospheric scan (1 fuel, gas giants/volcanic/ocean biomes, yields atmospheric phenomena discoveries, capped at 3 per body)
+POST /api/game/{id}/sub-surface-explore — Sub-surface exploration (3 fuel + 1 crew, volcanic/desert/tundra → geological formations, ocean → biological specimens, one-time per body)
 
 ### 4.4 Frontend DOM Structure (for Browser Automation)
 

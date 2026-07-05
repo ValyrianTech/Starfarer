@@ -291,6 +291,7 @@ def generate_system(rng: random.Random, idx: int, galaxy_rng: random.Random) -> 
             id=body_id, name=body_name, body_type=body_type,
             biome=biome, size=size, distance_from_star=round(distance, 2),
             description=desc, poi_count=poi_count,
+            initial_poi_count=poi_count,
         )
         bodies.append(body)
 

@@ -2858,7 +2858,7 @@ class TestMissionSummary:
     def test_get_missions_summary_only_daily(self):
         """When only a daily mission exists (no standard missions), available should be False
         and count should be 0, matching the fix in Option A."""
-        from backend.missions import get_missions_summary, FactionMission, generate_missions
+        from backend.missions import get_missions_summary, FactionMission
         from backend.game.manager import new_game
         from unittest.mock import patch
         state = new_game(seed=42)
