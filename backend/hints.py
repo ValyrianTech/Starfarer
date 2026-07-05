@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Callable
 
 from backend.fuel import get_fuel_status
+from backend.missions import get_missions_summary
 from backend.models.game_state import GameState
 from backend.models.system import StarSystem
 
@@ -146,6 +147,46 @@ def _morale_low(game_state: GameState, systems: dict[str, StarSystem]) -> bool:
     return game_state.ship.morale < 30
 
 
+def _missions_available(game_state: GameState, systems: dict[str, StarSystem]) -> bool:
+    """At a station offering missions the player hasn't engaged with yet.
+
+    Surfaces the mission system once the player has begun exploring
+    (more than one system visited) and is docked at a station that has
+    missions on offer, but only while they have no active or completed
+    missions (a first-time introduction).
+    """
+    if game_state.systems_visited < 2:
+        return False
+    if game_state.accepted_missions or game_state.completed_missions:
+        return False
+    current = game_state.get_current_system()
+    if current is None or not current.has_trading_station:
+        return False
+    summary = get_missions_summary(game_state, current)
+    return summary.get("available", False) and summary.get("count", 0) > 0
+
+
+def _mission_pending(game_state: GameState, systems: dict[str, StarSystem]) -> bool:
+    """The player has accepted missions and is docked at a station."""
+    if not game_state.accepted_missions:
+        return False
+    current = game_state.get_current_system()
+    if current is None or not current.has_trading_station:
+        return False
+    return True
+
+
+def _mission_high_tier(game_state: GameState, systems: dict[str, StarSystem]) -> bool:
+    """Reputation has unlocked higher-tier (2+) missions at this station."""
+    if game_state.systems_visited < 2:
+        return False
+    current = game_state.get_current_system()
+    if current is None or not current.has_trading_station:
+        return False
+    summary = get_missions_summary(game_state, current)
+    return summary.get("highest_tier", 0) >= 2
+
+
 # ---------------------------------------------------------------------------
 # Hint definitions — ordered by priority (highest first)
 # ---------------------------------------------------------------------------
@@ -184,6 +225,14 @@ HINT_DEFINITIONS: list[Hint] = [
         priority=40,
     ),
     Hint(
+        hint_id="mission_pending",
+        severity="info",
+        message_template="You have accepted mission(s) awaiting completion. Complete them at this station to claim your rewards.",
+        condition=_mission_pending,
+        command="/missions",
+        priority=35,
+    ),
+    Hint(
         hint_id="morale_low",
         severity="warning",
         message_template="Crew morale is low. Low morale can affect event outcomes. Visit a station with amenities to boost morale.",
@@ -200,12 +249,28 @@ HINT_DEFINITIONS: list[Hint] = [
         priority=20,
     ),
     Hint(
+        hint_id="missions_available",
+        severity="info",
+        message_template="Faction missions are available at this station. Complete them to earn credits and reputation.",
+        condition=_missions_available,
+        command="/missions",
+        priority=15,
+    ),
+    Hint(
         hint_id="cargo_full",
         severity="info",
         message_template="Cargo bay nearly full. Consider selling discoveries at the nearest trading station.",
         condition=_cargo_full,
         command=None,
         priority=10,
+    ),
+    Hint(
+        hint_id="mission_high_tier",
+        severity="tip",
+        message_template="Your faction reputation has unlocked higher-tier missions with greater rewards at this station.",
+        condition=_mission_high_tier,
+        command="/missions",
+        priority=8,
     ),
     Hint(
         hint_id="first_crisis",

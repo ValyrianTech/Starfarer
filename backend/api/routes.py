@@ -32,7 +32,7 @@ from backend.fuel import get_fuel_status
 from backend.generation.lore_content import ARC_DISPLAY_NAMES
 from backend.models.faction import get_faction, FACTION_DEFINITIONS
 from backend.missions import (
-    generate_missions, complete_mission, FactionMission,
+    generate_missions, complete_mission, FactionMission, get_missions_summary,
 )
 from backend.utils import seeded_random, deterministic_hash
 
@@ -221,9 +221,31 @@ def api_jump(game_id: str, sys_id: str) -> dict:
     event = trigger_event(state)
     if event:
         state.events.append(event)
-    game_save(state)
 
     current_system = state.get_current_system()
+    if current_system and current_system.has_trading_station:
+        missions_summary = get_missions_summary(state, current_system)
+        if missions_summary["available"] and missions_summary["count"] > 0:
+            tier_note = (
+                f" (up to tier {missions_summary['highest_tier']})"
+                if missions_summary["highest_tier"] > 1 else ""
+            )
+            state.add_log(
+                "faction",
+                f"{missions_summary['count']} faction mission(s) available at "
+                f"{current_system.name}{tier_note}, offered by "
+                f"{missions_summary['faction_name']}.",
+                category="system", title="Missions Available",
+            )
+        if missions_summary["daily_available"]:
+            state.add_log(
+                "faction",
+                f"A free daily opportunity awaits at {current_system.name}.",
+                category="system", title="Daily Mission",
+            )
+
+    game_save(state)
+
     return {
         "result": result,
         "current_system": current_system.to_dict() if current_system else None,
@@ -1380,6 +1402,7 @@ def _full_state_response(state: GameState, sort: str | None = None, order: str |
         "top3_ids": [item["id"] for item in sorted(cargo_items, key=lambda i: i.get("value", 0), reverse=True)[:3]],
         "fuel_status": get_fuel_status(state, state.systems),
         "hints": hints,
+        "missions_available": get_missions_summary(state, current_system),
         "biomes_visited": list(state.biomes_visited),
         "biomes_visited_count": len(state.biomes_visited),
         "shared_universe": state.shared_universe,

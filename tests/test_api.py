@@ -3468,3 +3468,55 @@ class TestAPICompleteMissionResourceChecks:
         })
         assert resp.status_code == 400
         assert "credits" in resp.json()["detail"].lower()
+
+
+class TestAPIMissionsAvailable:
+    """Tests for missions_available in game state response."""
+
+    def test_full_state_response_has_missions_available(self):
+        from backend.api.routes import _full_state_response
+        from backend.game.manager import new_game
+        state = new_game(seed=42)
+        resp = _full_state_response(state)
+        assert "missions_available" in resp
+        assert resp["missions_available"]["count"] > 0
+
+    def test_full_state_response_missions_available_no_system(self):
+        from backend.api.routes import _full_state_response
+        from backend.game.manager import new_game
+        state = new_game(seed=42)
+        state.ship.current_system_id = "nonexistent"
+        resp = _full_state_response(state)
+        assert "missions_available" in resp
+        assert resp["missions_available"]["count"] == 0
+
+    def test_get_game_includes_missions_available(self):
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+        resp = client.get(f"/api/game/{game_id}")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "missions_available" in data
+        assert isinstance(data["missions_available"], dict)
+        assert "count" in data["missions_available"]
+        assert "highest_tier" in data["missions_available"]
+        assert "daily_available" in data["missions_available"]
+
+    def test_jump_adds_mission_notification_logs(self):
+        from backend.game.manager import GAME_STORE
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "jump-mission-notif"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        nearby = client.get(f"/api/game/{game_id}/nearby").json()
+        reachable = [n for n in nearby["nearby"] if n["reachable"]]
+        if reachable:
+            target = reachable[0]
+            resp = client.post(f"/api/game/" + game_id + "/jump/" + target["id"])
+            assert resp.status_code == 200
+            resp = client.get(f"/api/game/{game_id}/log")
+            assert resp.status_code == 200
+            entries = resp.json()["entries"]
+            titles = [e.get("title", "") for e in entries]
+            has_mission_notif = any("Missions Available" in t for t in titles)
+            has_daily_notif = any("Daily Mission" in t for t in titles)
+            assert has_mission_notif or has_daily_notif, f"Expected mission notification in log titles: {titles}"
