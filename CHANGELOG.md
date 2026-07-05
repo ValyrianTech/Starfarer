@@ -3,6 +3,15 @@
 ## [Unreleased]
 
 ### Added
+- Scanner tier data (`get_scanner_tier_data(state, system)` in `backend/game/engine.py`): returns tier-specific structured data gated by scanner level — L3 (`value_estimation`: estimated discovery value ranges per body, 10–200 cr), L4 (`anomaly_detection`: bodies with anomalies — a lore fragment or `poi_count >= 3`), and L5 (`resource_mapping`: discovery categories available per body by biome)
+- `scanner_tier_data` field in the `POST /api/game/{id}/scan` response, containing `value_estimation`, `anomaly_detection`, and `resource_mapping`
+- `perform_scan()` now appends detailed tier-specific information to the scan result message at scanner L3/L4/L5
+- Codex expansion (`backend/codex.py`): each biome in `BIOME_CODEX_DATA` now has `rare_discoveries` and `unique_locations` fields, exposed via scanner tiers — L3 (`common_discovery_types`), L4 (`rare_discovery_types`), L5 (`unique_discovery_locations`)
+- 9 new phenomenon-specific events: nebula (Nebula Nursery, Precursor Nebula Beacon), pulsar (Pulsar Beam Sweep, Pulsar Timing Anomaly, Magnetar Flare), and binary star (Binary Eclipse, Lagrange Point Cache, Tidal Lock World)
+- Mission discoverability: after jumping to a system with a trading station, a log notification is added about available missions
+- `missions_available` field in the full game state response (`GET /api/game/{id}`), populated from `get_missions_summary()`
+- 3 new contextual hints in `backend/hints.py`: `mission_pending` (info — player has accepted missions at a station), `missions_available` (info — first arrival at a station with missions), and `mission_high_tier` (tip — reputation has unlocked tier 2+ missions)
+- `daily_available` field in `get_missions_summary()` output, indicating whether a daily mission is available
 - **Multiplayer Foundation — Ghosts in the Void**: Asynchronous shared universe system (`backend/multiplayer/`) enabling cross-session player interactions:
   - **Ghost Signatures** (`backend/multiplayer/ghosts.py`): Automatic traces left by players on jump, scan, and explore actions. Other players visiting the same system can see these echoes of past travellers via `GET /api/game/{id}/system/{sys_id}/ghosts`.
   - **Crossroads Trading Post** (`backend/multiplayer/crossroads.py`): Shared item/lore donation and claiming system. Players can donate items (`POST /crossroads/donate-item`) and lore fragments (`POST /crossroads/donate-lore`) for others to claim (`POST /crossroads/claim-item/{id}`, `POST /crossroads/claim-lore/{id}`). Available donations listed at `GET /crossroads/items` and `GET /crossroads/lore`.
@@ -80,6 +89,9 @@
 - Pagination support for Crossroads messages endpoint: `GET /api/crossroads/messages` now accepts optional `page` (default 1) and `per_page` (default 10, max 50) query parameters. Returns paginated response with `messages`, `page`, `per_page`, `total_messages`, and `total_pages` fields.
 
 ### Changed
+- Ion Storm event rebalanced: choices changed and it is now phenomenon-specific to nebula systems
+- `get_missions_summary()` now separates standard missions from daily missions — `available` and `count` reflect only standard (non-daily) missions, while `daily_available` reports daily mission availability
+- `_RESOURCE_LABELS` dict in `backend/game/engine.py` moved to module level instead of being recreated inside the scan loop
 - `Body.biome` field type changed from `str` to `Optional[str]` (defaults to `None`); `Body.from_dict` now uses `d.get("biome")` instead of `d["biome"]` for safe deserialization of None biomes
 - Solar Flare event: updated flavor text and rebalanced choices (now offers planetary cover, radiation shielding, or riding it out with crew/morale consequences)
 - Ion Storm event: updated flavor text and rebalanced choices (now offers system power-down, emergency power push, or waiting it out)
@@ -101,6 +113,7 @@
 - Black hole event count raised from 5 to 8 (from the original 5 plus the 3 new events above)
 - Hawking Radiation Harvest cooldown changed from 6 to 8 (to disambiguate from the new 'Hawking Radiation Harvest (Deep Scan)' event)
 ### Fixed
+- Scanner anomaly messaging: when scanner >= 5 and a body's `poi_count == 0`, the L4 anomaly message is suppressed so the L5 block handles it, and the L5 block shows appropriate messages for `poi_count == 0` bodies
 - `get_pending_ripples` performance: now uses database-level filtering (`get_pending_ripples_for_system`) instead of loading all ripples from the database and filtering in Python.
 - `api_ripples` no longer acquires the game lock since ripple data is read from the database, not from in-memory game state.
 - Frontend `renderGhostsTab` now accepts a `totalGhosts` parameter and displays the total ghost count instead of the page count.
