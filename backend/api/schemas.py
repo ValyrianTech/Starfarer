@@ -5,8 +5,6 @@ Defines the data models used for validating API request bodies
 and structuring API responses.
 """
 
-from typing import Any
-
 from pydantic import BaseModel
 
 
@@ -21,18 +19,6 @@ class NewGameRequest(BaseModel):
     ship_name: str | None = None
     game_id: str | None = None
     shared_universe: bool | None = None
-
-
-class JumpRequest(BaseModel):
-    """Request body for initiating a hyperspace jump."""
-
-    target_system_id: str
-
-
-class LandRequest(BaseModel):
-    """Request body for landing on a celestial body."""
-
-    body_id: str
 
 
 class ResolveEventRequest(BaseModel):
@@ -77,20 +63,6 @@ class HealthResponse(BaseModel):
     status: str
     version: str
     uptime: str
-
-
-class GameResponse(BaseModel):
-    """Response body for game-related endpoints."""
-
-    game_id: str
-    state: Any
-
-
-class ErrorResponse(BaseModel):
-    """Response body for error conditions."""
-
-    error: str
-    detail: str | None = None
 
 
 class CraftRequest(BaseModel):

@@ -332,7 +332,6 @@ def generate_system(rng: random.Random, idx: int, galaxy_rng: random.Random) -> 
     )
 
 
-MAX_INITIAL_JUMP = 40
 NEIGHBOR_DISTANCE_THRESHOLD = 60
 
 
