@@ -33,8 +33,8 @@ class TestUniverseGeneration:
         assert len(lore) == 20
 
     def test_deterministic(self) -> None:
-        s1, l1 = generate_universe(42)
-        s2, l2 = generate_universe(42)
+        s1, _l1 = generate_universe(42)
+        s2, _l2 = generate_universe(42)
         assert set(s1.keys()) == set(s2.keys())
         for k in s1:
             assert s1[k].name == s2[k].name
@@ -43,8 +43,8 @@ class TestUniverseGeneration:
             assert s1[k].star_type == s2[k].star_type
 
     def test_different_seeds_different_universes(self) -> None:
-        s1, l1 = generate_universe(42)
-        s2, l2 = generate_universe(99)
+        s1, _l1 = generate_universe(42)
+        s2, _l2 = generate_universe(99)
 
         def names(d: dict[str, StarSystem]) -> set[str]:
             return {s.name for s in d.values()}
@@ -52,20 +52,20 @@ class TestUniverseGeneration:
         assert len(names(s1) & names(s2)) < 40
 
     def test_each_system_has_bodies(self) -> None:
-        systems, lore = generate_universe(42)
+        systems, _lore = generate_universe(42)
         for system in systems.values():
             assert len(system.bodies) >= 1
             assert len(system.bodies) <= 20
 
     def test_each_system_has_valid_star_type(self) -> None:
         from backend.config import STAR_SPECTRAL_TYPES
-        systems, lore = generate_universe(42)
+        systems, _lore = generate_universe(42)
         for system in systems.values():
             assert system.star_type in STAR_SPECTRAL_TYPES
 
     def test_bodies_have_valid_biomes(self) -> None:
         from backend.config import BIOME_TYPES
-        systems, lore = generate_universe(42)
+        systems, _lore = generate_universe(42)
         for system in systems.values():
             for body in system.bodies:
                 assert body.biome in BIOME_TYPES or body.body_type == "asteroid_belt"
@@ -951,7 +951,7 @@ class TestLoreDistribution:
         for sys_id in list(placement.keys())[:5]:
             result = get_lore_fragments_for_system(sys_id, all_frags)
             assert len(result) == len(placement[sys_id])
-            assert set(f.id for f in result) == set(f.id for f in placement[sys_id])
+            assert {f.id for f in result} == {f.id for f in placement[sys_id]}
 
     def test_get_lore_fragments_for_system_empty(self) -> None:
         """get_lore_fragments_for_system should return empty for system with no fragments."""
@@ -1112,7 +1112,7 @@ class TestLoreDistribution:
 
         placement = distribute_lore_fragments(42, systems)
         assert len(placement) > 0
-        for sys_id, frags in placement.items():
+        for frags in placement.values():
             for frag in frags:
                 body_id = frag.discovery_id.split("::")[1]
                 assert body_id == "b2", f"Fragment should be on body2, not {body_id}"
@@ -1135,7 +1135,7 @@ class TestLoreDistribution:
 
         placement = distribute_lore_fragments(42, systems)
         assert len(placement) > 0
-        for sys_id, frags in placement.items():
+        for frags in placement.values():
             for frag in frags:
                 body_id = frag.discovery_id.split("::")[1]
                 assert body_id == "b1", f"Fragment should be on body b1, not {body_id}"
@@ -1148,7 +1148,7 @@ class TestLoreDistribution:
         placement = distribute_lore_fragments(42, systems)
 
         discovery_ids: set[str] = set()
-        for sys_id, frags in placement.items():
+        for frags in placement.values():
             for frag in frags:
                 assert frag.discovery_id not in discovery_ids, \
                     f"Duplicate discovery_id: {frag.discovery_id}"
@@ -1378,7 +1378,7 @@ class TestLoreDistribution:
         
         # All discovery_ids should be unique (no duplicate bodies)
         discovery_ids = set()
-        for sys_id, frags in placement.items():
+        for frags in placement.values():
             for frag in frags:
                 assert frag.discovery_id not in discovery_ids, \
                     f"Duplicate discovery_id: {frag.discovery_id}"
@@ -2200,8 +2200,8 @@ class TestNewHazardEvents:
         from backend.generation.universe import generate_universe
         from backend.models.ship import Ship
 
-        systems, lore = generate_universe(42)
-        ship = Ship(current_system_id=list(systems.keys())[0])
+        systems, _lore = generate_universe(42)
+        ship = Ship(current_system_id=next(iter(systems.keys())))
         state = GameState(id="test-trigger-mm", seed=42, ship=ship, systems=systems)
 
         # Set up conditions for the event to trigger
@@ -2231,8 +2231,8 @@ class TestNewHazardEvents:
         from backend.generation.universe import generate_universe
         from backend.models.ship import Ship
 
-        systems, lore = generate_universe(42)
-        ship = Ship(current_system_id=list(systems.keys())[0])
+        systems, _lore = generate_universe(42)
+        ship = Ship(current_system_id=next(iter(systems.keys())))
         state = GameState(id="test-trigger-qf", seed=42, ship=ship, systems=systems)
 
         state.event_cooldowns = {}
@@ -2260,8 +2260,8 @@ class TestNewHazardEvents:
         from backend.generation.universe import generate_universe
         from backend.models.ship import Ship
 
-        systems, lore = generate_universe(42)
-        ship = Ship(current_system_id=list(systems.keys())[0])
+        systems, _lore = generate_universe(42)
+        ship = Ship(current_system_id=next(iter(systems.keys())))
         state = GameState(id="test-cooldown-repeat", seed=42, ship=ship, systems=systems)
 
         # Set a cooldown for Micrometeorite Storm
@@ -2288,8 +2288,8 @@ class TestNewHazardEvents:
         from backend.generation.universe import generate_universe
         from backend.models.ship import Ship
 
-        systems, lore = generate_universe(42)
-        ship = Ship(current_system_id=list(systems.keys())[0])
+        systems, _lore = generate_universe(42)
+        ship = Ship(current_system_id=next(iter(systems.keys())))
         state = GameState(id="test-persist-counts", seed=42, ship=ship, systems=systems)
 
         # Clear cooldowns so events can trigger

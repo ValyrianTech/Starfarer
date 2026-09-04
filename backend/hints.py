@@ -89,9 +89,7 @@ def _fuel_low_no_station(game_state: GameState, systems: dict[str, StarSystem]) 
     current = game_state.get_current_system()
     if current is None:
         return False
-    if current.has_trading_station:
-        return False
-    return True
+    return not current.has_trading_station
 
 
 def _first_uncharted(game_state: GameState, systems: dict[str, StarSystem]) -> bool:
@@ -136,9 +134,8 @@ def _first_crisis(game_state: GameState, systems: dict[str, StarSystem]) -> bool
         if entry.get("category") == "crisis":
             return False
     for event in game_state.events:
-        if event.event_type == "crisis":
-            if not event.resolved:
-                return True
+        if event.event_type == "crisis" and not event.resolved:
+            return True
     return False
 
 
@@ -171,9 +168,7 @@ def _mission_pending(game_state: GameState, systems: dict[str, StarSystem]) -> b
     if not game_state.accepted_missions:
         return False
     current = game_state.get_current_system()
-    if current is None or not current.has_trading_station:
-        return False
-    return True
+    return not (current is None or not current.has_trading_station)
 
 
 def _mission_high_tier(game_state: GameState, systems: dict[str, StarSystem]) -> bool:

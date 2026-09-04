@@ -1,6 +1,7 @@
 import os
 import random
 import sys
+from typing import ClassVar
 
 import pytest
 
@@ -122,7 +123,7 @@ class TestGameManager:
         loaded = game_load(state.id)
         assert loaded is not None
         assert len(loaded.lore_fragments) == len(state.lore_fragments)
-        assert set(lf.id for lf in loaded.lore_fragments) == set(lf.id for lf in state.lore_fragments)
+        assert {lf.id for lf in loaded.lore_fragments} == {lf.id for lf in state.lore_fragments}
 
     def test_state_summary_has_lore_stats(self) -> None:
         """state_summary should include lore_fragments_collected and total."""
@@ -146,7 +147,7 @@ class TestNavigation:
         state = new_game(seed=42)
         cur = state.get_current_system()
         assert cur is not None
-        ok, cost, msg = can_jump(state.ship, cur, cur)
+        ok, _cost, msg = can_jump(state.ship, cur, cur)
         assert ok is False
         assert "Already" in msg
 
@@ -182,7 +183,7 @@ class TestNavigation:
 
     def test_land_on_invalid_body(self) -> None:
         state = new_game(seed=42)
-        ok, msg = land_on_body(state, "nonexistent")
+        ok, _msg = land_on_body(state, "nonexistent")
         assert ok is False
 
     def test_explore_surface(self) -> None:
@@ -204,7 +205,7 @@ class TestNavigation:
         reachable = [n for n in nearby if n["reachable"]]
         if reachable:
             target = state.systems[reachable[0]["id"]]
-            ok, cost, msg = can_jump(state.ship, target, state.get_current_system())
+            ok, cost, _msg = can_jump(state.ship, target, state.get_current_system())
             assert ok is True
             _ = perform_jump(state, target, cost)
             assert state.ship.current_system_id == target.id
@@ -224,14 +225,14 @@ class TestTradingAndUpgrades:
     def test_purchase_upgrade(self) -> None:
         state = new_game(seed=42)
         state.ship.credits = 10000
-        ok, msg = purchase_upgrade(state, "hyperdrive")
+        ok, _msg = purchase_upgrade(state, "hyperdrive")
         assert ok is True
         assert state.ship.upgrades["hyperdrive"] == 1
 
     def test_purchase_upgrade_not_enough_credits(self) -> None:
         state = new_game(seed=42)
         state.ship.credits = 10
-        ok, msg = purchase_upgrade(state, "hyperdrive")
+        ok, _msg = purchase_upgrade(state, "hyperdrive")
         assert ok is False
 
 
@@ -242,7 +243,7 @@ class TestCanJumpEdgeCases:
         """Jump should fail when there is no current system (None)."""
         state = new_game(seed=42)
         target = list(state.systems.values())[1]
-        ok, fuel_cost, msg = can_jump(state.ship, target, None)
+        ok, _fuel_cost, msg = can_jump(state.ship, target, None)
         assert ok is False
         assert "No current system" in msg
 
@@ -264,7 +265,7 @@ class TestCanJumpEdgeCases:
         state.ship.jump_range = 1
         state.ship.fuel = 500
         target = list(state.systems.values())[1]
-        ok, fuel_cost, msg = can_jump(state.ship, target, cur)
+        ok, _fuel_cost, msg = can_jump(state.ship, target, cur)
         assert ok is False
         assert "exceeds jump range" in msg
 
@@ -530,7 +531,7 @@ class TestTradingAdvanced:
         state.discoveries.append(low_value_disc)
         state.discoveries.append(high_value_disc)
         credits_before = state.ship.credits
-        ok, msg = perform_trade(state, "sell", cat, 1)
+        ok, _msg = perform_trade(state, "sell", cat, 1)
         assert ok is True
         assert high_value_disc not in state.discoveries
         assert low_value_disc in state.discoveries
@@ -754,7 +755,7 @@ class TestTradingAdvanced:
         state_allied.ship.hull = 60
         state_allied.ship.credits = 10000
         state_allied.modify_faction_reputation("void_traders", 60)
-        ok1, msg1 = perform_trade(state_allied, "buy", "repair", 1)
+        ok1, _msg1 = perform_trade(state_allied, "buy", "repair", 1)
         assert ok1 is True
         allied_cost = 10000 - state_allied.ship.credits
 
@@ -763,7 +764,7 @@ class TestTradingAdvanced:
         state_hostile.ship.hull = 60
         state_hostile.ship.credits = 10000
         state_hostile.modify_faction_reputation("void_traders", -50)
-        ok2, msg2 = perform_trade(state_hostile, "buy", "repair", 1)
+        ok2, _msg2 = perform_trade(state_hostile, "buy", "repair", 1)
         assert ok2 is True
         hostile_cost = 10000 - state_hostile.ship.credits
 
@@ -791,7 +792,7 @@ class TestTradingAdvanced:
     def test_trade_unknown_item(self) -> None:
         """Trade should fail for unknown items."""
         state = new_game(seed=42)
-        ok, msg = perform_trade(state, "buy", "nonexistent", 1)
+        ok, _msg = perform_trade(state, "buy", "nonexistent", 1)
         assert ok is False
 
     def test_buy_fuel_negative_quantity(self) -> None:
@@ -844,7 +845,7 @@ class TestTradingAdvanced:
         state = new_game(seed=42)
         state.ship.credits = 10000
         scanner_before = state.ship.scanner
-        ok, msg = purchase_upgrade(state, "scanner")
+        ok, _msg = purchase_upgrade(state, "scanner")
         assert ok is True
         assert state.ship.scanner > scanner_before
 
@@ -853,7 +854,7 @@ class TestTradingAdvanced:
         state = new_game(seed=42)
         state.ship.credits = 10000
         max_cargo_before = state.ship.max_cargo
-        ok, msg = purchase_upgrade(state, "cargo_hold")
+        ok, _msg = purchase_upgrade(state, "cargo_hold")
         assert ok is True
         assert state.ship.max_cargo > max_cargo_before
 
@@ -862,7 +863,7 @@ class TestTradingAdvanced:
         state = new_game(seed=42)
         state.ship.credits = 10000
         max_hull_before = state.ship.max_hull
-        ok, msg = purchase_upgrade(state, "hull_plating")
+        ok, _msg = purchase_upgrade(state, "hull_plating")
         assert ok is True
         assert state.ship.max_hull > max_hull_before
 
@@ -871,7 +872,7 @@ class TestTradingAdvanced:
         state = new_game(seed=42)
         state.ship.credits = 10000
         max_fuel_before = state.ship.max_fuel
-        ok, msg = purchase_upgrade(state, "fuel_tanks")
+        ok, _msg = purchase_upgrade(state, "fuel_tanks")
         assert ok is True
         assert state.ship.max_fuel > max_fuel_before
 
@@ -880,7 +881,7 @@ class TestTradingAdvanced:
         state = new_game(seed=42)
         state.ship.credits = 10000
         reduction_before = state.ship.morale_decay_reduction
-        ok, msg = purchase_upgrade(state, "life_support")
+        ok, _msg = purchase_upgrade(state, "life_support")
         assert ok is True
         assert state.ship.morale_decay_reduction > reduction_before
 
@@ -965,7 +966,7 @@ class TestEventsAdvanced:
         event = _create_event(EVENT_TEMPLATES[0], "sys_0000")
         event.resolved = True
         state.events.append(event)
-        ok, msg, extra = resolve_event(state, event.id, 0)
+        ok, msg, _extra = resolve_event(state, event.id, 0)
         assert ok is False
         assert "already resolved" in msg
 
@@ -975,7 +976,7 @@ class TestEventsAdvanced:
         from backend.generation.events import _create_event
         event = _create_event(EVENT_TEMPLATES[0], "sys_0000")
         state.events.append(event)
-        ok, msg, extra = resolve_event(state, event.id, 99)
+        ok, msg, _extra = resolve_event(state, event.id, 99)
         assert ok is False
         assert "Invalid choice" in msg
 
@@ -985,7 +986,7 @@ class TestEventsAdvanced:
         from backend.generation.events import _create_event
         event = _create_event(EVENT_TEMPLATES[0], "sys_0000")
         state.events.append(event)
-        ok, msg, extra = resolve_event(state, event.id, -1)
+        ok, msg, _extra = resolve_event(state, event.id, -1)
         assert ok is False
         assert "Invalid choice" in msg
 
@@ -994,7 +995,7 @@ class TestEventsAdvanced:
         state = new_game(seed=42)
         from backend.generation.events import _create_event
         # Find the narrative event template
-        narrative_template = [t for t in EVENT_TEMPLATES if t["type"] == "narrative"][0]
+        narrative_template = next(t for t in EVENT_TEMPLATES if t["type"] == "narrative")
         event = _create_event(narrative_template, state.get_current_system().id)
         state.events.append(event)
 
@@ -1190,14 +1191,14 @@ class TestEvents:
         event = _create_event(EVENT_TEMPLATES[0], "sys_0000")
         state.events.append(event)
 
-        ok, msg, extra = resolve_ev(state, event.id, 0)
+        ok, _msg, _extra = resolve_ev(state, event.id, 0)
         assert ok is True
         assert event.resolved is True
         assert event.chosen == 0
 
     def test_resolve_invalid_event(self) -> None:
         state = new_game(seed=42)
-        ok, msg, extra = resolve_event(state, "nonexistent", 0)
+        ok, _msg, _extra = resolve_event(state, "nonexistent", 0)
         assert ok is False
 
 
@@ -1314,7 +1315,7 @@ class TestBulkSell:
         state.discoveries.append(d1)
         state.discoveries.append(d2)
         credits_before = state.ship.credits
-        ok, msg, sold_count, total_price = perform_bulk_sell(state, [{"item": "mineral", "quantity": 2}])
+        ok, msg, _sold_count, _total_price = perform_bulk_sell(state, [{"item": "mineral", "quantity": 2}])
         assert ok is True
         assert "Sold" in msg
         assert state.ship.credits > credits_before
@@ -1330,7 +1331,7 @@ class TestBulkSell:
             return  # pragma: no cover
         land_on_body(state, planet.id)
         explore_surface(state)
-        ok, msg, sold_count, total_price = perform_bulk_sell(state, [{"item": "artifact", "quantity": True}])
+        ok, msg, _sold_count, _total_price = perform_bulk_sell(state, [{"item": "artifact", "quantity": True}])
         assert ok is False
         assert "Invalid quantity" in msg
 
@@ -1338,7 +1339,7 @@ class TestBulkSell:
         """No current system returns error."""
         state = new_game(seed=42)
         state.ship.current_system_id = "nonexistent"
-        ok, msg, sold_count, total_price = perform_bulk_sell(state, [{"item": "artifact", "quantity": 1}])
+        ok, msg, _sold_count, _total_price = perform_bulk_sell(state, [{"item": "artifact", "quantity": 1}])
         assert ok is False
         assert "Not in a system" in msg
 
@@ -1348,7 +1349,7 @@ class TestBulkSell:
         system = state.get_current_system()
         assert system is not None
         system.has_trading_station = False
-        ok, msg, sold_count, total_price = perform_bulk_sell(state, [{"item": "artifact", "quantity": 1}])
+        ok, msg, _sold_count, _total_price = perform_bulk_sell(state, [{"item": "artifact", "quantity": 1}])
         assert ok is False
         assert "No trading facilities" in msg
 
@@ -1362,7 +1363,7 @@ class TestBulkSell:
             return  # pragma: no cover
         land_on_body(state, planet.id)
         explore_surface(state)
-        ok, msg, sold_count, total_price = perform_bulk_sell(state, [{"quantity": 1}])
+        ok, msg, _sold_count, _total_price = perform_bulk_sell(state, [{"quantity": 1}])
         assert ok is False
         assert "missing required" in msg
 
@@ -1376,7 +1377,7 @@ class TestBulkSell:
             return  # pragma: no cover
         land_on_body(state, planet.id)
         explore_surface(state)
-        ok, msg, sold_count, total_price = perform_bulk_sell(state, [{"item": "artifact", "quantity": "three"}])
+        ok, msg, _sold_count, _total_price = perform_bulk_sell(state, [{"item": "artifact", "quantity": "three"}])
         assert ok is False
         assert "Invalid quantity" in msg
 
@@ -1390,7 +1391,7 @@ class TestBulkSell:
             return  # pragma: no cover
         land_on_body(state, planet.id)
         explore_surface(state)
-        ok, msg, sold_count, total_price = perform_bulk_sell(state, [{"item": "artifact", "quantity": -1}])
+        ok, msg, _sold_count, _total_price = perform_bulk_sell(state, [{"item": "artifact", "quantity": -1}])
         assert ok is False
         assert "Invalid quantity" in msg
 
@@ -1404,7 +1405,7 @@ class TestBulkSell:
             return  # pragma: no cover
         land_on_body(state, planet.id)
         explore_surface(state)
-        ok, msg, sold_count, total_price = perform_bulk_sell(state, [{"item": "artifact", "quantity": 0}])
+        ok, msg, _sold_count, _total_price = perform_bulk_sell(state, [{"item": "artifact", "quantity": 0}])
         assert ok is False
         assert "Invalid quantity" in msg
 
@@ -1418,7 +1419,7 @@ class TestBulkSell:
             return  # pragma: no cover
         land_on_body(state, planet.id)
         explore_surface(state)
-        ok, msg, sold_count, total_price = perform_bulk_sell(state, [{"item": "nonexistent_category", "quantity": 1}])
+        ok, msg, _sold_count, _total_price = perform_bulk_sell(state, [{"item": "nonexistent_category", "quantity": 1}])
         assert ok is False
         assert "No discoveries matching" in msg
 
@@ -1445,7 +1446,7 @@ class TestBulkSell:
         )
         state.discoveries.append(d1)
         credits_before = state.ship.credits
-        ok, msg, sold_count, total_price = perform_bulk_sell(state, [
+        ok, msg, _sold_count, _total_price = perform_bulk_sell(state, [
             {"item": "mineral", "quantity": 1},
             {"item": "nonexistent_category", "quantity": 1},
         ])
@@ -1474,7 +1475,7 @@ class TestBulkSell:
         )
         state.discoveries.append(disc)
         credits_before = state.ship.credits
-        ok, msg, sold_count, total_price = perform_bulk_sell(state, [{"item": "Mysterious Artifact", "quantity": 1}])
+        ok, msg, _sold_count, _total_price = perform_bulk_sell(state, [{"item": "Mysterious Artifact", "quantity": 1}])
         assert ok is True
         assert "Sold 1 item(s)" in msg
         assert state.ship.credits > credits_before
@@ -1490,7 +1491,7 @@ class TestBulkSell:
             return  # pragma: no cover
         land_on_body(state, planet.id)
         explore_surface(state)
-        ok, msg, sold_count, total_price = perform_bulk_sell(state, [
+        ok, msg, _sold_count, _total_price = perform_bulk_sell(state, [
             {"item": "nonexistent_alpha", "quantity": 1},
             {"item": "nonexistent_beta", "quantity": 1},
         ])
@@ -1533,7 +1534,7 @@ class TestBulkSell:
         state.discoveries.append(regular_disc)
         credits_before = state.ship.credits
         # Try to sell by name - should only sell the non-lore one
-        ok, msg, sold_count, total_price = perform_bulk_sell(state, [{"item": "Ancient Artifact", "quantity": 2}])
+        ok, _msg, sold_count, _total_price = perform_bulk_sell(state, [{"item": "Ancient Artifact", "quantity": 2}])
         assert ok is True
         assert sold_count == 1
         assert lore_disc in state.discoveries  # lore-linked should remain
@@ -1574,7 +1575,7 @@ class TestBulkSell:
         state.discoveries.append(regular_disc)
         credits_before = state.ship.credits
         # Try to sell by category - should only sell the non-lore one
-        ok, msg, sold_count, total_price = perform_bulk_sell(state, [{"item": "mineral", "quantity": 2}])
+        ok, _msg, sold_count, _total_price = perform_bulk_sell(state, [{"item": "mineral", "quantity": 2}])
         assert ok is True
         assert sold_count == 1
         assert lore_disc in state.discoveries  # lore-linked should remain
@@ -1959,7 +1960,7 @@ class TestTradingPerformTradeEdgeCases:
         state.discoveries.append(lore_disc)
         state.discoveries.append(regular_disc)
         credits_before = state.ship.credits
-        ok, msg = perform_trade(state, "sell", "Ancient Artifact")
+        ok, _msg = perform_trade(state, "sell", "Ancient Artifact")
         assert ok is True
         assert lore_disc in state.discoveries
         assert regular_disc not in state.discoveries
@@ -1996,7 +1997,7 @@ class TestTradingPerformTradeEdgeCases:
         state.discoveries.append(lore_disc)
         state.discoveries.append(regular_disc)
         credits_before = state.ship.credits
-        ok, msg = perform_trade(state, "sell", "mineral")
+        ok, _msg = perform_trade(state, "sell", "mineral")
         assert ok is True
         assert lore_disc in state.discoveries
         assert regular_disc not in state.discoveries
@@ -2263,9 +2264,8 @@ class TestLoreExploration:
         state.ship.current_system_id = sys_id
         state.ship.current_body_id = body_id
 
-        with patch("random.Random.randint", return_value=3):
-            with caplog.at_level(logging.WARNING):
-                discoveries = explore_surface(state)
+        with patch("random.Random.randint", return_value=3), caplog.at_level(logging.WARNING):
+            discoveries = explore_surface(state)
 
         # The lore fragment should be linked to exactly one discovery
         lore_discs = [d for d in discoveries if d.lore_fragment_id == frag.id]
@@ -2458,9 +2458,8 @@ class TestDistressBeacon:
                 sub_table=None,
             ),
         ]
-        with patch("backend.game.engine._DISTRESS_TABLE", custom_table):
-            with patch("backend.game.engine.seeded_random", return_value=mock_rng):
-                result = activate_distress_beacon(state)
+        with patch("backend.game.engine._DISTRESS_TABLE", custom_table), patch("backend.game.engine.seeded_random", return_value=mock_rng):
+            result = activate_distress_beacon(state)
         assert "error" in result
         assert result["error"] == "No distress outcome matched."
 
@@ -2722,9 +2721,8 @@ class TestEmergencyCraft:
             description="Test", value=100, system_id="sys1", body_id="body1",
         )
         state.discoveries.append(disc)
-        with patch.dict("backend.game.engine.CRAFT_CONVERSIONS", {"artifact": ("unknown_output_type", 5)}):
-            with pytest.raises(ValueError, match="Unhandled output type: unknown_output_type"):
-                emergency_craft(state, "craft_fallback_disc", "unknown_output_type")
+        with patch.dict("backend.game.engine.CRAFT_CONVERSIONS", {"artifact": ("unknown_output_type", 5)}), pytest.raises(ValueError, match="Unhandled output type: unknown_output_type"):
+            emergency_craft(state, "craft_fallback_disc", "unknown_output_type")
 
 
 class TestStrandedState:
@@ -3399,7 +3397,7 @@ class TestBlackHoleEvents:
 class TestNewBlackHoleEvents:
     """Tests for the 3 new black-hole-specific events with scanner_required support."""
 
-    NEW_BH_TITLES = {"Event Horizon Approach", "Hawking Radiation Harvest (Deep Scan)", "Time Dilation Echo"}
+    NEW_BH_TITLES: ClassVar[set[str]] = {"Event Horizon Approach", "Hawking Radiation Harvest (Deep Scan)", "Time Dilation Echo"}
 
     def _get_new_bh_templates(self):
         """Return the 3 new black hole event templates (the ones with scanner_required or Event Horizon Approach)."""
@@ -3728,9 +3726,9 @@ class TestPhenomenonEvents:
         from backend.generation.events import _create_event
 
         # Pick one template per phenomenon type
-        nebula_template = [t for t in EVENT_TEMPLATES if t.get("trigger_conditions", {}).get("phenomenon") == "nebula"][0]
-        pulsar_template = [t for t in EVENT_TEMPLATES if t.get("trigger_conditions", {}).get("phenomenon") == "pulsar"][0]
-        binary_template = [t for t in EVENT_TEMPLATES if t.get("trigger_conditions", {}).get("phenomenon") == "binary_star"][0]
+        nebula_template = next(t for t in EVENT_TEMPLATES if t.get("trigger_conditions", {}).get("phenomenon") == "nebula")
+        pulsar_template = next(t for t in EVENT_TEMPLATES if t.get("trigger_conditions", {}).get("phenomenon") == "pulsar")
+        binary_template = next(t for t in EVENT_TEMPLATES if t.get("trigger_conditions", {}).get("phenomenon") == "binary_star")
 
         for template in (nebula_template, pulsar_template, binary_template):
             for i in range(len(template["choices"])):
@@ -4201,9 +4199,8 @@ class TestCrisisCooldown:
         system.phenomenon = "none"
         crisis_template = [{"type": "crisis", "category": "crisis", "title": "Life Support Failure", "flavor": "...", "rarity": "common", "choices": []}]
         rng = random.Random(1)
-        with patch.object(rng, "random", return_value=0.2):
-            with patch("backend.generation.events._get_eligible_templates", return_value=crisis_template):
-                event = trigger_event(state, rng_override=rng)
+        with patch.object(rng, "random", return_value=0.2), patch("backend.generation.events._get_eligible_templates", return_value=crisis_template):
+            event = trigger_event(state, rng_override=rng)
         assert event is not None
         assert event.event_type == "crisis"
         assert state.crisis_cooldown == 3
@@ -4657,7 +4654,7 @@ class TestAtmosphericScan:
         return state, body
 
     def test_atmospheric_scan_gas_giant(self):
-        state, body = self._make_state("gas_giant")
+        state, _body = self._make_state("gas_giant")
         discoveries = perform_atmospheric_scan(state)
         assert len(discoveries) > 0
         for d in discoveries:
@@ -4665,34 +4662,34 @@ class TestAtmosphericScan:
             assert 20 <= d.value <= 60
 
     def test_atmospheric_scan_volcanic(self):
-        state, body = self._make_state("volcanic")
+        state, _body = self._make_state("volcanic")
         discoveries = perform_atmospheric_scan(state)
         assert len(discoveries) > 0
 
     def test_atmospheric_scan_ocean(self):
-        state, body = self._make_state("ocean")
+        state, _body = self._make_state("ocean")
         discoveries = perform_atmospheric_scan(state)
         assert len(discoveries) > 0
 
     def test_atmospheric_scan_wrong_biome(self):
-        state, body = self._make_state("desert")
+        state, _body = self._make_state("desert")
         discoveries = perform_atmospheric_scan(state)
         assert discoveries == []
 
     def test_atmospheric_scan_no_fuel(self):
-        state, body = self._make_state("gas_giant")
+        state, _body = self._make_state("gas_giant")
         state.ship.fuel = 0
         discoveries = perform_atmospheric_scan(state)
         assert discoveries == []
 
     def test_atmospheric_scan_no_system(self):
-        state, body = self._make_state("gas_giant")
+        state, _body = self._make_state("gas_giant")
         state.ship.current_system_id = "nonexistent"
         discoveries = perform_atmospheric_scan(state)
         assert discoveries == []
 
     def test_atmospheric_scan_deducts_fuel(self):
-        state, body = self._make_state("gas_giant")
+        state, _body = self._make_state("gas_giant")
         fuel_before = state.ship.fuel
         perform_atmospheric_scan(state)
         assert state.ship.fuel == fuel_before - ATMOSPHERIC_SCAN_FUEL_COST
@@ -4735,46 +4732,46 @@ class TestSubSurfaceExploration:
         return state, body
 
     def test_sub_surface_volcanic(self):
-        state, body = self._make_state("volcanic")
+        state, _body = self._make_state("volcanic")
         discoveries = perform_sub_surface_exploration(state)
         assert len(discoveries) > 0
         for d in discoveries:
             assert d.category == "geological_formation"
 
     def test_sub_surface_desert(self):
-        state, body = self._make_state("desert")
+        state, _body = self._make_state("desert")
         discoveries = perform_sub_surface_exploration(state)
         assert len(discoveries) > 0
         for d in discoveries:
             assert d.category == "geological_formation"
 
     def test_sub_surface_tundra(self):
-        state, body = self._make_state("tundra")
+        state, _body = self._make_state("tundra")
         discoveries = perform_sub_surface_exploration(state)
         assert len(discoveries) > 0
         for d in discoveries:
             assert d.category == "geological_formation"
 
     def test_sub_surface_ocean(self):
-        state, body = self._make_state("ocean")
+        state, _body = self._make_state("ocean")
         discoveries = perform_sub_surface_exploration(state)
         assert len(discoveries) > 0
         for d in discoveries:
             assert d.category == "biological_specimen"
 
     def test_sub_surface_wrong_biome(self):
-        state, body = self._make_state("jungle")
+        state, _body = self._make_state("jungle")
         discoveries = perform_sub_surface_exploration(state)
         assert discoveries == []
 
     def test_sub_surface_no_fuel(self):
-        state, body = self._make_state("volcanic")
+        state, _body = self._make_state("volcanic")
         state.ship.fuel = 0
         discoveries = perform_sub_surface_exploration(state)
         assert discoveries == []
 
     def test_sub_surface_no_crew(self):
-        state, body = self._make_state("volcanic")
+        state, _body = self._make_state("volcanic")
         state.ship.crew = 0
         discoveries = perform_sub_surface_exploration(state)
         assert discoveries == []
@@ -4786,7 +4783,7 @@ class TestSubSurfaceExploration:
         assert discoveries == []
 
     def test_sub_surface_deducts_fuel_and_crew(self):
-        state, body = self._make_state("volcanic")
+        state, _body = self._make_state("volcanic")
         fuel_before = state.ship.fuel
         crew_before = state.ship.crew
         perform_sub_surface_exploration(state)
@@ -4823,7 +4820,7 @@ class TestDiminishingReturns:
         state.ship.fuel = 100
         explore_surface(state)
         state.ship.fuel = 100
-        discoveries2 = explore_surface(state)
+        explore_surface(state)
         assert body.exploration_count == 2
 
     def test_third_exploration_further_reduced(self) -> None:

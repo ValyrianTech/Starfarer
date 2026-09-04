@@ -1716,7 +1716,7 @@ class TestTradingFactionIntegration:
         state.discoveries.append(disc)
         credits_before = state.ship.credits
 
-        ok, msg = perform_trade(state, "sell", "artifact", 1)
+        ok, _msg = perform_trade(state, "sell", "artifact", 1)
         assert ok is True
         price_mod = 1.0 + min(max(50, 0), 50) / 200.0
         expected_min = int(100 * 0.7 * price_mod)
@@ -1739,7 +1739,7 @@ class TestTradingFactionIntegration:
         state.discoveries.append(disc)
         credits_before = state.ship.credits
 
-        ok, msg = perform_trade(state, "sell", "artifact", 1)
+        ok, _msg = perform_trade(state, "sell", "artifact", 1)
         assert ok is True
         expected_min = int(100 * 0.7)
         expected_max = int(100 * 1.5)
@@ -1761,7 +1761,7 @@ class TestTradingFactionIntegration:
         state.discoveries.append(disc)
         credits_before = state.ship.credits
 
-        ok, msg = perform_trade(state, "sell", "artifact", 1)
+        ok, _msg = perform_trade(state, "sell", "artifact", 1)
         assert ok is True
         actual_credits = state.ship.credits - credits_before
         # faction_mod should be clamped to 1.25, so max is 100 * 1.5 * 1.25 = 187 (rounded down)
@@ -1778,7 +1778,7 @@ class TestTradingFactionIntegration:
         # Buy fuel with 0 rep (baseline)
         state.modify_faction_reputation("void_traders", 0)
         credits_before = state.ship.credits
-        ok, msg = perform_trade(state, "buy", "fuel", 10)
+        ok, _msg = perform_trade(state, "buy", "fuel", 10)
         assert ok is True
         base_cost = credits_before - state.ship.credits
 
@@ -1786,7 +1786,7 @@ class TestTradingFactionIntegration:
         state.ship.fuel = 0
         state.ship.credits = 5000
         state.modify_faction_reputation("void_traders", 50)
-        ok, msg = perform_trade(state, "buy", "fuel", 10)
+        ok, _msg = perform_trade(state, "buy", "fuel", 10)
         assert ok is True
         discounted_cost = 5000 - state.ship.credits
 
@@ -1805,7 +1805,7 @@ class TestTradingFactionIntegration:
                        description="Old relic", value=200, system_id=system.id),
         ]
 
-        ok, msg, sold_count, total_price = perform_bulk_sell(
+        ok, _msg, _sold_count, total_price = perform_bulk_sell(
             state, [{"item": "artifact", "quantity": 1}]
         )
         assert ok is True
@@ -1823,7 +1823,7 @@ class TestEventFactionIntegration:
         state.events.append(event)
         rep_before = state.get_faction_reputation("stellar_cartographers")
 
-        ok, msg, extra = resolve_event(state, event.id, 0)
+        ok, _msg, _extra = resolve_event(state, event.id, 0)
         assert ok is True
         rep_after = state.get_faction_reputation("stellar_cartographers")
         assert rep_after > rep_before
@@ -1835,7 +1835,7 @@ class TestEventFactionIntegration:
         state.events.append(event)
         rep_before = state.get_faction_reputation("void_traders")
 
-        ok, msg, extra = resolve_event(state, event.id, 0)
+        ok, _msg, _extra = resolve_event(state, event.id, 0)
         assert ok is True
         rep_after = state.get_faction_reputation("void_traders")
         assert rep_after > rep_before
@@ -1847,7 +1847,7 @@ class TestEventFactionIntegration:
         state.events.append(event)
         rep_before = state.get_faction_reputation("free_pilots")
 
-        ok, msg, extra = resolve_event(state, event.id, 0)
+        ok, _msg, _extra = resolve_event(state, event.id, 0)
         assert ok is True
         rep_after = state.get_faction_reputation("free_pilots")
         assert rep_after > rep_before
@@ -1859,7 +1859,7 @@ class TestEventFactionIntegration:
         state.events.append(event)
         rep_before = state.get_faction_reputation("free_pilots")
 
-        ok, msg, extra = resolve_event(state, event.id, 0)
+        ok, _msg, _extra = resolve_event(state, event.id, 0)
         assert ok is True
         rep_after = state.get_faction_reputation("free_pilots")
         assert rep_after > rep_before
@@ -1871,7 +1871,7 @@ class TestEventFactionIntegration:
         state.events.append(event)
         rep_before = state.get_faction_reputation("stellar_cartographers")
 
-        ok, msg, extra = resolve_event(state, event.id, 0)
+        ok, _msg, _extra = resolve_event(state, event.id, 0)
         assert ok is True
         rep_after = state.get_faction_reputation("stellar_cartographers")
         assert rep_after > rep_before
@@ -1883,7 +1883,7 @@ class TestEventFactionIntegration:
         state.events.append(event)
         rep_before = state.get_faction_reputation("free_pilots")
 
-        ok, msg, extra = resolve_event(state, event.id, 0)
+        ok, _msg, _extra = resolve_event(state, event.id, 0)
         assert ok is True
         rep_after = state.get_faction_reputation("free_pilots")
         assert rep_after > rep_before
@@ -1895,7 +1895,7 @@ class TestEventFactionIntegration:
         state.events.append(event)
         rep_before = state.get_faction_reputation("free_pilots")
 
-        ok, msg, extra = resolve_event(state, event.id, 0)
+        ok, _msg, _extra = resolve_event(state, event.id, 0)
         assert ok is True
         rep_after = state.get_faction_reputation("free_pilots")
         assert rep_after > rep_before
@@ -2419,7 +2419,7 @@ class TestReputationEventOutcomes:
         credits_before = state.ship.credits
         morale_before = state.ship.morale
 
-        ok, msg, extra = resolve_event(state, event.id, 0)
+        ok, _msg, _extra = resolve_event(state, event.id, 0)
         assert ok is True
         assert state.ship.credits > credits_before + 50  # +50 from signal + +10 from rep bonus
         assert state.ship.morale > morale_before  # morale from event + +1 from rep bonus
@@ -2433,7 +2433,7 @@ class TestReputationEventOutcomes:
         state.events.append(event)
         credits_before = state.ship.credits
 
-        ok, msg, extra = resolve_event(state, event.id, 0)
+        ok, _msg, _extra = resolve_event(state, event.id, 0)
         assert ok is True
         assert state.ship.credits > credits_before + 150  # +150 from merchant + +10 bonus
 
@@ -2446,7 +2446,7 @@ class TestReputationEventOutcomes:
         state.events.append(event)
         morale_before = state.ship.morale
 
-        ok, msg, extra = resolve_event(state, event.id, 0)
+        ok, _msg, _extra = resolve_event(state, event.id, 0)
         assert ok is True
         # Crisis event: hll:-20; fuel:-20 fixes life support. Morale should be boosted by +5 from rep
         assert state.ship.morale > morale_before + 5 - 25  # rough bound including event effects
@@ -2460,7 +2460,7 @@ class TestReputationEventOutcomes:
         state.events.append(event)
         morale_before = state.ship.morale
 
-        ok, msg, extra = resolve_event(state, event.id, 0)
+        ok, _msg, _extra = resolve_event(state, event.id, 0)
         assert ok is True
         # Crew dispute: morale:15; fuel:-2 plus +5 morale from rep bonus
         assert state.ship.morale > morale_before
@@ -2473,7 +2473,7 @@ class TestReputationEventOutcomes:
         event = _create_event(template, "sys_0000")
         state.events.append(event)
 
-        ok, msg, extra = resolve_event(state, event.id, 0)
+        ok, _msg, _extra = resolve_event(state, event.id, 0)
         assert ok is True
         # Should not get the bonus credits (no +10), just the event outcome
 
@@ -2487,7 +2487,7 @@ class TestReputationEventOutcomes:
         credits_before = state.ship.credits
         morale_before = state.ship.morale
 
-        ok, msg, extra = resolve_event(state, event.id, 0)
+        ok, _msg, _extra = resolve_event(state, event.id, 0)
         assert ok is True
         assert state.ship.credits >= credits_before + 10
         assert state.ship.morale >= morale_before + 1
@@ -2501,7 +2501,7 @@ class TestReputationEventOutcomes:
         state.events.append(event)
         morale_before = state.ship.morale
 
-        ok, msg, extra = resolve_event(state, event.id, 0)
+        ok, _msg, _extra = resolve_event(state, event.id, 0)
         assert ok is True
         assert state.ship.morale >= morale_before + 5
 
@@ -2512,7 +2512,7 @@ class TestReputationEventOutcomes:
         event = _create_event(template, "sys_0000")
         state.events.append(event)
 
-        ok, msg, extra = resolve_event(state, event.id, 0)
+        ok, _msg, _extra = resolve_event(state, event.id, 0)
         assert ok is True
 
         faction_logs = [e for e in state.log_entries if e["type"] == "faction"]

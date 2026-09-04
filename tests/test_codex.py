@@ -74,7 +74,7 @@ class TestGetCodex:
         state = _make_game()
         state.biomes_visited.add("jungle")
         entries = get_codex(state)
-        jungle = [e for e in entries if e["biome_id"] == "jungle"][0]
+        jungle = next(e for e in entries if e["biome_id"] == "jungle")
         assert jungle["unlocked"] is True
         assert jungle["description"] != "???"
         assert jungle["hint"] is not None
@@ -83,7 +83,7 @@ class TestGetCodex:
         state = _make_game()
         state.biomes_visited.add("jungle")
         entries = get_codex(state)
-        ocean = [e for e in entries if e["biome_id"] == "ocean"][0]
+        ocean = next(e for e in entries if e["biome_id"] == "ocean")
         assert ocean["unlocked"] is False
         assert ocean["description"] == "???"
         assert ocean["hint"] is not None
@@ -117,7 +117,7 @@ class TestGetCodex:
         state.ship.scanner = 2
         state.biomes_visited.add("jungle")
         entries = get_codex(state)
-        jungle = [e for e in entries if e["biome_id"] == "jungle"][0]
+        jungle = next(e for e in entries if e["biome_id"] == "jungle")
         assert len(jungle["common_discoveries"]) == 3
 
     def test_tier3_discoveries_hidden_when_locked(self) -> None:
@@ -133,7 +133,7 @@ class TestGetCodex:
         state.ship.scanner = 1
         state.biomes_visited.add("jungle")
         entries = get_codex(state)
-        jungle = [e for e in entries if e["biome_id"] == "jungle"][0]
+        jungle = next(e for e in entries if e["biome_id"] == "jungle")
         assert jungle["common_discoveries"] == []
 
     def test_tier3_discoveries_hidden_scanner_0(self) -> None:
@@ -141,7 +141,7 @@ class TestGetCodex:
         state.ship.scanner = 0
         state.biomes_visited.add("jungle")
         entries = get_codex(state)
-        jungle = [e for e in entries if e["biome_id"] == "jungle"][0]
+        jungle = next(e for e in entries if e["biome_id"] == "jungle")
         assert jungle["common_discoveries"] == []
 
     def test_scanner_level_3_shows_all(self) -> None:
@@ -150,8 +150,8 @@ class TestGetCodex:
         state.biomes_visited.add("ocean")
         state.biomes_visited.add("desert")
         entries = get_codex(state)
-        ocean = [e for e in entries if e["biome_id"] == "ocean"][0]
-        desert = [e for e in entries if e["biome_id"] == "desert"][0]
+        ocean = next(e for e in entries if e["biome_id"] == "ocean")
+        desert = next(e for e in entries if e["biome_id"] == "desert")
         assert ocean["value_rating"] is not None
         assert desert["value_rating"] is not None
         assert len(ocean["common_discoveries"]) == 3
@@ -272,7 +272,7 @@ class TestCodexAPI:
         state.biomes_visited.add("jungle")
         resp2 = client.get(f"/api/game/{game_id}/codex")
         data = resp2.json()
-        jungle = [e for e in data["codex"] if e["biome_id"] == "jungle"][0]
+        jungle = next(e for e in data["codex"] if e["biome_id"] == "jungle")
         assert jungle["unlocked"] is True
 
     def test_api_codex_reflects_scanner_level(self) -> None:

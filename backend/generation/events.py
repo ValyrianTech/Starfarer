@@ -799,22 +799,19 @@ def _get_eligible_templates(state: GameState, templates: list[dict]) -> list[dic
             eligible.append(t)
             continue
 
-        if "phenomenon" in conditions:
-            if system.phenomenon != conditions["phenomenon"]:
-                continue
+        if "phenomenon" in conditions and system.phenomenon != conditions["phenomenon"]:
+            continue
 
         if "biomes" in conditions:
             body_biomes = {b.biome for b in system.bodies}
             if not any(biome in body_biomes for biome in conditions["biomes"]):
                 continue
 
-        if "min_systems_visited" in conditions:
-            if state.systems_visited < conditions["min_systems_visited"]:
-                continue
+        if "min_systems_visited" in conditions and state.systems_visited < conditions["min_systems_visited"]:
+            continue
 
-        if "max_morale" in conditions:
-            if state.ship.morale > conditions["max_morale"]:
-                continue
+        if "max_morale" in conditions and state.ship.morale > conditions["max_morale"]:
+            continue
 
         if "unexplored_preference" in conditions:
             has_unexplored = any(not body.explored for body in system.bodies) if system.bodies else False
@@ -828,9 +825,8 @@ def _get_eligible_templates(state: GameState, templates: list[dict]) -> list[dic
             if state.get_faction_reputation(faction_id) < required_rep:
                 continue
 
-        if "scanner_required" in conditions:
-            if state.ship.scanner < conditions["scanner_required"]:
-                continue
+        if "scanner_required" in conditions and state.ship.scanner < conditions["scanner_required"]:
+            continue
 
         eligible.append(t)
 

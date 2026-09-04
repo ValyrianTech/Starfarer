@@ -65,7 +65,7 @@ def new_game(seed: int | None = None, ship_name: str | None = None, shared_unive
     game_id = str(uuid.uuid4())
 
     systems, lore_fragments = generate_universe(s)
-    first_sys_id = list(systems.keys())[0]
+    first_sys_id = next(iter(systems.keys()))
 
     ship = Ship(
         name=name, fuel=INITIAL_FUEL, hull=INITIAL_HULL,

@@ -492,7 +492,7 @@ class TestMultiplayerDatabase:
         # Create a game specifically for this test
         state = new_game(42, "RippleTest", shared_universe=True)
         state.ship.current_system_id = "sys-rp-1"
-        state.systems["sys-rp-1"] = state.systems[list(state.systems.keys())[0]]
+        state.systems["sys-rp-1"] = state.systems[next(iter(state.systems.keys()))]
         state.systems["sys-rp-1"].id = "sys-rp-1"
         GAME_STORE[state.id] = state
         game_save(state)
@@ -1401,8 +1401,8 @@ class TestMultiplayerRipples:
         }
 
         kept_ids = set()
-        for sid in full_systems:
-            if sid == system.id or distance_between(system, full_systems[sid]) / 10.0 > 5:
+        for sid, value in full_systems.items():
+            if sid == system.id or distance_between(system, value) / 10.0 > 5:
                 kept_ids.add(sid)
         state.systems = {sid: s for sid, s in full_systems.items() if sid in kept_ids}
 

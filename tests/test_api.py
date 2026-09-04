@@ -1206,14 +1206,14 @@ class TestPerformBulkSellDirect:
     def test_missing_item_key(self) -> None:
         """Missing 'item' key should return error gracefully."""
         state = self._create_test_state()
-        success, message, sold_count, total_price = perform_bulk_sell(state, [{"quantity": 5}])
+        success, message, _sold_count, _total_price = perform_bulk_sell(state, [{"quantity": 5}])
         assert not success
         assert "missing required 'item' field" in message
 
     def test_missing_quantity_key(self) -> None:
         """Missing 'quantity' key should default to 1 and succeed."""
         state = self._create_test_state()
-        success, message, sold_count, total_price = perform_bulk_sell(state, [{"item": "artifact"}])
+        success, message, _sold_count, _total_price = perform_bulk_sell(state, [{"item": "artifact"}])
         assert success
         assert "Sold" in message
         assert len(state.discoveries) == 1  # One item sold, one remains
@@ -1221,7 +1221,7 @@ class TestPerformBulkSellDirect:
     def test_non_integer_quantity(self) -> None:
         """Non-integer quantity should return error gracefully."""
         state = self._create_test_state()
-        success, message, sold_count, total_price = perform_bulk_sell(state, [{"item": "artifact", "quantity": "abc"}])
+        success, message, _sold_count, _total_price = perform_bulk_sell(state, [{"item": "artifact", "quantity": "abc"}])
         assert not success
         assert "Invalid quantity" in message
 
@@ -1229,7 +1229,7 @@ class TestPerformBulkSellDirect:
         """Quantity exceeding available matches should sell all and report error."""
         state = self._create_test_state()
         # Only 1 discovery with category "artifact" exists
-        success, message, sold_count, total_price = perform_bulk_sell(state, [{"item": "artifact", "quantity": 5}])
+        success, message, _sold_count, _total_price = perform_bulk_sell(state, [{"item": "artifact", "quantity": 5}])
         assert success
         assert "Sold" in message
         assert "Only" in message and "requested 5" in message
@@ -1602,7 +1602,7 @@ class TestAPILore:
         assert resp.status_code == 200
         data = resp.json()
 
-        for arc_id, arc_data in data["arcs"].items():
+        for arc_data in data["arcs"].values():
             assert arc_data["total"] == 5
             assert arc_data["collected"] == 0
             assert len(arc_data["fragments"]) == 5
@@ -1860,7 +1860,7 @@ class TestAPILore:
         expected_arcs = {"architects", "void_signal", "fracture", "wanderer"}
         assert set(data["arcs"].keys()) == expected_arcs
 
-        for arc_id, arc_data in data["arcs"].items():
+        for arc_data in data["arcs"].values():
             assert arc_data["total"] == 0
             assert arc_data["collected"] == 0
             assert arc_data["fragments"] == []
