@@ -2,69 +2,69 @@
 # decorators, Pydantic fields, pytest fixtures, mock attribute assignments)
 # and public API constants. Bare name references mark these items as used.
 
-health
-api_new_game
-api_get_game
-api_galaxy
-api_system_detail
-api_jump
-api_land
-api_atmospheric_scan
-api_sub_surface_explore
-api_explore
-api_resolve_event
-api_log
-api_log_paginated
-api_discoveries
-api_cargo
-api_lore
-api_codex
-api_trade
-api_bulk_sell
-api_upgrade
-api_upgrades_info
-api_nearby
-api_distress
-api_salvage
-api_salvage_craft
-api_factions
-api_faction_detail
-api_faction_mission
-api_missions
-api_accept_mission
-api_complete_mission
-api_save
-api_load
-api_dismiss_hint
-api_leaderboard
-api_spectate_games
-api_system_ghosts
-api_leave_ghost
-api_crossroads_items
-api_donate_item
-api_claim_item
-api_crossroads_lore
-api_donate_lore
-api_claim_lore
-api_crossroads_messages
-api_post_message
-api_ripples
-api_acknowledge_ripple
-index
-application
-text_not_blank
-status
-row_factory
-side_effect
-cleanup_messages
-setup_db
-lore_frags
-GAME_NAME
-GAME_VERSION
-MAX_CARGO
-MAX_HULL
-MAX_FUEL
-MAX_MORALE
-MAX_CREW
-BIOME_COLORS
-ALL_DISCOVERY_CATEGORIES
+health  # pragma: no cover  # noqa: B018, F821
+api_new_game  # pragma: no cover  # noqa: B018, F821
+api_get_game  # pragma: no cover  # noqa: B018, F821
+api_galaxy  # pragma: no cover  # noqa: B018, F821
+api_system_detail  # pragma: no cover  # noqa: B018, F821
+api_jump  # pragma: no cover  # noqa: B018, F821
+api_land  # pragma: no cover  # noqa: B018, F821
+api_atmospheric_scan  # pragma: no cover  # noqa: B018, F821
+api_sub_surface_explore  # pragma: no cover  # noqa: B018, F821
+api_explore  # pragma: no cover  # noqa: B018, F821
+api_resolve_event  # pragma: no cover  # noqa: B018, F821
+api_log  # pragma: no cover  # noqa: B018, F821
+api_log_paginated  # pragma: no cover  # noqa: B018, F821
+api_discoveries  # pragma: no cover  # noqa: B018, F821
+api_cargo  # pragma: no cover  # noqa: B018, F821
+api_lore  # pragma: no cover  # noqa: B018, F821
+api_codex  # pragma: no cover  # noqa: B018, F821
+api_trade  # pragma: no cover  # noqa: B018, F821
+api_bulk_sell  # pragma: no cover  # noqa: B018, F821
+api_upgrade  # pragma: no cover  # noqa: B018, F821
+api_upgrades_info  # pragma: no cover  # noqa: B018, F821
+api_nearby  # pragma: no cover  # noqa: B018, F821
+api_distress  # pragma: no cover  # noqa: B018, F821
+api_salvage  # pragma: no cover  # noqa: B018, F821
+api_salvage_craft  # pragma: no cover  # noqa: B018, F821
+api_factions  # pragma: no cover  # noqa: B018, F821
+api_faction_detail  # pragma: no cover  # noqa: B018, F821
+api_faction_mission  # pragma: no cover  # noqa: B018, F821
+api_missions  # pragma: no cover  # noqa: B018, F821
+api_accept_mission  # pragma: no cover  # noqa: B018, F821
+api_complete_mission  # pragma: no cover  # noqa: B018, F821
+api_save  # pragma: no cover  # noqa: B018, F821
+api_load  # pragma: no cover  # noqa: B018, F821
+api_dismiss_hint  # pragma: no cover  # noqa: B018, F821
+api_leaderboard  # pragma: no cover  # noqa: B018, F821
+api_spectate_games  # pragma: no cover  # noqa: B018, F821
+api_system_ghosts  # pragma: no cover  # noqa: B018, F821
+api_leave_ghost  # pragma: no cover  # noqa: B018, F821
+api_crossroads_items  # pragma: no cover  # noqa: B018, F821
+api_donate_item  # pragma: no cover  # noqa: B018, F821
+api_claim_item  # pragma: no cover  # noqa: B018, F821
+api_crossroads_lore  # pragma: no cover  # noqa: B018, F821
+api_donate_lore  # pragma: no cover  # noqa: B018, F821
+api_claim_lore  # pragma: no cover  # noqa: B018, F821
+api_crossroads_messages  # pragma: no cover  # noqa: B018, F821
+api_post_message  # pragma: no cover  # noqa: B018, F821
+api_ripples  # pragma: no cover  # noqa: B018, F821
+api_acknowledge_ripple  # pragma: no cover  # noqa: B018, F821
+index  # pragma: no cover  # noqa: B018, F821
+application  # pragma: no cover  # noqa: B018, F821
+text_not_blank  # pragma: no cover  # noqa: B018, F821
+status  # pragma: no cover  # noqa: B018, F821
+row_factory  # pragma: no cover  # noqa: B018, F821
+side_effect  # pragma: no cover  # noqa: B018, F821
+cleanup_messages  # pragma: no cover  # noqa: B018, F821
+setup_db  # pragma: no cover  # noqa: B018, F821
+lore_frags  # pragma: no cover  # noqa: B018, F821
+GAME_NAME  # pragma: no cover  # noqa: B018, F821
+GAME_VERSION  # pragma: no cover  # noqa: B018, F821
+MAX_CARGO  # pragma: no cover  # noqa: B018, F821
+MAX_HULL  # pragma: no cover  # noqa: B018, F821
+MAX_FUEL  # pragma: no cover  # noqa: B018, F821
+MAX_MORALE  # pragma: no cover  # noqa: B018, F821
+MAX_CREW  # pragma: no cover  # noqa: B018, F821
+BIOME_COLORS  # pragma: no cover  # noqa: B018, F821
+ALL_DISCOVERY_CATEGORIES  # pragma: no cover  # noqa: B018, F821
