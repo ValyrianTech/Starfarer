@@ -120,6 +120,8 @@
 - Added type annotations across multiple modules to fix mypy errors
 - Black hole event count raised from 5 to 8 (from the original 5 plus the 3 new events above)
 - Hawking Radiation Harvest cooldown changed from 6 to 8 (to disambiguate from the new 'Hawking Radiation Harvest (Deep Scan)' event)
+- Applied ruff safe auto-fixes across the codebase (272 fixes): import reordering/sorting, type annotation modernization from `Optional[X]` to `X | None`, `List[X]` to `list[X]`, and general formatting improvements across backend modules and tests
+- Fixed remaining ruff lint errors: renamed unused variables with underscore prefixes, simplified boolean expressions (e.g., `if a: if b: return True` → `if a and b: return True`), replaced list comprehensions with set comprehensions where appropriate, and used `next(iter(...))` instead of `list(...)[0]`
 ### Fixed
 - Atmospheric scan auto-select now correctly selects the next eligible body when the first eligible body is exhausted (`atmospheric_scan_count >= 3`), instead of returning empty results. Also when landed on an exhausted body, a log entry is now created explaining why the scan failed.
 - Fuel (and crew) is now deducted after discovery generation in atmospheric scan and sub-surface exploration (was deducted before, causing resources to be spent even when no discoveries were generated).
@@ -254,3 +256,6 @@
 - Dead code `get_available_events` (defined but never used in production)
 - Unused imports: `get_daily_mission_key`, `_TIER_COSTS`, and `faction_id` variable
 - Unused `uuid` import from `backend/models/game_state.py`
+- Unused Pydantic request/response schemas (`JumpRequest`, `LandRequest`, `GameResponse`, `ErrorResponse`) from `backend/api/schemas.py`
+- Unused `MAX_INITIAL_JUMP` constant from `backend/generation/universe.py`
+- Added `backend/vulture_whitelist.py` to whitelist framework magic names (FastAPI route decorators, Pydantic fields, pytest fixtures, mock attribute assignments) and public API constants that vulture would otherwise flag as false positives
