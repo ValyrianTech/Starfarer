@@ -9,12 +9,14 @@ Uses the same database file as the main application via
 
 import json
 from datetime import datetime, timedelta, timezone
-from typing import Optional
 
 from backend.database import get_db_ctx
 from backend.multiplayer.models import (
-    GhostSignature, CrossroadsItem, CrossroadsLore,
-    CrossroadsMessage, RippleEvent,
+    CrossroadsItem,
+    CrossroadsLore,
+    CrossroadsMessage,
+    GhostSignature,
+    RippleEvent,
 )
 
 _MULTIPLAYER_MIGRATIONS = """
@@ -271,7 +273,7 @@ def get_available_items() -> list[CrossroadsItem]:
     return result
 
 
-def claim_item(item_id: str, claimer_game_id: str) -> Optional[dict]:
+def claim_item(item_id: str, claimer_game_id: str) -> dict | None:
     """Mark a crossroads item as claimed by a player (atomic).
 
     Uses a single atomic UPDATE ... WHERE claimed=0 to eliminate the
@@ -369,7 +371,7 @@ def get_available_lore() -> list[CrossroadsLore]:
     return result
 
 
-def claim_lore(donation_id: str, claimer_game_id: str) -> Optional[dict]:
+def claim_lore(donation_id: str, claimer_game_id: str) -> dict | None:
     """Mark a crossroads lore donation as claimed by a player (atomic).
 
     Uses a single atomic UPDATE ... WHERE claimed=0 to eliminate the

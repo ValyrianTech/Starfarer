@@ -8,17 +8,21 @@ significant discovery, alerting other travellers in those systems.
 
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
 
-from backend.models.game_state import GameState
-from backend.models.discovery import Discovery
-from backend.models.system import StarSystem
 from backend.generation.universe import distance_between
-from backend.multiplayer.models import RippleEvent
+from backend.models.discovery import Discovery
+from backend.models.game_state import GameState
+from backend.models.system import StarSystem
 from backend.multiplayer.database import (
-    save_ripple_event, get_pending_ripples_for_system as db_get_pending_ripples_for_system,
     acknowledge_ripple as db_acknowledge_ripple,
 )
+from backend.multiplayer.database import (
+    get_pending_ripples_for_system as db_get_pending_ripples_for_system,
+)
+from backend.multiplayer.database import (
+    save_ripple_event,
+)
+from backend.multiplayer.models import RippleEvent
 
 _RIPPLE_RADIUS_LY = 5
 
@@ -26,7 +30,7 @@ _RIPPLE_RADIUS_LY = 5
 def create_ripple(
     source_game_state: GameState,
     discovery: Discovery,
-    all_systems: Optional[dict[str, StarSystem]] = None,
+    all_systems: dict[str, StarSystem] | None = None,
 ) -> dict:
     """Create ripple events for nearby systems when a discovery is made.
 

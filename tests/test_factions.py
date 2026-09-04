@@ -1,21 +1,33 @@
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
 
-from backend.main import app
 from backend.database import init_db
-from backend.game.manager import GAME_STORE, new_game, game_save, game_load, _state_to_dict, _state_from_dict
+from backend.game.engine import activate_distress_beacon
+from backend.game.manager import (
+    GAME_STORE,
+    _state_from_dict,
+    _state_to_dict,
+    game_load,
+    game_save,
+    new_game,
+)
+from backend.game.trading import perform_bulk_sell, perform_trade
+from backend.generation.events import EVENT_TEMPLATES, _create_event, resolve_event
+from backend.main import app
 from backend.models.faction import (
-    Faction, FactionRelation, FACTION_DEFINITIONS, get_faction,
+    FACTION_DEFINITIONS,
+    Faction,
+    FactionRelation,
+    get_faction,
 )
 from backend.models.game_state import _rep_label
-from backend.game.trading import perform_trade, perform_bulk_sell
-from backend.game.engine import activate_distress_beacon
-from backend.generation.events import resolve_event, EVENT_TEMPLATES, _create_event
 
 client = TestClient(app)
 
@@ -1406,11 +1418,10 @@ class TestFactionAPI:
         with patch(
             "backend.api.routes.generate_missions",
             return_value=[mission_a, mission_b],
-        ):
-            with patch("backend.utils.seeded_random", return_value=mock_rng):
-                resp = client.post(
-                    f"/api/game/{game_id}/faction/stellar_cartographers/mission"
-                )
+        ), patch("backend.utils.seeded_random", return_value=mock_rng):
+            resp = client.post(
+                f"/api/game/{game_id}/faction/stellar_cartographers/mission"
+            )
 
         assert resp.status_code == 200
         data = resp.json()
@@ -1470,11 +1481,10 @@ class TestFactionAPI:
         with patch(
             "backend.api.routes.generate_missions",
             return_value=[mission_a, mission_b],
-        ):
-            with patch("backend.utils.seeded_random", return_value=mock_rng):
-                resp = client.post(
-                    f"/api/game/{game_id}/faction/stellar_cartographers/mission"
-                )
+        ), patch("backend.utils.seeded_random", return_value=mock_rng):
+            resp = client.post(
+                f"/api/game/{game_id}/faction/stellar_cartographers/mission"
+            )
 
         assert resp.status_code == 200
         data = resp.json()
@@ -1706,7 +1716,7 @@ class TestTradingFactionIntegration:
         state.discoveries.append(disc)
         credits_before = state.ship.credits
 
-        ok, msg = perform_trade(state, "sell", "artifact", 1)
+        ok, _msg = perform_trade(state, "sell", "artifact", 1)
         assert ok is True
         price_mod = 1.0 + min(max(50, 0), 50) / 200.0
         expected_min = int(100 * 0.7 * price_mod)
@@ -1729,7 +1739,7 @@ class TestTradingFactionIntegration:
         state.discoveries.append(disc)
         credits_before = state.ship.credits
 
-        ok, msg = perform_trade(state, "sell", "artifact", 1)
+        ok, _msg = perform_trade(state, "sell", "artifact", 1)
         assert ok is True
         expected_min = int(100 * 0.7)
         expected_max = int(100 * 1.5)
@@ -1751,7 +1761,7 @@ class TestTradingFactionIntegration:
         state.discoveries.append(disc)
         credits_before = state.ship.credits
 
-        ok, msg = perform_trade(state, "sell", "artifact", 1)
+        ok, _msg = perform_trade(state, "sell", "artifact", 1)
         assert ok is True
         actual_credits = state.ship.credits - credits_before
         # faction_mod should be clamped to 1.25, so max is 100 * 1.5 * 1.25 = 187 (rounded down)
@@ -1768,7 +1778,7 @@ class TestTradingFactionIntegration:
         # Buy fuel with 0 rep (baseline)
         state.modify_faction_reputation("void_traders", 0)
         credits_before = state.ship.credits
-        ok, msg = perform_trade(state, "buy", "fuel", 10)
+        ok, _msg = perform_trade(state, "buy", "fuel", 10)
         assert ok is True
         base_cost = credits_before - state.ship.credits
 
@@ -1776,7 +1786,7 @@ class TestTradingFactionIntegration:
         state.ship.fuel = 0
         state.ship.credits = 5000
         state.modify_faction_reputation("void_traders", 50)
-        ok, msg = perform_trade(state, "buy", "fuel", 10)
+        ok, _msg = perform_trade(state, "buy", "fuel", 10)
         assert ok is True
         discounted_cost = 5000 - state.ship.credits
 
@@ -1795,7 +1805,7 @@ class TestTradingFactionIntegration:
                        description="Old relic", value=200, system_id=system.id),
         ]
 
-        ok, msg, sold_count, total_price = perform_bulk_sell(
+        ok, _msg, _sold_count, total_price = perform_bulk_sell(
             state, [{"item": "artifact", "quantity": 1}]
         )
         assert ok is True
@@ -1813,7 +1823,7 @@ class TestEventFactionIntegration:
         state.events.append(event)
         rep_before = state.get_faction_reputation("stellar_cartographers")
 
-        ok, msg, extra = resolve_event(state, event.id, 0)
+        ok, _msg, _extra = resolve_event(state, event.id, 0)
         assert ok is True
         rep_after = state.get_faction_reputation("stellar_cartographers")
         assert rep_after > rep_before
@@ -1825,7 +1835,7 @@ class TestEventFactionIntegration:
         state.events.append(event)
         rep_before = state.get_faction_reputation("void_traders")
 
-        ok, msg, extra = resolve_event(state, event.id, 0)
+        ok, _msg, _extra = resolve_event(state, event.id, 0)
         assert ok is True
         rep_after = state.get_faction_reputation("void_traders")
         assert rep_after > rep_before
@@ -1837,7 +1847,7 @@ class TestEventFactionIntegration:
         state.events.append(event)
         rep_before = state.get_faction_reputation("free_pilots")
 
-        ok, msg, extra = resolve_event(state, event.id, 0)
+        ok, _msg, _extra = resolve_event(state, event.id, 0)
         assert ok is True
         rep_after = state.get_faction_reputation("free_pilots")
         assert rep_after > rep_before
@@ -1849,7 +1859,7 @@ class TestEventFactionIntegration:
         state.events.append(event)
         rep_before = state.get_faction_reputation("free_pilots")
 
-        ok, msg, extra = resolve_event(state, event.id, 0)
+        ok, _msg, _extra = resolve_event(state, event.id, 0)
         assert ok is True
         rep_after = state.get_faction_reputation("free_pilots")
         assert rep_after > rep_before
@@ -1861,7 +1871,7 @@ class TestEventFactionIntegration:
         state.events.append(event)
         rep_before = state.get_faction_reputation("stellar_cartographers")
 
-        ok, msg, extra = resolve_event(state, event.id, 0)
+        ok, _msg, _extra = resolve_event(state, event.id, 0)
         assert ok is True
         rep_after = state.get_faction_reputation("stellar_cartographers")
         assert rep_after > rep_before
@@ -1873,7 +1883,7 @@ class TestEventFactionIntegration:
         state.events.append(event)
         rep_before = state.get_faction_reputation("free_pilots")
 
-        ok, msg, extra = resolve_event(state, event.id, 0)
+        ok, _msg, _extra = resolve_event(state, event.id, 0)
         assert ok is True
         rep_after = state.get_faction_reputation("free_pilots")
         assert rep_after > rep_before
@@ -1885,7 +1895,7 @@ class TestEventFactionIntegration:
         state.events.append(event)
         rep_before = state.get_faction_reputation("free_pilots")
 
-        ok, msg, extra = resolve_event(state, event.id, 0)
+        ok, _msg, _extra = resolve_event(state, event.id, 0)
         assert ok is True
         rep_after = state.get_faction_reputation("free_pilots")
         assert rep_after > rep_before
@@ -1987,7 +1997,7 @@ class TestReputationDecay:
         assert restored.jumps_since_rep_decay == 5
 
     def test_rep_decay_on_jump(self) -> None:
-        from backend.game.engine import perform_jump, can_jump
+        from backend.game.engine import can_jump, perform_jump
         from backend.generation.universe import distance_between
         state = new_game(seed=42)
         state.modify_faction_reputation("stellar_cartographers", 30)
@@ -2019,7 +2029,7 @@ class TestReputationDecay:
         assert state.get_faction_reputation("free_pilots") > -5
 
     def test_rep_decay_resets_counter(self) -> None:
-        from backend.game.engine import perform_jump, can_jump
+        from backend.game.engine import can_jump, perform_jump
         from backend.generation.universe import distance_between
         state = new_game(seed=42)
         state.modify_faction_reputation("void_traders", 30)
@@ -2046,7 +2056,7 @@ class TestReputationDecay:
         assert state.jumps_since_rep_decay == 0
 
     def test_rep_decay_zero_rep_unchanged(self) -> None:
-        from backend.game.engine import perform_jump, can_jump
+        from backend.game.engine import can_jump, perform_jump
         from backend.generation.universe import distance_between
         state = new_game(seed=42)
         assert state.get_faction_reputation("stellar_cartographers") == 0
@@ -2073,7 +2083,7 @@ class TestReputationDecay:
         assert state.get_faction_reputation("stellar_cartographers") == 0
 
     def test_rep_decay_negative_toward_zero(self) -> None:
-        from backend.game.engine import perform_jump, can_jump
+        from backend.game.engine import can_jump, perform_jump
         from backend.generation.universe import distance_between
         state = new_game(seed=42)
         state.modify_faction_reputation("free_pilots", -10)
@@ -2409,7 +2419,7 @@ class TestReputationEventOutcomes:
         credits_before = state.ship.credits
         morale_before = state.ship.morale
 
-        ok, msg, extra = resolve_event(state, event.id, 0)
+        ok, _msg, _extra = resolve_event(state, event.id, 0)
         assert ok is True
         assert state.ship.credits > credits_before + 50  # +50 from signal + +10 from rep bonus
         assert state.ship.morale > morale_before  # morale from event + +1 from rep bonus
@@ -2423,7 +2433,7 @@ class TestReputationEventOutcomes:
         state.events.append(event)
         credits_before = state.ship.credits
 
-        ok, msg, extra = resolve_event(state, event.id, 0)
+        ok, _msg, _extra = resolve_event(state, event.id, 0)
         assert ok is True
         assert state.ship.credits > credits_before + 150  # +150 from merchant + +10 bonus
 
@@ -2436,7 +2446,7 @@ class TestReputationEventOutcomes:
         state.events.append(event)
         morale_before = state.ship.morale
 
-        ok, msg, extra = resolve_event(state, event.id, 0)
+        ok, _msg, _extra = resolve_event(state, event.id, 0)
         assert ok is True
         # Crisis event: hll:-20; fuel:-20 fixes life support. Morale should be boosted by +5 from rep
         assert state.ship.morale > morale_before + 5 - 25  # rough bound including event effects
@@ -2450,7 +2460,7 @@ class TestReputationEventOutcomes:
         state.events.append(event)
         morale_before = state.ship.morale
 
-        ok, msg, extra = resolve_event(state, event.id, 0)
+        ok, _msg, _extra = resolve_event(state, event.id, 0)
         assert ok is True
         # Crew dispute: morale:15; fuel:-2 plus +5 morale from rep bonus
         assert state.ship.morale > morale_before
@@ -2463,7 +2473,7 @@ class TestReputationEventOutcomes:
         event = _create_event(template, "sys_0000")
         state.events.append(event)
 
-        ok, msg, extra = resolve_event(state, event.id, 0)
+        ok, _msg, _extra = resolve_event(state, event.id, 0)
         assert ok is True
         # Should not get the bonus credits (no +10), just the event outcome
 
@@ -2477,7 +2487,7 @@ class TestReputationEventOutcomes:
         credits_before = state.ship.credits
         morale_before = state.ship.morale
 
-        ok, msg, extra = resolve_event(state, event.id, 0)
+        ok, _msg, _extra = resolve_event(state, event.id, 0)
         assert ok is True
         assert state.ship.credits >= credits_before + 10
         assert state.ship.morale >= morale_before + 1
@@ -2491,7 +2501,7 @@ class TestReputationEventOutcomes:
         state.events.append(event)
         morale_before = state.ship.morale
 
-        ok, msg, extra = resolve_event(state, event.id, 0)
+        ok, _msg, _extra = resolve_event(state, event.id, 0)
         assert ok is True
         assert state.ship.morale >= morale_before + 5
 
@@ -2502,7 +2512,7 @@ class TestReputationEventOutcomes:
         event = _create_event(template, "sys_0000")
         state.events.append(event)
 
-        ok, msg, extra = resolve_event(state, event.id, 0)
+        ok, _msg, _extra = resolve_event(state, event.id, 0)
         assert ok is True
 
         faction_logs = [e for e in state.log_entries if e["type"] == "faction"]
@@ -2823,8 +2833,8 @@ class TestMissionSummary:
         assert "Tier 2" in d["summary"]
 
     def test_get_missions_summary_with_station(self):
-        from backend.missions import get_missions_summary
         from backend.game.manager import new_game
+        from backend.missions import get_missions_summary
         state = new_game(seed=42)
         current = state.get_current_system()
         current.has_trading_station = True
@@ -2835,8 +2845,8 @@ class TestMissionSummary:
         assert summary["available"] is True
 
     def test_get_missions_summary_no_station(self):
-        from backend.missions import get_missions_summary
         from backend.game.manager import new_game
+        from backend.missions import get_missions_summary
         state = new_game(seed=42)
         current = state.get_current_system()
         current.has_trading_station = False
@@ -2847,8 +2857,8 @@ class TestMissionSummary:
         assert summary["available"] is False
 
     def test_get_missions_summary_none_system(self):
-        from backend.missions import get_missions_summary
         from backend.game.manager import new_game
+        from backend.missions import get_missions_summary
         state = new_game(seed=42)
         summary = get_missions_summary(state, None)
         assert summary["count"] == 0
@@ -2858,9 +2868,10 @@ class TestMissionSummary:
     def test_get_missions_summary_only_daily(self):
         """When only a daily mission exists (no standard missions), available should be False
         and count should be 0, matching the fix in Option A."""
-        from backend.missions import get_missions_summary, FactionMission
-        from backend.game.manager import new_game
         from unittest.mock import patch
+
+        from backend.game.manager import new_game
+        from backend.missions import FactionMission, get_missions_summary
         state = new_game(seed=42)
         current = state.get_current_system()
         current.has_trading_station = True

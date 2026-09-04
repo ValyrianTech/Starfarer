@@ -1,30 +1,32 @@
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-import pytest
 from unittest.mock import patch
+
+import pytest
 from fastapi.testclient import TestClient
 
-from backend.main import app
 from backend.database import init_db
-from backend.game.manager import GAME_STORE, new_game, game_save, game_load
+from backend.game.manager import GAME_STORE, game_load, game_save, new_game
 from backend.hints import (
-    Hint,
     HINT_DEFINITIONS,
-    get_contextual_hints,
-    _fuel_zero,
-    _fuel_critical,
-    _fuel_low_no_station,
-    _first_uncharted,
-    _hull_low,
+    Hint,
     _cargo_full,
     _first_crisis,
-    _morale_low,
+    _first_uncharted,
     _format_message,
+    _fuel_critical,
+    _fuel_low_no_station,
+    _fuel_zero,
+    _hull_low,
+    _morale_low,
+    get_contextual_hints,
 )
+from backend.main import app
+from backend.models.event import Choice, Event
 from backend.models.game_state import GameState
-from backend.models.event import Event, Choice
 
 client = TestClient(app)
 
@@ -644,7 +646,7 @@ class TestDismissedHintsPersistence:
     def test_dismissed_hints_roundtrip(self) -> None:
         from backend.database import init_db
         init_db()
-        from backend.game.manager import _state_to_dict, _state_from_dict
+        from backend.game.manager import _state_from_dict, _state_to_dict
 
         state = _make_game()
         state.dismissed_hints.add("test_hint_1")
@@ -659,7 +661,7 @@ class TestDismissedHintsPersistence:
         assert "test_hint_2" in restored.dismissed_hints
 
     def test_empty_dismissed_hints_roundtrip(self) -> None:
-        from backend.game.manager import _state_to_dict, _state_from_dict
+        from backend.game.manager import _state_from_dict, _state_to_dict
 
         state = _make_game()
         d = _state_to_dict(state)
@@ -667,7 +669,7 @@ class TestDismissedHintsPersistence:
         assert restored.dismissed_hints == set()
 
     def test_old_save_without_dismissed_hints(self) -> None:
-        from backend.game.manager import _state_to_dict, _state_from_dict
+        from backend.game.manager import _state_from_dict, _state_to_dict
 
         state = _make_game()
         d = _state_to_dict(state)

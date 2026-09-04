@@ -7,7 +7,6 @@ within the procedurally generated galaxy.
 """
 
 from dataclasses import dataclass, field
-from typing import Optional
 
 VALID_SYSTEM_TYPES = frozenset({
     "civilized",
@@ -47,7 +46,7 @@ class Body:
     body_type: str
     size: int
     distance_from_star: float
-    biome: Optional[str] = None
+    biome: str | None = None
     description: str = ""
     poi_count: int = 0
     initial_poi_count: int = 0

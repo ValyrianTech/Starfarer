@@ -6,7 +6,6 @@ and structuring API responses.
 """
 
 from pydantic import BaseModel
-from typing import Optional, Any
 
 
 class NewGameRequest(BaseModel):
@@ -16,22 +15,10 @@ class NewGameRequest(BaseModel):
     if not specified.
     """
 
-    seed: Optional[int] = None
-    ship_name: Optional[str] = None
-    game_id: Optional[str] = None
-    shared_universe: Optional[bool] = None
-
-
-class JumpRequest(BaseModel):
-    """Request body for initiating a hyperspace jump."""
-
-    target_system_id: str
-
-
-class LandRequest(BaseModel):
-    """Request body for landing on a celestial body."""
-
-    body_id: str
+    seed: int | None = None
+    ship_name: str | None = None
+    game_id: str | None = None
+    shared_universe: bool | None = None
 
 
 class ResolveEventRequest(BaseModel):
@@ -78,20 +65,6 @@ class HealthResponse(BaseModel):
     uptime: str
 
 
-class GameResponse(BaseModel):
-    """Response body for game-related endpoints."""
-
-    game_id: str
-    state: Any
-
-
-class ErrorResponse(BaseModel):
-    """Response body for error conditions."""
-
-    error: str
-    detail: Optional[str] = None
-
-
 class CraftRequest(BaseModel):
     """Request body for emergency crafting a discovery into resources."""
 
@@ -103,14 +76,14 @@ class AcceptMissionRequest(BaseModel):
     """Request body for accepting a faction mission."""
 
     mission_id: str
-    faction_id: Optional[str] = None
+    faction_id: str | None = None
 
 
 class CompleteMissionRequest(BaseModel):
     """Request body for completing a faction mission."""
 
     mission_id: str
-    faction_id: Optional[str] = None
+    faction_id: str | None = None
 
 
 class DismissHintRequest(BaseModel):

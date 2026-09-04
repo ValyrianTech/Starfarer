@@ -9,17 +9,27 @@ shared gathering point for travellers across all game sessions.
 import math
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Optional
 
-from backend.models.game_state import GameState
 from backend.models.discovery import Discovery
-from backend.multiplayer.models import (
-    CrossroadsItem, CrossroadsLore, CrossroadsMessage,
+from backend.models.game_state import GameState
+from backend.multiplayer.database import (
+    claim_item as db_claim_item,
 )
 from backend.multiplayer.database import (
-    save_crossroads_item, get_available_items, claim_item as db_claim_item,
-    save_crossroads_lore, get_available_lore, claim_lore as db_claim_lore,
-    save_crossroads_message, get_recent_messages_paginated,
+    claim_lore as db_claim_lore,
+)
+from backend.multiplayer.database import (
+    get_available_items,
+    get_available_lore,
+    get_recent_messages_paginated,
+    save_crossroads_item,
+    save_crossroads_lore,
+    save_crossroads_message,
+)
+from backend.multiplayer.models import (
+    CrossroadsItem,
+    CrossroadsLore,
+    CrossroadsMessage,
 )
 
 MAX_MESSAGE_LENGTH = 500
@@ -29,7 +39,7 @@ def donate_item(
     game_state: GameState,
     item_name: str,
     quantity: int,
-    message: Optional[str] = None,
+    message: str | None = None,
 ) -> dict:
     """Donate an item from the player's cargo to the Crossroads.
 
@@ -137,7 +147,7 @@ def get_available_items_list() -> list[dict]:
 def donate_lore(
     game_state: GameState,
     fragment_id: str,
-    message: Optional[str] = None,
+    message: str | None = None,
 ) -> dict:
     """Donate a discovered lore fragment to the Crossroads for other
     players to read.

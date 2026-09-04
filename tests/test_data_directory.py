@@ -1,9 +1,9 @@
-import sys
-import os
-import importlib
 import asyncio
-from unittest.mock import MagicMock, patch
+import importlib
+import os
+import sys
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
@@ -19,8 +19,9 @@ class TestConfigDataDirectory:
         assert DB_PATH == DATA_DIR / "starfarer.db"
 
     def test_data_dir_env_var_override(self, monkeypatch) -> None:
-        import backend.config
         from pathlib import Path
+
+        import backend.config
         monkeypatch.setenv("STARFARER_DATA_DIR", "/tmp/test_starfarer_data_override")
         importlib.reload(backend.config)
         assert backend.config.DATA_DIR == Path("/tmp/test_starfarer_data_override")
@@ -45,7 +46,7 @@ class TestDatabaseMigrations:
             assert isinstance(migration[1], str)
 
     def test_run_migrations_creates_schema_version(self) -> None:
-        from backend.database import init_db, run_migrations, get_db
+        from backend.database import get_db, init_db, run_migrations
         init_db()
         run_migrations()
         conn = get_db()
@@ -57,7 +58,7 @@ class TestDatabaseMigrations:
             conn.close()
 
     def test_run_migrations_is_idempotent(self) -> None:
-        from backend.database import init_db, run_migrations, get_db
+        from backend.database import get_db, init_db, run_migrations
         init_db()
         run_migrations()
         run_migrations()
@@ -70,7 +71,7 @@ class TestDatabaseMigrations:
             conn.close()
 
     def test_run_migrations_records_current_version(self) -> None:
-        from backend.database import init_db, run_migrations, get_db
+        from backend.database import get_db, init_db, run_migrations
         init_db()
         run_migrations()
         conn = get_db()
@@ -85,8 +86,9 @@ class TestDatabaseMigrations:
             conn.close()
 
     def test_run_migrations_without_init_db(self, tmp_path) -> None:
-        from backend.database import run_migrations
         import sqlite3
+
+        from backend.database import run_migrations
 
         db_path = tmp_path / "test_clean.db"
         with patch("backend.database.DB_PATH", db_path), \

@@ -7,11 +7,17 @@ at trading stations.
 """
 
 import random
-from backend.config import UPGRADE_COSTS, UPGRADE_EFFECTS, UPGRADE_MAX_LEVELS, FUEL_BASE_PRICE
-from backend.utils import deterministic_hash
+
+from backend.config import (
+    FUEL_BASE_PRICE,
+    UPGRADE_COSTS,
+    UPGRADE_EFFECTS,
+    UPGRADE_MAX_LEVELS,
+)
 from backend.models.game_state import GameState, rep_label
 from backend.models.ship import Ship
 from backend.models.system import StarSystem
+from backend.utils import deterministic_hash
 
 
 def round_half_up(x: float) -> int:

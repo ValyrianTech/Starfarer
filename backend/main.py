@@ -6,20 +6,21 @@ context manager for database initialization, registers CORS middleware,
 mounts static file directories, and includes the API router.
 """
 
+import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse, Response
-import os
+from fastapi.staticfiles import StaticFiles
 
 from backend.api.routes import router
 from backend.api.spectate import router as spectate_router
-from backend.multiplayer.api import router as multiplayer_router
-from backend.database import init_db, run_migrations
-from backend.multiplayer.database import init_multiplayer_db
 from backend.config import DATA_DIR
+from backend.database import init_db, run_migrations
+from backend.multiplayer.api import router as multiplayer_router
+from backend.multiplayer.database import init_multiplayer_db
 
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend")
 WEBUI_DIR = os.path.join(os.path.dirname(__file__), "..", "webui")

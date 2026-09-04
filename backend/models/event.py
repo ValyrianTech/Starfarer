@@ -7,7 +7,6 @@ player's response options.
 """
 
 from dataclasses import dataclass, field
-from typing import Optional
 
 
 @dataclass
@@ -35,10 +34,10 @@ class Event:
     title: str
     flavor: str
     event_type: str
-    category: Optional[str] = None
+    category: str | None = None
     choices: list[Choice] = field(default_factory=list)
     resolved: bool = False
-    chosen: Optional[int] = None
+    chosen: int | None = None
     system_id: str = ""
 
     def to_dict(self) -> dict:

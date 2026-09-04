@@ -6,7 +6,6 @@ messages, and discovery ripple events shared across game sessions.
 """
 
 from dataclasses import dataclass, field
-from typing import Optional
 
 
 @dataclass
@@ -24,7 +23,7 @@ class GhostSignature:
     system_id: str
     timestamp: str
     discoveries: list[str] = field(default_factory=list)
-    message: Optional[str] = None
+    message: str | None = None
     body_visits: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
@@ -74,9 +73,9 @@ class CrossroadsItem:
     donor_name: str
     item_name: str
     quantity: int
-    message: Optional[str] = None
+    message: str | None = None
     claimed: bool = False
-    claimer_game_id: Optional[str] = None
+    claimer_game_id: str | None = None
     created_at: str = ""
 
     def to_dict(self) -> dict:
@@ -127,9 +126,9 @@ class CrossroadsLore:
     donor_game_id: str
     donor_name: str
     fragment_id: str
-    message: Optional[str] = None
+    message: str | None = None
     claimed: bool = False
-    claimer_game_id: Optional[str] = None
+    claimer_game_id: str | None = None
     created_at: str = ""
 
     def to_dict(self) -> dict:

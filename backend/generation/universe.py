@@ -7,17 +7,29 @@ random number generator. Also includes distance calculations and
 connectivity enforcement.
 """
 
-import random
+import logging
 import math
+import random
 
 from backend.config import (
-    GALAXY_SYSTEM_COUNT, GALAXY_WIDTH, GALAXY_HEIGHT,
-    STAR_SPECTRAL_TYPES, STAR_COLORS, SYSTEM_PHENOMENA, PHENOMENON_WEIGHTS,
-    PLANET_NAMES, MOON_NAMES, BIOME_TYPES, MIN_ORBITALS, MAX_ORBITALS,
+    BIOME_TYPES,
+    GALAXY_HEIGHT,
+    GALAXY_SYSTEM_COUNT,
+    GALAXY_WIDTH,
+    MAX_ORBITALS,
+    MIN_ORBITALS,
+    MOON_NAMES,
+    PHENOMENON_WEIGHTS,
+    PLANET_NAMES,
+    STAR_COLORS,
+    STAR_SPECTRAL_TYPES,
+    SYSTEM_PHENOMENA,
 )
-from backend.utils import seeded_random
 from backend.generation.lore import distribute_lore_fragments
-from backend.models.system import StarSystem, Body
+from backend.models.system import Body, StarSystem
+from backend.utils import seeded_random
+
+logger = logging.getLogger(__name__)
 
 
 def _pick_weighted(rng: random.Random, items: list[str], weights: list[int]) -> str:
@@ -320,7 +332,6 @@ def generate_system(rng: random.Random, idx: int, galaxy_rng: random.Random) -> 
     )
 
 
-MAX_INITIAL_JUMP = 40
 NEIGHBOR_DISTANCE_THRESHOLD = 60
 
 
@@ -357,7 +368,7 @@ def generate_universe(seed: int, system_count: int = GALAXY_SYSTEM_COUNT) -> tup
     placement = distribute_lore_fragments(seed, systems)
 
     lore_fragments = []
-    for sys_id, frags in placement.items():
+    for frags in placement.values():
         lore_fragments.extend(frags)
 
     return systems, lore_fragments
@@ -376,7 +387,6 @@ def _ensure_connectivity(systems: dict[str, StarSystem], rng: random.Random) -> 
     :param rng: The seeded random number generator.
     :type rng: random.Random
     """
-    import logging
     max_iters = 100
 
     def _find_and_fix_isolated(sys_list: list[StarSystem]) -> bool:
@@ -462,7 +472,7 @@ def _ensure_connectivity(systems: dict[str, StarSystem], rng: random.Random) -> 
                         system.y = target.y + (dy / dist) * target_dist
                         system.x = max(50, min(GALAXY_WIDTH - 50, system.x))
                         system.y = max(50, min(GALAXY_HEIGHT - 50, system.y))
-                    logging.warning(
+                    logger.warning(
                         f"System {system.id} ({system.name}) was isolated after "
                         f"{max_iters} iterations; fallback repositioning applied."
                     )

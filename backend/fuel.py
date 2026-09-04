@@ -6,8 +6,8 @@ relative to the nearest trading station and returns a warning
 level and supporting information.
 """
 
-from backend.generation.universe import distance_between
 from backend.config import JUMP_FUEL_COST_PER_LY
+from backend.generation.universe import distance_between
 from backend.models.game_state import GameState
 from backend.models.system import StarSystem
 

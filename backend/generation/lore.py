@@ -6,9 +6,9 @@ definitions, distributing them deterministically across the galaxy,
 and querying fragments by system or body.
 """
 
-import random
-from typing import Optional
 import logging
+import random
+
 from backend.generation.lore_content import FRAGMENT_DATA
 from backend.models.discovery import LoreFragment
 from backend.models.system import Body, StarSystem
@@ -183,7 +183,7 @@ def get_fragment_for_body(
     system_id: str,
     body_id: str,
     lore_fragments: list[LoreFragment],
-) -> Optional[LoreFragment]:
+) -> LoreFragment | None:
     """Return the lore fragment assigned to a specific body, if any.
 
     :param system_id: The ID of the star system.

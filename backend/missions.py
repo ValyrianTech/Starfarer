@@ -6,12 +6,11 @@ completion logic integrated with the faction reputation system.
 """
 
 from dataclasses import dataclass
-from typing import Optional
 
-from backend.utils import deterministic_hash, seeded_random
-from backend.models.faction import get_faction, FACTION_DEFINITIONS
+from backend.models.faction import FACTION_DEFINITIONS, get_faction
 from backend.models.game_state import GameState
 from backend.models.system import StarSystem
+from backend.utils import deterministic_hash, seeded_random
 
 
 @dataclass
@@ -34,7 +33,7 @@ class FactionMission:
     credit_cost: int
     credit_reward: int
     reputation_reward: int
-    item_reward: Optional[str] = None
+    item_reward: str | None = None
 
     def generate_summary(self) -> str:
         """Build a short, human-readable one-line summary of the mission.
@@ -428,7 +427,7 @@ def get_primary_faction_id(state: GameState, system: StarSystem) -> str:
     return faction_ids[faction_idx]
 
 
-def get_missions_summary(state: GameState, system: Optional[StarSystem]) -> dict:
+def get_missions_summary(state: GameState, system: StarSystem | None) -> dict:
     """Summarize the missions available at a system for quick surfacing.
 
     Produces a compact overview of the missions offered at the given

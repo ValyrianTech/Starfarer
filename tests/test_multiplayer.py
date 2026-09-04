@@ -1,29 +1,51 @@
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 import tempfile
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
-from datetime import datetime, timezone, timedelta
 from fastapi.testclient import TestClient
-from unittest.mock import patch, MagicMock
 
-from backend.main import app
 from backend.database import init_db
-from backend.game.manager import GAME_STORE, new_game, game_save
-from backend.multiplayer.database import init_multiplayer_db, cleanup_expired_messages
-from backend.multiplayer.models import GhostSignature, CrossroadsItem, CrossroadsLore, CrossroadsMessage, RippleEvent
-from backend.multiplayer.ghosts import record_ghost, get_system_ghosts
-from backend.multiplayer.crossroads import (
-    donate_item, claim_item, get_available_items_list,
-    donate_lore, claim_lore, get_available_lore_list,
-    post_message, get_messages,
-)
-from backend.multiplayer.ripples import create_ripple, get_pending_ripples, acknowledge_ripple
-from backend.multiplayer.api import _game_locks, _get_lock, _cleanup_game_lock, _cleanup_stale_locks, _game_exists
+from backend.game.manager import GAME_STORE, game_save, new_game
+from backend.main import app
 from backend.models.discovery import Discovery, LoreFragment
+from backend.multiplayer.api import (
+    _cleanup_game_lock,
+    _cleanup_stale_locks,
+    _game_exists,
+    _game_locks,
+    _get_lock,
+)
+from backend.multiplayer.crossroads import (
+    claim_item,
+    claim_lore,
+    donate_item,
+    donate_lore,
+    get_available_items_list,
+    get_available_lore_list,
+    get_messages,
+    post_message,
+)
+from backend.multiplayer.database import cleanup_expired_messages, init_multiplayer_db
+from backend.multiplayer.ghosts import get_system_ghosts, record_ghost
+from backend.multiplayer.models import (
+    CrossroadsItem,
+    CrossroadsLore,
+    CrossroadsMessage,
+    GhostSignature,
+    RippleEvent,
+)
+from backend.multiplayer.ripples import (
+    acknowledge_ripple,
+    create_ripple,
+    get_pending_ripples,
+)
 
 client = TestClient(app)
 
@@ -222,7 +244,10 @@ class TestMultiplayerDatabase:
         yield
 
     def test_save_and_get_ghost_signatures(self) -> None:
-        from backend.multiplayer.database import save_ghost_signature, get_ghost_signatures
+        from backend.multiplayer.database import (
+            get_ghost_signatures,
+            save_ghost_signature,
+        )
         gs = GhostSignature(
             id="ghost-db-1",
             game_id="game-db-1",
@@ -244,7 +269,10 @@ class TestMultiplayerDatabase:
         assert found[0].body_visits == ["body-a"]
 
     def test_save_and_get_available_items(self) -> None:
-        from backend.multiplayer.database import save_crossroads_item, get_available_items
+        from backend.multiplayer.database import (
+            get_available_items,
+            save_crossroads_item,
+        )
         ci = CrossroadsItem(
             id="item-db-1",
             donor_game_id="game-db-1",
@@ -263,7 +291,8 @@ class TestMultiplayerDatabase:
         assert found[0].quantity == 2
 
     def test_claim_item_success(self) -> None:
-        from backend.multiplayer.database import save_crossroads_item, claim_item as db_claim_item
+        from backend.multiplayer.database import claim_item as db_claim_item
+        from backend.multiplayer.database import save_crossroads_item
         ci = CrossroadsItem(
             id="item-claim-1",
             donor_game_id="game-db-1",
@@ -283,7 +312,8 @@ class TestMultiplayerDatabase:
         assert result["claimer_game_id"] == "claimer-game-1"
 
     def test_claim_item_already_claimed(self) -> None:
-        from backend.multiplayer.database import save_crossroads_item, claim_item as db_claim_item
+        from backend.multiplayer.database import claim_item as db_claim_item
+        from backend.multiplayer.database import save_crossroads_item
         ci = CrossroadsItem(
             id="item-claim-2",
             donor_game_id="game-db-1",
@@ -321,7 +351,10 @@ class TestMultiplayerDatabase:
             assert result is None
 
     def test_save_and_get_available_lore(self) -> None:
-        from backend.multiplayer.database import save_crossroads_lore, get_available_lore
+        from backend.multiplayer.database import (
+            get_available_lore,
+            save_crossroads_lore,
+        )
         cl = CrossroadsLore(
             id="lore-db-1",
             donor_game_id="game-db-1",
@@ -338,7 +371,8 @@ class TestMultiplayerDatabase:
         assert found[0].fragment_id == "lore_architects_1"
 
     def test_claim_lore_success(self) -> None:
-        from backend.multiplayer.database import save_crossroads_lore, claim_lore as db_claim_lore
+        from backend.multiplayer.database import claim_lore as db_claim_lore
+        from backend.multiplayer.database import save_crossroads_lore
         cl = CrossroadsLore(
             id="lore-claim-1",
             donor_game_id="game-db-1",
@@ -356,7 +390,8 @@ class TestMultiplayerDatabase:
         assert result["claimer_game_id"] == "claimer-game-1"
 
     def test_claim_lore_already_claimed(self) -> None:
-        from backend.multiplayer.database import save_crossroads_lore, claim_lore as db_claim_lore
+        from backend.multiplayer.database import claim_lore as db_claim_lore
+        from backend.multiplayer.database import save_crossroads_lore
         cl = CrossroadsLore(
             id="lore-claim-2",
             donor_game_id="game-db-1",
@@ -388,7 +423,10 @@ class TestMultiplayerDatabase:
             assert result is None
 
     def test_save_and_get_recent_messages(self) -> None:
-        from backend.multiplayer.database import save_crossroads_message, get_recent_messages
+        from backend.multiplayer.database import (
+            get_recent_messages,
+            save_crossroads_message,
+        )
         cm = CrossroadsMessage(
             id="msg-db-1",
             game_id="game-db-1",
@@ -404,7 +442,10 @@ class TestMultiplayerDatabase:
         assert found[0].text == "First post!"
 
     def test_expired_messages_excluded(self) -> None:
-        from backend.multiplayer.database import save_crossroads_message, get_recent_messages
+        from backend.multiplayer.database import (
+            get_recent_messages,
+            save_crossroads_message,
+        )
         cm = CrossroadsMessage(
             id="msg-expired-1",
             game_id="game-db-1",
@@ -433,7 +474,8 @@ class TestMultiplayerDatabase:
         assert deleted >= 1
 
     def test_save_and_get_ripple_events(self) -> None:
-        from backend.multiplayer.database import save_ripple_event, get_pending_ripples as db_get_pending
+        from backend.multiplayer.database import get_pending_ripples as db_get_pending
+        from backend.multiplayer.database import save_ripple_event
         re = RippleEvent(
             id="ripple-db-1",
             source_game_id="game-db-1",
@@ -450,7 +492,7 @@ class TestMultiplayerDatabase:
         # Create a game specifically for this test
         state = new_game(42, "RippleTest", shared_universe=True)
         state.ship.current_system_id = "sys-rp-1"
-        state.systems["sys-rp-1"] = state.systems[list(state.systems.keys())[0]]
+        state.systems["sys-rp-1"] = state.systems[next(iter(state.systems.keys()))]
         state.systems["sys-rp-1"].id = "sys-rp-1"
         GAME_STORE[state.id] = state
         game_save(state)
@@ -462,7 +504,8 @@ class TestMultiplayerDatabase:
         GAME_STORE.pop(state.id, None)
 
     def test_acknowledge_ripple_success(self) -> None:
-        from backend.multiplayer.database import save_ripple_event, acknowledge_ripple as db_ack_ripple
+        from backend.multiplayer.database import acknowledge_ripple as db_ack_ripple
+        from backend.multiplayer.database import save_ripple_event
         re = RippleEvent(
             id="ripple-ack-1",
             source_game_id="game-src",
@@ -478,7 +521,8 @@ class TestMultiplayerDatabase:
         assert ok is True
 
     def test_acknowledge_ripple_already_acknowledged(self) -> None:
-        from backend.multiplayer.database import save_ripple_event, acknowledge_ripple as db_ack_ripple
+        from backend.multiplayer.database import acknowledge_ripple as db_ack_ripple
+        from backend.multiplayer.database import save_ripple_event
         re = RippleEvent(
             id="ripple-ack-2",
             source_game_id="game-src",
@@ -507,7 +551,10 @@ class TestMultiplayerDatabase:
         assert result == [1, 2, 3]
 
     def test_get_recent_messages_paginated_basic(self) -> None:
-        from backend.multiplayer.database import save_crossroads_message, get_recent_messages_paginated
+        from backend.multiplayer.database import (
+            get_recent_messages_paginated,
+            save_crossroads_message,
+        )
         for i in range(10):
             cm = CrossroadsMessage(
                 id=f"msg-pag-{i}",
@@ -523,7 +570,10 @@ class TestMultiplayerDatabase:
         assert total == 10
 
     def test_get_recent_messages_paginated_page2(self) -> None:
-        from backend.multiplayer.database import save_crossroads_message, get_recent_messages_paginated
+        from backend.multiplayer.database import (
+            get_recent_messages_paginated,
+            save_crossroads_message,
+        )
         for i in range(10):
             cm = CrossroadsMessage(
                 id=f"msg-pag2-{i}",
@@ -543,7 +593,10 @@ class TestMultiplayerDatabase:
         assert page1_ids.isdisjoint(page2_ids)
 
     def test_get_recent_messages_paginated_empty_page(self) -> None:
-        from backend.multiplayer.database import save_crossroads_message, get_recent_messages_paginated
+        from backend.multiplayer.database import (
+            get_recent_messages_paginated,
+            save_crossroads_message,
+        )
         for i in range(3):
             cm = CrossroadsMessage(
                 id=f"msg-empty-{i}",
@@ -559,7 +612,10 @@ class TestMultiplayerDatabase:
         assert total == 3
 
     def test_get_recent_messages_paginated_expired_excluded(self) -> None:
-        from backend.multiplayer.database import save_crossroads_message, get_recent_messages_paginated
+        from backend.multiplayer.database import (
+            get_recent_messages_paginated,
+            save_crossroads_message,
+        )
         active = CrossroadsMessage(
             id="msg-active",
             game_id="game-x",
@@ -585,8 +641,12 @@ class TestMultiplayerDatabase:
         assert total == 1
 
     def test_get_recent_messages_paginated_total_count(self) -> None:
-        from backend.multiplayer.database import save_crossroads_message, get_recent_messages_paginated
         import uuid
+
+        from backend.multiplayer.database import (
+            get_recent_messages_paginated,
+            save_crossroads_message,
+        )
         for i in range(7):
             cm = CrossroadsMessage(
                 id=f"msg-count-{uuid.uuid4()}",
@@ -601,8 +661,8 @@ class TestMultiplayerDatabase:
         assert total == 7
 
     def test_get_recent_messages_paginated_per_page_capped(self) -> None:
-        from backend.multiplayer.database import save_crossroads_message
         from backend.multiplayer.crossroads import get_messages
+        from backend.multiplayer.database import save_crossroads_message
         # Insert 60 messages to ensure the cap is exercised
         for i in range(60):
             cm = CrossroadsMessage(
@@ -619,8 +679,8 @@ class TestMultiplayerDatabase:
         assert result['per_page'] == 50
 
     def test_get_recent_messages_paginated_page_clamped(self) -> None:
-        from backend.multiplayer.database import save_crossroads_message
         from backend.multiplayer.crossroads import get_messages
+        from backend.multiplayer.database import save_crossroads_message
         # Insert 10 messages
         for i in range(10):
             cm = CrossroadsMessage(
@@ -1068,6 +1128,7 @@ class TestMultiplayerCrossroads:
     def test_post_message_pydantic_rejects_empty(self) -> None:
         """PostMessageRequest schema should reject empty text."""
         from pydantic import ValidationError
+
         from backend.multiplayer.schemas import PostMessageRequest
         with pytest.raises(ValidationError):
             PostMessageRequest(game_id="game-1", text="")
@@ -1075,6 +1136,7 @@ class TestMultiplayerCrossroads:
     def test_post_message_pydantic_rejects_whitespace(self) -> None:
         """PostMessageRequest schema should reject whitespace-only text."""
         from pydantic import ValidationError
+
         from backend.multiplayer.schemas import PostMessageRequest
         with pytest.raises(ValidationError):
             PostMessageRequest(game_id="game-1", text="   ")
@@ -1082,6 +1144,7 @@ class TestMultiplayerCrossroads:
     def test_post_message_pydantic_rejects_too_long(self) -> None:
         """PostMessageRequest schema should reject text longer than 500 chars."""
         from pydantic import ValidationError
+
         from backend.multiplayer.schemas import PostMessageRequest
         with pytest.raises(ValidationError):
             PostMessageRequest(game_id="game-1", text="x" * 501)
@@ -1287,7 +1350,9 @@ class TestMultiplayerRipples:
             # Get the first target system from the created ripple
             _ = result["ripples"][0]["target_system_id"]
             # Now check that the ripple exists in the DB for that target
-            from backend.multiplayer.database import get_pending_ripples as db_get_pending
+            from backend.multiplayer.database import (
+                get_pending_ripples as db_get_pending,
+            )
             db_ripples = db_get_pending(state_a.id)
             # The function filters by game_id not being in acknowledged_by
             # So our ripple should be in there
@@ -1336,8 +1401,8 @@ class TestMultiplayerRipples:
         }
 
         kept_ids = set()
-        for sid in full_systems:
-            if sid == system.id or distance_between(system, full_systems[sid]) / 10.0 > 5:
+        for sid, value in full_systems.items():
+            if sid == system.id or distance_between(system, value) / 10.0 > 5:
                 kept_ids.add(sid)
         state.systems = {sid: s for sid, s in full_systems.items() if sid in kept_ids}
 
@@ -1872,9 +1937,10 @@ class TestMultiplayerAPI:
         state = GAME_STORE[game_id]
         current_sys = state.get_current_system()
 
+        import uuid
+
         from backend.multiplayer.database import save_ripple_event
         from backend.multiplayer.models import RippleEvent
-        import uuid
         ripple = RippleEvent(
             id=str(uuid.uuid4()),
             source_game_id="other-game",
@@ -1903,9 +1969,10 @@ class TestMultiplayerAPI:
         state = GAME_STORE[game_id]
         current_sys = state.get_current_system()
 
+        import uuid
+
         from backend.multiplayer.database import save_ripple_event
         from backend.multiplayer.models import RippleEvent
-        import uuid
         ripple_id = str(uuid.uuid4())
         ripple = RippleEvent(
             id=ripple_id,
@@ -1951,8 +2018,9 @@ class TestMultiplayerAPI:
 
     def test_get_lock_returns_lock(self) -> None:
         """Verify that _get_lock returns a threading.Lock instance."""
-        from backend.multiplayer.api import _get_lock
         import threading
+
+        from backend.multiplayer.api import _get_lock
         lock = _get_lock("test-get-lock-1")
         assert isinstance(lock, type(threading.Lock()))
 
@@ -2021,6 +2089,7 @@ class TestMultiplayerAPI:
     def test_lock_serializes_concurrent_requests(self) -> None:
         """Verify that the lock serializes concurrent access to prevent state corruption."""
         import concurrent.futures
+
         from backend.multiplayer.api import _game_locks
 
         resp = client.post("/api/game/new", json={"shared_universe": True})

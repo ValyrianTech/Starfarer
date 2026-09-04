@@ -6,13 +6,13 @@ without intrusive tutorials.
 """
 
 from __future__ import annotations
-from typing import Callable
+
+from collections.abc import Callable
 
 from backend.fuel import get_fuel_status
 from backend.missions import get_missions_summary
 from backend.models.game_state import GameState
 from backend.models.system import StarSystem
-
 
 # ---------------------------------------------------------------------------
 # Hint definition structure
@@ -21,7 +21,7 @@ from backend.models.system import StarSystem
 class Hint:
     """A single contextual hint."""
 
-    __slots__ = ("id", "severity", "message_template", "command", "condition", "priority")
+    __slots__ = ("command", "condition", "id", "message_template", "priority", "severity")
 
     def __init__(
         self,
@@ -89,9 +89,7 @@ def _fuel_low_no_station(game_state: GameState, systems: dict[str, StarSystem]) 
     current = game_state.get_current_system()
     if current is None:
         return False
-    if current.has_trading_station:
-        return False
-    return True
+    return not current.has_trading_station
 
 
 def _first_uncharted(game_state: GameState, systems: dict[str, StarSystem]) -> bool:
@@ -136,9 +134,8 @@ def _first_crisis(game_state: GameState, systems: dict[str, StarSystem]) -> bool
         if entry.get("category") == "crisis":
             return False
     for event in game_state.events:
-        if event.event_type == "crisis":
-            if not event.resolved:
-                return True
+        if event.event_type == "crisis" and not event.resolved:
+            return True
     return False
 
 
@@ -171,9 +168,7 @@ def _mission_pending(game_state: GameState, systems: dict[str, StarSystem]) -> b
     if not game_state.accepted_missions:
         return False
     current = game_state.get_current_system()
-    if current is None or not current.has_trading_station:
-        return False
-    return True
+    return not (current is None or not current.has_trading_station)
 
 
 def _mission_high_tier(game_state: GameState, systems: dict[str, StarSystem]) -> bool:

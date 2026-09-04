@@ -6,13 +6,13 @@ loading games, saving and restoring game states, and retrieving
 leaderboard data.
 """
 
-import sqlite3
 import json
+import sqlite3
+from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import datetime, timezone
-from typing import Generator
 
-from backend.config import DB_PATH, DATA_DIR
+from backend.config import DATA_DIR, DB_PATH
 
 
 def get_db() -> sqlite3.Connection:
