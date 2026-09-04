@@ -7,17 +7,26 @@ random number generator. Also includes distance calculations and
 connectivity enforcement.
 """
 
-import random
 import math
+import random
 
 from backend.config import (
-    GALAXY_SYSTEM_COUNT, GALAXY_WIDTH, GALAXY_HEIGHT,
-    STAR_SPECTRAL_TYPES, STAR_COLORS, SYSTEM_PHENOMENA, PHENOMENON_WEIGHTS,
-    PLANET_NAMES, MOON_NAMES, BIOME_TYPES, MIN_ORBITALS, MAX_ORBITALS,
+    BIOME_TYPES,
+    GALAXY_HEIGHT,
+    GALAXY_SYSTEM_COUNT,
+    GALAXY_WIDTH,
+    MAX_ORBITALS,
+    MIN_ORBITALS,
+    MOON_NAMES,
+    PHENOMENON_WEIGHTS,
+    PLANET_NAMES,
+    STAR_COLORS,
+    STAR_SPECTRAL_TYPES,
+    SYSTEM_PHENOMENA,
 )
-from backend.utils import seeded_random
 from backend.generation.lore import distribute_lore_fragments
-from backend.models.system import StarSystem, Body
+from backend.models.system import Body, StarSystem
+from backend.utils import seeded_random
 
 
 def _pick_weighted(rng: random.Random, items: list[str], weights: list[int]) -> str:

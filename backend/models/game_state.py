@@ -9,12 +9,12 @@ and log entries.
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Optional
+
+from backend.models.discovery import Discovery, LoreFragment
+from backend.models.event import Event
+from backend.models.faction import FactionRelation
 from backend.models.ship import Ship
 from backend.models.system import StarSystem
-from backend.models.event import Event
-from backend.models.discovery import Discovery, LoreFragment
-from backend.models.faction import FactionRelation
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +64,7 @@ class GameState:
     faction_relations: dict[str, FactionRelation] = field(default_factory=dict)
     systems_visited: int = 0
     game_started: str = ""
-    last_event_title: Optional[str] = None
+    last_event_title: str | None = None
     jumps_since_rep_decay: int = 0
     station_visits: dict[str, int] = field(default_factory=dict)
     event_cooldowns: dict[str, int] = field(default_factory=dict)
@@ -87,7 +87,7 @@ class GameState:
         if not self.game_started:
             self.game_started = datetime.now(timezone.utc).isoformat()
 
-    def get_current_system(self) -> Optional[StarSystem]:
+    def get_current_system(self) -> StarSystem | None:
         """Retrieve the star system the ship is currently in.
 
         :returns: The current :class:`StarSystem`, or ``None`` if the

@@ -7,7 +7,6 @@ lore fragments scattered throughout the galaxy.
 """
 
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass
@@ -22,10 +21,10 @@ class Discovery:
     category: str
     name: str
     description: str
-    lore_fragment_id: Optional[str] = None
+    lore_fragment_id: str | None = None
     value: int = 0
     system_id: str = ""
-    body_id: Optional[str] = None
+    body_id: str | None = None
 
     def to_dict(self) -> dict:
         """Serialize the discovery to a dictionary.
@@ -98,7 +97,7 @@ class LoreFragment:
     title: str
     text: str
     discovered: bool = False
-    discovery_id: Optional[str] = None
+    discovery_id: str | None = None
     fragment_number: int = -1
     discovery_location: str = ""
     discovery_date: str = ""

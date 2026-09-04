@@ -5,8 +5,9 @@ Defines the data models used for validating API request bodies
 and structuring API responses.
 """
 
+from typing import Any
+
 from pydantic import BaseModel
-from typing import Optional, Any
 
 
 class NewGameRequest(BaseModel):
@@ -16,10 +17,10 @@ class NewGameRequest(BaseModel):
     if not specified.
     """
 
-    seed: Optional[int] = None
-    ship_name: Optional[str] = None
-    game_id: Optional[str] = None
-    shared_universe: Optional[bool] = None
+    seed: int | None = None
+    ship_name: str | None = None
+    game_id: str | None = None
+    shared_universe: bool | None = None
 
 
 class JumpRequest(BaseModel):
@@ -89,7 +90,7 @@ class ErrorResponse(BaseModel):
     """Response body for error conditions."""
 
     error: str
-    detail: Optional[str] = None
+    detail: str | None = None
 
 
 class CraftRequest(BaseModel):
@@ -103,14 +104,14 @@ class AcceptMissionRequest(BaseModel):
     """Request body for accepting a faction mission."""
 
     mission_id: str
-    faction_id: Optional[str] = None
+    faction_id: str | None = None
 
 
 class CompleteMissionRequest(BaseModel):
     """Request body for completing a faction mission."""
 
     mission_id: str
-    faction_id: Optional[str] = None
+    faction_id: str | None = None
 
 
 class DismissHintRequest(BaseModel):

@@ -5,14 +5,14 @@ Defines the data models used for validating request bodies
 for the Ghosts in the Void multiplayer layer.
 """
 
-from typing import Optional
+
 from pydantic import BaseModel, Field, field_validator
 
 
 class LeaveGhostRequest(BaseModel):
     """Request body for leaving a ghost signature in a star system."""
 
-    message: Optional[str] = None
+    message: str | None = None
 
 
 class DonateItemRequest(BaseModel):
@@ -21,7 +21,7 @@ class DonateItemRequest(BaseModel):
     game_id: str
     item_name: str
     quantity: int = 1
-    message: Optional[str] = None
+    message: str | None = None
 
 
 class ClaimItemRequest(BaseModel):
@@ -35,7 +35,7 @@ class DonateLoreRequest(BaseModel):
 
     game_id: str
     fragment_id: str
-    message: Optional[str] = None
+    message: str | None = None
 
 
 class ClaimLoreRequest(BaseModel):
@@ -49,7 +49,7 @@ class PostMessageRequest(BaseModel):
 
     game_id: str
     text: str = Field(..., min_length=1, max_length=500)
-    player_name: Optional[str] = None
+    player_name: str | None = None
 
     @field_validator('text')
     @classmethod

@@ -1,24 +1,63 @@
-import sys
 import os
 import random
+import sys
+
 import pytest
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from backend.game.engine import (
-    can_jump, perform_jump, perform_scan, get_nearby_systems,
-    land_on_body, explore_surface,
-    activate_distress_beacon, perform_salvage, emergency_craft,
-    get_scanner_tier_data, _body_has_anomaly, _categories_for_biome,
-    DEFAULT_DISCOVERY_CATEGORIES, BIOME_DISCOVERY_CATEGORIES,
-    _generate_discovery, perform_atmospheric_scan, perform_sub_surface_exploration,
+from backend.config import (
+    ATMOSPHERIC_SCAN_FUEL_COST,
+    SCAN_FUEL_COST,
+    SUB_SURFACE_CREW_COST,
+    SUB_SURFACE_FUEL_COST,
 )
-from backend.game.trading import get_upgrade_info, purchase_upgrade, perform_trade, perform_bulk_sell, calculate_fuel_price, round_half_up
-from backend.game.manager import new_game, get_galaxy, get_system_detail, game_save, load_or_create, get_game_state, _state_from_dict
-from backend.generation.events import trigger_event, resolve_event, EVENT_TEMPLATES, _get_eligible_templates, _apply_cooldown_fallback
-from backend.config import SCAN_FUEL_COST, ATMOSPHERIC_SCAN_FUEL_COST, SUB_SURFACE_FUEL_COST, SUB_SURFACE_CREW_COST, MOTHERLODE_CHANCE, MOTHERLODE_VALUE_MULTIPLIER
-from backend.models.game_state import GameState
+from backend.game.engine import (
+    BIOME_DISCOVERY_CATEGORIES,
+    DEFAULT_DISCOVERY_CATEGORIES,
+    _body_has_anomaly,
+    _categories_for_biome,
+    _generate_discovery,
+    activate_distress_beacon,
+    can_jump,
+    emergency_craft,
+    explore_surface,
+    get_nearby_systems,
+    get_scanner_tier_data,
+    land_on_body,
+    perform_atmospheric_scan,
+    perform_jump,
+    perform_salvage,
+    perform_scan,
+    perform_sub_surface_exploration,
+)
+from backend.game.manager import (
+    _state_from_dict,
+    game_save,
+    get_galaxy,
+    get_game_state,
+    get_system_detail,
+    load_or_create,
+    new_game,
+)
+from backend.game.trading import (
+    calculate_fuel_price,
+    get_upgrade_info,
+    perform_bulk_sell,
+    perform_trade,
+    purchase_upgrade,
+    round_half_up,
+)
+from backend.generation.events import (
+    EVENT_TEMPLATES,
+    _apply_cooldown_fallback,
+    _get_eligible_templates,
+    resolve_event,
+    trigger_event,
+)
 from backend.models.discovery import Discovery, LoreFragment
-from backend.models.system import StarSystem, Body
+from backend.models.game_state import GameState
+from backend.models.system import Body, StarSystem
 
 
 class TestGameManager:
@@ -1146,8 +1185,8 @@ class TestEvents:
 
     def test_resolve_event(self) -> None:
         state = new_game(seed=42)
+        from backend.generation.events import EVENT_TEMPLATES, _create_event
         from backend.generation.events import resolve_event as resolve_ev
-        from backend.generation.events import _create_event, EVENT_TEMPLATES
         event = _create_event(EVENT_TEMPLATES[0], "sys_0000")
         state.events.append(event)
 
@@ -1195,7 +1234,7 @@ class TestTriggerEventPhenomenonBranch:
 
     def test_get_eligible_templates_no_system(self) -> None:
         """_get_eligible_templates should return all templates when there's no current system."""
-        from backend.generation.events import _get_eligible_templates, EVENT_TEMPLATES
+        from backend.generation.events import EVENT_TEMPLATES, _get_eligible_templates
         state = new_game(seed=42)
         state.ship.current_system_id = "nonexistent"
         result = _get_eligible_templates(state, EVENT_TEMPLATES)
@@ -1203,7 +1242,7 @@ class TestTriggerEventPhenomenonBranch:
 
     def test_get_eligible_templates_unexplored_preference_fails(self) -> None:
         """_get_eligible_templates should skip events with unexplored_preference when all bodies are explored."""
-        from backend.generation.events import _get_eligible_templates, EVENT_TEMPLATES
+        from backend.generation.events import EVENT_TEMPLATES, _get_eligible_templates
         state = new_game(seed=42)
         system = state.get_current_system()
         assert system is not None
@@ -1548,7 +1587,7 @@ class TestDatabaseModule:
 
     def test_create_game_new(self) -> None:
         """create_game should create a new game record."""
-        from backend.database import init_db, create_game, load_game
+        from backend.database import create_game, init_db, load_game
         init_db()
         create_game("db-create-new", 42, "NewShip", {"fuel": 80, "test": True})
         loaded = load_game("db-create-new")
@@ -1558,7 +1597,7 @@ class TestDatabaseModule:
 
     def test_create_game_existing_preserves_created_at(self) -> None:
         """create_game should preserve created_at when updating existing game."""
-        from backend.database import init_db, create_game, get_db
+        from backend.database import create_game, get_db, init_db
         init_db()
         create_game("db-create-existing", 42, "OldShip", {"v": 1})
         conn = get_db()
@@ -1588,7 +1627,7 @@ class TestDatabaseModule:
 
     def test_load_save_returns_data(self) -> None:
         """load_save should return the most recent save."""
-        from backend.database import init_db, save_game, load_save
+        from backend.database import init_db, load_save, save_game
         init_db()
         save_game("load-save-test", {"seed": 42, "test": True})
         result = load_save("load-save-test")
@@ -1597,7 +1636,7 @@ class TestDatabaseModule:
 
     def test_save_game_existing_preserves_created_at(self) -> None:
         """save_game should preserve created_at when updating existing game."""
-        from backend.database import init_db, save_game, get_db
+        from backend.database import get_db, init_db, save_game
         init_db()
         save_game("save-existing-test", {"seed": 42, "fuel": 80})
         conn = get_db()
@@ -1612,7 +1651,7 @@ class TestDatabaseModule:
 
     def test_save_game_new_existing_record_else_branch(self) -> None:
         """save_game should handle new game (no existing record)."""
-        from backend.database import init_db, save_game, load_game
+        from backend.database import init_db, load_game, save_game
         init_db()
         save_game("save-new-game-test", {"seed": 42, "ship": {"name": "TestShip"}, "fuel": 80})
         loaded = load_game("save-new-game-test")
@@ -1621,7 +1660,7 @@ class TestDatabaseModule:
 
     def test_get_leaderboard_with_entries(self) -> None:
         """get_leaderboard should return valid entries."""
-        from backend.database import init_db, save_game, get_leaderboard
+        from backend.database import get_leaderboard, init_db, save_game
         init_db()
         save_game("lb-test-1", {"seed": 42, "discoveries": [1, 2], "systems_visited": 5, "ship": {"credits": 500, "name": "LB1"}})
         result = get_leaderboard(limit=10)
@@ -1629,7 +1668,7 @@ class TestDatabaseModule:
 
     def test_get_leaderboard_empty(self) -> None:
         """get_leaderboard should return empty list when no games exist."""
-        from backend.database import init_db, get_leaderboard, get_db
+        from backend.database import get_db, get_leaderboard, init_db
         init_db()
         conn = get_db()
         try:
@@ -1670,7 +1709,7 @@ class TestEventCreateEvent:
 
     def test_create_event_creates_valid_event(self) -> None:
         """_create_event should create a valid Event with all fields populated."""
-        from backend.generation.events import _create_event, EVENT_TEMPLATES
+        from backend.generation.events import EVENT_TEMPLATES, _create_event
         event = _create_event(EVENT_TEMPLATES[0], "sys_test")
         assert event.id is not None
         assert len(event.id) > 0
@@ -1969,8 +2008,9 @@ class TestDatabaseGetLeaderboard:
 
     def test_leaderboard_malformed_non_dict(self) -> None:
         """json.loads returns a non-dict; leaderboard should skip it."""
-        from backend.database import init_db, get_db, get_leaderboard
         from datetime import datetime, timezone
+
+        from backend.database import get_db, get_leaderboard, init_db
         init_db()
         now = datetime.now(timezone.utc).isoformat()
         conn = get_db()
@@ -1988,8 +2028,9 @@ class TestDatabaseGetLeaderboard:
 
     def test_leaderboard_skips_bad_json(self) -> None:
         """get_leaderboard should skip entries that can't be JSON parsed."""
-        from backend.database import init_db, get_db, get_leaderboard
         from datetime import datetime, timezone
+
+        from backend.database import get_db, get_leaderboard, init_db
         init_db()
         now = datetime.now(timezone.utc).isoformat()
         conn = get_db()
@@ -2403,7 +2444,8 @@ class TestDistressBeacon:
 
     def test_activate_distress_beacon_fallback_error(self) -> None:
         from unittest.mock import MagicMock, patch
-        from backend.game.engine import _BucketEntry, _always_true_precondition
+
+        from backend.game.engine import _always_true_precondition, _BucketEntry
         state = self._make_stranded_state()
         mock_rng = MagicMock()
         mock_rng.random.side_effect = [0.2, 0.5]
@@ -2831,11 +2873,11 @@ class TestTriggerEventEmptyEligible:
 
     def test_low_morale_empty_eligible_returns_none(self) -> None:
         """When morale is low and no crew/crisis/narrative templates are eligible, trigger_event should return None."""
+        from backend.config import MORALE_LOW_THRESHOLD
         from backend.generation.events import trigger_event
         from backend.models.game_state import GameState
         from backend.models.ship import Ship
-        from backend.models.system import StarSystem, Body
-        from backend.config import MORALE_LOW_THRESHOLD
+        from backend.models.system import Body, StarSystem
 
         # Create a state with low morale
         ship = Ship(morale=MORALE_LOW_THRESHOLD - 1)
@@ -2854,7 +2896,7 @@ class TestTriggerEventEmptyEligible:
         # Mock _get_eligible_templates to return an empty list
         # This simulates the scenario where all templates with trigger_conditions
         # fail to match, and there are no unconditional templates either
-        import unittest.mock as mock
+        from unittest import mock
         with mock.patch("backend.generation.events._get_eligible_templates", return_value=[]):
             result = trigger_event(state)
 
@@ -2862,11 +2904,11 @@ class TestTriggerEventEmptyEligible:
 
     def test_normal_path_empty_eligible_returns_none(self) -> None:
         """When morale is normal and no templates are eligible, trigger_event should return None."""
+        from backend.config import MORALE_LOW_THRESHOLD
         from backend.generation.events import trigger_event
         from backend.models.game_state import GameState
         from backend.models.ship import Ship
-        from backend.models.system import StarSystem, Body
-        from backend.config import MORALE_LOW_THRESHOLD
+        from backend.models.system import Body, StarSystem
 
         # Create a state with normal morale
         ship = Ship(morale=MORALE_LOW_THRESHOLD + 10)
@@ -2883,8 +2925,8 @@ class TestTriggerEventEmptyEligible:
         state.ship.current_system_id = "sys1"
 
         # Mock _get_eligible_templates to return an empty list
-        import unittest.mock as mock
         import random
+        from unittest import mock
         rng = random.Random(1)
         with mock.patch("backend.generation.events._get_eligible_templates", return_value=[]):
             result = trigger_event(state, rng_override=rng)
@@ -2893,11 +2935,11 @@ class TestTriggerEventEmptyEligible:
 
     def test_low_morale_empty_eligible_after_cooldown_filter(self) -> None:
         """When low-morale eligible list becomes empty after type+cooldown filtering, trigger_event should return None."""
+        from backend.config import MORALE_LOW_THRESHOLD
         from backend.generation.events import trigger_event
         from backend.models.game_state import GameState
         from backend.models.ship import Ship
-        from backend.models.system import StarSystem, Body
-        from backend.config import MORALE_LOW_THRESHOLD
+        from backend.models.system import Body, StarSystem
 
         # Create a state with low morale
         ship = Ship(morale=MORALE_LOW_THRESHOLD - 1)
@@ -2919,7 +2961,7 @@ class TestTriggerEventEmptyEligible:
         # Mock _get_eligible_templates to return only exploration-type templates
         # (not crew/crisis/narrative), so the type filter at line 296 empties
         # eligible. The cooldown check then has nothing left either.
-        import unittest.mock as mock
+        from unittest import mock
         with mock.patch("backend.generation.events._get_eligible_templates", return_value=[
             {"type": "exploration", "title": "Rare Discovery", "flavor": "...", "rarity": "common", "choices": []}
         ]):
@@ -2929,11 +2971,11 @@ class TestTriggerEventEmptyEligible:
 
     def test_normal_path_empty_eligible_after_cooldown_filter(self) -> None:
         """When normal path eligible list is empty after cooldown check, trigger_event should return None."""
+        from backend.config import MORALE_LOW_THRESHOLD
         from backend.generation.events import trigger_event
         from backend.models.game_state import GameState
         from backend.models.ship import Ship
-        from backend.models.system import StarSystem, Body
-        from backend.config import MORALE_LOW_THRESHOLD
+        from backend.models.system import Body, StarSystem
 
         # Create a state with normal morale
         ship = Ship(morale=MORALE_LOW_THRESHOLD + 10)
@@ -2953,8 +2995,8 @@ class TestTriggerEventEmptyEligible:
         state.last_event_title = "Ancient Signal"
 
         # Mock _get_eligible_templates to return an empty list
-        import unittest.mock as mock
         import random
+        from unittest import mock
         rng = random.Random(1)
         with mock.patch("backend.generation.events._get_eligible_templates", return_value=[]):
             result = trigger_event(state, rng_override=rng)
@@ -2966,7 +3008,7 @@ class TestFuelPricing:
     """Tests for the calculate_fuel_price function and fuel buying with dynamic pricing."""
 
     def _make_system(self, system_type: str) -> "StarSystem":
-        from backend.models.system import StarSystem, Body
+        from backend.models.system import Body, StarSystem
         body = Body(id="b1", name="TestPlanet", body_type="planet", biome="ocean",
                     size=5, distance_from_star=0.5, poi_count=2)
         return StarSystem(
@@ -3319,8 +3361,8 @@ class TestBlackHoleEvents:
 
     def test_black_hole_events_can_be_triggered(self) -> None:
         """Black hole events should be triggerable in a black hole system."""
-        from unittest.mock import patch
         import random
+        from unittest.mock import patch
         state = new_game(seed=42)
         system = state.get_current_system()
         assert system is not None
@@ -3485,8 +3527,8 @@ class TestNewBlackHoleEvents:
 
     def test_new_events_can_be_triggered_in_black_hole(self) -> None:
         """The new events should be triggerable in a black hole system with sufficient scanner."""
-        from unittest.mock import patch
         import random as rnd
+        from unittest.mock import patch
 
         state = new_game(seed=42)
         system = state.get_current_system()
@@ -3665,8 +3707,8 @@ class TestPhenomenonEvents:
 
     def test_phenomenon_events_can_be_triggered(self) -> None:
         """Events can be triggered in matching systems."""
-        from unittest.mock import patch
         import random
+        from unittest.mock import patch
 
         for phenomenon in ("nebula", "pulsar", "binary_star"):
             state = new_game(seed=42)
@@ -3800,8 +3842,8 @@ class TestEventCooldowns:
 
     def test_event_cooldown_decrement_in_actions(self) -> None:
         """Jump, scan, explore all decrement cooldowns."""
-        from backend.database import init_db
         from backend.api.routes import api_scan
+        from backend.database import init_db
         from backend.game.manager import GAME_STORE
         init_db()
         state = new_game(seed=42)
@@ -3910,10 +3952,10 @@ class TestEventCooldowns:
 
     def test_cooldown_fallback_all_match_last_event_title_low_morale(self) -> None:
         """When all eligible events are on cooldown and ALL of them match last_event_title (single event case), the fallback should still fire that event."""
+        from backend.config import MORALE_LOW_THRESHOLD
         from backend.models.game_state import GameState
         from backend.models.ship import Ship
-        from backend.models.system import StarSystem, Body
-        from backend.config import MORALE_LOW_THRESHOLD
+        from backend.models.system import Body, StarSystem
 
         ship = Ship(morale=MORALE_LOW_THRESHOLD - 1)
         state = GameState(id="test-all-match-low", seed=42, ship=ship)
@@ -3926,7 +3968,7 @@ class TestEventCooldowns:
         state.systems = {"sys1": system}
         state.ship.current_system_id = "sys1"
 
-        import unittest.mock as mock
+        from unittest import mock
         single_template = {"type": "crew", "title": "Crew Dispute", "flavor": "...", "rarity": "common", "choices": []}
         with mock.patch("backend.generation.events._get_eligible_templates", return_value=[single_template]):
             state.event_cooldowns["Crew Dispute"] = 5
@@ -3937,11 +3979,12 @@ class TestEventCooldowns:
 
     def test_cooldown_fallback_all_match_last_event_title_normal_path(self) -> None:
         """When all eligible events are on cooldown and ALL of them match last_event_title (single event case) in the normal path, the fallback should still fire that event."""
+        import random as rnd_mod
+
+        from backend.config import MORALE_LOW_THRESHOLD
         from backend.models.game_state import GameState
         from backend.models.ship import Ship
-        from backend.models.system import StarSystem, Body
-        from backend.config import MORALE_LOW_THRESHOLD
-        import random as rnd_mod
+        from backend.models.system import Body, StarSystem
 
         ship = Ship(morale=MORALE_LOW_THRESHOLD + 10)
         state = GameState(id="test-all-match-normal", seed=42, ship=ship)
@@ -3954,7 +3997,7 @@ class TestEventCooldowns:
         state.systems = {"sys1": system}
         state.ship.current_system_id = "sys1"
 
-        import unittest.mock as mock
+        from unittest import mock
         single_template = {"type": "hazard", "title": "Solar Flare", "flavor": "...", "rarity": "common", "choices": []}
         with mock.patch("backend.generation.events._get_eligible_templates", return_value=[single_template]):
             state.event_cooldowns["Solar Flare"] = 5
@@ -3970,7 +4013,7 @@ class TestCooldownOrdering:
 
     def test_cooldown_decrement_before_trigger(self) -> None:
         """Simulate: cooldown at 1, decrement removes it, trigger sets new cooldown."""
-        from backend.generation.events import decrement_cooldowns, EVENT_COOLDOWNS
+        from backend.generation.events import EVENT_COOLDOWNS, decrement_cooldowns
         state = new_game(seed=42)
         state.ship.morale = 20  # low morale forces event
         state.event_cooldowns["Ancient Signal"] = 1
@@ -3987,7 +4030,7 @@ class TestCooldownOrdering:
 
     def test_cooldown_ordering_jump_action(self) -> None:
         """Jump pipeline: perform_jump -> decrement -> trigger; old cooldown expires, new one set at full value."""
-        from backend.generation.events import decrement_cooldowns, EVENT_COOLDOWNS
+        from backend.generation.events import EVENT_COOLDOWNS, decrement_cooldowns
         state = new_game(seed=42)
         state.ship.morale = 20
         state.ship.fuel = 500
@@ -4015,7 +4058,7 @@ class TestCooldownOrdering:
 
     def test_cooldown_ordering_scan_action(self) -> None:
         """Scan pipeline: perform_scan -> decrement -> trigger; old cooldown expires, new one set at full value."""
-        from backend.generation.events import decrement_cooldowns, EVENT_COOLDOWNS
+        from backend.generation.events import EVENT_COOLDOWNS, decrement_cooldowns
         state = new_game(seed=42)
         state.ship.morale = 20
         state.ship.fuel = 100
@@ -4034,7 +4077,7 @@ class TestCooldownOrdering:
 
     def test_cooldown_ordering_explore_action(self) -> None:
         """Explore pipeline: explore_surface -> decrement -> trigger; old cooldown expires, new one set at full value."""
-        from backend.generation.events import decrement_cooldowns, EVENT_COOLDOWNS
+        from backend.generation.events import EVENT_COOLDOWNS, decrement_cooldowns
         state = new_game(seed=42)
         state.ship.morale = 20
         state.ship.fuel = 100
@@ -4061,7 +4104,7 @@ class TestCooldownOrdering:
         """Save/load: cooldown at 1 survives roundtrip, decrements to expire, new event gets full cooldown."""
         from backend.database import init_db
         from backend.game.manager import game_load
-        from backend.generation.events import decrement_cooldowns, EVENT_COOLDOWNS
+        from backend.generation.events import EVENT_COOLDOWNS, decrement_cooldowns
         init_db()
 
         state = new_game(seed=42)
@@ -4117,8 +4160,8 @@ class TestCrisisCooldown:
 
     def test_crisis_cooldown_blocks_crisis_in_normal_path(self) -> None:
         """When crisis_cooldown > 0 in normal path, crisis events should be filtered out."""
-        from unittest.mock import patch
         import random
+        from unittest.mock import patch
         state = new_game(seed=42)
         state.ship.morale = 80  # normal morale
         state.crisis_cooldown = 2
@@ -4148,8 +4191,8 @@ class TestCrisisCooldown:
 
     def test_crisis_cooldown_set_when_crisis_fires_normal_path(self) -> None:
         """When a crisis event fires in normal path, crisis_cooldown should be set to 3."""
-        from unittest.mock import patch
         import random
+        from unittest.mock import patch
         state = new_game(seed=42)
         state.ship.morale = 80  # normal morale
         state.crisis_cooldown = 0  # no cooldown
@@ -4198,11 +4241,12 @@ class TestCrisisCooldown:
 
     def test_crisis_cooldown_blocks_all_crisis_in_low_morale(self) -> None:
         """When crisis_cooldown > 0 in low-morale path, crisis events should be filtered out even if they are the only eligible type."""
+        from unittest import mock
+
+        from backend.config import MORALE_LOW_THRESHOLD
         from backend.models.game_state import GameState
         from backend.models.ship import Ship
-        from backend.models.system import StarSystem, Body
-        from backend.config import MORALE_LOW_THRESHOLD
-        import unittest.mock as mock
+        from backend.models.system import Body, StarSystem
 
         ship = Ship(morale=MORALE_LOW_THRESHOLD - 1)
         state = GameState(id="test-crisis-block-low", seed=42, ship=ship)
@@ -4225,12 +4269,13 @@ class TestCrisisCooldown:
 
     def test_crisis_cooldown_blocks_all_crisis_in_normal_path(self) -> None:
         """When crisis_cooldown > 0 in normal path, crisis events should be filtered out even if they are the only eligible type."""
+        import random
+        from unittest import mock
+
+        from backend.config import MORALE_LOW_THRESHOLD
         from backend.models.game_state import GameState
         from backend.models.ship import Ship
-        from backend.models.system import StarSystem, Body
-        from backend.config import MORALE_LOW_THRESHOLD
-        import unittest.mock as mock
-        import random
+        from backend.models.system import Body, StarSystem
 
         ship = Ship(morale=MORALE_LOW_THRESHOLD + 10)
         state = GameState(id="test-crisis-block-normal", seed=42, ship=ship)
@@ -4270,8 +4315,8 @@ class TestCrisisCooldown:
 
     def test_crisis_cooldown_not_set_when_non_crisis_fires_normal_path(self) -> None:
         """When a non-crisis event fires in normal path, crisis_cooldown should stay 0."""
-        from unittest.mock import patch
         import random as rand_mod
+        from unittest.mock import patch
         state = new_game(seed=42)
         state.ship.morale = 80  # normal morale
         state.crisis_cooldown = 0
@@ -4296,7 +4341,7 @@ class TestCrisisCooldown:
 
     def test_crisis_events_can_be_resolved(self) -> None:
         """All crisis events should resolve correctly for each choice."""
-        from backend.generation.events import _create_event, EVENT_TEMPLATES
+        from backend.generation.events import EVENT_TEMPLATES, _create_event
         crisis_templates = [t for t in EVENT_TEMPLATES if t["type"] == "crisis"]
         for template in crisis_templates:
             for i in range(len(template["choices"])):
@@ -4783,7 +4828,7 @@ class TestDiminishingReturns:
 
     def test_third_exploration_further_reduced(self) -> None:
         """Third exploration should have further reduced yield (at least 1 find when num_finds >= 4)."""
-        import unittest.mock as mock
+        from unittest import mock
         state, body = self._make_state()
         state.ship.fuel = 100
         # First exploration: randint returns 4 so we get 4 finds
@@ -4804,7 +4849,7 @@ class TestDiminishingReturns:
 
     def test_fourth_exploration_empty(self) -> None:
         """Fourth exploration should return empty (exploration_count >= 3)."""
-        import unittest.mock as mock
+        from unittest import mock
         state, body = self._make_state()
         state.ship.fuel = 100
         # First exploration
@@ -4827,7 +4872,7 @@ class TestDiminishingReturns:
 
     def test_second_exploration_zero_finds_early_return(self) -> None:
         """When second exploration yields 0 finds after diminishing returns, return early."""
-        import unittest.mock as mock
+        from unittest import mock
         state, body = self._make_state()
         state.ship.fuel = 100
         # First exploration: seed RNG so randint returns something > 1 so first exploration works
@@ -4846,7 +4891,7 @@ class TestDiminishingReturns:
 
     def test_third_exploration_zero_finds_early_return(self) -> None:
         """When third exploration yields 0 finds after diminishing returns, return early."""
-        import unittest.mock as mock
+        from unittest import mock
         state, body = self._make_state()
         state.ship.fuel = 100
         # First exploration
@@ -4871,7 +4916,7 @@ class TestMotherlodeDiscoveries:
     """Tests for motherlode discoveries."""
     def test_motherlode_on_high_poi_body(self):
         import random as rnd_mod
-        import unittest.mock as mock
+        from unittest import mock
         state = new_game(seed=42)
         system = state.get_current_system()
         assert system is not None
@@ -4884,7 +4929,7 @@ class TestMotherlodeDiscoveries:
 
     def test_motherlode_not_on_low_poi_body(self):
         import random as rnd_mod
-        import unittest.mock as mock
+        from unittest import mock
         state = new_game(seed=42)
         system = state.get_current_system()
         assert system is not None
@@ -4897,7 +4942,7 @@ class TestMotherlodeDiscoveries:
 
     def test_motherlode_uses_initial_poi_count(self):
         import random as rnd_mod
-        import unittest.mock as mock
+        from unittest import mock
         state = new_game(seed=42)
         system = state.get_current_system()
         assert system is not None
@@ -4910,7 +4955,7 @@ class TestMotherlodeDiscoveries:
 
     def test_motherlode_still_works_after_exploration(self):
         import random as rnd_mod
-        import unittest.mock as mock
+        from unittest import mock
         state = new_game(seed=42)
         system = state.get_current_system()
         assert system is not None
@@ -5016,15 +5061,17 @@ class TestSubSurfaceAdditional:
 class TestApiEndpoints:
     """Tests for the new API endpoints via test client."""
     def test_atmospheric_scan_endpoint(self):
-        from backend.main import app
         from fastapi.testclient import TestClient
+
+        from backend.main import app
         client = TestClient(app)
         resp = client.post("/api/game/nonexistent/atmospheric-scan")
         assert resp.status_code == 404
 
     def test_sub_surface_endpoint(self):
-        from backend.main import app
         from fastapi.testclient import TestClient
+
+        from backend.main import app
         client = TestClient(app)
         resp = client.post("/api/game/nonexistent/sub-surface-explore")
         assert resp.status_code == 404

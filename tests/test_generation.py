@@ -1,17 +1,29 @@
-import sys
 import os
+import sys
+
 import pytest
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from backend.generation.universe import generate_universe, distance_between, _ensure_connectivity, NEIGHBOR_DISTANCE_THRESHOLD
-from backend.models.system import StarSystem, Body
-from backend.models.ship import Ship
-from backend.models.game_state import GameState
-from backend.models.event import Event, Choice
-from backend.models.discovery import Discovery, LoreFragment
-from backend.config import GALAXY_SYSTEM_COUNT
-from backend.game.manager import new_game, _fixup_old_lore_fragment_numbers, _state_from_dict
 import random
+
+from backend.config import GALAXY_SYSTEM_COUNT
+from backend.game.manager import (
+    _fixup_old_lore_fragment_numbers,
+    _state_from_dict,
+    new_game,
+)
+from backend.generation.universe import (
+    NEIGHBOR_DISTANCE_THRESHOLD,
+    _ensure_connectivity,
+    distance_between,
+    generate_universe,
+)
+from backend.models.discovery import Discovery, LoreFragment
+from backend.models.event import Choice, Event
+from backend.models.game_state import GameState
+from backend.models.ship import Ship
+from backend.models.system import Body, StarSystem
 
 
 class TestUniverseGeneration:
@@ -82,8 +94,9 @@ class TestUniverseGeneration:
 
     def test_biome_for_body_gas_giant_path(self) -> None:
         """_biome_for_body should return gas_giant when rng.random() < 0.15."""
+        from unittest import mock
+
         from backend.generation.universe import _biome_for_body
-        import unittest.mock as mock
         # Force the gas_giant branch by patching rng.random to return 0.1 (< 0.15)
         with mock.patch.object(random.Random, 'random', return_value=0.1):
             rng = random.Random(0)
@@ -92,8 +105,8 @@ class TestUniverseGeneration:
 
     def test_biome_for_body_moon(self) -> None:
         """_biome_for_body should return a biome from the first 5 for moons."""
-        from backend.generation.universe import _biome_for_body
         from backend.config import BIOME_TYPES
+        from backend.generation.universe import _biome_for_body
         rng = random.Random(42)
         biome = _biome_for_body(rng, "G", 0.5, "moon")
         assert biome in BIOME_TYPES[:5]
@@ -107,8 +120,8 @@ class TestUniverseGeneration:
 
     def test_body_description_valid(self) -> None:
         """_body_description should return a string for all known biomes."""
-        from backend.generation.universe import _body_description
         from backend.config import BIOME_TYPES
+        from backend.generation.universe import _body_description
         rng = random.Random(42)
         for biome in BIOME_TYPES:
             desc = _body_description(rng, "planet", biome, "G")
@@ -238,7 +251,7 @@ class TestUniverseGeneration:
         """When max_iters is exhausted, the else block should log a warning and
         move isolated systems directly to within threshold distance."""
         import logging
-        import unittest.mock as mock
+        from unittest import mock
         caplog.set_level(logging.WARNING)
         rng = random.Random(42)
         # Two systems extremely far apart - the ratio-based movement can't
@@ -266,7 +279,7 @@ class TestUniverseGeneration:
         """When multiple systems remain isolated after max_iters, each should
         get a warning and be moved to within threshold."""
         import logging
-        import unittest.mock as mock
+        from unittest import mock
         caplog.set_level(logging.WARNING)
         rng = random.Random(42)
         # One central system and two extremely far away.  Patch galaxy bounds
@@ -339,7 +352,7 @@ class TestGameState:
         assert state.log_entries[0]["id"] == 1
 
     def test_add_log_id_persists_across_save_load(self) -> None:
-        from backend.game.manager import _state_to_dict, _state_from_dict
+        from backend.game.manager import _state_from_dict, _state_to_dict
 
         ship = Ship()
         state = GameState(id="test-persist", seed=42, ship=ship)
@@ -767,8 +780,9 @@ class TestGenerationBodyDescription:
 
     def test_body_description_unknown_biome(self) -> None:
         """_body_description should fall back to default for unknown biome."""
-        from backend.generation.universe import _body_description
         import random as rnd_mod
+
+        from backend.generation.universe import _body_description
         rng = rnd_mod.Random(42)
         desc = _body_description(rng, "planet", "unknown_biome_xyz", "G")
         assert isinstance(desc, str)
@@ -777,9 +791,10 @@ class TestGenerationBodyDescription:
 
     def test_body_description_all_known_biomes(self) -> None:
         """_body_description should return valid strings for all defined biomes."""
-        from backend.generation.universe import _body_description
-        from backend.config import BIOME_TYPES
         import random as rnd_mod
+
+        from backend.config import BIOME_TYPES
+        from backend.generation.universe import _body_description
         rng = rnd_mod.Random(42)
         for biome in BIOME_TYPES:
             desc = _body_description(rng, "planet", biome, "G")
@@ -798,14 +813,14 @@ class TestLoreContent:
 
     def test_five_fragments_per_arc(self) -> None:
         """Each arc should have exactly 5 fragments."""
-        from backend.generation.lore_content import FRAGMENT_DATA, ARC_IDS
+        from backend.generation.lore_content import ARC_IDS, FRAGMENT_DATA
         for arc in ARC_IDS:
             count = sum(1 for f in FRAGMENT_DATA if f["arc"] == arc)
             assert count == 5, f"Arc {arc} has {count} fragments, expected 5"
 
     def test_fragment_numbers_are_sequential(self) -> None:
         """Fragment numbers within each arc should be 1-5."""
-        from backend.generation.lore_content import FRAGMENT_DATA, ARC_IDS
+        from backend.generation.lore_content import ARC_IDS, FRAGMENT_DATA
         for arc in ARC_IDS:
             numbers = [f["fragment_number"] for f in FRAGMENT_DATA if f["arc"] == arc]
             assert sorted(numbers) == [1, 2, 3, 4, 5]
@@ -823,7 +838,7 @@ class TestLoreContent:
 
     def test_arc_display_names_cover_all_arcs(self) -> None:
         """All arcs in ARC_IDS should have display names."""
-        from backend.generation.lore_content import ARC_IDS, ARC_DISPLAY_NAMES
+        from backend.generation.lore_content import ARC_DISPLAY_NAMES, ARC_IDS
         for arc in ARC_IDS:
             assert arc in ARC_DISPLAY_NAMES
             assert len(ARC_DISPLAY_NAMES[arc]) > 0
@@ -892,7 +907,10 @@ class TestLoreDistribution:
 
     def test_get_fragment_for_body(self) -> None:
         """get_fragment_for_body should return the correct fragment."""
-        from backend.generation.lore import distribute_lore_fragments, get_fragment_for_body
+        from backend.generation.lore import (
+            distribute_lore_fragments,
+            get_fragment_for_body,
+        )
 
         systems, _ = generate_universe(42)
         placement = distribute_lore_fragments(42, systems)
@@ -919,7 +937,10 @@ class TestLoreDistribution:
 
     def test_get_lore_fragments_for_system(self) -> None:
         """get_lore_fragments_for_system should return all fragments in a system."""
-        from backend.generation.lore import distribute_lore_fragments, get_lore_fragments_for_system
+        from backend.generation.lore import (
+            distribute_lore_fragments,
+            get_lore_fragments_for_system,
+        )
 
         systems, _ = generate_universe(42)
         placement = distribute_lore_fragments(42, systems)
@@ -1138,8 +1159,9 @@ class TestLoreDistribution:
 
     def test_used_bodies_excluded_from_selection(self) -> None:
         """_pick_lore_location should not select bodies already in used_bodies."""
-        from backend.generation.lore import _pick_lore_location
         import random as rnd_mod
+
+        from backend.generation.lore import _pick_lore_location
 
         body1 = Body(
             id="b1", name="Body1", body_type="planet", biome="ocean",
@@ -1170,8 +1192,9 @@ class TestLoreDistribution:
 
     def test_pick_lore_location_raises_when_all_bodies_used(self) -> None:
         """_pick_lore_location raises ValueError when system has poi bodies but all are used."""
-        from backend.generation.lore import _pick_lore_location
         import random as rnd_mod
+
+        from backend.generation.lore import _pick_lore_location
 
         body1 = Body(
             id="b1", name="Body1", body_type="planet", biome="ocean",
@@ -1199,8 +1222,9 @@ class TestLoreDistribution:
 
     def test_pick_lore_location_with_empty_used_bodies_and_zero_poi(self) -> None:
         """_pick_lore_location raises ValueError when all bodies have poi_count=0."""
-        from backend.generation.lore import _pick_lore_location
         import random as rnd_mod
+
+        from backend.generation.lore import _pick_lore_location
 
         body1 = Body(
             id="b1", name="Body1", body_type="planet", biome="ocean",
@@ -1227,8 +1251,9 @@ class TestLoreDistribution:
 
     def test_pick_lore_location_default_used_bodies(self) -> None:
         """_pick_lore_location should work when called without used_bodies argument."""
-        from backend.generation.lore import _pick_lore_location
         import random as rnd_mod
+
+        from backend.generation.lore import _pick_lore_location
 
         body = Body(
             id="b1", name="Body1", body_type="planet", biome="ocean",
@@ -1363,8 +1388,12 @@ class TestLoreDistribution:
         """When _pick_lore_location raises an unexpected ValueError,
         distribute_lore_fragments should log a warning and continue to the next fragment."""
         import logging
-        import unittest.mock as mock
-        from backend.generation.lore import distribute_lore_fragments, _pick_lore_location
+        from unittest import mock
+
+        from backend.generation.lore import (
+            _pick_lore_location,
+            distribute_lore_fragments,
+        )
 
         caplog.set_level(logging.WARNING)
 
@@ -1484,7 +1513,7 @@ class TestOldSaveLogEntryIdCollision:
 
     def test_next_log_id_computed_from_max_existing_id(self) -> None:
         """_next_log_id should be max(existing log entry IDs) + 1 when missing from old save."""
-        from backend.game.manager import _state_to_dict, _state_from_dict
+        from backend.game.manager import _state_from_dict, _state_to_dict
 
         ship = Ship()
         state = GameState(id="test-old-save", seed=42, ship=ship)
@@ -1514,7 +1543,7 @@ class TestOldSaveLogEntryIdCollision:
 
     def test_next_log_id_defaults_to_1_with_empty_log(self) -> None:
         """_next_log_id should default to 1 when log_entries is empty and _next_log_id is missing."""
-        from backend.game.manager import _state_to_dict, _state_from_dict
+        from backend.game.manager import _state_from_dict, _state_to_dict
 
         ship = Ship()
         state = GameState(id="test-empty-log", seed=42, ship=ship)
@@ -1534,7 +1563,7 @@ class TestOldSaveLogEntryIdCollision:
 
     def test_next_log_id_with_non_sequential_ids(self) -> None:
         """_next_log_id should be max ID + 1 even with non-sequential IDs (e.g., 5, 10, 3)."""
-        from backend.game.manager import _state_to_dict, _state_from_dict
+        from backend.game.manager import _state_from_dict, _state_to_dict
 
         ship = Ship()
         state = GameState(id="test-nonseq", seed=42, ship=ship)
@@ -1564,7 +1593,7 @@ class TestOldSaveLogEntryIdCollision:
 
         This tests the fix: _next_log_id = max(d.get("_next_log_id", max_id + 1), max_id + 1)
         """
-        from backend.game.manager import _state_to_dict, _state_from_dict
+        from backend.game.manager import _state_from_dict, _state_to_dict
 
         ship = Ship()
         state = GameState(id="test-regress", seed=42, ship=ship)
@@ -1598,7 +1627,7 @@ class TestOldSaveLogEntryIdCollision:
         The cleaning loop reassigns "abc" to ID 2, so max_id = 4.
         _next_log_id should be max(5, 4+1) = 5, not the regressed value.
         """
-        from backend.game.manager import _state_to_dict, _state_from_dict
+        from backend.game.manager import _state_from_dict, _state_to_dict
 
         ship = Ship()
         state = GameState(id="test-regress-clean", seed=42, ship=ship)
@@ -1639,7 +1668,7 @@ class TestOldSaveLogEntryIdCollision:
         The cleaning loop reassigns "xyz" to ID 3, so max_id = 3.
         _next_log_id should be max(3, 3+1) = 4, not 3.
         """
-        from backend.game.manager import _state_to_dict, _state_from_dict
+        from backend.game.manager import _state_from_dict, _state_to_dict
 
         ship = Ship()
         state = GameState(id="test-regress-clean2", seed=42, ship=ship)
@@ -1676,7 +1705,8 @@ class TestOldSaveLogEntryIdCollision:
         This tests the warning added per PR #53 change request 5.
         """
         import logging
-        from backend.game.manager import _state_to_dict, _state_from_dict
+
+        from backend.game.manager import _state_from_dict, _state_to_dict
 
         ship = Ship()
         state = GameState(id="test-warn-override", seed=42, ship=ship)
@@ -1909,8 +1939,9 @@ class TestAncientGateSystemType:
 
     def test_ancient_gate_system_type(self) -> None:
         """Systems with ancient_gate phenomenon should have system_type='ancient'."""
-        from backend.generation.universe import generate_system
         import random
+
+        from backend.generation.universe import generate_system
         # Use a seed that produces ancient_gate phenomenon
         # We need to find a seed where phenomenon == "ancient_gate"
         found = False
@@ -1927,8 +1958,9 @@ class TestAncientGateSystemType:
 
     def test_ancient_gate_not_uncharted(self) -> None:
         """Systems with ancient_gate phenomenon should NOT have system_type='uncharted'."""
-        from backend.generation.universe import generate_system
         import random
+
+        from backend.generation.universe import generate_system
         found = False
         for seed in range(1000):
             rng = random.Random(seed)
@@ -1943,8 +1975,9 @@ class TestAncientGateSystemType:
 
     def test_pulsar_and_black_hole_still_uncharted(self) -> None:
         """Pulsar and black_hole phenomena should still produce system_type='uncharted'."""
-        from backend.generation.universe import generate_system
         import random
+
+        from backend.generation.universe import generate_system
         found_pulsar = False
         found_black_hole = False
         for seed in range(1000):
@@ -2035,7 +2068,7 @@ class TestNewHazardEvents:
 
     def test_hazard_event_cooldown_scales_with_repeat_triggers(self) -> None:
         """Hazard event cooldown should increase when the same event is triggered repeatedly, but cap at 3x."""
-        from backend.generation.events import apply_cooldown, EVENT_COOLDOWNS
+        from backend.generation.events import EVENT_COOLDOWNS, apply_cooldown
         from backend.models.ship import Ship
 
         ship = Ship()
@@ -2071,7 +2104,7 @@ class TestNewHazardEvents:
 
     def test_phenomenon_gated_hazard_events_do_not_scale_cooldown(self) -> None:
         """Phenomenon-gated hazard events should NOT scale cooldown when triggered repeatedly."""
-        from backend.generation.events import apply_cooldown, EVENT_COOLDOWNS
+        from backend.generation.events import EVENT_COOLDOWNS, apply_cooldown
         from backend.models.ship import Ship
 
         ship = Ship()
@@ -2099,7 +2132,7 @@ class TestNewHazardEvents:
 
     def test_mixed_hazard_events_scaling_and_non_scaling(self) -> None:
         """Non-gated hazard events should scale while gated ones don't, even in the same state."""
-        from backend.generation.events import apply_cooldown, EVENT_COOLDOWNS
+        from backend.generation.events import EVENT_COOLDOWNS, apply_cooldown
         from backend.models.ship import Ship
 
         ship = Ship()
@@ -2140,7 +2173,7 @@ class TestNewHazardEvents:
 
     def test_non_hazard_events_do_not_scale_cooldown(self) -> None:
         """Non-hazard events should not have scaled cooldowns and should not increment hazard_event_counts."""
-        from backend.generation.events import apply_cooldown, EVENT_COOLDOWNS
+        from backend.generation.events import EVENT_COOLDOWNS, apply_cooldown
         from backend.models.ship import Ship
 
         ship = Ship()
@@ -2161,10 +2194,11 @@ class TestNewHazardEvents:
 
     def test_micrometeorite_storm_can_be_triggered(self) -> None:
         """Micrometeorite Storm should be triggerable via the event system."""
+        import random
+
         from backend.generation.events import trigger_event
         from backend.generation.universe import generate_universe
         from backend.models.ship import Ship
-        import random
 
         systems, lore = generate_universe(42)
         ship = Ship(current_system_id=list(systems.keys())[0])
@@ -2191,10 +2225,11 @@ class TestNewHazardEvents:
 
     def test_quantum_fluctuation_can_be_triggered(self) -> None:
         """Quantum Fluctuation should be triggerable via the event system."""
+        import random
+
         from backend.generation.events import trigger_event
         from backend.generation.universe import generate_universe
         from backend.models.ship import Ship
-        import random
 
         systems, lore = generate_universe(42)
         ship = Ship(current_system_id=list(systems.keys())[0])
@@ -2219,10 +2254,11 @@ class TestNewHazardEvents:
 
     def test_cooldown_prevents_immediate_repeat(self) -> None:
         """Cooldown should prevent the same hazard event from triggering again immediately."""
+        import random
+
         from backend.generation.events import trigger_event
         from backend.generation.universe import generate_universe
         from backend.models.ship import Ship
-        import random
 
         systems, lore = generate_universe(42)
         ship = Ship(current_system_id=list(systems.keys())[0])
@@ -2246,10 +2282,11 @@ class TestNewHazardEvents:
 
     def test_hazard_event_counts_persists_across_triggers(self) -> None:
         """hazard_event_counts should accumulate across multiple trigger_event calls."""
+        import random
+
         from backend.generation.events import trigger_event
         from backend.generation.universe import generate_universe
         from backend.models.ship import Ship
-        import random
 
         systems, lore = generate_universe(42)
         ship = Ship(current_system_id=list(systems.keys())[0])
@@ -2489,7 +2526,7 @@ class TestEventCooldowns:
 
     def test_all_event_templates_have_cooldowns(self) -> None:
         """Every event title in EVENT_TEMPLATES must have a corresponding entry in EVENT_COOLDOWNS."""
-        from backend.generation.events import EVENT_TEMPLATES, EVENT_COOLDOWNS
+        from backend.generation.events import EVENT_COOLDOWNS, EVENT_TEMPLATES
 
         for template in EVENT_TEMPLATES:
             title = template["title"]

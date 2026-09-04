@@ -1,18 +1,20 @@
-import sys
-import os
 import json
+import os
+import sys
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-import pytest
 from datetime import datetime, timezone
-from fastapi.testclient import TestClient
 from unittest.mock import patch
 
-from backend.main import app
+import pytest
+from fastapi.testclient import TestClient
+
 from backend.database import init_db
-from backend.game.manager import GAME_STORE, new_game, game_save
 from backend.game.engine import get_nearby_systems, land_on_body
+from backend.game.manager import GAME_STORE, game_save, new_game
 from backend.game.trading import perform_bulk_sell, purchase_upgrade
+from backend.main import app
 from backend.models.game_state import GameState
 
 client = TestClient(app)
@@ -748,7 +750,7 @@ class TestAPIInternalFunctions:
 
     def test_resolve_event_success_via_api(self) -> None:
         """Resolving an event through the API should succeed."""
-        from backend.generation.events import _create_event, EVENT_TEMPLATES
+        from backend.generation.events import EVENT_TEMPLATES, _create_event
         resp = client.post("/api/game/new", json={"seed": 42, "game_id": "resolve-api"})
         game_id = resp.json()["game_id"]
         state = GAME_STORE.get(game_id)
@@ -856,7 +858,8 @@ class TestAPIEventTriggerPaths:
     def test_lifespan_init(self) -> None:
         """Lifespan context manager should initialize DB and directories."""
         import asyncio
-        from backend.main import lifespan, DATA_DIR
+
+        from backend.main import DATA_DIR, lifespan
 
         async def run_lifespan() -> None:
             async with lifespan(app):
@@ -1368,8 +1371,9 @@ class TestRoutesFullStateResponse:
 
     def test_full_state_response_invalid_sort_key(self) -> None:
         """_full_state_response with invalid sort key should raise HTTPException 422."""
-        from backend.api.routes import _full_state_response
         from fastapi import HTTPException
+
+        from backend.api.routes import _full_state_response
         state = new_game(seed=42)
         with pytest.raises(HTTPException) as exc_info:
             _full_state_response(state, sort="category", order="desc")
@@ -1378,8 +1382,9 @@ class TestRoutesFullStateResponse:
 
     def test_full_state_response_invalid_order(self) -> None:
         """_full_state_response with invalid order should raise HTTPException 422."""
-        from backend.api.routes import _full_state_response
         from fastapi import HTTPException
+
+        from backend.api.routes import _full_state_response
         state = new_game(seed=42)
         with pytest.raises(HTTPException) as exc_info:
             _full_state_response(state, sort="value", order="ascending")
@@ -1545,8 +1550,8 @@ class TestRoutesGetState:
     def test_get_state_from_db(self) -> None:
         """_get_state should load from DB when not in GAME_STORE."""
         from backend.api.routes import _get_state
-        from backend.game.manager import GAME_STORE, game_save
         from backend.database import init_db
+        from backend.game.manager import GAME_STORE, game_save
         init_db()
         state = new_game(seed=42, ship_name="GTDB")
         try:
@@ -1786,8 +1791,8 @@ class TestAPILore:
 
     def test_lore_fallback_when_system_not_found(self) -> None:
         """When discovery_id references a system not in state.systems, fallback location is used."""
-        from backend.models.discovery import LoreFragment
         from backend.game.manager import GAME_STORE, game_save
+        from backend.models.discovery import LoreFragment
 
         resp = client.post("/api/game/new", json={"seed": 42, "game_id": "lore-fallback-sys"})
         assert resp.status_code == 200
@@ -1878,6 +1883,7 @@ class TestAPIMainIndex:
     def test_assets_mount_exists(self) -> None:
         """Assets mount should be active when directory exists."""
         import os as _os
+
         from backend.main import FRONTEND_DIR
         assets_dir = _os.path.join(FRONTEND_DIR, "assets")
         assert _os.path.isdir(assets_dir), "Assets directory should exist"
@@ -3303,8 +3309,8 @@ class TestAPICompleteMissionResourceChecks:
 
     def test_complete_mission_insufficient_fuel(self) -> None:
         """complete_mission should return error dict when fuel is insufficient."""
-        from backend.missions import complete_mission, FactionMission
         from backend.game.manager import new_game
+        from backend.missions import FactionMission, complete_mission
 
         state = new_game(seed=42)
         state.ship.fuel = 2  # Not enough for a tier 1 mission (costs 3 fuel)
@@ -3333,8 +3339,8 @@ class TestAPICompleteMissionResourceChecks:
 
     def test_complete_mission_insufficient_credits(self) -> None:
         """complete_mission should return error dict when credits are insufficient."""
-        from backend.missions import complete_mission, FactionMission
         from backend.game.manager import new_game
+        from backend.missions import FactionMission, complete_mission
 
         state = new_game(seed=42)
         state.ship.credits = 5  # Not enough for a tier 1 mission (costs 10 credits)
@@ -3365,8 +3371,8 @@ class TestAPICompleteMissionResourceChecks:
 
     def test_complete_mission_sufficient_resources(self) -> None:
         """complete_mission should succeed when resources are sufficient."""
-        from backend.missions import complete_mission, FactionMission
         from backend.game.manager import new_game
+        from backend.missions import FactionMission, complete_mission
 
         state = new_game(seed=42)
         state.ship.fuel = 100
@@ -3396,8 +3402,8 @@ class TestAPICompleteMissionResourceChecks:
 
     def test_complete_mission_zero_cost_success(self) -> None:
         """complete_mission should succeed with zero-cost missions (e.g. daily)."""
-        from backend.missions import complete_mission, FactionMission
         from backend.game.manager import new_game
+        from backend.missions import FactionMission, complete_mission
 
         state = new_game(seed=42)
         state.ship.fuel = 0
@@ -3666,7 +3672,7 @@ class TestSpectateBuildPayload:
     def test_build_payload_pending_events_exclude_resolved(self) -> None:
         """_build_payload should only include unresolved events."""
         from backend.api.spectate import _build_payload
-        from backend.generation.events import _create_event, EVENT_TEMPLATES
+        from backend.generation.events import EVENT_TEMPLATES, _create_event
         state = new_game(seed=42, ship_name="SpecEvents")
         event = _create_event(EVENT_TEMPLATES[0], state.ship.current_system_id)
         state.events.append(event)
@@ -3775,6 +3781,7 @@ class TestSpectateStreamEndpoint:
 
     def test_stream_initial_snapshot(self) -> None:
         import asyncio
+
         from backend.api.spectate import api_spectate_stream
         resp = client.post("/api/game/new", json={"seed": 42, "game_id": "spectate-stream-game"})
         assert resp.status_code == 200
@@ -3802,7 +3809,9 @@ class TestSpectateStreamEndpoint:
 
     def test_stream_not_found_direct(self) -> None:
         import asyncio
+
         from fastapi import HTTPException
+
         from backend.api.spectate import api_spectate_stream
         GAME_STORE.pop("spectate-stream-direct-missing", None)
         with pytest.raises(HTTPException) as exc:
@@ -3811,7 +3820,8 @@ class TestSpectateStreamEndpoint:
 
     def test_stream_many_log_entries(self) -> None:
         import asyncio
-        from backend.api.spectate import api_spectate_stream, INITIAL_LOG_ENTRIES
+
+        from backend.api.spectate import INITIAL_LOG_ENTRIES, api_spectate_stream
         resp = client.post("/api/game/new", json={"seed": 42, "game_id": "spectate-stream-manylog"})
         assert resp.status_code == 200
         try:
@@ -3841,6 +3851,7 @@ class TestSpectateStreamEndpoint:
 
     def test_stream_state_change(self) -> None:
         import asyncio
+
         from backend.api.spectate import api_spectate_stream
         resp = client.post("/api/game/new", json={"seed": 42, "game_id": "spectate-stream-change"})
         assert resp.status_code == 200
@@ -3873,6 +3884,7 @@ class TestSpectateStreamEndpoint:
 
     def test_stream_end_on_eviction(self) -> None:
         import asyncio
+
         from backend.api.spectate import api_spectate_stream
         resp = client.post("/api/game/new", json={"seed": 42, "game_id": "spectate-stream-evict"})
         assert resp.status_code == 200
@@ -3898,6 +3910,7 @@ class TestSpectateStreamEndpoint:
 
     def test_stream_heartbeat_and_reset(self) -> None:
         import asyncio
+
         from backend.api import spectate
         from backend.api.spectate import api_spectate_stream
         resp = client.post("/api/game/new", json={"seed": 42, "game_id": "spectate-stream-heartbeat"})
@@ -3932,6 +3945,7 @@ class TestSpectateStreamEndpoint:
 
     def test_games_skips_invalid_state_json(self) -> None:
         from datetime import datetime, timezone
+
         from backend.database import get_db
         now = datetime.now(timezone.utc).isoformat()
         conn = get_db()

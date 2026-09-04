@@ -6,7 +6,6 @@ current stats, maximum capacities, current location, and installed upgrades.
 """
 
 from dataclasses import dataclass, field
-from typing import Optional
 
 
 @dataclass
@@ -32,7 +31,7 @@ class Ship:
     max_cargo: int = 50
     max_crew: int = 10
     current_system_id: str = ""
-    current_body_id: Optional[str] = None
+    current_body_id: str | None = None
     morale_decay_reduction: int = 0
     stranded_turns: int = 0
     distress_cooldown: bool = False

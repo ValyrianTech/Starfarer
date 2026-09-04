@@ -7,13 +7,13 @@ for triggering random events and resolving player choices against them.
 
 import random
 import uuid
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any
 
-from backend.models.game_state import GameState
-from backend.models.event import Event, Choice
 from backend.config import MORALE_LOW_THRESHOLD
+from backend.models.event import Choice, Event
+from backend.models.game_state import GameState
 from backend.utils import deterministic_hash, seeded_random
-
 
 EVENT_TEMPLATES: list[dict[str, Any]] = [
     {
@@ -856,7 +856,7 @@ def _apply_cooldown_fallback(eligible: list[dict], state: GameState) -> list[dic
     return eligible
 
 
-def trigger_event(state: GameState, rng_override: Optional[random.Random] = None) -> Event | None:
+def trigger_event(state: GameState, rng_override: random.Random | None = None) -> Event | None:
     """Possibly trigger a procedural event based on the current game state.
 
     Events have a base 35% chance of triggering after a jump, scan, or

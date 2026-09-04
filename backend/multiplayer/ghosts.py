@@ -9,19 +9,19 @@ discover.
 import math
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
 
 from backend.models.game_state import GameState
-from backend.multiplayer.models import GhostSignature
 from backend.multiplayer.database import (
-    save_ghost_signature, get_ghost_signatures_paginated,
+    get_ghost_signatures_paginated,
+    save_ghost_signature,
 )
+from backend.multiplayer.models import GhostSignature
 
 
 def record_ghost(
     game_state: GameState,
     system_id: str,
-    message: Optional[str] = None,
+    message: str | None = None,
 ) -> dict:
     """Record a ghost signature for the current player at a given system.
 

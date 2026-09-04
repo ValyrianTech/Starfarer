@@ -5,29 +5,35 @@ Provides functions for hyperspace jumps, system scanning, surface
 landing, surface exploration, and nearby system discovery.
 """
 
-import random
 import logging
+import random
+from collections.abc import Callable
 from datetime import datetime, timezone
-from typing import Any, Callable, List, NamedTuple, Optional
+from typing import Any, NamedTuple
 
 from backend.config import (
-    JUMP_FUEL_COST_PER_LY, SCAN_FUEL_COST, EXPLORE_FUEL_COST,
+    ATMOSPHERIC_SCAN_FUEL_COST,
+    EXPLORE_FUEL_COST,
+    JUMP_FUEL_COST_PER_LY,
     MORALE_DECAY_PER_JUMP,
-    ATMOSPHERIC_SCAN_FUEL_COST, SUB_SURFACE_FUEL_COST, SUB_SURFACE_CREW_COST,
-    MOTHERLODE_CHANCE, MOTHERLODE_VALUE_MULTIPLIER,
+    MOTHERLODE_CHANCE,
+    MOTHERLODE_VALUE_MULTIPLIER,
+    SCAN_FUEL_COST,
+    SUB_SURFACE_CREW_COST,
+    SUB_SURFACE_FUEL_COST,
 )
+from backend.generation.lore import get_fragment_for_body
+from backend.generation.universe import distance_between
+from backend.models.discovery import Discovery
 from backend.models.game_state import GameState
 from backend.models.ship import Ship
-from backend.models.system import StarSystem, Body
-from backend.models.discovery import Discovery
+from backend.models.system import Body, StarSystem
 from backend.utils import deterministic_hash, seeded_random
-from backend.generation.universe import distance_between
-from backend.generation.lore import get_fragment_for_body
 
 logger = logging.getLogger(__name__)
 
 
-def can_jump(ship: Ship, target: StarSystem, current: Optional[StarSystem]) -> tuple[bool, int, str]:
+def can_jump(ship: Ship, target: StarSystem, current: StarSystem | None) -> tuple[bool, int, str]:
     """Check whether a jump to a target system is possible.
 
     Validates that the ship has sufficient fuel and jump range to
@@ -146,7 +152,7 @@ _RESOURCE_LABELS = {
 }
 
 
-def _categories_for_biome(biome: Optional[str]) -> list[str]:
+def _categories_for_biome(biome: str | None) -> list[str]:
     """Return the discovery categories available for a given biome."""
     return BIOME_DISCOVERY_CATEGORIES.get(biome or "", DEFAULT_DISCOVERY_CATEGORIES)
 
@@ -688,8 +694,8 @@ class _BucketEntry(NamedTuple):
     """Entry in the distress bucket table."""
     threshold: float
     precondition: Callable[[GameState], bool]
-    strategy: Optional[Callable[..., dict]]
-    sub_table: Optional[List[_SubEntry]]
+    strategy: Callable[..., dict] | None
+    sub_table: list[_SubEntry] | None
 
 
 def _distress_pilots_guild(state: GameState, rng: Any, turns: int) -> dict:
@@ -783,20 +789,20 @@ def _always_true_precondition(state: GameState) -> bool:
 
 
 #: Sub-outcome table for passerby branch.
-_PASSERBY_TABLE: List[_SubEntry] = [
+_PASSERBY_TABLE: list[_SubEntry] = [
     _SubEntry(weight=0.5, strategy=_distress_passerby_help),
     _SubEntry(weight=0.3, strategy=_distress_piracy),
     _SubEntry(weight=0.2, strategy=_distress_passerby_ignore),
 ]
 
 #: Sub-outcome table for signal branch.
-_SIGNAL_TABLE: List[_SubEntry] = [
+_SIGNAL_TABLE: list[_SubEntry] = [
     _SubEntry(weight=0.5, strategy=_distress_signal_friendly),
     _SubEntry(weight=0.5, strategy=_distress_signal_hostile),
 ]
 
 #: Top-level distress outcome bucket table.
-_DISTRESS_TABLE: List[_BucketEntry] = [
+_DISTRESS_TABLE: list[_BucketEntry] = [
     _BucketEntry(
         threshold=0.3,
         precondition=_has_station_precondition,

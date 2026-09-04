@@ -6,13 +6,13 @@ without intrusive tutorials.
 """
 
 from __future__ import annotations
-from typing import Callable
+
+from collections.abc import Callable
 
 from backend.fuel import get_fuel_status
 from backend.missions import get_missions_summary
 from backend.models.game_state import GameState
 from backend.models.system import StarSystem
-
 
 # ---------------------------------------------------------------------------
 # Hint definition structure
@@ -21,7 +21,7 @@ from backend.models.system import StarSystem
 class Hint:
     """A single contextual hint."""
 
-    __slots__ = ("id", "severity", "message_template", "command", "condition", "priority")
+    __slots__ = ("command", "condition", "id", "message_template", "priority", "severity")
 
     def __init__(
         self,

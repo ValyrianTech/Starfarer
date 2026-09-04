@@ -1,14 +1,15 @@
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import pytest
 from fastapi.testclient import TestClient
 
-from backend.main import app
-from backend.database import init_db
-from backend.game.manager import GAME_STORE, new_game, game_save, game_load
 from backend.codex import BIOME_CODEX_DATA, get_codex
+from backend.database import init_db
+from backend.game.manager import GAME_STORE, game_load, game_save, new_game
+from backend.main import app
 from backend.models.game_state import GameState
 
 client = TestClient(app)
@@ -399,7 +400,7 @@ class TestBiomesVisitedSerialization:
         assert "desert" in loaded.biomes_visited
 
     def test_biomes_visited_in_state_to_dict(self) -> None:
-        from backend.game.manager import _state_to_dict, _state_from_dict
+        from backend.game.manager import _state_from_dict, _state_to_dict
 
         state = _make_game()
         state.biomes_visited.add("ocean")
@@ -415,7 +416,7 @@ class TestBiomesVisitedSerialization:
         assert "tundra" in restored.biomes_visited
 
     def test_empty_biomes_visited_roundtrip(self) -> None:
-        from backend.game.manager import _state_to_dict, _state_from_dict
+        from backend.game.manager import _state_from_dict, _state_to_dict
 
         state = _make_game()
         d = _state_to_dict(state)
@@ -423,7 +424,7 @@ class TestBiomesVisitedSerialization:
         assert restored.biomes_visited == set()
 
     def test_old_save_without_biomes_visited(self) -> None:
-        from backend.game.manager import _state_to_dict, _state_from_dict
+        from backend.game.manager import _state_from_dict, _state_to_dict
 
         state = _make_game()
         d = _state_to_dict(state)

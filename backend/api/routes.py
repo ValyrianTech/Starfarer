@@ -11,32 +11,63 @@ import time
 
 from fastapi import APIRouter, HTTPException
 
-from backend.models.game_state import GameState
 from backend.api.schemas import (
-    AcceptMissionRequest, BulkSellRequest, CompleteMissionRequest, CraftRequest,
-    DismissHintRequest, NewGameRequest, ResolveEventRequest, TradeRequest, UpgradeRequest, HealthResponse,
+    AcceptMissionRequest,
+    BulkSellRequest,
+    CompleteMissionRequest,
+    CraftRequest,
+    DismissHintRequest,
+    HealthResponse,
+    NewGameRequest,
+    ResolveEventRequest,
+    TradeRequest,
+    UpgradeRequest,
+)
+from backend.database import get_leaderboard
+from backend.fuel import get_fuel_status
+from backend.game.engine import (
+    activate_distress_beacon,
+    can_jump,
+    emergency_craft,
+    explore_surface,
+    get_nearby_systems,
+    get_scanner_tier_data,
+    land_on_body,
+    perform_atmospheric_scan,
+    perform_jump,
+    perform_salvage,
+    perform_scan,
+    perform_sub_surface_exploration,
 )
 from backend.game.manager import (
-    GAME_STORE, new_game, get_galaxy, get_system_detail, game_save, game_load as game_load_func,
+    GAME_STORE,
+    game_save,
+    get_galaxy,
+    get_system_detail,
+    new_game,
 )
-from backend.generation.events import trigger_event, resolve_event as resolve_event_func, decrement_cooldowns
-from backend.game.engine import (
-    can_jump, perform_jump, perform_scan, get_nearby_systems,
-    get_scanner_tier_data,
-    land_on_body, explore_surface,
-    activate_distress_beacon, perform_salvage, emergency_craft,
-    perform_atmospheric_scan, perform_sub_surface_exploration,
+from backend.game.manager import (
+    game_load as game_load_func,
 )
-from backend.game.trading import get_upgrade_info, purchase_upgrade, perform_trade, perform_bulk_sell
-from backend.database import get_leaderboard
-from backend.hints import HINT_DEFINITIONS, get_contextual_hints
-from backend.fuel import get_fuel_status
+from backend.game.trading import (
+    get_upgrade_info,
+    perform_bulk_sell,
+    perform_trade,
+    purchase_upgrade,
+)
+from backend.generation.events import decrement_cooldowns, trigger_event
+from backend.generation.events import resolve_event as resolve_event_func
 from backend.generation.lore_content import ARC_DISPLAY_NAMES
-from backend.models.faction import get_faction, FACTION_DEFINITIONS
+from backend.hints import HINT_DEFINITIONS, get_contextual_hints
 from backend.missions import (
-    generate_missions, complete_mission, FactionMission, get_missions_summary,
+    FactionMission,
+    complete_mission,
+    generate_missions,
+    get_missions_summary,
 )
-from backend.utils import seeded_random, deterministic_hash
+from backend.models.faction import FACTION_DEFINITIONS, get_faction
+from backend.models.game_state import GameState
+from backend.utils import deterministic_hash, seeded_random
 
 logger = logging.getLogger(__name__)
 

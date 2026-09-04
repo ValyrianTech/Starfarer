@@ -9,19 +9,27 @@ querying galaxy and system data.
 import logging
 import uuid
 
-from backend.database import load_game, save_game as db_save, load_save
 from backend.config import (
-    DEFAULT_SEED, DEFAULT_SHIP_NAME, INITIAL_FUEL, INITIAL_HULL,
-    INITIAL_CARGO, INITIAL_CREW, INITIAL_MORALE, INITIAL_CREDITS,
-    INITIAL_JUMP_RANGE, INITIAL_SCANNER,
+    DEFAULT_SEED,
+    DEFAULT_SHIP_NAME,
+    INITIAL_CARGO,
+    INITIAL_CREDITS,
+    INITIAL_CREW,
+    INITIAL_FUEL,
+    INITIAL_HULL,
+    INITIAL_JUMP_RANGE,
+    INITIAL_MORALE,
+    INITIAL_SCANNER,
 )
-from backend.models.game_state import GameState
-from backend.models.ship import Ship
-from backend.models.faction import FactionRelation, FACTION_DEFINITIONS
-from backend.generation.universe import generate_universe
+from backend.database import load_game, load_save
+from backend.database import save_game as db_save
 from backend.game.engine import (
     get_nearby_systems,
 )
+from backend.generation.universe import generate_universe
+from backend.models.faction import FACTION_DEFINITIONS, FactionRelation
+from backend.models.game_state import GameState
+from backend.models.ship import Ship
 
 logger = logging.getLogger(__name__)
 
@@ -270,9 +278,9 @@ def _state_from_dict(d: dict) -> GameState:
     :returns: A fully reconstructed :class:`GameState`.
     :rtype: GameState
     """
-    from backend.models.system import StarSystem
-    from backend.models.event import Event
     from backend.models.discovery import Discovery, LoreFragment
+    from backend.models.event import Event
+    from backend.models.system import StarSystem
 
     systems = {}
     for k, v in d.get("systems", {}).items():

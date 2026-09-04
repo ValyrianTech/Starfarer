@@ -1,21 +1,33 @@
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
 
-from backend.main import app
 from backend.database import init_db
-from backend.game.manager import GAME_STORE, new_game, game_save, game_load, _state_to_dict, _state_from_dict
+from backend.game.engine import activate_distress_beacon
+from backend.game.manager import (
+    GAME_STORE,
+    _state_from_dict,
+    _state_to_dict,
+    game_load,
+    game_save,
+    new_game,
+)
+from backend.game.trading import perform_bulk_sell, perform_trade
+from backend.generation.events import EVENT_TEMPLATES, _create_event, resolve_event
+from backend.main import app
 from backend.models.faction import (
-    Faction, FactionRelation, FACTION_DEFINITIONS, get_faction,
+    FACTION_DEFINITIONS,
+    Faction,
+    FactionRelation,
+    get_faction,
 )
 from backend.models.game_state import _rep_label
-from backend.game.trading import perform_trade, perform_bulk_sell
-from backend.game.engine import activate_distress_beacon
-from backend.generation.events import resolve_event, EVENT_TEMPLATES, _create_event
 
 client = TestClient(app)
 
@@ -1406,11 +1418,10 @@ class TestFactionAPI:
         with patch(
             "backend.api.routes.generate_missions",
             return_value=[mission_a, mission_b],
-        ):
-            with patch("backend.utils.seeded_random", return_value=mock_rng):
-                resp = client.post(
-                    f"/api/game/{game_id}/faction/stellar_cartographers/mission"
-                )
+        ), patch("backend.utils.seeded_random", return_value=mock_rng):
+            resp = client.post(
+                f"/api/game/{game_id}/faction/stellar_cartographers/mission"
+            )
 
         assert resp.status_code == 200
         data = resp.json()
@@ -1470,11 +1481,10 @@ class TestFactionAPI:
         with patch(
             "backend.api.routes.generate_missions",
             return_value=[mission_a, mission_b],
-        ):
-            with patch("backend.utils.seeded_random", return_value=mock_rng):
-                resp = client.post(
-                    f"/api/game/{game_id}/faction/stellar_cartographers/mission"
-                )
+        ), patch("backend.utils.seeded_random", return_value=mock_rng):
+            resp = client.post(
+                f"/api/game/{game_id}/faction/stellar_cartographers/mission"
+            )
 
         assert resp.status_code == 200
         data = resp.json()
@@ -1987,7 +1997,7 @@ class TestReputationDecay:
         assert restored.jumps_since_rep_decay == 5
 
     def test_rep_decay_on_jump(self) -> None:
-        from backend.game.engine import perform_jump, can_jump
+        from backend.game.engine import can_jump, perform_jump
         from backend.generation.universe import distance_between
         state = new_game(seed=42)
         state.modify_faction_reputation("stellar_cartographers", 30)
@@ -2019,7 +2029,7 @@ class TestReputationDecay:
         assert state.get_faction_reputation("free_pilots") > -5
 
     def test_rep_decay_resets_counter(self) -> None:
-        from backend.game.engine import perform_jump, can_jump
+        from backend.game.engine import can_jump, perform_jump
         from backend.generation.universe import distance_between
         state = new_game(seed=42)
         state.modify_faction_reputation("void_traders", 30)
@@ -2046,7 +2056,7 @@ class TestReputationDecay:
         assert state.jumps_since_rep_decay == 0
 
     def test_rep_decay_zero_rep_unchanged(self) -> None:
-        from backend.game.engine import perform_jump, can_jump
+        from backend.game.engine import can_jump, perform_jump
         from backend.generation.universe import distance_between
         state = new_game(seed=42)
         assert state.get_faction_reputation("stellar_cartographers") == 0
@@ -2073,7 +2083,7 @@ class TestReputationDecay:
         assert state.get_faction_reputation("stellar_cartographers") == 0
 
     def test_rep_decay_negative_toward_zero(self) -> None:
-        from backend.game.engine import perform_jump, can_jump
+        from backend.game.engine import can_jump, perform_jump
         from backend.generation.universe import distance_between
         state = new_game(seed=42)
         state.modify_faction_reputation("free_pilots", -10)
@@ -2823,8 +2833,8 @@ class TestMissionSummary:
         assert "Tier 2" in d["summary"]
 
     def test_get_missions_summary_with_station(self):
-        from backend.missions import get_missions_summary
         from backend.game.manager import new_game
+        from backend.missions import get_missions_summary
         state = new_game(seed=42)
         current = state.get_current_system()
         current.has_trading_station = True
@@ -2835,8 +2845,8 @@ class TestMissionSummary:
         assert summary["available"] is True
 
     def test_get_missions_summary_no_station(self):
-        from backend.missions import get_missions_summary
         from backend.game.manager import new_game
+        from backend.missions import get_missions_summary
         state = new_game(seed=42)
         current = state.get_current_system()
         current.has_trading_station = False
@@ -2847,8 +2857,8 @@ class TestMissionSummary:
         assert summary["available"] is False
 
     def test_get_missions_summary_none_system(self):
-        from backend.missions import get_missions_summary
         from backend.game.manager import new_game
+        from backend.missions import get_missions_summary
         state = new_game(seed=42)
         summary = get_missions_summary(state, None)
         assert summary["count"] == 0
@@ -2858,9 +2868,10 @@ class TestMissionSummary:
     def test_get_missions_summary_only_daily(self):
         """When only a daily mission exists (no standard missions), available should be False
         and count should be 0, matching the fix in Option A."""
-        from backend.missions import get_missions_summary, FactionMission
-        from backend.game.manager import new_game
         from unittest.mock import patch
+
+        from backend.game.manager import new_game
+        from backend.missions import FactionMission, get_missions_summary
         state = new_game(seed=42)
         current = state.get_current_system()
         current.has_trading_station = True
