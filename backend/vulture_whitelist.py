@@ -12,8 +12,8 @@ introspection and are therefore not detected as used by static analysis alone.
 class Whitelist:
     """Helper class that allows mocking Python objects."""
 
-    def __getattr__(self, _: str) -> None:
-        pass
+    def __getattr__(self, name: str) -> None:
+        self.__dict__[name] = None
 
 
 whitelist = Whitelist()
@@ -25,6 +25,7 @@ whitelist.api_get_game  # noqa: B018
 whitelist.api_galaxy  # noqa: B018
 whitelist.api_system_detail  # noqa: B018
 whitelist.api_jump  # noqa: B018
+whitelist.api_scan  # noqa: B018
 whitelist.api_land  # noqa: B018
 whitelist.api_atmospheric_scan  # noqa: B018
 whitelist.api_sub_surface_explore  # noqa: B018
@@ -55,6 +56,7 @@ whitelist.api_load  # noqa: B018
 whitelist.api_dismiss_hint  # noqa: B018
 whitelist.api_leaderboard  # noqa: B018
 whitelist.api_spectate_games  # noqa: B018
+whitelist.api_spectate_stream  # noqa: B018
 whitelist.api_system_ghosts  # noqa: B018
 whitelist.api_leave_ghost  # noqa: B018
 whitelist.api_crossroads_items  # noqa: B018
