@@ -21,6 +21,7 @@ from backend.multiplayer.database import (
 from backend.multiplayer.database import (
     get_available_items,
     get_available_lore,
+    get_lore_donation,
     get_recent_messages_paginated,
     save_crossroads_item,
     save_crossroads_lore,
@@ -106,12 +107,12 @@ def claim_item(item_id: str, game_state: GameState) -> dict:
     :returns: A dictionary with ``success`` flag and item data or error detail.
     :rtype: dict
     """
+    if not game_state.ship.current_system_id:
+        return {"success": False, "detail": "Cannot claim item: ship has no current system."}
+
     item_data = db_claim_item(item_id, game_state.id)
     if not item_data:
         return {"success": False, "detail": "Item not found or already claimed."}
-
-    if not game_state.ship.current_system_id:
-        return {"success": False, "detail": "Cannot claim item: ship has no current system."}
 
     for _ in range(item_data["quantity"]):
         disc = Discovery(
@@ -206,23 +207,34 @@ def claim_lore(donation_id: str, game_state: GameState) -> dict:
     :returns: A dictionary with ``success`` flag and lore data or error detail.
     :rtype: dict
     """
-    lore_data = db_claim_lore(donation_id, game_state.id)
+    # First, look up the donation to get the fragment_id without claiming
+    lore_data = get_lore_donation(donation_id)
     if not lore_data:
         return {"success": False, "detail": "Lore donation not found or already claimed."}
 
+    # Verify the fragment exists in the game state before claiming
+    fragment_exists = any(lf.id == lore_data["fragment_id"] for lf in game_state.lore_fragments)
+    if not fragment_exists:
+        return {"success": False, "detail": "Cannot claim lore: lore fragment not present in game state."}
+
+    # Now atomically claim it
+    claimed_data = db_claim_lore(donation_id, game_state.id)
+    if not claimed_data:
+        return {"success": False, "detail": "Lore donation not found or already claimed."}
+
     for lf in game_state.lore_fragments:
-        if lf.id == lore_data["fragment_id"]:
+        if lf.id == claimed_data["fragment_id"]:
             lf.discovered = True
             lf.discovery_timestamp = datetime.now(timezone.utc).isoformat()
             break
 
     game_state.add_log(
         "multiplayer",
-        f"Claimed lore fragment '{lore_data['fragment_id']}' from the Crossroads (donated by {lore_data['donor_name']}).",
+        f"Claimed lore fragment '{claimed_data['fragment_id']}' from the Crossroads (donated by {claimed_data['donor_name']}).",
         category="multiplayer",
         title="Lore Claimed",
     )
-    return {"success": True, "lore": lore_data}
+    return {"success": True, "lore": claimed_data}
 
 
 def get_available_lore_list() -> list[dict]:

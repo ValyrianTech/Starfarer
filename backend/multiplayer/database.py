@@ -371,6 +371,34 @@ def get_available_lore() -> list[CrossroadsLore]:
     return result
 
 
+def get_lore_donation(donation_id: str) -> dict | None:
+    """Look up an unclaimed lore donation without claiming it.
+
+    :param donation_id: The unique identifier of the lore donation.
+    :type donation_id: str
+    :returns: A dictionary of the donation data on success, ``None`` if the
+        donation does not exist or was already claimed.
+    :rtype: dict or None
+    """
+    with get_db_ctx() as conn:
+        row = conn.execute(
+            "SELECT * FROM crossroads_lore WHERE id = ? AND claimed = 0",
+            (donation_id,),
+        ).fetchone()
+        if not row:
+            return None
+        return {
+            "id": row["id"],
+            "donor_game_id": row["donor_game_id"],
+            "donor_name": row["donor_name"],
+            "fragment_id": row["fragment_id"],
+            "message": row["message"],
+            "claimed": bool(row["claimed"]),
+            "claimer_game_id": row["claimer_game_id"],
+            "created_at": row["created_at"],
+        }
+
+
 def claim_lore(donation_id: str, claimer_game_id: str) -> dict | None:
     """Mark a crossroads lore donation as claimed by a player (atomic).
 
