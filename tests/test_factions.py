@@ -288,6 +288,7 @@ class TestFactionAPI:
         resp = client.post(f"/api/game/{game_id}/faction/stellar_cartographers/mission")
         assert resp.status_code == 400
         assert "Not enough fuel" in resp.json()["detail"]
+        assert state.accepted_missions == {}
 
     def test_faction_mission_not_enough_credits(self) -> None:
         resp = client.post("/api/game/new", json={"seed": 42})
@@ -305,6 +306,7 @@ class TestFactionAPI:
         resp = client.post(f"/api/game/{game_id}/faction/stellar_cartographers/mission")
         assert resp.status_code == 400
         assert "Not enough credits" in resp.json()["detail"]
+        assert state.accepted_missions == {}
 
     def test_faction_mission_nonexistent_game(self) -> None:
         resp = client.post("/api/game/nonexistent-gid/faction/stellar_cartographers/mission")
