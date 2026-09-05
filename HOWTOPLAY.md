@@ -658,13 +658,13 @@ Content-Type: application/json
 
 Missions cannot be accepted twice and must be accepted before completing. Completed missions are tracked and cannot be repeated.
 
-##### Legacy One-Shot Endpoint
+##### Faction Mission Accept Endpoint
 
 ```http
 POST /api/game/{game_id}/faction/{faction_id}/mission
 ```
 
-Randomly picks a mission from the available pool, deducts costs, and immediately awards rewards in a single call. Requires being at a trading station (`has_trading_station` must be true).
+Randomly picks a mission from the available pool and **accepts** it — adding it to the player's accepted missions (with full metadata) without deducting costs or awarding rewards in the same call. Costs (fuel and credits) are only deducted and rewards only awarded later when the mission is completed via `POST /api/game/{game_id}/missions/{mission_id}/complete`. Requires being at a trading station (`has_trading_station` must be true) and validates that the player has sufficient fuel and credits to accept the mission (returning HTTP 400 otherwise). Returns `result`, `mission` (with `fuel_cost`/`credit_cost`), and `ship`.
 
 | Faction | Alignment | Bonus |
 |---|---|---|
@@ -759,7 +759,7 @@ The game persists all state to SQLite. Save frequently — especially before ris
 | GET | `/api/game/{id}/nearby` | Nearby systems |
 | GET | `/api/game/{id}/factions` | List all factions |
 | GET | `/api/game/{id}/faction/{fid}` | Single faction detail |
-| POST | `/api/game/{id}/faction/{fid}/mission` | Run one-shot faction mission (tiered) |
+| POST | `/api/game/{id}/faction/{fid}/mission` | Accept a tiered faction mission (costs deducted and rewards awarded on completion) |
 | GET | `/api/game/{id}/missions` | List available missions at station |
 | POST | `/api/game/{id}/missions/{mid}/accept` | Accept a mission (costs deducted on completion) |
 | POST | `/api/game/{id}/missions/{mid}/complete` | Complete accepted mission (claims rewards) |

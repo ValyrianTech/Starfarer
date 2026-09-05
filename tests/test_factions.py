@@ -248,10 +248,12 @@ class TestFactionAPI:
         resp = client.post(f"/api/game/{game_id}/faction/stellar_cartographers/mission")
         assert resp.status_code == 200
         data = resp.json()
-        assert data["effect"] == "success"
-        assert "reputation" in data
-        assert "ship" in data
         assert "mission" in data
+        assert data["mission"]["id"]
+        assert "fuel_cost" in data["mission"]
+        assert "credit_cost" in data["mission"]
+        assert "ship" in data
+        assert data["mission"]["id"] in state.accepted_missions
 
     def test_faction_mission_no_trading_station(self) -> None:
         resp = client.post("/api/game/new", json={"seed": 42})
@@ -286,6 +288,7 @@ class TestFactionAPI:
         resp = client.post(f"/api/game/{game_id}/faction/stellar_cartographers/mission")
         assert resp.status_code == 400
         assert "Not enough fuel" in resp.json()["detail"]
+        assert state.accepted_missions == {}
 
     def test_faction_mission_not_enough_credits(self) -> None:
         resp = client.post("/api/game/new", json={"seed": 42})
@@ -303,6 +306,7 @@ class TestFactionAPI:
         resp = client.post(f"/api/game/{game_id}/faction/stellar_cartographers/mission")
         assert resp.status_code == 400
         assert "Not enough credits" in resp.json()["detail"]
+        assert state.accepted_missions == {}
 
     def test_faction_mission_nonexistent_game(self) -> None:
         resp = client.post("/api/game/nonexistent-gid/faction/stellar_cartographers/mission")
@@ -314,7 +318,7 @@ class TestFactionAPI:
         resp = client.post(f"/api/game/{game_id}/faction/nonexistent/mission")
         assert resp.status_code == 404
 
-    def test_faction_mission_increases_reputation(self) -> None:
+    def test_faction_mission_accept_does_not_increase_reputation(self) -> None:
         resp = client.post("/api/game/new", json={"seed": 42, "game_id": "mission-rep-inc"})
         game_id = resp.json()["game_id"]
         state = GAME_STORE.get(game_id)
@@ -330,8 +334,54 @@ class TestFactionAPI:
         resp = client.post(f"/api/game/{game_id}/faction/void_traders/mission")
         assert resp.status_code == 200
         data = resp.json()
-        assert data["effect"] == "success"
-        assert data["reputation"] > 0
+        assert data["mission"]["id"] in state.accepted_missions
+        assert state.get_faction_reputation("void_traders") == 0
+
+    def test_faction_mission_accept_then_complete_flow(self) -> None:
+        resp = client.post(
+            "/api/game/new",
+            json={"seed": 42, "game_id": "faction-mission-e2e"},
+        )
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        state.ship.fuel = 100
+        state.ship.credits = 500
+        current_system = state.get_current_system()
+        assert current_system is not None
+        current_system.has_trading_station = True
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        rep_before = state.get_faction_reputation("void_traders")
+        credits_before = state.ship.credits
+
+        resp = client.post(f"/api/game/{game_id}/faction/void_traders/mission")
+        assert resp.status_code == 200
+        data = resp.json()
+        mission_id = data["mission"]["id"]
+        credit_cost = data["mission"]["credit_cost"]
+        credit_reward = data["mission"]["credit_reward"]
+
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        assert mission_id in state.accepted_missions
+        assert state.get_faction_reputation("void_traders") == rep_before
+
+        resp = client.post(
+            f"/api/game/{game_id}/missions/{mission_id}/complete",
+            json={"mission_id": mission_id},
+        )
+        assert resp.status_code == 200
+
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        assert mission_id not in state.accepted_missions
+        assert any(
+            c.get("mission_id") == mission_id for c in state.completed_missions
+        )
+        assert state.get_faction_reputation("void_traders") > rep_before
+        assert state.ship.credits == credits_before - credit_cost + credit_reward
 
     def test_full_state_response_includes_factions(self) -> None:
         resp = client.post("/api/game/new", json={"seed": 42})
@@ -369,12 +419,11 @@ class TestFactionAPI:
         resp = client.post(f"/api/game/{game_id}/faction/stellar_cartographers/mission")
         assert resp.status_code == 200
         data = resp.json()
-        assert data["effect"] == "success"
         assert "mission" in data
-        assert "tier" in data["mission"]
-        assert "fuel_cost_incurred" in data["mission"]
-        assert "credit_cost_incurred" in data["mission"]
+        assert "fuel_cost" in data["mission"]
+        assert "credit_cost" in data["mission"]
         assert data["mission"]["tier"] in (1, 2, 3)
+        assert data["mission"]["id"] in state.accepted_missions
 
     def test_generate_missions_nonexistent_faction(self) -> None:
         from backend.missions import generate_missions
@@ -1105,10 +1154,9 @@ class TestFactionAPI:
 
         assert resp.status_code == 200
         data = resp.json()
-        assert data["effect"] == "success"
         assert data["mission"]["id"] == "mission_standard_001"
-        assert data["mission"]["fuel_cost_incurred"] > 0
-        assert data["mission"]["credit_cost_incurred"] > 0
+        assert data["mission"]["fuel_cost"] > 0
+        assert data["mission"]["credit_cost"] > 0
 
     def test_faction_mission_skips_completed_mission(self) -> None:
         resp = client.post(
@@ -1152,7 +1200,6 @@ class TestFactionAPI:
 
         assert resp.status_code == 200
         data = resp.json()
-        assert data["effect"] == "success"
         assert data["mission"]["id"] != completed_mission_id
 
     def test_faction_mission_all_completed_returns_200(self) -> None:
@@ -1190,8 +1237,6 @@ class TestFactionAPI:
         )
 
         assert resp.status_code == 200
-        data = resp.json()
-        assert data["effect"] == "success"
 
     def test_faction_mission_skips_accepted_mission(self) -> None:
         resp = client.post(
@@ -1230,7 +1275,6 @@ class TestFactionAPI:
 
         assert resp.status_code == 200
         data = resp.json()
-        assert data["effect"] == "success"
         assert data["mission"]["id"] != accepted_mission_id
 
     def test_faction_mission_all_accepted_returns_400(self) -> None:
@@ -1425,7 +1469,6 @@ class TestFactionAPI:
 
         assert resp.status_code == 200
         data = resp.json()
-        assert data["effect"] == "success"
         assert data["mission"]["id"] == "mission_b_001"
 
     def test_faction_mission_accepted_chooses_remaining(self) -> None:
@@ -1488,7 +1531,6 @@ class TestFactionAPI:
 
         assert resp.status_code == 200
         data = resp.json()
-        assert data["effect"] == "success"
         assert data["mission"]["id"] == "mission_b_002"
 
     def test_api_accept_mission_already_accepted(self) -> None:

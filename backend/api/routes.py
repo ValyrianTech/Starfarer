@@ -1019,21 +1019,23 @@ def api_faction_detail(game_id: str, faction_id: str) -> dict:
 
 @router.post("/game/{game_id}/faction/{faction_id}/mission")
 def api_faction_mission(game_id: str, faction_id: str) -> dict:
-    """Run a faction mission to earn reputation with that faction.
+    """Accept a faction mission to earn reputation with that faction.
 
     Uses the tiered mission system. Costs and rewards scale with the
     player's reputation — higher reputation unlocks higher-tier missions
-    with better payouts.
+    with better payouts. The mission is accepted here; rewards are only
+    applied later when the mission is completed via the mission-complete
+    endpoint.
 
     :param game_id: The unique identifier of the game.
     :type game_id: str
     :param faction_id: The unique identifier of the faction.
     :type faction_id: str
-    :returns: A dictionary with ``result`` message, ``effect``, ``reputation``,
-        ``ship`` status, and ``mission`` details.
+    :returns: A dictionary with ``result`` message, ``mission`` details,
+        and ``ship`` status.
     :rtype: dict
     :raises HTTPException: 404 if the game or faction is not found; 400 if
-        the mission cannot be attempted.
+        the mission cannot be accepted.
     """
     state = _get_state(game_id)
     if not state:
@@ -1072,6 +1074,17 @@ def api_faction_mission(game_id: str, faction_id: str) -> dict:
     
     mission = rng.choice(available)
 
+    if state.ship.fuel < mission.fuel_cost:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Not enough fuel. Mission requires {mission.fuel_cost} fuel."
+        )
+    if state.ship.credits < mission.credit_cost:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Not enough credits. Mission requires {mission.credit_cost} credits."
+        )
+
     state.accepted_missions[mission.id] = {
         "faction_id": mission.faction_id,
         "tier": mission.tier,
@@ -1092,10 +1105,6 @@ def api_faction_mission(game_id: str, faction_id: str) -> dict:
         category="system", title="Mission Accepted",
     )
 
-    completion = complete_mission(state, mission)
-    if "error" in completion:
-        raise HTTPException(status_code=400, detail=completion["error"])
-
     # Ensure the faction is marked as known
     if faction_id in state.faction_relations:
         state.faction_relations[faction_id].known = True
@@ -1103,20 +1112,9 @@ def api_faction_mission(game_id: str, faction_id: str) -> dict:
     game_save(state)
 
     return {
-        "result": (
-            f"Mission '{completion['title']}' for {faction.name} completed! "
-            f"Reputation +{completion['reputation_reward']}, Credits +{completion['credit_reward']}."
-        ),
-        "effect": "success",
-        "reputation": completion['new_reputation'],
+        "result": f"Mission '{mission.title}' accepted.",
+        "mission": mission.to_dict(),
         "ship": state.ship.to_dict(),
-        "mission": {
-            "id": completion['mission_id'],
-            "title": completion['title'],
-            "tier": mission.tier,
-            "fuel_cost_incurred": mission.fuel_cost,
-            "credit_cost_incurred": mission.credit_cost,
-        },
     }
 
 

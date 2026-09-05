@@ -17,6 +17,17 @@ class Whitelist:
     """
 
     def __getattr__(self, name: str) -> None:
+        """Dynamically register an arbitrary attribute name as a whitelist entry.
+
+        This method is invoked by Python whenever an attribute is not found via
+        normal lookup. It stores the attribute name in the instance dictionary so
+        that vulture treats it as used, while the attribute value is set to None.
+
+        :param name: The name of the attribute being accessed.
+        :type name: str
+        :returns: None
+        :rtype: None
+        """
         self.__dict__[name] = None
 
 

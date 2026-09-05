@@ -116,6 +116,7 @@
 - Lore viewer HTML structure completely redesigned with arc tabs, progress bars, and fragment cards
 - Lore button now has `data-lore-nav="true"` attribute for targeted pulse animation
 - `POST /api/game/{id}/faction/{fid}/mission` now uses tiered mission system: guaranteed success (no random success/failure), costs/rewards scale with reputation, requires being at a trading station, response includes `mission` field with details
+- `POST /api/game/{id}/faction/{fid}/mission` no longer auto-completes missions in a single call — it now only accepts a mission, adding it to `state.accepted_missions` (with full metadata) without deducting fuel/credit costs or awarding rewards. Costs are deducted and rewards awarded only when the mission is later completed via the mission-complete endpoint. The endpoint now validates sufficient fuel and credits before accepting (HTTP 400 otherwise), and the response format changed: it now returns `result`, `mission` (with `fuel_cost`/`credit_cost`), and `ship` (no longer returns `effect`/`reputation` or `fuel_cost_incurred`/`credit_cost_incurred`).
 - All game action log calls now include structured metadata fields (category, title, system, body, resource changes) for: jumps, scans, landings, exploration, distress calls, salvage, emergency crafting, trading, upgrades, missions, events, and faction reputation changes
 - Mission completion log entry now includes `credits_change` metadata
 - Added type annotations to `add_log` method (`**kwargs: str | int`)
