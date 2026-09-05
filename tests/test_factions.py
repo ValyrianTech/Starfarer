@@ -316,7 +316,7 @@ class TestFactionAPI:
         resp = client.post(f"/api/game/{game_id}/faction/nonexistent/mission")
         assert resp.status_code == 404
 
-    def test_faction_mission_increases_reputation(self) -> None:
+    def test_faction_mission_accept_does_not_increase_reputation(self) -> None:
         resp = client.post("/api/game/new", json={"seed": 42, "game_id": "mission-rep-inc"})
         game_id = resp.json()["game_id"]
         state = GAME_STORE.get(game_id)
