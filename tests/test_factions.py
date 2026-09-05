@@ -335,6 +335,52 @@ class TestFactionAPI:
         assert data["mission"]["id"] in state.accepted_missions
         assert state.get_faction_reputation("void_traders") == 0
 
+    def test_faction_mission_accept_then_complete_flow(self) -> None:
+        resp = client.post(
+            "/api/game/new",
+            json={"seed": 42, "game_id": "faction-mission-e2e"},
+        )
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        state.ship.fuel = 100
+        state.ship.credits = 500
+        current_system = state.get_current_system()
+        assert current_system is not None
+        current_system.has_trading_station = True
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        rep_before = state.get_faction_reputation("void_traders")
+        credits_before = state.ship.credits
+
+        resp = client.post(f"/api/game/{game_id}/faction/void_traders/mission")
+        assert resp.status_code == 200
+        data = resp.json()
+        mission_id = data["mission"]["id"]
+        credit_cost = data["mission"]["credit_cost"]
+        credit_reward = data["mission"]["credit_reward"]
+
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        assert mission_id in state.accepted_missions
+        assert state.get_faction_reputation("void_traders") == rep_before
+
+        resp = client.post(
+            f"/api/game/{game_id}/missions/{mission_id}/complete",
+            json={"mission_id": mission_id},
+        )
+        assert resp.status_code == 200
+
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        assert mission_id not in state.accepted_missions
+        assert any(
+            c.get("mission_id") == mission_id for c in state.completed_missions
+        )
+        assert state.get_faction_reputation("void_traders") > rep_before
+        assert state.ship.credits == credits_before - credit_cost + credit_reward
+
     def test_full_state_response_includes_factions(self) -> None:
         resp = client.post("/api/game/new", json={"seed": 42})
         game_id = resp.json()["game_id"]
