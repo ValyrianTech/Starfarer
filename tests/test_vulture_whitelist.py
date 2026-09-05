@@ -3,7 +3,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-import backend.vulture_whitelist as vulture_whitelist
+from backend import vulture_whitelist
 from backend.vulture_whitelist import Whitelist
 
 
