@@ -10,7 +10,11 @@ introspection and are therefore not detected as used by static analysis alone.
 
 
 class Whitelist:
-    """Helper class that allows mocking Python objects."""
+    """Helper class that allows mocking Python objects.
+
+    Use it to create whitelist files that are not only syntactically
+    correct, but can also be executed.
+    """
 
     def __getattr__(self, name: str) -> None:
         self.__dict__[name] = None
