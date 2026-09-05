@@ -19,6 +19,16 @@ class TestWhitelist:
         for name in ("foo", "bar", "baz", "_private", "nested.attr"):
             assert getattr(whitelist, name) is None
 
+    def test_getattr_records_accessed_names(self) -> None:
+        whitelist = Whitelist()
+        whitelist.anything  # noqa: B018
+        whitelist.some_random_attribute  # noqa: B018
+        whitelist.health  # noqa: B018
+        assert "anything" in whitelist.__dict__
+        assert "some_random_attribute" in whitelist.__dict__
+        assert "health" in whitelist.__dict__
+        assert whitelist.__dict__["anything"] is None
+
 
 class TestModule:
     def test_exposes_whitelist_instance(self) -> None:
@@ -29,29 +39,73 @@ class TestModule:
         assert vulture_whitelist.whitelist.health is None
         assert vulture_whitelist.whitelist.api_new_game is None
 
-    def test_representative_route_names_accessible(self) -> None:
+    def test_module_whitelist_records_names(self) -> None:
         whitelist = vulture_whitelist.whitelist
-        for name in (
+        assert len(whitelist.__dict__) > 0
+        assert "health" in whitelist.__dict__
+        assert "GAME_NAME" in whitelist.__dict__
+
+    def test_all_route_names_present(self) -> None:
+        whitelist = vulture_whitelist.whitelist
+        expected = {
             "health",
             "api_new_game",
             "api_get_game",
             "api_galaxy",
             "api_system_detail",
             "api_jump",
-            "api_land",
             "api_scan",
+            "api_land",
+            "api_atmospheric_scan",
+            "api_sub_surface_explore",
             "api_explore",
+            "api_resolve_event",
+            "api_log",
+            "api_log_paginated",
+            "api_discoveries",
+            "api_cargo",
+            "api_lore",
+            "api_codex",
             "api_trade",
+            "api_bulk_sell",
             "api_upgrade",
+            "api_upgrades_info",
+            "api_nearby",
+            "api_distress",
+            "api_salvage",
+            "api_salvage_craft",
+            "api_factions",
+            "api_faction_detail",
+            "api_faction_mission",
+            "api_missions",
+            "api_accept_mission",
+            "api_complete_mission",
             "api_save",
             "api_load",
+            "api_dismiss_hint",
             "api_leaderboard",
-        ):
-            assert getattr(whitelist, name) is None
+            "api_spectate_games",
+            "api_spectate_stream",
+            "api_system_ghosts",
+            "api_leave_ghost",
+            "api_crossroads_items",
+            "api_donate_item",
+            "api_claim_item",
+            "api_crossroads_lore",
+            "api_donate_lore",
+            "api_claim_lore",
+            "api_crossroads_messages",
+            "api_post_message",
+            "api_ripples",
+            "api_acknowledge_ripple",
+            "index",
+        }
+        missing = expected - set(whitelist.__dict__.keys())
+        assert not missing, f"Missing route handler names in whitelist: {sorted(missing)}"
 
-    def test_representative_config_constants_accessible(self) -> None:
+    def test_all_config_constants_present(self) -> None:
         whitelist = vulture_whitelist.whitelist
-        for name in (
+        expected = {
             "GAME_NAME",
             "GAME_VERSION",
             "MAX_CARGO",
@@ -61,15 +115,18 @@ class TestModule:
             "MAX_CREW",
             "BIOME_COLORS",
             "ALL_DISCOVERY_CATEGORIES",
-        ):
-            assert getattr(whitelist, name) is None
+        }
+        missing = expected - set(whitelist.__dict__.keys())
+        assert not missing, f"Missing config constants in whitelist: {sorted(missing)}"
 
-    def test_representative_fixtures_accessible(self) -> None:
+    def test_all_fixtures_present(self) -> None:
         whitelist = vulture_whitelist.whitelist
-        for name in ("setup_db", "lore_frags", "cleanup_messages"):
-            assert getattr(whitelist, name) is None
+        expected = {"setup_db", "lore_frags", "cleanup_messages"}
+        missing = expected - set(whitelist.__dict__.keys())
+        assert not missing, f"Missing fixtures in whitelist: {sorted(missing)}"
 
-    def test_representative_misc_names_accessible(self) -> None:
+    def test_all_misc_names_present(self) -> None:
         whitelist = vulture_whitelist.whitelist
-        for name in ("side_effect", "row_factory", "application", "status", "text_not_blank"):
-            assert getattr(whitelist, name) is None
+        expected = {"side_effect", "row_factory", "application", "status", "text_not_blank"}
+        missing = expected - set(whitelist.__dict__.keys())
+        assert not missing, f"Missing misc names in whitelist: {sorted(missing)}"
