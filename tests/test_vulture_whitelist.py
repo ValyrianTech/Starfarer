@@ -38,6 +38,7 @@ class TestModule:
     def test_whitelist_attribute_access_returns_none(self) -> None:
         assert vulture_whitelist.whitelist.health is None
         assert vulture_whitelist.whitelist.api_new_game is None
+        assert vulture_whitelist.whitelist.api_scan is None
 
     def test_module_whitelist_records_names(self) -> None:
         whitelist = vulture_whitelist.whitelist
