@@ -95,6 +95,8 @@
 - Cooldown entries for 'Event Horizon Approach' (8), 'Hawking Radiation Harvest (Deep Scan)' (8), and 'Time Dilation Echo' (10)
 - Pagination support for ghost signatures endpoint: `GET /api/game/{id}/system/{sys_id}/ghosts` now accepts optional `page` (default 1) and `per_page` (default 10, max 50) query parameters. Returns paginated response with `ghosts`, `page`, `per_page`, `total_ghosts`, and `total_pages` fields. Returns 404 if page exceeds total pages with active ghosts.
 - Pagination support for Crossroads messages endpoint: `GET /api/crossroads/messages` now accepts optional `page` (default 1) and `per_page` (default 10, max 50) query parameters. Returns paginated response with `messages`, `page`, `per_page`, `total_messages`, and `total_pages` fields.
+- Comprehensive test suite for the vulture whitelist (`tests/test_vulture_whitelist.py`): covers the `Whitelist` class `__getattr__` behavior and verifies representative route names, config constants, pytest fixtures, and misc framework-magic names are accessible via the module-level `whitelist` instance.
+- Added `backend/vulture_whitelist.py` to whitelist framework magic names (FastAPI route decorators, Pydantic fields, pytest fixtures, mock attribute assignments) and public API constants that vulture would otherwise flag as false positives
 
 ### Changed
 - Ion Storm event rebalanced: choices changed and it is now phenomenon-specific to nebula systems
@@ -122,6 +124,7 @@
 - Hawking Radiation Harvest cooldown changed from 6 to 8 (to disambiguate from the new 'Hawking Radiation Harvest (Deep Scan)' event)
 - Applied ruff safe auto-fixes across the codebase (272 fixes): import reordering/sorting, type annotation modernization from `Optional[X]` to `X | None`, `List[X]` to `list[X]`, and general formatting improvements across backend modules and tests
 - Fixed remaining ruff lint errors: renamed unused variables with underscore prefixes, simplified boolean expressions (e.g., `if a: if b: return True` → `if a and b: return True`), replaced list comprehensions with set comprehensions where appropriate, and used `next(iter(...))` instead of `list(...)[0]`
+- Refactored `backend/vulture_whitelist.py` from bare string expressions to a `Whitelist` class with a `__getattr__` method and a module-level `whitelist` instance. Names are now referenced as attributes (e.g., `whitelist.health`) instead of bare string expressions, eliminating 66 RUF100 errors from unused `# noqa: B018` directives (since B018 does not apply to bare strings) and fixing the vulture whitelist which was previously non-functional (bare string expressions do not suppress vulture warnings).
 ### Fixed
 - Atmospheric scan auto-select now correctly selects the next eligible body when the first eligible body is exhausted (`atmospheric_scan_count >= 3`), instead of returning empty results. Also when landed on an exhausted body, a log entry is now created explaining why the scan failed.
 - Fuel (and crew) is now deducted after discovery generation in atmospheric scan and sub-surface exploration (was deducted before, causing resources to be spent even when no discoveries were generated).
@@ -258,4 +261,3 @@
 - Unused `uuid` import from `backend/models/game_state.py`
 - Unused Pydantic request/response schemas (`JumpRequest`, `LandRequest`, `GameResponse`, `ErrorResponse`) from `backend/api/schemas.py`
 - Unused `MAX_INITIAL_JUMP` constant from `backend/generation/universe.py`
-- Added `backend/vulture_whitelist.py` to whitelist framework magic names (FastAPI route decorators, Pydantic fields, pytest fixtures, mock attribute assignments) and public API constants that vulture would otherwise flag as false positives

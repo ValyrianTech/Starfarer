@@ -1,70 +1,105 @@
-# Vulture whitelist: false positives from framework magic (FastAPI route
-# decorators, Pydantic fields, pytest fixtures, mock attribute assignments)
-# and public API constants. Bare name references mark these items as used.
+"""Vulture whitelist for Starfarer: Echoes of the Void.
 
-health  # pragma: no cover  # noqa: B018, F821
-api_new_game  # pragma: no cover  # noqa: B018, F821
-api_get_game  # pragma: no cover  # noqa: B018, F821
-api_galaxy  # pragma: no cover  # noqa: B018, F821
-api_system_detail  # pragma: no cover  # noqa: B018, F821
-api_jump  # pragma: no cover  # noqa: B018, F821
-api_land  # pragma: no cover  # noqa: B018, F821
-api_atmospheric_scan  # pragma: no cover  # noqa: B018, F821
-api_sub_surface_explore  # pragma: no cover  # noqa: B018, F821
-api_explore  # pragma: no cover  # noqa: B018, F821
-api_resolve_event  # pragma: no cover  # noqa: B018, F821
-api_log  # pragma: no cover  # noqa: B018, F821
-api_log_paginated  # pragma: no cover  # noqa: B018, F821
-api_discoveries  # pragma: no cover  # noqa: B018, F821
-api_cargo  # pragma: no cover  # noqa: B018, F821
-api_lore  # pragma: no cover  # noqa: B018, F821
-api_codex  # pragma: no cover  # noqa: B018, F821
-api_trade  # pragma: no cover  # noqa: B018, F821
-api_bulk_sell  # pragma: no cover  # noqa: B018, F821
-api_upgrade  # pragma: no cover  # noqa: B018, F821
-api_upgrades_info  # pragma: no cover  # noqa: B018, F821
-api_nearby  # pragma: no cover  # noqa: B018, F821
-api_distress  # pragma: no cover  # noqa: B018, F821
-api_salvage  # pragma: no cover  # noqa: B018, F821
-api_salvage_craft  # pragma: no cover  # noqa: B018, F821
-api_factions  # pragma: no cover  # noqa: B018, F821
-api_faction_detail  # pragma: no cover  # noqa: B018, F821
-api_faction_mission  # pragma: no cover  # noqa: B018, F821
-api_missions  # pragma: no cover  # noqa: B018, F821
-api_accept_mission  # pragma: no cover  # noqa: B018, F821
-api_complete_mission  # pragma: no cover  # noqa: B018, F821
-api_save  # pragma: no cover  # noqa: B018, F821
-api_load  # pragma: no cover  # noqa: B018, F821
-api_dismiss_hint  # pragma: no cover  # noqa: B018, F821
-api_leaderboard  # pragma: no cover  # noqa: B018, F821
-api_spectate_games  # pragma: no cover  # noqa: B018, F821
-api_system_ghosts  # pragma: no cover  # noqa: B018, F821
-api_leave_ghost  # pragma: no cover  # noqa: B018, F821
-api_crossroads_items  # pragma: no cover  # noqa: B018, F821
-api_donate_item  # pragma: no cover  # noqa: B018, F821
-api_claim_item  # pragma: no cover  # noqa: B018, F821
-api_crossroads_lore  # pragma: no cover  # noqa: B018, F821
-api_donate_lore  # pragma: no cover  # noqa: B018, F821
-api_claim_lore  # pragma: no cover  # noqa: B018, F821
-api_crossroads_messages  # pragma: no cover  # noqa: B018, F821
-api_post_message  # pragma: no cover  # noqa: B018, F821
-api_ripples  # pragma: no cover  # noqa: B018, F821
-api_acknowledge_ripple  # pragma: no cover  # noqa: B018, F821
-index  # pragma: no cover  # noqa: B018, F821
-application  # pragma: no cover  # noqa: B018, F821
-text_not_blank  # pragma: no cover  # noqa: B018, F821
-status  # pragma: no cover  # noqa: B018, F821
-row_factory  # pragma: no cover  # noqa: B018, F821
-side_effect  # pragma: no cover  # noqa: B018, F821
-cleanup_messages  # pragma: no cover  # noqa: B018, F821
-setup_db  # pragma: no cover  # noqa: B018, F821
-lore_frags  # pragma: no cover  # noqa: B018, F821
-GAME_NAME  # pragma: no cover  # noqa: B018, F821
-GAME_VERSION  # pragma: no cover  # noqa: B018, F821
-MAX_CARGO  # pragma: no cover  # noqa: B018, F821
-MAX_HULL  # pragma: no cover  # noqa: B018, F821
-MAX_FUEL  # pragma: no cover  # noqa: B018, F821
-MAX_MORALE  # pragma: no cover  # noqa: B018, F821
-MAX_CREW  # pragma: no cover  # noqa: B018, F821
-BIOME_COLORS  # pragma: no cover  # noqa: B018, F821
-ALL_DISCOVERY_CATEGORIES  # pragma: no cover  # noqa: B018, F821
+This module suppresses false-positive "unused code" warnings emitted by the
+`vulture` dead-code detector. It marks framework-magic names -- such as FastAPI
+route decorators, Pydantic model fields, pytest fixtures, and mock attribute
+assignments -- as well as public API constants as used via attribute
+references. These names are resolved at runtime or through framework
+introspection and are therefore not detected as used by static analysis alone.
+"""
+
+
+class Whitelist:
+    """Helper class that allows mocking Python objects.
+
+    Use it to create whitelist files that are not only syntactically
+    correct, but can also be executed.
+    """
+
+    def __getattr__(self, name: str) -> None:
+        self.__dict__[name] = None
+
+
+whitelist = Whitelist()
+
+# FastAPI route handlers (registered via decorators)
+whitelist.health  # noqa: B018
+whitelist.api_new_game  # noqa: B018
+whitelist.api_get_game  # noqa: B018
+whitelist.api_galaxy  # noqa: B018
+whitelist.api_system_detail  # noqa: B018
+whitelist.api_jump  # noqa: B018
+whitelist.api_scan  # noqa: B018
+whitelist.api_land  # noqa: B018
+whitelist.api_atmospheric_scan  # noqa: B018
+whitelist.api_sub_surface_explore  # noqa: B018
+whitelist.api_explore  # noqa: B018
+whitelist.api_resolve_event  # noqa: B018
+whitelist.api_log  # noqa: B018
+whitelist.api_log_paginated  # noqa: B018
+whitelist.api_discoveries  # noqa: B018
+whitelist.api_cargo  # noqa: B018
+whitelist.api_lore  # noqa: B018
+whitelist.api_codex  # noqa: B018
+whitelist.api_trade  # noqa: B018
+whitelist.api_bulk_sell  # noqa: B018
+whitelist.api_upgrade  # noqa: B018
+whitelist.api_upgrades_info  # noqa: B018
+whitelist.api_nearby  # noqa: B018
+whitelist.api_distress  # noqa: B018
+whitelist.api_salvage  # noqa: B018
+whitelist.api_salvage_craft  # noqa: B018
+whitelist.api_factions  # noqa: B018
+whitelist.api_faction_detail  # noqa: B018
+whitelist.api_faction_mission  # noqa: B018
+whitelist.api_missions  # noqa: B018
+whitelist.api_accept_mission  # noqa: B018
+whitelist.api_complete_mission  # noqa: B018
+whitelist.api_save  # noqa: B018
+whitelist.api_load  # noqa: B018
+whitelist.api_dismiss_hint  # noqa: B018
+whitelist.api_leaderboard  # noqa: B018
+whitelist.api_spectate_games  # noqa: B018
+whitelist.api_spectate_stream  # noqa: B018
+whitelist.api_system_ghosts  # noqa: B018
+whitelist.api_leave_ghost  # noqa: B018
+whitelist.api_crossroads_items  # noqa: B018
+whitelist.api_donate_item  # noqa: B018
+whitelist.api_claim_item  # noqa: B018
+whitelist.api_crossroads_lore  # noqa: B018
+whitelist.api_donate_lore  # noqa: B018
+whitelist.api_claim_lore  # noqa: B018
+whitelist.api_crossroads_messages  # noqa: B018
+whitelist.api_post_message  # noqa: B018
+whitelist.api_ripples  # noqa: B018
+whitelist.api_acknowledge_ripple  # noqa: B018
+whitelist.index  # noqa: B018
+
+# Pydantic model fields/validators
+whitelist.status  # noqa: B018
+whitelist.text_not_blank  # noqa: B018
+
+# Config constants
+whitelist.GAME_NAME  # noqa: B018
+whitelist.GAME_VERSION  # noqa: B018
+whitelist.MAX_CARGO  # noqa: B018
+whitelist.MAX_HULL  # noqa: B018
+whitelist.MAX_FUEL  # noqa: B018
+whitelist.MAX_MORALE  # noqa: B018
+whitelist.MAX_CREW  # noqa: B018
+whitelist.BIOME_COLORS  # noqa: B018
+whitelist.ALL_DISCOVERY_CATEGORIES  # noqa: B018
+
+# Pytest fixtures
+whitelist.setup_db  # noqa: B018
+whitelist.lore_frags  # noqa: B018
+whitelist.cleanup_messages  # noqa: B018
+
+# Mock attributes
+whitelist.side_effect  # noqa: B018
+
+# SQLite row_factory
+whitelist.row_factory  # noqa: B018
+
+# Lifespan parameter
+whitelist.application  # noqa: B018
