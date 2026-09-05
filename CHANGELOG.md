@@ -252,6 +252,9 @@
 - Weak test: `test_get_recent_messages_paginated_per_page_capped` now passes correctly with an empty database instead of passing vacuously.
 - `get_missions_summary` no longer called twice on jump — deduplicated the call in `api_jump` to avoid redundant processing
 - `get_missions_summary` now safely handles `system=None` in `_full_state_response` — returns an empty summary instead of crashing when the current system is unavailable
+- `claim_item` in `crossroads.py` now validates the ship's `current_system_id` before calling `db_claim_item()`, instead of claiming the DB record first and checking the system afterward — previously a ship with no current system caused the item to be permanently lost from the database even though the claim failed
+- `claim_lore` in `crossroads.py` now looks up the lore donation via a new `get_lore_donation()` helper (without claiming it) and verifies the fragment is present in the game state before calling `db_claim_lore()`, preventing permanent lore loss when the fragment was not present
+- Added `get_lore_donation()` to `database.py`: looks up an unclaimed lore donation by ID without claiming it, returning a dict of donation data or `None` if not found or already claimed
 
 ### Removed
 - Unused `Optional` import from `backend/codex.py`

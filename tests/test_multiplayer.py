@@ -422,6 +422,58 @@ class TestMultiplayerDatabase:
             result = db_claim_lore("test-lore-id", "test-claimer")
             assert result is None
 
+    def test_get_lore_donation_returns_unclaimed(self) -> None:
+        from backend.multiplayer.database import (
+            get_lore_donation,
+            save_crossroads_lore,
+        )
+        cl = CrossroadsLore(
+            id="lore-donation-get-1",
+            donor_game_id="game-db-1",
+            donor_name="DBTester",
+            fragment_id="lore_architects_1",
+            message="Ancient text",
+            claimed=False,
+            created_at=datetime.now(timezone.utc).isoformat(),
+        )
+        save_crossroads_lore(cl)
+        result = get_lore_donation("lore-donation-get-1")
+        assert result is not None
+        assert result["id"] == "lore-donation-get-1"
+        assert result["donor_game_id"] == "game-db-1"
+        assert result["donor_name"] == "DBTester"
+        assert result["fragment_id"] == "lore_architects_1"
+        assert result["message"] == "Ancient text"
+        assert result["claimed"] is False
+        assert result["claimer_game_id"] is None
+        assert result["created_at"] is not None
+
+    def test_get_lore_donation_claimed_returns_none(self) -> None:
+        from backend.multiplayer.database import (
+            claim_lore as db_claim_lore,
+        )
+        from backend.multiplayer.database import (
+            get_lore_donation,
+            save_crossroads_lore,
+        )
+        cl = CrossroadsLore(
+            id="lore-donation-get-2",
+            donor_game_id="game-db-1",
+            donor_name="DBTester",
+            fragment_id="lore_signal_1",
+            claimed=False,
+            created_at=datetime.now(timezone.utc).isoformat(),
+        )
+        save_crossroads_lore(cl)
+        db_claim_lore("lore-donation-get-2", "claimer-x")
+        result = get_lore_donation("lore-donation-get-2")
+        assert result is None
+
+    def test_get_lore_donation_not_found(self) -> None:
+        from backend.multiplayer.database import get_lore_donation
+        result = get_lore_donation("nonexistent-lore-donation")
+        assert result is None
+
     def test_save_and_get_recent_messages(self) -> None:
         from backend.multiplayer.database import (
             get_recent_messages,
@@ -1216,6 +1268,31 @@ class TestMultiplayerCrossroads:
         assert result["success"] is False
         assert "no current system" in result["detail"].lower()
 
+        # The item must NOT have been claimed in the DB as a side effect.
+        items = get_available_items_list()
+        still_available = [i for i in items if i["id"] == don_result["donation"]["id"]]
+        assert len(still_available) == 1
+
+        GAME_STORE.pop(donor.id, None)
+        GAME_STORE.pop(claimer.id, None)
+
+    def test_claim_item_no_current_system_does_not_claim_db(self) -> None:
+        """db_claim_item must not be invoked when the ship has no current system."""
+        donor = new_game(42, "DonorShip", shared_universe=True)
+        GAME_STORE[donor.id] = donor
+        disc = _make_discovery(name="NoSys Item Mock")
+        donor.discoveries.append(disc)
+        don_result = donate_item(donor, "NoSys Item Mock", 1)
+
+        claimer = new_game(43, "ClaimerShip", shared_universe=True)
+        GAME_STORE[claimer.id] = claimer
+        claimer.ship.current_system_id = ""
+
+        with patch("backend.multiplayer.crossroads.db_claim_item") as mock_db_claim:
+            result = claim_item(don_result["donation"]["id"], claimer)
+        assert result["success"] is False
+        mock_db_claim.assert_not_called()
+
         GAME_STORE.pop(donor.id, None)
         GAME_STORE.pop(claimer.id, None)
 
@@ -1260,10 +1337,54 @@ class TestMultiplayerCrossroads:
 
         claimer = new_game(43, "LoreClaimer", shared_universe=True)
         GAME_STORE[claimer.id] = claimer
+        clf = _make_lore_fragment("lore_race", discovered=False)
+        claimer.lore_fragments.append(clf)
 
         with patch("backend.multiplayer.crossroads.db_claim_lore", return_value=None):
             result = claim_lore(don_result["donation"]["id"], claimer)
         assert result["success"] is False
+
+        GAME_STORE.pop(donor.id, None)
+        GAME_STORE.pop(claimer.id, None)
+
+    def test_claim_lore_fragment_not_in_game_state(self) -> None:
+        """claim_lore must not claim the donation when the fragment is absent."""
+        donor = new_game(42, "LoreDonor", shared_universe=True)
+        GAME_STORE[donor.id] = donor
+        lf = _make_lore_fragment("lore_missing_state", discovered=True)
+        donor.lore_fragments.append(lf)
+        don_result = donate_lore(donor, "lore_missing_state")
+
+        claimer = new_game(43, "LoreClaimer", shared_universe=True)
+        GAME_STORE[claimer.id] = claimer
+        # Claimer has no matching lore fragment in its state.
+        result = claim_lore(don_result["donation"]["id"], claimer)
+        assert result["success"] is False
+        assert "not present in game state" in result["detail"].lower()
+
+        # The donation must still be available (not claimed in the DB).
+        lore_list = get_available_lore_list()
+        still_available = [item for item in lore_list if item["id"] == don_result["donation"]["id"]]
+        assert len(still_available) == 1
+
+        GAME_STORE.pop(donor.id, None)
+        GAME_STORE.pop(claimer.id, None)
+
+    def test_claim_lore_fragment_not_in_game_state_does_not_claim_db(self) -> None:
+        """db_claim_lore must not be invoked when the fragment is absent."""
+        donor = new_game(42, "LoreDonor", shared_universe=True)
+        GAME_STORE[donor.id] = donor
+        lf = _make_lore_fragment("lore_missing_state_mock", discovered=True)
+        donor.lore_fragments.append(lf)
+        don_result = donate_lore(donor, "lore_missing_state_mock")
+
+        claimer = new_game(43, "LoreClaimer", shared_universe=True)
+        GAME_STORE[claimer.id] = claimer
+
+        with patch("backend.multiplayer.crossroads.db_claim_lore") as mock_db_claim:
+            result = claim_lore(don_result["donation"]["id"], claimer)
+        assert result["success"] is False
+        mock_db_claim.assert_not_called()
 
         GAME_STORE.pop(donor.id, None)
         GAME_STORE.pop(claimer.id, None)
