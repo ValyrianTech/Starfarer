@@ -1,3 +1,13 @@
+"""Vulture whitelist for Starfarer: Echoes of the Void.
+
+This module suppresses false-positive "unused code" warnings emitted by the
+`vulture` dead-code detector. It marks framework-magic names -- such as FastAPI
+route decorators, Pydantic model fields, pytest fixtures, and mock attribute
+assignments -- as well as public API constants as used via bare name
+references. These names are resolved at runtime or through framework
+introspection and are therefore not detected as used by static analysis alone.
+"""
+
 # Vulture whitelist: false positives from framework magic (FastAPI route
 # decorators, Pydantic fields, pytest fixtures, mock attribute assignments)
 # and public API constants. Bare name references mark these items as used.
