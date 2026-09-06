@@ -145,6 +145,7 @@
 - Codex hint field now correctly shown for all biomes regardless of unlock status — hints use `tier1_hint` from `BIOME_CODEX_DATA` and are displayed whenever `scanner_level >= 0`
 - `.unlocked` CSS class now has corresponding styles in `ui.css` (cyan border, full opacity), fixing the visual distinction between unlocked and locked codex entries
 - Event modals (`events.js`), galaxy info panel (`galaxy.js`), ship status (`ship.js`), and system view (`system.js`) now use `escapeHtml()` for all user-facing data, preventing XSS injection
+- Stored XSS vulnerability in log rendering (`frontend/js/log.js`): `showGameLog()` now escapes user-controlled fields (`entry.type` and `entry.message`) with `escapeHtml()` before rendering, preventing stored XSS injection via crafted log content. A regression test (`TestFrontendXSSProtection` in `tests/test_api.py`) verifies the escaping.
 - `test_new_events_correct_cooldown_values` now asserts the correct cooldown for 'Hawking Radiation Harvest (Deep Scan)' instead of the old 'Hawking Radiation Harvest' event (was checking the wrong event's cooldown)
 - `NEW_BH_TITLES` test set now includes 'Hawking Radiation Harvest (Deep Scan)' instead of the old 'Hawking Radiation Harvest' title, ensuring the new event is properly tested
 - `test_new_events_can_be_triggered_in_black_hole` now verifies that the triggered event is actually one of the 3 new black hole events (was only checking that *any* event triggered, not that it was a new event)
