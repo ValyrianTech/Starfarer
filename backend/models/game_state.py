@@ -180,6 +180,16 @@ class GameState:
         self.ship.crew = max(0, min(self.ship.max_crew, self.ship.crew + effects["crew"]))
         return effects
 
+    def sync_cargo(self) -> None:
+        """Synchronize the ship's cargo count with the discoveries list.
+
+        Sets ``ship.cargo`` to the number of entries currently held in
+        ``discoveries``. This should be called any time discoveries are
+        added to or removed from the game state so that the cargo stat
+        remains consistent with the actual inventory.
+        """
+        self.ship.cargo = len(self.discoveries)
+
     @property
     def lore_fragments_collected(self) -> int:
         """Count of lore fragments that have been discovered.
