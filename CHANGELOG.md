@@ -255,6 +255,7 @@
 - `claim_item` in `crossroads.py` now validates the ship's `current_system_id` before calling `db_claim_item()`, instead of claiming the DB record first and checking the system afterward — previously a ship with no current system caused the item to be permanently lost from the database even though the claim failed
 - `claim_lore` in `crossroads.py` now looks up the lore donation via a new `get_lore_donation()` helper (without claiming it) and verifies the fragment is present in the game state before calling `db_claim_lore()`, preventing permanent lore loss when the fragment was not present
 - Added `get_lore_donation()` to `database.py`: looks up an unclaimed lore donation by ID without claiming it, returning a dict of donation data or `None` if not found or already claimed
+- Ship cargo count (`ship.cargo`) is now synchronized with the discoveries list: Added `sync_cargo()` to `GameState` (`backend/models/game_state.py`) which sets `ship.cargo = len(discoveries)`. It is now called whenever discoveries are added or removed — in surface exploration, atmospheric scans, sub-surface exploration, salvage, emergency crafting, trading, bulk selling, multiplayer crossroads donate/claim operations, and when loading game state from the database — so the cargo stat always reflects the actual inventory count.
 
 ### Removed
 - Unused `Optional` import from `backend/codex.py`
