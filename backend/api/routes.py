@@ -205,10 +205,11 @@ def api_get_game(game_id: str, sort: str | None = None, order: str | None = None
     :raises HTTPException: 404 if the game is not found; 422 if
         ``sort`` or ``order`` is invalid.
     """
-    state = _get_state(game_id)
-    if not state:
-        raise HTTPException(status_code=404, detail="Game not found")
-    return _full_state_response(state, sort=sort, order=order)
+    with _get_lock(game_id):
+        state = _get_state(game_id)
+        if not state:
+            raise HTTPException(status_code=404, detail="Game not found")
+        return _full_state_response(state, sort=sort, order=order)
 
 
 @router.get("/game/{game_id}/galaxy")
@@ -222,10 +223,11 @@ def api_galaxy(game_id: str) -> dict:
     :rtype: dict
     :raises HTTPException: 404 if the game is not found.
     """
-    state = _get_state(game_id)
-    if not state:
-        raise HTTPException(status_code=404, detail="Game not found")
-    return get_galaxy(state)
+    with _get_lock(game_id):
+        state = _get_state(game_id)
+        if not state:
+            raise HTTPException(status_code=404, detail="Game not found")
+        return get_galaxy(state)
 
 
 @router.get("/game/{game_id}/system/{sys_id}")
@@ -241,13 +243,14 @@ def api_system_detail(game_id: str, sys_id: str) -> dict:
     :rtype: dict
     :raises HTTPException: 404 if the game or system is not found.
     """
-    state = _get_state(game_id)
-    if not state:
-        raise HTTPException(status_code=404, detail="Game not found")
-    detail = get_system_detail(state, sys_id)
-    if not detail:
-        raise HTTPException(status_code=404, detail="System not found")
-    return detail
+    with _get_lock(game_id):
+        state = _get_state(game_id)
+        if not state:
+            raise HTTPException(status_code=404, detail="Game not found")
+        detail = get_system_detail(state, sys_id)
+        if not detail:
+            raise HTTPException(status_code=404, detail="System not found")
+        return detail
 
 
 @router.post("/game/{game_id}/jump/{sys_id}")
@@ -539,14 +542,15 @@ def api_log(game_id: str) -> dict:
     :rtype: dict
     :raises HTTPException: 404 if the game is not found.
     """
-    state = _get_state(game_id)
-    if not state:
-        raise HTTPException(status_code=404, detail="Game not found")
-    entries = list(reversed(state.log_entries))
-    return {
-        "count": len(entries),
-        "entries": entries,
-    }
+    with _get_lock(game_id):
+        state = _get_state(game_id)
+        if not state:
+            raise HTTPException(status_code=404, detail="Game not found")
+        entries = list(reversed(state.log_entries))
+        return {
+            "count": len(entries),
+            "entries": entries,
+        }
 
 
 @router.get("/game/{game_id}/log/paginated")
@@ -575,41 +579,42 @@ def api_log_paginated(
     :rtype: dict
     :raises HTTPException: 404 if the game is not found.
     """
-    state = _get_state(game_id)
-    if not state:
-        raise HTTPException(status_code=404, detail="Game not found")
+    with _get_lock(game_id):
+        state = _get_state(game_id)
+        if not state:
+            raise HTTPException(status_code=404, detail="Game not found")
 
-    page = max(1, page)
-    per_page = max(1, min(per_page, 100))
+        page = max(1, page)
+        per_page = max(1, min(per_page, 100))
 
-    entries = list(reversed(state.log_entries))
+        entries = list(reversed(state.log_entries))
 
-    if category:
-        entries = [e for e in entries if e.get("category") == category]
+        if category:
+            entries = [e for e in entries if e.get("category") == category]
 
-    if search:
-        search_lower = search.lower()
-        entries = [
-            e for e in entries
-            if search_lower in str(e.get("title", "")).lower()
-            or search_lower in str(e.get("message", "")).lower()
-            or search_lower in str(e.get("description", "")).lower()
-        ]
+        if search:
+            search_lower = search.lower()
+            entries = [
+                e for e in entries
+                if search_lower in str(e.get("title", "")).lower()
+                or search_lower in str(e.get("message", "")).lower()
+                or search_lower in str(e.get("description", "")).lower()
+            ]
 
-    total_entries = len(entries)
-    total_pages = (total_entries - 1) // per_page + 1 if total_entries > 0 else 0
+        total_entries = len(entries)
+        total_pages = (total_entries - 1) // per_page + 1 if total_entries > 0 else 0
 
-    start = (page - 1) * per_page
-    end = start + per_page
-    page_entries = entries[start:end]
+        start = (page - 1) * per_page
+        end = start + per_page
+        page_entries = entries[start:end]
 
-    return {
-        "log_entries": page_entries,
-        "page": page,
-        "per_page": per_page,
-        "total_entries": total_entries,
-        "total_pages": total_pages,
-    }
+        return {
+            "log_entries": page_entries,
+            "page": page,
+            "per_page": per_page,
+            "total_entries": total_entries,
+            "total_pages": total_pages,
+        }
 
 
 @router.get("/game/{game_id}/discoveries")
@@ -623,13 +628,14 @@ def api_discoveries(game_id: str) -> dict:
     :rtype: dict
     :raises HTTPException: 404 if the game is not found.
     """
-    state = _get_state(game_id)
-    if not state:
-        raise HTTPException(status_code=404, detail="Game not found")
-    return {
-        "count": len(state.discoveries),
-        "discoveries": [d.to_dict() for d in state.discoveries],
-    }
+    with _get_lock(game_id):
+        state = _get_state(game_id)
+        if not state:
+            raise HTTPException(status_code=404, detail="Game not found")
+        return {
+            "count": len(state.discoveries),
+            "discoveries": [d.to_dict() for d in state.discoveries],
+        }
 
 
 @router.get("/game/{game_id}/cargo")
@@ -651,43 +657,44 @@ def api_cargo(game_id: str, sort: str = "value", order: str = "desc") -> dict:
     :rtype: dict
     :raises HTTPException: 404 if the game is not found.
     """
-    state = _get_state(game_id)
-    if not state:
-        raise HTTPException(status_code=404, detail="Game not found")
-    cargo_items = [d.to_cargo_dict() for d in state.discoveries]
+    with _get_lock(game_id):
+        state = _get_state(game_id)
+        if not state:
+            raise HTTPException(status_code=404, detail="Game not found")
+        cargo_items = [d.to_cargo_dict() for d in state.discoveries]
 
-    valid_sorts = {"value", "name"}
-    valid_orders = {"asc", "desc"}
+        valid_sorts = {"value", "name"}
+        valid_orders = {"asc", "desc"}
 
-    if sort not in valid_sorts:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Invalid sort key '{sort}'. Must be one of: {', '.join(sorted(valid_sorts))}"
-        )
-    if order not in valid_orders:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Invalid order '{order}'. Must be one of: {', '.join(sorted(valid_orders))}"
-        )
+        if sort not in valid_sorts:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Invalid sort key '{sort}'. Must be one of: {', '.join(sorted(valid_sorts))}"
+            )
+        if order not in valid_orders:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Invalid order '{order}'. Must be one of: {', '.join(sorted(valid_orders))}"
+            )
 
-    total_value = sum(item["value"] for item in cargo_items)
+        total_value = sum(item["value"] for item in cargo_items)
 
-    top3_ids = [item["id"] for item in sorted(cargo_items, key=lambda i: i.get("value", 0), reverse=True)[:3]]
+        top3_ids = [item["id"] for item in sorted(cargo_items, key=lambda i: i.get("value", 0), reverse=True)[:3]]
 
-    if sort == "value":
-        reverse = order == "desc"
-        cargo_items.sort(key=lambda i: i.get("value", 0), reverse=reverse)
-    else:  # sort == "name"
-        reverse = order == "desc"
-        cargo_items.sort(key=lambda i: i.get("name", ""), reverse=reverse)
+        if sort == "value":
+            reverse = order == "desc"
+            cargo_items.sort(key=lambda i: i.get("value", 0), reverse=reverse)
+        else:  # sort == "name"
+            reverse = order == "desc"
+            cargo_items.sort(key=lambda i: i.get("name", ""), reverse=reverse)
 
-    return {
-        "cargo": state.ship.cargo,
-        "cargo_capacity": state.ship.max_cargo,
-        "cargo_items": cargo_items,
-        "total_value": total_value,
-        "top3_ids": top3_ids,
-    }
+        return {
+            "cargo": state.ship.cargo,
+            "cargo_capacity": state.ship.max_cargo,
+            "cargo_items": cargo_items,
+            "total_value": total_value,
+            "top3_ids": top3_ids,
+        }
 
 
 @router.get("/game/{game_id}/lore")
@@ -704,65 +711,66 @@ def api_lore(game_id: str) -> dict:
     :rtype: dict
     :raises HTTPException: 404 if the game is not found.
     """
-    state = _get_state(game_id)
-    if not state:
-        raise HTTPException(status_code=404, detail="Game not found")
+    with _get_lock(game_id):
+        state = _get_state(game_id)
+        if not state:
+            raise HTTPException(status_code=404, detail="Game not found")
 
-    arcs: dict[str, dict] = {}
-    for arc_id, display_name in ARC_DISPLAY_NAMES.items():
-        arcs[arc_id] = {
-            "arc_id": arc_id,
-            "display_name": display_name,
-            "fragments": [],
-            "collected": 0,
-            "total": 0,
+        arcs: dict[str, dict] = {}
+        for arc_id, display_name in ARC_DISPLAY_NAMES.items():
+            arcs[arc_id] = {
+                "arc_id": arc_id,
+                "display_name": display_name,
+                "fragments": [],
+                "collected": 0,
+                "total": 0,
+            }
+
+        for lore in state.lore_fragments:
+            arc = lore.arc
+            if arc in arcs:
+                frag_dict = lore.to_dict()
+
+                if lore.discovered and lore.discovery_id:
+                    parts = lore.discovery_id.split("::")
+                    if len(parts) == 2:
+                        sys_id, body_id = parts
+                        system = state.systems.get(sys_id)
+                        if system:
+                            body = None
+                            for b in system.bodies:
+                                if b.id == body_id:
+                                    body = b
+                                    break
+                            body_name = body.name if body else body_id
+                            frag_dict["discovery_location"] = f"{system.name} - {body_name}"
+                        else:
+                            # Fallback: use raw IDs so the user at least sees something
+                            logger.warning(
+                                "Lore fragment %s references unknown system %s (body %s) - possible orphaned reference",
+                                lore.id, sys_id, body_id,
+                            )
+                            frag_dict["discovery_location"] = f"Unknown system ({sys_id}) - Body ({body_id})"
+
+                if lore.discovery_timestamp:
+                    frag_dict["discovery_date"] = lore.discovery_timestamp
+
+                arcs[arc]["fragments"].append(frag_dict)
+                arcs[arc]["total"] += 1
+                if lore.discovered:
+                    arcs[arc]["collected"] += 1
+
+        lore_collected = sum(1 for lf in state.lore_fragments if lf.discovered)
+        lore_total = len(state.lore_fragments)
+
+        return {
+            "arcs": arcs,
+            "arc_order": list(ARC_DISPLAY_NAMES.keys()),
+            "progress": {
+                "collected": lore_collected,
+                "total": lore_total,
+            },
         }
-
-    for lore in state.lore_fragments:
-        arc = lore.arc
-        if arc in arcs:
-            frag_dict = lore.to_dict()
-
-            if lore.discovered and lore.discovery_id:
-                parts = lore.discovery_id.split("::")
-                if len(parts) == 2:
-                    sys_id, body_id = parts
-                    system = state.systems.get(sys_id)
-                    if system:
-                        body = None
-                        for b in system.bodies:
-                            if b.id == body_id:
-                                body = b
-                                break
-                        body_name = body.name if body else body_id
-                        frag_dict["discovery_location"] = f"{system.name} - {body_name}"
-                    else:
-                        # Fallback: use raw IDs so the user at least sees something
-                        logger.warning(
-                            "Lore fragment %s references unknown system %s (body %s) - possible orphaned reference",
-                            lore.id, sys_id, body_id,
-                        )
-                        frag_dict["discovery_location"] = f"Unknown system ({sys_id}) - Body ({body_id})"
-
-            if lore.discovery_timestamp:
-                frag_dict["discovery_date"] = lore.discovery_timestamp
-
-            arcs[arc]["fragments"].append(frag_dict)
-            arcs[arc]["total"] += 1
-            if lore.discovered:
-                arcs[arc]["collected"] += 1
-
-    lore_collected = sum(1 for lf in state.lore_fragments if lf.discovered)
-    lore_total = len(state.lore_fragments)
-
-    return {
-        "arcs": arcs,
-        "arc_order": list(ARC_DISPLAY_NAMES.keys()),
-        "progress": {
-            "collected": lore_collected,
-            "total": lore_total,
-        },
-    }
 
 
 @router.get("/game/{game_id}/codex")
@@ -779,14 +787,15 @@ def api_codex(game_id: str) -> dict:
     :rtype: dict
     :raises HTTPException: 404 if the game is not found.
     """
-    state = _get_state(game_id)
-    if not state:
-        raise HTTPException(status_code=404, detail="Game not found")
-    from backend.codex import get_codex
-    return {
-        "game_id": game_id,
-        "codex": get_codex(state),
-    }
+    with _get_lock(game_id):
+        state = _get_state(game_id)
+        if not state:
+            raise HTTPException(status_code=404, detail="Game not found")
+        from backend.codex import get_codex
+        return {
+            "game_id": game_id,
+            "codex": get_codex(state),
+        }
 
 
 @router.post("/game/{game_id}/trade")
@@ -900,13 +909,14 @@ def api_upgrades_info(game_id: str) -> dict:
     :rtype: dict
     :raises HTTPException: 404 if the game is not found.
     """
-    state = _get_state(game_id)
-    if not state:
-        raise HTTPException(status_code=404, detail="Game not found")
-    return {
-        "upgrades": get_upgrade_info(state.ship),
-        "credits": state.ship.credits,
-    }
+    with _get_lock(game_id):
+        state = _get_state(game_id)
+        if not state:
+            raise HTTPException(status_code=404, detail="Game not found")
+        return {
+            "upgrades": get_upgrade_info(state.ship),
+            "credits": state.ship.credits,
+        }
 
 
 @router.get("/game/{game_id}/nearby")
@@ -920,15 +930,16 @@ def api_nearby(game_id: str) -> dict:
     :rtype: dict
     :raises HTTPException: 404 if the game is not found.
     """
-    state = _get_state(game_id)
-    if not state:
-        raise HTTPException(status_code=404, detail="Game not found")
-    return {
-        "nearby": get_nearby_systems(state),
-        "current_system_id": state.ship.current_system_id,
-        "jump_range": state.ship.jump_range,
-        "fuel": state.ship.fuel,
-    }
+    with _get_lock(game_id):
+        state = _get_state(game_id)
+        if not state:
+            raise HTTPException(status_code=404, detail="Game not found")
+        return {
+            "nearby": get_nearby_systems(state),
+            "current_system_id": state.ship.current_system_id,
+            "jump_range": state.ship.jump_range,
+            "fuel": state.ship.fuel,
+        }
 
 
 @router.post("/game/{game_id}/distress")
@@ -1027,10 +1038,11 @@ def api_factions(game_id: str) -> dict:
     :rtype: dict
     :raises HTTPException: 404 if the game is not found.
     """
-    state = _get_state(game_id)
-    if not state:
-        raise HTTPException(status_code=404, detail="Game not found")
-    return {"factions": state.get_known_factions()}
+    with _get_lock(game_id):
+        state = _get_state(game_id)
+        if not state:
+            raise HTTPException(status_code=404, detail="Game not found")
+        return {"factions": state.get_known_factions()}
 
 
 @router.get("/game/{game_id}/faction/{faction_id}")
@@ -1045,24 +1057,25 @@ def api_faction_detail(game_id: str, faction_id: str) -> dict:
     :rtype: dict
     :raises HTTPException: 404 if the game or faction is not found.
     """
-    state = _get_state(game_id)
-    if not state:
-        raise HTTPException(status_code=404, detail="Game not found")
-    faction = get_faction(faction_id)
-    if not faction:
-        raise HTTPException(status_code=404, detail="Faction not found")
-    relation = state.faction_relations.get(faction_id)
-    return {
-        "faction": {
-            "id": faction.id,
-            "name": faction.name,
-            "description": faction.description,
-            "alignment": faction.alignment,
-            "home_system_id": faction.home_system_id,
-        },
-        "reputation": relation.reputation if relation else 0,
-        "known": relation.known if relation else False,
-    }
+    with _get_lock(game_id):
+        state = _get_state(game_id)
+        if not state:
+            raise HTTPException(status_code=404, detail="Game not found")
+        faction = get_faction(faction_id)
+        if not faction:
+            raise HTTPException(status_code=404, detail="Faction not found")
+        relation = state.faction_relations.get(faction_id)
+        return {
+            "faction": {
+                "id": faction.id,
+                "name": faction.name,
+                "description": faction.description,
+                "alignment": faction.alignment,
+                "home_system_id": faction.home_system_id,
+            },
+            "reputation": relation.reputation if relation else 0,
+            "known": relation.known if relation else False,
+        }
 
 
 @router.post("/game/{game_id}/faction/{faction_id}/mission")
@@ -1184,38 +1197,39 @@ def api_missions(game_id: str) -> dict:
     :raises HTTPException: 404 if the game is not found; 400 if
         not in a system or no trading station.
     """
-    state = _get_state(game_id)
-    if not state:
-        raise HTTPException(status_code=404, detail="Game not found")
+    with _get_lock(game_id):
+        state = _get_state(game_id)
+        if not state:
+            raise HTTPException(status_code=404, detail="Game not found")
 
-    current_system = state.get_current_system()
-    if not current_system:
-        raise HTTPException(status_code=400, detail="Not in a star system")
-    if not current_system.has_trading_station:
-        raise HTTPException(status_code=400, detail="No trading station in this system")
+        current_system = state.get_current_system()
+        if not current_system:
+            raise HTTPException(status_code=400, detail="Not in a star system")
+        if not current_system.has_trading_station:
+            raise HTTPException(status_code=400, detail="No trading station in this system")
 
-    faction_ids = list(FACTION_DEFINITIONS.keys())
-    faction_idx = deterministic_hash(state.seed, current_system.id, "primary_faction") % len(faction_ids)
-    primary_faction_id = faction_ids[faction_idx]
+        faction_ids = list(FACTION_DEFINITIONS.keys())
+        faction_idx = deterministic_hash(state.seed, current_system.id, "primary_faction") % len(faction_ids)
+        primary_faction_id = faction_ids[faction_idx]
 
-    missions = generate_missions(state, current_system, primary_faction_id)
+        missions = generate_missions(state, current_system, primary_faction_id)
 
-    faction = get_faction(primary_faction_id)
+        faction = get_faction(primary_faction_id)
 
-    daily_available = any(m.objective_type == "daily" for m in missions)
-    standard_missions = [m for m in missions if m.objective_type != "daily"]
+        daily_available = any(m.objective_type == "daily" for m in missions)
+        standard_missions = [m for m in missions if m.objective_type != "daily"]
 
-    return {
-        "system_id": current_system.id,
-        "system_name": current_system.name,
-        "faction_id": primary_faction_id,
-        "faction_name": faction.name if faction else primary_faction_id,
-        "missions": [m.to_dict() for m in standard_missions],
-        "daily_mission": next(
-            (m.to_dict() for m in missions if m.objective_type == "daily"), None
-        ),
-        "daily_available": daily_available,
-    }
+        return {
+            "system_id": current_system.id,
+            "system_name": current_system.name,
+            "faction_id": primary_faction_id,
+            "faction_name": faction.name if faction else primary_faction_id,
+            "missions": [m.to_dict() for m in standard_missions],
+            "daily_mission": next(
+                (m.to_dict() for m in missions if m.objective_type == "daily"), None
+            ),
+            "daily_available": daily_available,
+        }
 
 
 @router.post("/game/{game_id}/missions/{mission_id}/accept")
