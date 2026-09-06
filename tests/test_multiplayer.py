@@ -16,6 +16,7 @@ from backend.api.routes import (
     _cleanup_stale_locks,
     _game_locks,
     _get_lock,
+    _lock_last_access,
 )
 from backend.database import init_db
 from backend.game.manager import GAME_STORE, game_save, new_game
@@ -2166,9 +2167,11 @@ class TestMultiplayerAPI:
 
         _get_lock(game_id)
         assert game_id in _game_locks
+        assert game_id in _lock_last_access
 
         _cleanup_game_lock(game_id)
         assert game_id not in _game_locks
+        assert game_id not in _lock_last_access
 
     def test_cleanup_game_lock_nonexistent(self) -> None:
         _cleanup_game_lock("nonexistent-game-id")
@@ -2180,10 +2183,12 @@ class TestMultiplayerAPI:
 
         _get_lock(game_id)
         assert game_id in _game_locks
+        assert game_id in _lock_last_access
 
         del GAME_STORE[game_id]
         _cleanup_stale_locks()
         assert game_id not in _game_locks
+        assert game_id not in _lock_last_access
 
     def test_cleanup_stale_locks_preserves_active(self) -> None:
         state = new_game(42, "ActiveTest", shared_universe=True)
@@ -2257,6 +2262,35 @@ class TestMultiplayerAPI:
         for i in range(105):
             lock = api_routes._get_lock(f"dummy-periodic-{i}")
             assert lock is not None
+
+    def test_get_lock_periodic_cleanup_preserves_recently_accessed(self) -> None:
+        """Periodic cleanup should NOT remove locks accessed within the stale threshold."""
+        game_id = "recently-accessed-game"
+
+        times = iter([100.0] * 300)
+        with patch("backend.api.routes.time.time", side_effect=lambda: next(times)):
+            _get_lock(game_id)
+            assert game_id in _game_locks
+
+            for i in range(200):
+                _get_lock(f"dummy-recent-{i}")
+
+        assert game_id in _game_locks
+        _cleanup_game_lock(game_id)
+
+    def test_get_lock_periodic_cleanup_removes_old_stale(self) -> None:
+        """Periodic cleanup should remove locks not accessed for over the stale threshold."""
+        stale_id = "old-stale-periodic-game"
+
+        times = iter([0.0] + [61.0] * 300)
+        with patch("backend.api.routes.time.time", side_effect=lambda: next(times)):
+            _get_lock(stale_id)
+            assert stale_id in _game_locks
+
+            for i in range(200):
+                _get_lock(f"dummy-old-stale-{i}")
+
+        assert stale_id not in _game_locks
 
     def test_cleanup_stale_locks_concurrent_safety(self) -> None:
         """Verify _cleanup_stale_locks is safe when called concurrently with _get_lock."""

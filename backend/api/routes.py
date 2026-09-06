@@ -78,28 +78,37 @@ START_TIME = time.time()
 router = APIRouter(prefix="/api")
 
 _game_locks: dict[str, Lock] = {}
+_lock_last_access: dict[str, float] = {}
 _lock_for_locks: Lock = Lock()
 _lock_access_count = itertools.count(1)
 _new_game_lock = Lock()
+
+_LOCK_STALE_THRESHOLD_SECONDS = 60.0
 
 
 def _get_lock(game_id: str) -> Lock:
     """Return a thread lock for the given game_id, creating one if needed."""
     count = next(_lock_access_count)
     with _lock_for_locks:
+        now = time.time()
         # Periodic cleanup of stale locks every 100 accesses
         if count % 100 == 0:
             for gid in list(_game_locks.keys()):
-                if gid not in GAME_STORE:
+                if gid not in GAME_STORE and (
+                    now - _lock_last_access.get(gid, 0) > _LOCK_STALE_THRESHOLD_SECONDS
+                ):
                     del _game_locks[gid]
+                    _lock_last_access.pop(gid, None)
         if game_id not in _game_locks:
             _game_locks[game_id] = Lock()
+        _lock_last_access[game_id] = now
         return _game_locks[game_id]
 
 
 def _cleanup_game_lock(game_id: str) -> None:
     """Remove the lock entry for the given game_id."""
     _game_locks.pop(game_id, None)
+    _lock_last_access.pop(game_id, None)
 
 
 def _cleanup_stale_locks() -> None:
@@ -108,6 +117,7 @@ def _cleanup_stale_locks() -> None:
         for gid in list(_game_locks.keys()):
             if gid not in GAME_STORE:
                 del _game_locks[gid]
+                _lock_last_access.pop(gid, None)
 
 
 def _get_state(game_id: str) -> GameState | None:
