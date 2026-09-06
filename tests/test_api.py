@@ -803,7 +803,92 @@ class TestAPIMainApp:
         allow_credentials = kwargs["allow_credentials"]
         assert allow_credentials is True
         assert "*" not in allow_origins
-        assert allow_origins == ["http://localhost:3000", "http://localhost:8080", "http://localhost:8001"]
+        from backend.config import ALLOWED_ORIGINS
+        assert allow_origins == ALLOWED_ORIGINS
+
+
+class TestCORSConfig:
+    """Tests for the configurable CORS allowlist."""
+
+    def test_default_origins_when_env_not_set(self, monkeypatch) -> None:
+        from backend.config import get_allowed_origins
+        monkeypatch.delenv("STARFARER_ALLOWED_ORIGINS", raising=False)
+        origins = get_allowed_origins()
+        assert origins == ["http://localhost:3000", "http://localhost:8080", "http://localhost:8001"]
+
+    def test_custom_origins_from_env(self, monkeypatch) -> None:
+        from backend.config import get_allowed_origins
+        monkeypatch.setenv("STARFARER_ALLOWED_ORIGINS", "https://example.com,https://api.example.com")
+        origins = get_allowed_origins()
+        assert origins == ["https://example.com", "https://api.example.com"]
+
+    def test_empty_env_falls_back_to_defaults(self, monkeypatch) -> None:
+        from backend.config import get_allowed_origins
+        monkeypatch.setenv("STARFARER_ALLOWED_ORIGINS", "")
+        origins = get_allowed_origins()
+        assert origins == ["http://localhost:3000", "http://localhost:8080", "http://localhost:8001"]
+
+    def test_whitespace_env_falls_back_to_defaults(self, monkeypatch) -> None:
+        from backend.config import get_allowed_origins
+        monkeypatch.setenv("STARFARER_ALLOWED_ORIGINS", "   ")
+        origins = get_allowed_origins()
+        assert origins == ["http://localhost:3000", "http://localhost:8080", "http://localhost:8001"]
+
+    def test_whitespace_around_origins_is_stripped(self, monkeypatch) -> None:
+        from backend.config import get_allowed_origins
+        monkeypatch.setenv("STARFARER_ALLOWED_ORIGINS", " https://a.example , https://b.example ,https://c.example ")
+        origins = get_allowed_origins()
+        assert origins == ["https://a.example", "https://b.example", "https://c.example"]
+
+    def test_empty_entries_are_filtered_out(self, monkeypatch) -> None:
+        from backend.config import get_allowed_origins
+        monkeypatch.setenv("STARFARER_ALLOWED_ORIGINS", "https://a.example,,https://b.example,,,https://c.example,")
+        origins = get_allowed_origins()
+        assert origins == ["https://a.example", "https://b.example", "https://c.example"]
+
+    def test_config_allowed_origins_matches_default(self, monkeypatch) -> None:
+        import importlib
+
+        import backend.config
+        monkeypatch.delenv("STARFARER_ALLOWED_ORIGINS", raising=False)
+        importlib.reload(backend.config)
+        assert backend.config.ALLOWED_ORIGINS == [
+            "http://localhost:3000",
+            "http://localhost:8080",
+            "http://localhost:8001",
+        ]
+        importlib.reload(backend.config)
+
+    def test_config_allowed_origins_env_override(self, monkeypatch) -> None:
+        import importlib
+
+        import backend.config
+        monkeypatch.setenv("STARFARER_ALLOWED_ORIGINS", "https://prod.example.com,https://staging.example.com")
+        importlib.reload(backend.config)
+        assert backend.config.ALLOWED_ORIGINS == [
+            "https://prod.example.com",
+            "https://staging.example.com",
+        ]
+        monkeypatch.delenv("STARFARER_ALLOWED_ORIGINS", raising=False)
+        importlib.reload(backend.config)
+
+    def test_main_uses_config_allowed_origins(self) -> None:
+        """main.py must wire the config allowlist into the CORS middleware."""
+        from typing import Any, cast
+
+        from starlette.middleware.cors import CORSMiddleware as StarletteCORSMiddleware
+
+        from backend.config import ALLOWED_ORIGINS
+
+        cors_middleware = None
+        for middleware in app.user_middleware:
+            if middleware.cls is StarletteCORSMiddleware:
+                cors_middleware = middleware
+                break
+
+        assert cors_middleware is not None
+        kwargs = cast(dict[str, Any], cors_middleware.kwargs)
+        assert kwargs["allow_origins"] == ALLOWED_ORIGINS
 
 
 class TestAPIEventTriggerPaths:
