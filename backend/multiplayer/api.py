@@ -10,8 +10,6 @@ from fastapi import APIRouter, HTTPException
 
 from backend.api.routes import (
     _cleanup_game_lock,
-    _cleanup_stale_locks,
-    _game_locks,
     _get_lock,
     _get_state,
     _save_state,
