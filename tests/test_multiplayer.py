@@ -11,17 +11,17 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
+from backend.api.routes import (
+    _cleanup_game_lock,
+    _cleanup_stale_locks,
+    _game_locks,
+    _get_lock,
+)
 from backend.database import init_db
 from backend.game.manager import GAME_STORE, game_save, new_game
 from backend.main import app
 from backend.models.discovery import Discovery, LoreFragment
-from backend.multiplayer.api import (
-    _cleanup_game_lock,
-    _cleanup_stale_locks,
-    _game_exists,
-    _game_locks,
-    _get_lock,
-)
+from backend.multiplayer.api import _game_exists
 from backend.multiplayer.crossroads import (
     claim_item,
     claim_lore,
@@ -2141,20 +2141,20 @@ class TestMultiplayerAPI:
         """Verify that _get_lock returns a threading.Lock instance."""
         import threading
 
-        from backend.multiplayer.api import _get_lock
+        from backend.api.routes import _get_lock
         lock = _get_lock("test-get-lock-1")
         assert isinstance(lock, type(threading.Lock()))
 
     def test_get_lock_same_game_id(self) -> None:
         """Verify that _get_lock returns the same lock for the same game_id."""
-        from backend.multiplayer.api import _get_lock
+        from backend.api.routes import _get_lock
         lock1 = _get_lock("test-get-lock-2")
         lock2 = _get_lock("test-get-lock-2")
         assert lock1 is lock2
 
     def test_get_lock_different_game_ids(self) -> None:
         """Verify that _get_lock returns different locks for different game_ids."""
-        from backend.multiplayer.api import _get_lock
+        from backend.api.routes import _get_lock
         lock1 = _get_lock("test-get-lock-3a")
         lock2 = _get_lock("test-get-lock-3b")
         assert lock1 is not lock2
@@ -2211,7 +2211,7 @@ class TestMultiplayerAPI:
         """Verify that the lock serializes concurrent access to prevent state corruption."""
         import concurrent.futures
 
-        from backend.multiplayer.api import _game_locks
+        from backend.api.routes import _game_locks
 
         resp = client.post("/api/game/new", json={"shared_universe": True})
         assert resp.status_code == 200
@@ -2248,14 +2248,14 @@ class TestMultiplayerAPI:
 
     def test_get_lock_periodic_cleanup_triggers(self) -> None:
         """Verify that periodic stale lock cleanup triggers without deadlock after 100 calls."""
-        import backend.multiplayer.api as mp_api
+        import backend.api.routes as api_routes
         
         # Call _get_lock 100+ times to ensure periodic cleanup is triggered.
         # _lock_access_count is now an itertools.count object; we verify
         # that calling _get_lock does not raise any errors and that locks
         # are properly created.
         for i in range(105):
-            lock = mp_api._get_lock(f"dummy-periodic-{i}")
+            lock = api_routes._get_lock(f"dummy-periodic-{i}")
             assert lock is not None
 
     def test_cleanup_stale_locks_concurrent_safety(self) -> None:
