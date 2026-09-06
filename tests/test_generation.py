@@ -635,6 +635,30 @@ class TestGameState:
         assert state.ship.cargo == len(state.discoveries)
         assert state.ship.cargo == 3
 
+    def test_sync_cargo_clamps_to_max_cargo(self) -> None:
+        """sync_cargo should clamp ship.cargo to max_cargo when discoveries exceed it."""
+        ship = Ship(cargo=0, max_cargo=5)
+        state = GameState(id="test-cargo-clamp", seed=42, ship=ship)
+        state.discoveries = [
+            Discovery(id=f"d-{i}", category="artifact", name="Cargo", description="x", value=10)
+            for i in range(10)
+        ]
+        state.sync_cargo()
+        assert state.ship.cargo == state.ship.max_cargo
+        assert state.ship.cargo == 5
+
+    def test_sync_cargo_within_max_cargo(self) -> None:
+        """sync_cargo should keep cargo equal to len(discoveries) when under max."""
+        ship = Ship(cargo=0, max_cargo=10)
+        state = GameState(id="test-cargo-within", seed=42, ship=ship)
+        state.discoveries = [
+            Discovery(id=f"d-{i}", category="artifact", name="Cargo", description="x", value=10)
+            for i in range(4)
+        ]
+        state.sync_cargo()
+        assert state.ship.cargo == len(state.discoveries)
+        assert state.ship.cargo == 4
+
 
 class TestEventModel:
     def test_event_to_dict_and_back(self) -> None:

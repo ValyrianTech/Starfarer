@@ -216,11 +216,12 @@ class GameState:
         """Synchronize the ship's cargo count with the discoveries list.
 
         Sets ``ship.cargo`` to the number of entries currently held in
-        ``discoveries``. This should be called any time discoveries are
-        added to or removed from the game state so that the cargo stat
-        remains consistent with the actual inventory.
+        ``discoveries``, clamped to ``ship.max_cargo``. This should be
+        called any time discoveries are added to or removed from the game
+        state so that the cargo stat remains consistent with the actual
+        inventory.
         """
-        self.ship.cargo = len(self.discoveries)
+        self.ship.cargo = min(len(self.discoveries), self.ship.max_cargo)
 
     @property
     def lore_fragments_collected(self) -> int:
