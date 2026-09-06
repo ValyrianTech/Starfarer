@@ -402,11 +402,19 @@ class TestGameState:
         assert state.ship.morale == 70
 
     def test_apply_choice_outcome_cargo(self) -> None:
-        """apply_choice_outcome should parse and apply cargo changes."""
+        """apply_choice_outcome should create Discovery objects for positive cargo."""
         ship = Ship(cargo=10, max_cargo=50)
         state = GameState(id="test-c", seed=42, ship=ship)
+        state.discoveries = [
+            Discovery(id=f"init-{i}", category="artifact", name="Initial Cargo",
+                      description="Pre-existing cargo.", value=25, system_id="sys")
+            for i in range(10)
+        ]
+        state.sync_cargo()
         effects = state.apply_choice_outcome("cargo:5")
         assert effects["cargo"] == 5
+        assert len(state.discoveries) == 15
+        assert state.ship.cargo == len(state.discoveries)
         assert state.ship.cargo == 15
 
     def test_apply_choice_outcome_crew(self) -> None:
@@ -421,6 +429,12 @@ class TestGameState:
         """apply_choice_outcome with all stat types should apply all effects."""
         ship = Ship(fuel=50, hull=50, morale=50, credits=500, cargo=10, crew=50, max_fuel=100, max_hull=100, max_cargo=50, max_crew=100)
         state = GameState(id="test-all", seed=42, ship=ship)
+        state.discoveries = [
+            Discovery(id=f"init-{i}", category="artifact", name="Initial Cargo",
+                      description="Pre-existing cargo.", value=25, system_id="sys")
+            for i in range(10)
+        ]
+        state.sync_cargo()
         effects = state.apply_choice_outcome("fuel:-10; hull:10; morale:5; credits:200; cargo:-2; crew:-1")
         assert effects["fuel"] == -10
         assert effects["hull"] == 10
@@ -432,6 +446,7 @@ class TestGameState:
         assert state.ship.hull == 60
         assert state.ship.morale == 55
         assert state.ship.credits == 700
+        assert len(state.discoveries) == 8
         assert state.ship.cargo == 8
         assert state.ship.crew == 49
 
@@ -498,6 +513,12 @@ class TestGameState:
         caplog.set_level(logging.WARNING)
         ship = Ship(fuel=50, hull=50, morale=50, credits=500, cargo=10, crew=5, max_fuel=100, max_hull=100, max_cargo=50, max_crew=10)
         state = GameState(id="test-no-warn", seed=42, ship=ship)
+        state.discoveries = [
+            Discovery(id=f"init-{i}", category="artifact", name="Initial Cargo",
+                      description="Pre-existing cargo.", value=25, system_id="sys")
+            for i in range(10)
+        ]
+        state.sync_cargo()
         effects = state.apply_choice_outcome("fuel:-10; hull:10; morale:5; credits:200; cargo:-2; crew:-1")
         assert effects["fuel"] == -10
         assert effects["hull"] == 10
@@ -505,6 +526,8 @@ class TestGameState:
         assert effects["credits"] == 200
         assert effects["cargo"] == -2
         assert effects["crew"] == -1
+        assert len(state.discoveries) == 8
+        assert state.ship.cargo == 8
         warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
         assert len(warning_messages) == 0, f"Expected no warnings but got: {warning_messages}"
 
@@ -521,6 +544,96 @@ class TestGameState:
         assert any("Some narrative" in msg for msg in warning_messages)
         assert any("scanner:1" in msg for msg in warning_messages)
         assert any("Another note" in msg for msg in warning_messages)
+
+    def test_cargo_positive_creates_discovery_objects(self) -> None:
+        """cargo:+N should create N Discovery objects that can be synced."""
+        ship = Ship(cargo=0, max_cargo=50)
+        state = GameState(id="test-cargo-add", seed=42, ship=ship)
+        effects = state.apply_choice_outcome("cargo:3")
+        assert effects["cargo"] == 3
+        assert len(state.discoveries) == 3
+        assert all(isinstance(d, Discovery) for d in state.discoveries)
+        assert all(d.category == "artifact" for d in state.discoveries)
+        assert all(d.name == "Event Cargo" for d in state.discoveries)
+        assert all(d.value == 50 for d in state.discoveries)
+        assert state.ship.cargo == 3
+        state.sync_cargo()
+        assert state.ship.cargo == 3
+
+    def test_cargo_negative_removes_discovery_objects(self) -> None:
+        """cargo:-N should remove N sellable Discovery objects."""
+        ship = Ship(cargo=4, max_cargo=50)
+        state = GameState(id="test-cargo-remove", seed=42, ship=ship)
+        state.discoveries = [
+            Discovery(id=f"d-{i}", category="artifact", name="Cargo", description="x", value=10)
+            for i in range(4)
+        ]
+        state.sync_cargo()
+        effects = state.apply_choice_outcome("cargo:-2")
+        assert effects["cargo"] == -2
+        assert len(state.discoveries) == 2
+        assert state.ship.cargo == 2
+
+    def test_cargo_negative_removes_available_when_insufficient(self) -> None:
+        """cargo:-N with too few discoveries should remove what is available."""
+        ship = Ship(cargo=2, max_cargo=50)
+        state = GameState(id="test-cargo-underflow", seed=42, ship=ship)
+        state.discoveries = [
+            Discovery(id=f"d-{i}", category="artifact", name="Cargo", description="x", value=10)
+            for i in range(2)
+        ]
+        state.sync_cargo()
+        effects = state.apply_choice_outcome("cargo:-10")
+        assert effects["cargo"] == -10
+        assert len(state.discoveries) == 0
+        assert state.ship.cargo == 0
+
+    def test_cargo_positive_respects_max_capacity(self) -> None:
+        """cargo:+N at max capacity should not exceed the limit."""
+        ship = Ship(cargo=50, max_cargo=50)
+        state = GameState(id="test-cargo-max", seed=42, ship=ship)
+        state.discoveries = [
+            Discovery(id=f"d-{i}", category="artifact", name="Cargo", description="x", value=10)
+            for i in range(50)
+        ]
+        state.sync_cargo()
+        effects = state.apply_choice_outcome("cargo:10")
+        assert effects["cargo"] == 10
+        assert len(state.discoveries) == 50
+        assert state.ship.cargo == 50
+
+    def test_cargo_negative_prefers_sellable(self) -> None:
+        """cargo:-N should remove sellable discoveries before lore-linked ones."""
+        ship = Ship(cargo=4, max_cargo=50)
+        state = GameState(id="test-cargo-sellable", seed=42, ship=ship)
+        state.discoveries = [
+            Discovery(id="sell-1", category="artifact", name="Cargo", description="x", value=10),
+            Discovery(id="lore-1", category="artifact", name="Lore Item", description="x", value=10, lore_fragment_id="lf_1"),
+            Discovery(id="sell-2", category="artifact", name="Cargo", description="x", value=10),
+            Discovery(id="lore-2", category="artifact", name="Lore Item", description="x", value=10, lore_fragment_id="lf_2"),
+        ]
+        state.sync_cargo()
+        state.apply_choice_outcome("cargo:-3")
+        remaining_ids = {d.id for d in state.discoveries}
+        assert len(state.discoveries) == 1
+        assert remaining_ids == {"lore-2"}
+        assert state.ship.cargo == 1
+
+    def test_cargo_outcome_then_sync_cargo_consistent(self) -> None:
+        """Applying a cargo outcome then sync_cargo keeps cargo consistent."""
+        ship = Ship(cargo=0, max_cargo=100)
+        state = GameState(id="test-cargo-sync", seed=42, ship=ship)
+        state.apply_choice_outcome("cargo:7")
+        assert len(state.discoveries) == 7
+        state.sync_cargo()
+        assert state.ship.cargo == len(state.discoveries)
+        assert state.ship.cargo == 7
+
+        state.apply_choice_outcome("cargo:-4")
+        assert len(state.discoveries) == 3
+        state.sync_cargo()
+        assert state.ship.cargo == len(state.discoveries)
+        assert state.ship.cargo == 3
 
 
 class TestEventModel:
