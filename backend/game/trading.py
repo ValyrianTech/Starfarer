@@ -283,6 +283,7 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
             total_price += sell_price
             sold_items.append(disc.name)
         state.discoveries = [d for d in state.discoveries if d.id not in to_sell_ids]
+        state.sync_cargo()
         state.ship.credits += total_price
         result_message = f"Sold {len(sold_items)} item(s) for {total_price} credits."
         system_name = system.name
@@ -426,6 +427,7 @@ def perform_bulk_sell(state: GameState, items: list[dict]) -> tuple[bool, str, i
     state.discoveries = [d for d in discoveries_snapshot if d.id not in sold_ids]
 
     state.ship.credits += total_price
+    state.sync_cargo()
     _apply_free_pilots_morale_bonus(state)
 
     log_msg = f"Bulk sold {sold_count} item(s) for {total_price} credits."

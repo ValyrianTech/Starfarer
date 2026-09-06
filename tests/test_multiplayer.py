@@ -2499,3 +2499,45 @@ class TestLeaderboardMultiplayer:
                 assert entry["items_donated"] == 0
                 assert entry["lore_donated"] == 0
                 break
+
+
+# ---------------------------------------------------------------------------
+# TestSyncCargoCrossroads
+# ---------------------------------------------------------------------------
+
+class TestSyncCargoCrossroads:
+    """Regression tests verifying that the Crossroads code paths modified by
+    PR #77 keep ``ship.cargo`` consistent with ``len(discoveries)``."""
+
+    def test_donate_item_maintains_cargo_invariant(self) -> None:
+        """donate_item should keep cargo in sync after removing donated items."""
+        state = new_game(42, "DonorSync", shared_universe=True)
+        GAME_STORE[state.id] = state
+        disc1 = _make_discovery(name="CargoSync Donation")
+        disc2 = _make_discovery(name="CargoSync Donation")
+        state.discoveries.append(disc1)
+        state.discoveries.append(disc2)
+        result = donate_item(state, "CargoSync Donation", 1)
+        assert result["success"] is True
+        assert len(state.discoveries) == 1
+        assert state.ship.cargo == len(state.discoveries)
+        GAME_STORE.pop(state.id, None)
+
+    def test_claim_item_maintains_cargo_invariant(self) -> None:
+        """claim_item should keep the claimer's cargo in sync with discoveries."""
+        donor = new_game(42, "DonorSync", shared_universe=True)
+        GAME_STORE[donor.id] = donor
+        disc1 = _make_discovery(name="Claimable Sync Gem")
+        disc2 = _make_discovery(name="Claimable Sync Gem")
+        donor.discoveries.append(disc1)
+        donor.discoveries.append(disc2)
+        don_result = donate_item(donor, "Claimable Sync Gem", 2)
+
+        claimer = new_game(43, "ClaimerSync", shared_universe=True)
+        GAME_STORE[claimer.id] = claimer
+        result = claim_item(don_result["donation"]["id"], claimer)
+        assert result["success"] is True
+        assert len(claimer.discoveries) == 2
+        assert claimer.ship.cargo == len(claimer.discoveries)
+        GAME_STORE.pop(donor.id, None)
+        GAME_STORE.pop(claimer.id, None)

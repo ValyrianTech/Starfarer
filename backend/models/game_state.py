@@ -7,6 +7,7 @@ and log entries.
 """
 
 import logging
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
@@ -176,9 +177,51 @@ class GameState:
         self.ship.hull = max(0, min(self.ship.max_hull, self.ship.hull + effects["hull"]))
         self.ship.morale = max(0, min(100, self.ship.morale + effects["morale"]))
         self.ship.credits = max(0, self.ship.credits + effects["credits"])
-        self.ship.cargo = max(0, min(self.ship.max_cargo, self.ship.cargo + effects["cargo"]))
         self.ship.crew = max(0, min(self.ship.max_crew, self.ship.crew + effects["crew"]))
+
+        cargo_delta = effects["cargo"]
+        if cargo_delta > 0:
+            available = max(0, self.ship.max_cargo - len(self.discoveries))
+            to_add = min(cargo_delta, available)
+            for _ in range(to_add):
+                self.discoveries.append(
+                    Discovery(
+                        id=str(uuid.uuid4()),
+                        category="artifact",
+                        name="Event Cargo",
+                        description="Recovered during a random event.",
+                        value=50,
+                        system_id=self.ship.current_system_id or "",
+                    )
+                )
+        elif cargo_delta < 0:
+            to_remove = -cargo_delta
+            removed = 0
+            for discovery in list(self.discoveries):
+                if removed >= to_remove:
+                    break
+                if discovery.lore_fragment_id is None:
+                    self.discoveries.remove(discovery)
+                    removed += 1
+            for discovery in list(self.discoveries):
+                if removed >= to_remove:
+                    break
+                self.discoveries.remove(discovery)
+                removed += 1
+
+        self.sync_cargo()
         return effects
+
+    def sync_cargo(self) -> None:
+        """Synchronize the ship's cargo count with the discoveries list.
+
+        Sets ``ship.cargo`` to the number of entries currently held in
+        ``discoveries``, clamped to ``ship.max_cargo``. This should be
+        called any time discoveries are added to or removed from the game
+        state so that the cargo stat remains consistent with the actual
+        inventory.
+        """
+        self.ship.cargo = min(len(self.discoveries), self.ship.max_cargo)
 
     @property
     def lore_fragments_collected(self) -> int:
