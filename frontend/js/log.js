@@ -5,13 +5,13 @@ function showGameLog(logEntries) {
   let html = '';
   if (logEntries && logEntries.length > 0) {
     for (const entry of logEntries) {
-      const typeClass = entry.type || 'system';
+      const typeClass = escapeHtml(entry.type || 'system');
       const time = entry.timestamp ? new Date(entry.timestamp).toLocaleTimeString() : '';
       html += `
         <div class="log-entry" style="padding:0.3rem 0;border-bottom:1px solid rgba(255,255,255,0.05);">
           <span style="color:var(--color-text-dim);font-size:0.7rem;">[${time}]</span>
           <span style="color:var(--color-cyan);font-size:0.75rem;text-transform:uppercase;margin-left:0.5rem;">${typeClass}</span>
-          <span style="margin-left:0.5rem;font-size:0.85rem;">${entry.message}</span>
+          <span style="margin-left:0.5rem;font-size:0.85rem;">${escapeHtml(entry.message)}</span>
         </div>`;
     }
   } else {
