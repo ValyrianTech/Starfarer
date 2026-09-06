@@ -5082,3 +5082,155 @@ class TestSubSurfaceNoSystem:
         state.ship.crew = 5
         discoveries = perform_sub_surface_exploration(state)
         assert discoveries == []
+
+
+class TestSyncCargoInvariant:
+    """Regression tests verifying that every code path modified by PR #77 to
+    call ``sync_cargo()`` keeps ``ship.cargo`` consistent with the number of
+    discoveries (``ship.cargo == len(discoveries)``)."""
+
+    def test_explore_surface_maintains_cargo_invariant(self) -> None:
+        """explore_surface should keep cargo in sync with discoveries."""
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
+        if planet is None:
+            return  # pragma: no cover
+        planet.poi_count = 5
+        ok, _msg = land_on_body(state, planet.id)
+        assert ok is True
+        discoveries = explore_surface(state)
+        assert len(discoveries) > 0
+        assert state.ship.cargo == len(state.discoveries)
+
+    def test_atmospheric_scan_maintains_cargo_invariant(self) -> None:
+        """perform_atmospheric_scan should keep cargo in sync with discoveries."""
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        body = Body(
+            id="b_atmo_sync", name="AtmoWorld", body_type="planet",
+            biome="gas_giant", size=5, distance_from_star=0.5, poi_count=3,
+        )
+        system.bodies = [body]
+        state.ship.current_body_id = body.id
+        discoveries = perform_atmospheric_scan(state)
+        assert len(discoveries) > 0
+        assert state.ship.cargo == len(state.discoveries)
+
+    def test_sub_surface_exploration_maintains_cargo_invariant(self) -> None:
+        """perform_sub_surface_exploration should keep cargo in sync with discoveries."""
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        body = Body(
+            id="b_sub_sync", name="SubWorld", body_type="planet",
+            biome="volcanic", size=5, distance_from_star=0.5, poi_count=3,
+        )
+        system.bodies = [body]
+        state.ship.current_body_id = body.id
+        state.ship.crew = 5
+        discoveries = perform_sub_surface_exploration(state)
+        assert len(discoveries) > 0
+        assert state.ship.cargo == len(state.discoveries)
+
+    def test_perform_salvage_spare_parts_maintains_cargo_invariant(self) -> None:
+        """perform_salvage (spare parts) should keep cargo in sync with discoveries."""
+        from unittest.mock import MagicMock, patch
+
+        state = new_game(seed=42)
+        state.ship.fuel = 0
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), system.bodies[0])
+        land_on_body(state, planet.id)
+
+        mock_rng = MagicMock()
+        mock_rng.random.side_effect = [0.8]
+        mock_rng.randint.side_effect = [30]
+        mock_rng.getrandbits.return_value = 0xABC123
+        with patch("backend.game.engine.seeded_random", return_value=mock_rng):
+            result = perform_salvage(state)
+        assert result["find"] == "spare_parts"
+        assert state.ship.cargo == len(state.discoveries)
+
+    def test_emergency_craft_maintains_cargo_invariant(self) -> None:
+        """emergency_craft should keep cargo in sync after removing a discovery."""
+        state = new_game(seed=42)
+        disc = Discovery(
+            id="craft_sync_disc", category="artifact", name="Ancient Artifact",
+            description="Ancient", value=50, system_id="sys1", body_id="body1",
+        )
+        state.discoveries.append(disc)
+        state.ship.cargo = 99  # deliberately desync cargo
+        result = emergency_craft(state, "craft_sync_disc", "fuel")
+        assert "error" not in result
+        assert len(state.discoveries) == 0
+        assert state.ship.cargo == len(state.discoveries)
+
+    def test_perform_trade_sell_maintains_cargo_invariant(self) -> None:
+        """perform_trade (sell) should keep cargo in sync after selling a discovery."""
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        system.has_trading_station = True
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
+        if planet is None:
+            return  # pragma: no cover
+        planet.poi_count = 5
+        land_on_body(state, planet.id)
+        explore_surface(state)
+        state.discoveries.clear()
+        disc = Discovery(
+            id="trade_sync_disc", name="Test Mineral", category="mineral",
+            description="A test mineral", lore_fragment_id=None, value=100,
+        )
+        state.discoveries.append(disc)
+        ok, _msg = perform_trade(state, "sell", "mineral", 1)
+        assert ok is True
+        assert state.ship.cargo == len(state.discoveries)
+
+    def test_perform_bulk_sell_maintains_cargo_invariant(self) -> None:
+        """perform_bulk_sell should keep cargo in sync after bulk selling discoveries."""
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        system.has_trading_station = True
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
+        if planet is None:
+            return  # pragma: no cover
+        planet.poi_count = 5
+        land_on_body(state, planet.id)
+        explore_surface(state)
+        state.discoveries.clear()
+        d1 = Discovery(
+            id="bulk_sync_d1", name="Common Ore", category="mineral",
+            description="A common mineral", lore_fragment_id=None, value=100,
+        )
+        d2 = Discovery(
+            id="bulk_sync_d2", name="Rare Ore", category="mineral",
+            description="A rare mineral", lore_fragment_id=None, value=200,
+        )
+        state.discoveries.append(d1)
+        state.discoveries.append(d2)
+        ok, _msg, _sold_count, _total_price = perform_bulk_sell(state, [{"item": "mineral", "quantity": 2}])
+        assert ok is True
+        assert state.ship.cargo == len(state.discoveries)
+
+    def test_state_from_dict_syncs_cargo(self) -> None:
+        """_state_from_dict should sync cargo to match discoveries during load."""
+        state = new_game(seed=42)
+        for i in range(3):
+            state.discoveries.append(
+                Discovery(
+                    id=f"load_sync_disc_{i}", name=f"Item {i}", category="mineral",
+                    description="A test mineral", value=10,
+                )
+            )
+        data = get_game_state(state)
+        data["ship"]["cargo"] = 99
+        loaded = _state_from_dict(data)
+        assert loaded is not None
+        assert len(loaded.discoveries) == 3
+        assert loaded.ship.cargo == len(loaded.discoveries)
