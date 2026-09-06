@@ -16,6 +16,27 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 DB_PATH = DATA_DIR / "starfarer.db"
 
+DEFAULT_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://localhost:8080",
+    "http://localhost:8001",
+]
+
+
+def get_allowed_origins() -> list[str]:
+    """Return the CORS allowed origins from the STARFARER_ALLOWED_ORIGINS env var.
+
+    The env var should be a comma-separated list of origins. If unset or empty,
+    returns the default local development origins.
+    """
+    raw = os.environ.get("STARFARER_ALLOWED_ORIGINS", "")
+    if raw.strip():
+        return [origin.strip() for origin in raw.split(",") if origin.strip()]
+    return list(DEFAULT_ALLOWED_ORIGINS)
+
+
+ALLOWED_ORIGINS = get_allowed_origins()
+
 GAME_NAME = "Starfarer: Echoes of the Void"
 GAME_VERSION = "0.1.0"
 
