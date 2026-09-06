@@ -2292,6 +2292,30 @@ class TestMultiplayerAPI:
 
         assert stale_id not in _game_locks
 
+    def test_cleanup_game_lock_no_keyerror_with_periodic_cleanup(self) -> None:
+        """_cleanup_game_lock must not cause KeyError in _get_lock's periodic cleanup."""
+        stale_id = "race-condition-stale-game"
+
+        # Set up a stale lock entry at time 0.0, then advance to 61.0 so that
+        # _get_lock's periodic cleanup would consider it stale.
+        times = iter([0.0] + [61.0] * 300)
+        with patch("backend.api.routes.time.time", side_effect=lambda: next(times)):
+            _get_lock(stale_id)
+            assert stale_id in _game_locks
+
+            # Simulate the race: _cleanup_game_lock removes the entry while
+            # _get_lock's periodic cleanup is about to process it. Both now
+            # acquire _lock_for_locks, so this must not raise KeyError.
+            _cleanup_game_lock(stale_id)
+
+            # Trigger periodic cleanup. Even though stale_id was already
+            # removed by _cleanup_game_lock, the pop-based cleanup must not
+            # raise KeyError.
+            for i in range(200):
+                _get_lock(f"dummy-race-{i}")
+
+        assert stale_id not in _game_locks
+
     def test_cleanup_stale_locks_concurrent_safety(self) -> None:
         """Verify _cleanup_stale_locks is safe when called concurrently with _get_lock."""
         import concurrent.futures

@@ -97,7 +97,7 @@ def _get_lock(game_id: str) -> Lock:
                 if gid not in GAME_STORE and (
                     now - _lock_last_access.get(gid, 0) > _LOCK_STALE_THRESHOLD_SECONDS
                 ):
-                    del _game_locks[gid]
+                    _game_locks.pop(gid, None)
                     _lock_last_access.pop(gid, None)
         if game_id not in _game_locks:
             _game_locks[game_id] = Lock()
@@ -107,8 +107,9 @@ def _get_lock(game_id: str) -> Lock:
 
 def _cleanup_game_lock(game_id: str) -> None:
     """Remove the lock entry for the given game_id."""
-    _game_locks.pop(game_id, None)
-    _lock_last_access.pop(game_id, None)
+    with _lock_for_locks:
+        _game_locks.pop(game_id, None)
+        _lock_last_access.pop(game_id, None)
 
 
 def _cleanup_stale_locks() -> None:
@@ -116,7 +117,7 @@ def _cleanup_stale_locks() -> None:
     with _lock_for_locks:
         for gid in list(_game_locks.keys()):
             if gid not in GAME_STORE:
-                del _game_locks[gid]
+                _game_locks.pop(gid, None)
                 _lock_last_access.pop(gid, None)
 
 
