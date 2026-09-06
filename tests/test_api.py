@@ -811,10 +811,10 @@ class TestCORSConfig:
     """Tests for the configurable CORS allowlist."""
 
     def test_default_origins_when_env_not_set(self, monkeypatch) -> None:
-        from backend.config import get_allowed_origins
+        from backend.config import DEFAULT_ALLOWED_ORIGINS, get_allowed_origins
         monkeypatch.delenv("STARFARER_ALLOWED_ORIGINS", raising=False)
         origins = get_allowed_origins()
-        assert origins == ["http://localhost:3000", "http://localhost:8080", "http://localhost:8001"]
+        assert origins == DEFAULT_ALLOWED_ORIGINS
 
     def test_custom_origins_from_env(self, monkeypatch) -> None:
         from backend.config import get_allowed_origins
@@ -823,16 +823,16 @@ class TestCORSConfig:
         assert origins == ["https://example.com", "https://api.example.com"]
 
     def test_empty_env_falls_back_to_defaults(self, monkeypatch) -> None:
-        from backend.config import get_allowed_origins
+        from backend.config import DEFAULT_ALLOWED_ORIGINS, get_allowed_origins
         monkeypatch.setenv("STARFARER_ALLOWED_ORIGINS", "")
         origins = get_allowed_origins()
-        assert origins == ["http://localhost:3000", "http://localhost:8080", "http://localhost:8001"]
+        assert origins == DEFAULT_ALLOWED_ORIGINS
 
     def test_whitespace_env_falls_back_to_defaults(self, monkeypatch) -> None:
-        from backend.config import get_allowed_origins
+        from backend.config import DEFAULT_ALLOWED_ORIGINS, get_allowed_origins
         monkeypatch.setenv("STARFARER_ALLOWED_ORIGINS", "   ")
         origins = get_allowed_origins()
-        assert origins == ["http://localhost:3000", "http://localhost:8080", "http://localhost:8001"]
+        assert origins == DEFAULT_ALLOWED_ORIGINS
 
     def test_whitespace_around_origins_is_stripped(self, monkeypatch) -> None:
         from backend.config import get_allowed_origins
@@ -852,11 +852,7 @@ class TestCORSConfig:
         import backend.config
         monkeypatch.delenv("STARFARER_ALLOWED_ORIGINS", raising=False)
         importlib.reload(backend.config)
-        assert backend.config.ALLOWED_ORIGINS == [
-            "http://localhost:3000",
-            "http://localhost:8080",
-            "http://localhost:8001",
-        ]
+        assert backend.config.ALLOWED_ORIGINS == backend.config.DEFAULT_ALLOWED_ORIGINS
         importlib.reload(backend.config)
 
     def test_config_allowed_origins_env_override(self, monkeypatch) -> None:

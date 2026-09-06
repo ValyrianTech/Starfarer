@@ -16,7 +16,7 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 DB_PATH = DATA_DIR / "starfarer.db"
 
-_DEFAULT_ALLOWED_ORIGINS = [
+DEFAULT_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://localhost:8080",
     "http://localhost:8001",
@@ -32,7 +32,7 @@ def get_allowed_origins() -> list[str]:
     raw = os.environ.get("STARFARER_ALLOWED_ORIGINS", "")
     if raw.strip():
         return [origin.strip() for origin in raw.split(",") if origin.strip()]
-    return list(_DEFAULT_ALLOWED_ORIGINS)
+    return list(DEFAULT_ALLOWED_ORIGINS)
 
 
 ALLOWED_ORIGINS = get_allowed_origins()
