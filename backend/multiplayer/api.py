@@ -129,9 +129,8 @@ def api_leave_ghost(game_id: str, req: LeaveGhostRequest) -> dict:
     :rtype: dict
     :raises HTTPException: 404 if the game is not found.
     """
-    state = _check_game(game_id)
-
     with _get_lock(game_id):
+        state = _check_game(game_id)
         current_system = state.get_current_system()
         if not current_system:
             raise HTTPException(status_code=400, detail="Not in a star system")
@@ -176,8 +175,8 @@ def api_donate_item(req: DonateItemRequest) -> dict:
     :raises HTTPException: 404 if the game is not found; 400 if the
         donation fails.
     """
-    state = _check_game(req.game_id)
     with _get_lock(req.game_id):
+        state = _check_game(req.game_id)
         result = donate_item(state, req.item_name, req.quantity, message=req.message)
         if not result.get("success"):
             raise HTTPException(status_code=400, detail=result.get("detail", "Donation failed"))
@@ -199,8 +198,8 @@ def api_claim_item(item_id: str, req: ClaimItemRequest) -> dict:
     :rtype: dict
     :raises HTTPException: 404 if the game is not found; 400 if claim fails.
     """
-    state = _check_game(req.game_id)
     with _get_lock(req.game_id):
+        state = _check_game(req.game_id)
         result = claim_item(item_id, state)
         if not result.get("success"):
             raise HTTPException(status_code=400, detail=result.get("detail", "Claim failed"))
@@ -242,8 +241,8 @@ def api_donate_lore(req: DonateLoreRequest) -> dict:
     :raises HTTPException: 404 if the game is not found; 400 if the
         donation fails.
     """
-    state = _check_game(req.game_id)
     with _get_lock(req.game_id):
+        state = _check_game(req.game_id)
         result = donate_lore(state, req.fragment_id, message=req.message)
         if not result.get("success"):
             raise HTTPException(status_code=400, detail=result.get("detail", "Donation failed"))
@@ -265,8 +264,8 @@ def api_claim_lore(donation_id: str, req: ClaimLoreRequest) -> dict:
     :rtype: dict
     :raises HTTPException: 404 if the game is not found; 400 if claim fails.
     """
-    state = _check_game(req.game_id)
     with _get_lock(req.game_id):
+        state = _check_game(req.game_id)
         result = claim_lore(donation_id, state)
         if not result.get("success"):
             raise HTTPException(status_code=400, detail=result.get("detail", "Claim failed"))
@@ -314,8 +313,8 @@ def api_post_message(req: PostMessageRequest) -> dict:
     :rtype: dict
     :raises HTTPException: 404 if the game is not found.
     """
-    state = _check_game(req.game_id)
     with _get_lock(req.game_id):
+        state = _check_game(req.game_id)
         msg = post_message(state, req.text)
         if isinstance(msg, dict) and not msg.get("success"):
             raise HTTPException(status_code=400, detail=msg.get("detail", "Failed to post message"))
@@ -364,9 +363,8 @@ def api_acknowledge_ripple(game_id: str, ripple_id: str) -> dict:
     :raises HTTPException: 404 if the game is not found;
         400 if the ripple cannot be acknowledged.
     """
-    state = _check_game(game_id)
-
     with _get_lock(game_id):
+        state = _check_game(game_id)
         result = acknowledge_ripple(ripple_id, state)
         if not result.get("success"):
             raise HTTPException(status_code=400, detail=result.get("detail", "Failed to acknowledge ripple"))
