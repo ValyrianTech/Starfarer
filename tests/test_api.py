@@ -4181,8 +4181,10 @@ class TestRoutesLocks:
         game_id = "test-lock-cleanup-game"
         routes_mod._get_lock(game_id)
         assert game_id in routes_mod._game_locks
+        assert game_id in routes_mod._lock_last_access
         routes_mod._cleanup_game_lock(game_id)
         assert game_id not in routes_mod._game_locks
+        assert game_id not in routes_mod._lock_last_access
 
     def test_cleanup_game_lock_nonexistent(self) -> None:
         import backend.api.routes as routes_mod
@@ -4195,10 +4197,12 @@ class TestRoutesLocks:
         GAME_STORE[game_id] = state
         routes_mod._get_lock(game_id)
         assert game_id in routes_mod._game_locks
+        assert game_id in routes_mod._lock_last_access
 
         GAME_STORE.pop(game_id, None)
         routes_mod._cleanup_stale_locks()
         assert game_id not in routes_mod._game_locks
+        assert game_id not in routes_mod._lock_last_access
 
     def test_cleanup_stale_locks_preserves_active(self) -> None:
         import backend.api.routes as routes_mod
@@ -4216,12 +4220,58 @@ class TestRoutesLocks:
     def test_get_lock_periodic_cleanup_triggers(self) -> None:
         """Periodic cleanup should run after 100 accesses and drop stale locks."""
         import backend.api.routes as routes_mod
-        stale_id = "stale-periodic-cleanup-game"
-        routes_mod._get_lock(stale_id)
-        assert stale_id in routes_mod._game_locks
+        from unittest.mock import patch
 
-        for i in range(200):
-            routes_mod._get_lock(f"dummy-periodic-{i}")
+        stale_id = "stale-periodic-cleanup-game"
+
+        # First call at time 0.0, subsequent calls at time 61.0 (past the 60s threshold)
+        times = iter([0.0] + [61.0] * 300)
+        with patch("backend.api.routes.time.time", side_effect=lambda: next(times)):
+            routes_mod._get_lock(stale_id)
+            assert stale_id in routes_mod._game_locks
+
+            for i in range(200):
+                routes_mod._get_lock(f"dummy-periodic-{i}")
+
+        assert stale_id not in routes_mod._game_locks
+
+    def test_get_lock_periodic_cleanup_preserves_recently_accessed(self) -> None:
+        """Periodic cleanup should NOT remove locks for games accessed within the stale threshold."""
+        import backend.api.routes as routes_mod
+        from unittest.mock import patch
+
+        game_id = "recently-accessed-game"
+
+        # All calls at the same time - the lock is always recently accessed
+        times = iter([100.0] * 300)
+        with patch("backend.api.routes.time.time", side_effect=lambda: next(times)):
+            routes_mod._get_lock(game_id)
+            assert game_id in routes_mod._game_locks
+
+            # Trigger periodic cleanup at count=100
+            for i in range(200):
+                routes_mod._get_lock(f"dummy-recent-{i}")
+
+        # The lock should still be present because it was accessed at the same time
+        # as the cleanup (within the 60-second threshold)
+        assert game_id in routes_mod._game_locks
+        routes_mod._cleanup_game_lock(game_id)
+
+    def test_get_lock_periodic_cleanup_removes_old_stale(self) -> None:
+        """Periodic cleanup should remove locks for games not accessed for over the stale threshold."""
+        import backend.api.routes as routes_mod
+        from unittest.mock import patch
+
+        stale_id = "old-stale-periodic-game"
+
+        # First access at time 0.0, cleanup at time 61.0+ (past the 60s threshold)
+        times = iter([0.0] + [61.0] * 300)
+        with patch("backend.api.routes.time.time", side_effect=lambda: next(times)):
+            routes_mod._get_lock(stale_id)
+            assert stale_id in routes_mod._game_locks
+
+            for i in range(200):
+                routes_mod._get_lock(f"dummy-old-stale-{i}")
 
         assert stale_id not in routes_mod._game_locks
 
