@@ -807,6 +807,25 @@ class TestAPIMainApp:
         assert allow_origins == ALLOWED_ORIGINS
 
 
+class TestFrontendXSSProtection:
+    """Tests for XSS protection in frontend JS files."""
+
+    def test_log_js_escapes_user_content(self) -> None:
+        """log.js should escape user-controlled fields with escapeHtml()."""
+        from pathlib import Path
+
+        log_js = Path(__file__).parent.parent / "frontend" / "js" / "log.js"
+        content = log_js.read_text()
+
+        # entry.message must be escaped
+        assert "escapeHtml(entry.message)" in content
+        # entry.type must be escaped (it is used as the typeClass)
+        assert "escapeHtml(entry.type" in content
+        # The raw unescaped interpolation must not be present
+        assert "${entry.message}" not in content
+        assert "${entry.type}" not in content
+
+
 class TestCORSConfig:
     """Tests for the configurable CORS allowlist."""
 
