@@ -787,6 +787,8 @@ class TestAPIMainApp:
 
     def test_cors_does_not_use_wildcard_with_credentials(self) -> None:
         """CORS middleware must not combine wildcard origins with credentials."""
+        from typing import Any, cast
+
         from starlette.middleware.cors import CORSMiddleware as StarletteCORSMiddleware
 
         cors_middleware = None
@@ -796,8 +798,9 @@ class TestAPIMainApp:
                 break
 
         assert cors_middleware is not None
-        allow_origins = cors_middleware.kwargs["allow_origins"]
-        allow_credentials = cors_middleware.kwargs["allow_credentials"]
+        kwargs = cast(dict[str, Any], cors_middleware.kwargs)
+        allow_origins = kwargs["allow_origins"]
+        allow_credentials = kwargs["allow_credentials"]
         assert allow_credentials is True
         assert "*" not in allow_origins
         assert allow_origins == ["http://localhost:3000", "http://localhost:8080", "http://localhost:8001"]
