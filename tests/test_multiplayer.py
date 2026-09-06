@@ -11,17 +11,18 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
+from backend.api.routes import (
+    _cleanup_game_lock,
+    _cleanup_stale_locks,
+    _game_locks,
+    _get_lock,
+    _lock_last_access,
+)
 from backend.database import init_db
 from backend.game.manager import GAME_STORE, game_save, new_game
 from backend.main import app
 from backend.models.discovery import Discovery, LoreFragment
-from backend.multiplayer.api import (
-    _cleanup_game_lock,
-    _cleanup_stale_locks,
-    _game_exists,
-    _game_locks,
-    _get_lock,
-)
+from backend.multiplayer.api import _game_exists
 from backend.multiplayer.crossroads import (
     claim_item,
     claim_lore,
@@ -2141,20 +2142,20 @@ class TestMultiplayerAPI:
         """Verify that _get_lock returns a threading.Lock instance."""
         import threading
 
-        from backend.multiplayer.api import _get_lock
+        from backend.api.routes import _get_lock
         lock = _get_lock("test-get-lock-1")
         assert isinstance(lock, type(threading.Lock()))
 
     def test_get_lock_same_game_id(self) -> None:
         """Verify that _get_lock returns the same lock for the same game_id."""
-        from backend.multiplayer.api import _get_lock
+        from backend.api.routes import _get_lock
         lock1 = _get_lock("test-get-lock-2")
         lock2 = _get_lock("test-get-lock-2")
         assert lock1 is lock2
 
     def test_get_lock_different_game_ids(self) -> None:
         """Verify that _get_lock returns different locks for different game_ids."""
-        from backend.multiplayer.api import _get_lock
+        from backend.api.routes import _get_lock
         lock1 = _get_lock("test-get-lock-3a")
         lock2 = _get_lock("test-get-lock-3b")
         assert lock1 is not lock2
@@ -2166,9 +2167,11 @@ class TestMultiplayerAPI:
 
         _get_lock(game_id)
         assert game_id in _game_locks
+        assert game_id in _lock_last_access
 
         _cleanup_game_lock(game_id)
         assert game_id not in _game_locks
+        assert game_id not in _lock_last_access
 
     def test_cleanup_game_lock_nonexistent(self) -> None:
         _cleanup_game_lock("nonexistent-game-id")
@@ -2180,10 +2183,12 @@ class TestMultiplayerAPI:
 
         _get_lock(game_id)
         assert game_id in _game_locks
+        assert game_id in _lock_last_access
 
         del GAME_STORE[game_id]
         _cleanup_stale_locks()
         assert game_id not in _game_locks
+        assert game_id not in _lock_last_access
 
     def test_cleanup_stale_locks_preserves_active(self) -> None:
         state = new_game(42, "ActiveTest", shared_universe=True)
@@ -2211,7 +2216,7 @@ class TestMultiplayerAPI:
         """Verify that the lock serializes concurrent access to prevent state corruption."""
         import concurrent.futures
 
-        from backend.multiplayer.api import _game_locks
+        from backend.api.routes import _game_locks
 
         resp = client.post("/api/game/new", json={"shared_universe": True})
         assert resp.status_code == 200
@@ -2248,15 +2253,68 @@ class TestMultiplayerAPI:
 
     def test_get_lock_periodic_cleanup_triggers(self) -> None:
         """Verify that periodic stale lock cleanup triggers without deadlock after 100 calls."""
-        import backend.multiplayer.api as mp_api
+        import backend.api.routes as api_routes
         
         # Call _get_lock 100+ times to ensure periodic cleanup is triggered.
         # _lock_access_count is now an itertools.count object; we verify
         # that calling _get_lock does not raise any errors and that locks
         # are properly created.
         for i in range(105):
-            lock = mp_api._get_lock(f"dummy-periodic-{i}")
+            lock = api_routes._get_lock(f"dummy-periodic-{i}")
             assert lock is not None
+
+    def test_get_lock_periodic_cleanup_preserves_recently_accessed(self) -> None:
+        """Periodic cleanup should NOT remove locks accessed within the stale threshold."""
+        game_id = "recently-accessed-game"
+
+        times = iter([100.0] * 300)
+        with patch("backend.api.routes.time.time", side_effect=lambda: next(times)):
+            _get_lock(game_id)
+            assert game_id in _game_locks
+
+            for i in range(200):
+                _get_lock(f"dummy-recent-{i}")
+
+        assert game_id in _game_locks
+        _cleanup_game_lock(game_id)
+
+    def test_get_lock_periodic_cleanup_removes_old_stale(self) -> None:
+        """Periodic cleanup should remove locks not accessed for over the stale threshold."""
+        stale_id = "old-stale-periodic-game"
+
+        times = iter([0.0] + [61.0] * 300)
+        with patch("backend.api.routes.time.time", side_effect=lambda: next(times)):
+            _get_lock(stale_id)
+            assert stale_id in _game_locks
+
+            for i in range(200):
+                _get_lock(f"dummy-old-stale-{i}")
+
+        assert stale_id not in _game_locks
+
+    def test_cleanup_game_lock_no_keyerror_with_periodic_cleanup(self) -> None:
+        """_cleanup_game_lock must not cause KeyError in _get_lock's periodic cleanup."""
+        stale_id = "race-condition-stale-game"
+
+        # Set up a stale lock entry at time 0.0, then advance to 61.0 so that
+        # _get_lock's periodic cleanup would consider it stale.
+        times = iter([0.0] + [61.0] * 300)
+        with patch("backend.api.routes.time.time", side_effect=lambda: next(times)):
+            _get_lock(stale_id)
+            assert stale_id in _game_locks
+
+            # Simulate the race: _cleanup_game_lock removes the entry while
+            # _get_lock's periodic cleanup is about to process it. Both now
+            # acquire _lock_for_locks, so this must not raise KeyError.
+            _cleanup_game_lock(stale_id)
+
+            # Trigger periodic cleanup. Even though stale_id was already
+            # removed by _cleanup_game_lock, the pop-based cleanup must not
+            # raise KeyError.
+            for i in range(200):
+                _get_lock(f"dummy-race-{i}")
+
+        assert stale_id not in _game_locks
 
     def test_cleanup_stale_locks_concurrent_safety(self) -> None:
         """Verify _cleanup_stale_locks is safe when called concurrently with _get_lock."""

@@ -4149,3 +4149,175 @@ class TestApiNewEndpoints:
             assert resp.status_code == 200
             data = resp.json()
             assert "discoveries" in data
+
+
+class TestRoutesLocks:
+    """Tests for the per-game lock infrastructure in routes.py."""
+
+    def test_get_lock_returns_lock(self) -> None:
+        """Verify that _get_lock returns a threading.Lock instance."""
+        import threading
+
+        import backend.api.routes as routes_mod
+        lock = routes_mod._get_lock("test-lock-routes-1")
+        assert isinstance(lock, type(threading.Lock()))
+
+    def test_get_lock_same_game_id(self) -> None:
+        """Verify that _get_lock returns the same lock for the same game_id."""
+        import backend.api.routes as routes_mod
+        lock1 = routes_mod._get_lock("test-lock-routes-2")
+        lock2 = routes_mod._get_lock("test-lock-routes-2")
+        assert lock1 is lock2
+
+    def test_get_lock_different_game_ids(self) -> None:
+        """Verify that _get_lock returns different locks for different game_ids."""
+        import backend.api.routes as routes_mod
+        lock1 = routes_mod._get_lock("test-lock-routes-3a")
+        lock2 = routes_mod._get_lock("test-lock-routes-3b")
+        assert lock1 is not lock2
+
+    def test_cleanup_game_lock_removes_lock(self) -> None:
+        import backend.api.routes as routes_mod
+        game_id = "test-lock-cleanup-game"
+        routes_mod._get_lock(game_id)
+        assert game_id in routes_mod._game_locks
+        assert game_id in routes_mod._lock_last_access
+        routes_mod._cleanup_game_lock(game_id)
+        assert game_id not in routes_mod._game_locks
+        assert game_id not in routes_mod._lock_last_access
+
+    def test_cleanup_game_lock_nonexistent(self) -> None:
+        import backend.api.routes as routes_mod
+        routes_mod._cleanup_game_lock("test-lock-nonexistent-game")
+
+    def test_cleanup_stale_locks_removes_stale(self) -> None:
+        import backend.api.routes as routes_mod
+        state = new_game(42, "StaleRoutesTest")
+        game_id = state.id
+        GAME_STORE[game_id] = state
+        routes_mod._get_lock(game_id)
+        assert game_id in routes_mod._game_locks
+        assert game_id in routes_mod._lock_last_access
+
+        GAME_STORE.pop(game_id, None)
+        routes_mod._cleanup_stale_locks()
+        assert game_id not in routes_mod._game_locks
+        assert game_id not in routes_mod._lock_last_access
+
+    def test_cleanup_stale_locks_preserves_active(self) -> None:
+        import backend.api.routes as routes_mod
+        state = new_game(42, "ActiveRoutesTest")
+        game_id = state.id
+        GAME_STORE[game_id] = state
+        routes_mod._get_lock(game_id)
+        assert game_id in routes_mod._game_locks
+
+        routes_mod._cleanup_stale_locks()
+        assert game_id in routes_mod._game_locks
+
+        GAME_STORE.pop(game_id, None)
+
+    def test_get_lock_periodic_cleanup_triggers(self) -> None:
+        """Periodic cleanup should run after 100 accesses and drop stale locks."""
+        import backend.api.routes as routes_mod
+        from unittest.mock import patch
+
+        stale_id = "stale-periodic-cleanup-game"
+
+        # First call at time 0.0, subsequent calls at time 61.0 (past the 60s threshold)
+        times = iter([0.0] + [61.0] * 300)
+        with patch("backend.api.routes.time.time", side_effect=lambda: next(times)):
+            routes_mod._get_lock(stale_id)
+            assert stale_id in routes_mod._game_locks
+
+            for i in range(200):
+                routes_mod._get_lock(f"dummy-periodic-{i}")
+
+        assert stale_id not in routes_mod._game_locks
+
+    def test_get_lock_periodic_cleanup_preserves_recently_accessed(self) -> None:
+        """Periodic cleanup should NOT remove locks for games accessed within the stale threshold."""
+        import backend.api.routes as routes_mod
+        from unittest.mock import patch
+
+        game_id = "recently-accessed-game"
+
+        # All calls at the same time - the lock is always recently accessed
+        times = iter([100.0] * 300)
+        with patch("backend.api.routes.time.time", side_effect=lambda: next(times)):
+            routes_mod._get_lock(game_id)
+            assert game_id in routes_mod._game_locks
+
+            # Trigger periodic cleanup at count=100
+            for i in range(200):
+                routes_mod._get_lock(f"dummy-recent-{i}")
+
+        # The lock should still be present because it was accessed at the same time
+        # as the cleanup (within the 60-second threshold)
+        assert game_id in routes_mod._game_locks
+        routes_mod._cleanup_game_lock(game_id)
+
+    def test_get_lock_periodic_cleanup_removes_old_stale(self) -> None:
+        """Periodic cleanup should remove locks for games not accessed for over the stale threshold."""
+        import backend.api.routes as routes_mod
+        from unittest.mock import patch
+
+        stale_id = "old-stale-periodic-game"
+
+        # First access at time 0.0, cleanup at time 61.0+ (past the 60s threshold)
+        times = iter([0.0] + [61.0] * 300)
+        with patch("backend.api.routes.time.time", side_effect=lambda: next(times)):
+            routes_mod._get_lock(stale_id)
+            assert stale_id in routes_mod._game_locks
+
+            for i in range(200):
+                routes_mod._get_lock(f"dummy-old-stale-{i}")
+
+        assert stale_id not in routes_mod._game_locks
+
+    def test_new_game_lock_exists(self) -> None:
+        import threading
+
+        import backend.api.routes as routes_mod
+        assert isinstance(routes_mod._new_game_lock, type(threading.Lock()))
+
+    def test_concurrent_scan_serialized(self) -> None:
+        """Concurrent scans on the same game must be serialized by the lock."""
+        import concurrent.futures
+        import threading
+        import time
+
+        import backend.api.routes as routes_mod
+
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+
+        active = 0
+        max_active = 0
+        counter_lock = threading.Lock()
+
+        original = routes_mod.perform_scan
+
+        def slow_scan(state):
+            nonlocal active, max_active
+            with counter_lock:
+                active += 1
+                max_active = max(max_active, active)
+            time.sleep(0.05)
+            with counter_lock:
+                active -= 1
+            return original(state)
+
+        routes_mod.perform_scan = slow_scan
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+                futures = [
+                    executor.submit(client.post, f"/api/game/{game_id}/scan")
+                    for _ in range(8)
+                ]
+                for future in concurrent.futures.as_completed(futures):
+                    assert future.result().status_code == 200
+        finally:
+            routes_mod.perform_scan = original
+
+        assert max_active == 1

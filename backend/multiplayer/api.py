@@ -6,12 +6,14 @@ and messages, and discovery ripple events. All endpoints are mounted
 under ``/api``.
 """
 
-import itertools
-from threading import Lock
-
 from fastapi import APIRouter, HTTPException
 
-from backend.api.routes import _get_state, _save_state
+from backend.api.routes import (
+    _cleanup_game_lock,
+    _get_lock,
+    _get_state,
+    _save_state,
+)
 from backend.game.manager import GAME_STORE
 from backend.models.game_state import GameState
 from backend.multiplayer.crossroads import (
@@ -42,62 +44,6 @@ from backend.multiplayer.schemas import (
 )
 
 router = APIRouter(prefix="/api")
-
-_game_locks: dict[str, Lock] = {}
-_lock_for_locks: Lock = Lock()
-_lock_access_count = itertools.count(1)
-
-
-def _get_lock(game_id: str) -> Lock:
-    """Return a thread lock for the given game_id, creating one if needed.
-
-    Performs periodic cleanup of stale locks (those belonging to games
-    no longer in ``GAME_STORE``) every 100 accesses via the internal
-    access counter.
-
-    :param game_id: The unique identifier of the game.
-    :type game_id: str
-    :returns: The :class:`threading.Lock` associated with the given game.
-    :rtype: Lock
-    """
-    count = next(_lock_access_count)
-    with _lock_for_locks:
-        # Periodic cleanup of stale locks every 100 accesses
-        if count % 100 == 0:
-            for gid in list(_game_locks.keys()):
-                if gid not in GAME_STORE:
-                    del _game_locks[gid]
-        if game_id not in _game_locks:
-            _game_locks[game_id] = Lock()
-        return _game_locks[game_id]
-
-
-def _cleanup_game_lock(game_id: str) -> None:
-    """Remove the lock entry for the given game_id from the lock dictionary.
-
-    Called when a game is no longer valid (e.g. not found in ``GAME_STORE``),
-    ensuring stale locks do not accumulate.
-
-    :param game_id: The unique identifier of the game whose lock to remove.
-    :type game_id: str
-    :rtype: None
-    """
-    _game_locks.pop(game_id, None)
-
-
-def _cleanup_stale_locks() -> None:
-    """Remove all locks for games that are no longer present in ``GAME_STORE``.
-
-    Iterates over the lock dictionary under the ``_lock_for_locks`` mutex
-    and deletes any entry whose game_id is not currently tracked by the
-    game manager.
-
-    :rtype: None
-    """
-    with _lock_for_locks:
-        for gid in list(_game_locks.keys()):
-            if gid not in GAME_STORE:
-                del _game_locks[gid]
 
 
 def _game_exists(game_id: str) -> bool:
@@ -183,9 +129,8 @@ def api_leave_ghost(game_id: str, req: LeaveGhostRequest) -> dict:
     :rtype: dict
     :raises HTTPException: 404 if the game is not found.
     """
-    state = _check_game(game_id)
-
     with _get_lock(game_id):
+        state = _check_game(game_id)
         current_system = state.get_current_system()
         if not current_system:
             raise HTTPException(status_code=400, detail="Not in a star system")
@@ -230,8 +175,8 @@ def api_donate_item(req: DonateItemRequest) -> dict:
     :raises HTTPException: 404 if the game is not found; 400 if the
         donation fails.
     """
-    state = _check_game(req.game_id)
     with _get_lock(req.game_id):
+        state = _check_game(req.game_id)
         result = donate_item(state, req.item_name, req.quantity, message=req.message)
         if not result.get("success"):
             raise HTTPException(status_code=400, detail=result.get("detail", "Donation failed"))
@@ -253,8 +198,8 @@ def api_claim_item(item_id: str, req: ClaimItemRequest) -> dict:
     :rtype: dict
     :raises HTTPException: 404 if the game is not found; 400 if claim fails.
     """
-    state = _check_game(req.game_id)
     with _get_lock(req.game_id):
+        state = _check_game(req.game_id)
         result = claim_item(item_id, state)
         if not result.get("success"):
             raise HTTPException(status_code=400, detail=result.get("detail", "Claim failed"))
@@ -296,8 +241,8 @@ def api_donate_lore(req: DonateLoreRequest) -> dict:
     :raises HTTPException: 404 if the game is not found; 400 if the
         donation fails.
     """
-    state = _check_game(req.game_id)
     with _get_lock(req.game_id):
+        state = _check_game(req.game_id)
         result = donate_lore(state, req.fragment_id, message=req.message)
         if not result.get("success"):
             raise HTTPException(status_code=400, detail=result.get("detail", "Donation failed"))
@@ -319,8 +264,8 @@ def api_claim_lore(donation_id: str, req: ClaimLoreRequest) -> dict:
     :rtype: dict
     :raises HTTPException: 404 if the game is not found; 400 if claim fails.
     """
-    state = _check_game(req.game_id)
     with _get_lock(req.game_id):
+        state = _check_game(req.game_id)
         result = claim_lore(donation_id, state)
         if not result.get("success"):
             raise HTTPException(status_code=400, detail=result.get("detail", "Claim failed"))
@@ -368,8 +313,8 @@ def api_post_message(req: PostMessageRequest) -> dict:
     :rtype: dict
     :raises HTTPException: 404 if the game is not found.
     """
-    state = _check_game(req.game_id)
     with _get_lock(req.game_id):
+        state = _check_game(req.game_id)
         msg = post_message(state, req.text)
         if isinstance(msg, dict) and not msg.get("success"):
             raise HTTPException(status_code=400, detail=msg.get("detail", "Failed to post message"))
@@ -395,8 +340,9 @@ def api_ripples(game_id: str) -> dict:
     :rtype: dict
     :raises HTTPException: 404 if the game is not found.
     """
-    state = _check_game(game_id)
-    # No lock needed: ripple data is read from the database, not from in-memory game state.
+    with _get_lock(game_id):
+        state = _check_game(game_id)
+    # Ripple data is read from the database, not from in-memory game state.
     # The game state is only used to determine the player's current system for filtering.
     ripples = get_pending_ripples(state)
     return {"ripples": ripples}
@@ -418,9 +364,8 @@ def api_acknowledge_ripple(game_id: str, ripple_id: str) -> dict:
     :raises HTTPException: 404 if the game is not found;
         400 if the ripple cannot be acknowledged.
     """
-    state = _check_game(game_id)
-
     with _get_lock(game_id):
+        state = _check_game(game_id)
         result = acknowledge_ripple(ripple_id, state)
         if not result.get("success"):
             raise HTTPException(status_code=400, detail=result.get("detail", "Failed to acknowledge ripple"))
