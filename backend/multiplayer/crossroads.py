@@ -71,6 +71,8 @@ def donate_item(
     for i in sorted(indices_to_remove, reverse=True):
         game_state.discoveries.pop(i)
 
+    game_state.sync_cargo()
+
     item = CrossroadsItem(
         id=str(uuid.uuid4()),
         donor_game_id=game_state.id,
@@ -124,6 +126,8 @@ def claim_item(item_id: str, game_state: GameState) -> dict:
             system_id=game_state.ship.current_system_id or "",
         )
         game_state.discoveries.append(disc)
+
+    game_state.sync_cargo()
 
     game_state.add_log(
         "multiplayer",

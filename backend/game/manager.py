@@ -345,7 +345,7 @@ def _state_from_dict(d: dict) -> GameState:
         else:
             accepted_missions[k] = v
 
-    return GameState(
+    state = GameState(
         id=d["id"],
         seed=d["seed"],
         ship=Ship.from_dict(d["ship"]),
@@ -371,6 +371,8 @@ def _state_from_dict(d: dict) -> GameState:
         shared_universe=d.get("shared_universe", False),
         _next_log_id=_next_log_id,
     )
+    state.sync_cargo()
+    return state
 
 
 def _fixup_old_lore_fragment_numbers(lore_fragments: list) -> None:

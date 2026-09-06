@@ -435,6 +435,7 @@ def explore_surface(state: GameState) -> list[Discovery]:
         discoveries.append(disc)
         state.discoveries.append(disc)
 
+    state.sync_cargo()
     ship.fuel -= EXPLORE_FUEL_COST
 
     state.add_log("exploration", f"Explored {body.name}. Found {len(discoveries)} points of interest.", category="exploration", title="Surface Exploration", system=system.name, body=body.name, fuel_change=-EXPLORE_FUEL_COST)
@@ -498,6 +499,7 @@ def perform_atmospheric_scan(state: GameState) -> list[Discovery]:
         state.discoveries.append(disc)
 
     if discoveries:
+        state.sync_cargo()
         ship.fuel -= ATMOSPHERIC_SCAN_FUEL_COST
 
         body.atmospheric_scan_count += 1
@@ -564,6 +566,7 @@ def perform_sub_surface_exploration(state: GameState) -> list[Discovery]:
         state.discoveries.append(disc)
 
     if discoveries:
+        state.sync_cargo()
         ship.fuel -= SUB_SURFACE_FUEL_COST
         ship.crew -= SUB_SURFACE_CREW_COST
         body.sub_surface_explored = True
@@ -963,6 +966,7 @@ def perform_salvage(state: GameState) -> dict:
             body_id=body_id,
         )
         state.discoveries.append(disc)
+        state.sync_cargo()
         state.add_log("emergency", f"Salvaged spare parts on {body.name if body else body_id} (value: {spare_value} credits).", category="crisis", title="Salvage: Spare Parts", cargo_change=1)
         return {
             "result": f"Found salvageable spare parts! Value: {spare_value} credits.",
@@ -1014,6 +1018,7 @@ def emergency_craft(state: GameState, discovery_id: str, output: str) -> dict:
         return {"error": f"Discovery type '{category}' can only be crafted into '{expected_output}', not '{output}'."}
 
     state.discoveries.remove(matching_disc)
+    state.sync_cargo()
 
     ship = state.ship
     if output == "fuel":
