@@ -97,8 +97,12 @@ def _get_lock(game_id: str) -> Lock:
                 if gid not in GAME_STORE and (
                     now - _lock_last_access.get(gid, 0) > _LOCK_STALE_THRESHOLD_SECONDS
                 ):
-                    _game_locks.pop(gid, None)
-                    _lock_last_access.pop(gid, None)
+                    lock = _game_locks.get(gid)
+                    # Don't remove locks that are currently held by another thread
+                    # (e.g., a game being loaded from the database inside _get_state)
+                    if lock is not None and not lock.locked():
+                        _game_locks.pop(gid, None)
+                        _lock_last_access.pop(gid, None)
         if game_id not in _game_locks:
             _game_locks[game_id] = Lock()
         _lock_last_access[game_id] = now
@@ -117,8 +121,11 @@ def _cleanup_stale_locks() -> None:
     with _lock_for_locks:
         for gid in list(_game_locks.keys()):
             if gid not in GAME_STORE:
-                _game_locks.pop(gid, None)
-                _lock_last_access.pop(gid, None)
+                lock = _game_locks.get(gid)
+                # Don't remove locks that are currently held by another thread
+                if lock is not None and not lock.locked():
+                    _game_locks.pop(gid, None)
+                    _lock_last_access.pop(gid, None)
 
 
 def _get_state(game_id: str) -> GameState | None:
