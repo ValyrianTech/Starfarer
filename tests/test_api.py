@@ -4219,8 +4219,9 @@ class TestRoutesLocks:
 
     def test_get_lock_periodic_cleanup_triggers(self) -> None:
         """Periodic cleanup should run after 100 accesses and drop stale locks."""
-        import backend.api.routes as routes_mod
         from unittest.mock import patch
+
+        import backend.api.routes as routes_mod
 
         stale_id = "stale-periodic-cleanup-game"
 
@@ -4237,8 +4238,9 @@ class TestRoutesLocks:
 
     def test_get_lock_periodic_cleanup_preserves_recently_accessed(self) -> None:
         """Periodic cleanup should NOT remove locks for games accessed within the stale threshold."""
-        import backend.api.routes as routes_mod
         from unittest.mock import patch
+
+        import backend.api.routes as routes_mod
 
         game_id = "recently-accessed-game"
 
@@ -4259,8 +4261,9 @@ class TestRoutesLocks:
 
     def test_get_lock_periodic_cleanup_removes_old_stale(self) -> None:
         """Periodic cleanup should remove locks for games not accessed for over the stale threshold."""
-        import backend.api.routes as routes_mod
         from unittest.mock import patch
+
+        import backend.api.routes as routes_mod
 
         stale_id = "old-stale-periodic-game"
 
