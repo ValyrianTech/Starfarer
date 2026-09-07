@@ -4886,6 +4886,10 @@ class TestDiminishingReturns:
         assert state.ship.fuel == 100 - EXPLORE_FUEL_COST
         # exploration_count SHOULD be incremented even when nothing is found
         assert body.exploration_count == 2
+        # A log entry SHOULD be created even when nothing is found
+        log_entry = state.log_entries[-1]
+        assert "Found nothing of interest" in log_entry["message"]
+        assert log_entry["fuel_change"] == -EXPLORE_FUEL_COST
 
     def test_third_exploration_zero_finds_early_return(self) -> None:
         """When third exploration yields 0 finds after diminishing returns, deduct fuel and increment count."""
@@ -4908,6 +4912,10 @@ class TestDiminishingReturns:
         assert discoveries == []
         assert state.ship.fuel == 100 - EXPLORE_FUEL_COST
         assert body.exploration_count == 3
+        # A log entry SHOULD be created even when nothing is found
+        log_entry = state.log_entries[-1]
+        assert "Found nothing of interest" in log_entry["message"]
+        assert log_entry["fuel_change"] == -EXPLORE_FUEL_COST
 
 
 class TestMotherlodeDiscoveries:
