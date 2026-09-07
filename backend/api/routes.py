@@ -97,8 +97,15 @@ def _get_lock(game_id: str) -> Lock:
                 if gid not in GAME_STORE and (
                     now - _lock_last_access.get(gid, 0) > _LOCK_STALE_THRESHOLD_SECONDS
                 ):
-                    _game_locks.pop(gid, None)
-                    _lock_last_access.pop(gid, None)
+                    lock = _game_locks.get(gid)
+                    # Atomically check-and-acquire: eliminates the TOCTOU race where
+                    # another thread could acquire the lock between lock.locked() and
+                    # the dict removal. If we acquire it, no one else holds it and
+                    # no one can acquire it until we release it after removal.
+                    if lock is not None and lock.acquire(blocking=False):
+                        _game_locks.pop(gid, None)
+                        _lock_last_access.pop(gid, None)
+                        lock.release()
         if game_id not in _game_locks:
             _game_locks[game_id] = Lock()
         _lock_last_access[game_id] = now
@@ -117,8 +124,15 @@ def _cleanup_stale_locks() -> None:
     with _lock_for_locks:
         for gid in list(_game_locks.keys()):
             if gid not in GAME_STORE:
-                _game_locks.pop(gid, None)
-                _lock_last_access.pop(gid, None)
+                lock = _game_locks.get(gid)
+                # Atomically check-and-acquire: eliminates the TOCTOU race where
+                # another thread could acquire the lock between lock.locked() and
+                # the dict removal. If we acquire it, no one else holds it and
+                # no one can acquire it until we release it after removal.
+                if lock is not None and lock.acquire(blocking=False):
+                    _game_locks.pop(gid, None)
+                    _lock_last_access.pop(gid, None)
+                    lock.release()
 
 
 def _get_state(game_id: str) -> GameState | None:

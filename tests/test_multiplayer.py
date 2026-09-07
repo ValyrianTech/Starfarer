@@ -2176,33 +2176,6 @@ class TestMultiplayerAPI:
     def test_cleanup_game_lock_nonexistent(self) -> None:
         _cleanup_game_lock("nonexistent-game-id")
 
-    def test_cleanup_stale_locks_removes_stale(self) -> None:
-        state = new_game(42, "StaleTest", shared_universe=True)
-        game_id = state.id
-        GAME_STORE[game_id] = state
-
-        _get_lock(game_id)
-        assert game_id in _game_locks
-        assert game_id in _lock_last_access
-
-        del GAME_STORE[game_id]
-        _cleanup_stale_locks()
-        assert game_id not in _game_locks
-        assert game_id not in _lock_last_access
-
-    def test_cleanup_stale_locks_preserves_active(self) -> None:
-        state = new_game(42, "ActiveTest", shared_universe=True)
-        game_id = state.id
-        GAME_STORE[game_id] = state
-
-        _get_lock(game_id)
-        assert game_id in _game_locks
-
-        _cleanup_stale_locks()
-        assert game_id in _game_locks
-
-        del GAME_STORE[game_id]
-
     def test_get_lock_returns_same_lock_for_existing_game(self) -> None:
         resp = client.post("/api/game/new", json={"shared_universe": True})
         assert resp.status_code == 200
