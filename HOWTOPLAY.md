@@ -145,7 +145,7 @@ The response also includes a `lore_fragments_discovered` field listing any lore 
 - `discovery_location` — where it was found (system name - body name)
 - `discovery_timestamp` — ISO format datetime of discovery
 
-**Diminishing returns:** Each body tracks how many times it has been explored (`exploration_count`). Your first exploration yields the most finds; the second yields about half, the third about a quarter, and after 3 explorations a body is exhausted and returns no further discoveries. Move on to fresh bodies to keep finding valuable discoveries. Bodies with a high `poi_count` (4+) also have a small chance of yielding a **motherlode** — a discovery worth 3–5x its normal value.
+**Diminishing returns:** Each body tracks how many times it has been explored (`exploration_count`). Your first exploration yields the most finds; the second yields about half, the third about a quarter, and after 3 explorations a body is exhausted and returns no further discoveries. Move on to fresh bodies to keep finding valuable discoveries. Each exploration attempt always costs 2 fuel and increments the body's `exploration_count`, even when the body is exhausted or diminishing returns reduce the number of finds to zero — so you cannot spam-explore an exhausted body for free. Bodies with a high `poi_count` (4+) also have a small chance of yielding a **motherlode** — a discovery worth 3–5x its normal value.
 
 ### 3.8 Atmospheric Scan
 
