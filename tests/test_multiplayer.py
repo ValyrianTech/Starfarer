@@ -2203,6 +2203,39 @@ class TestMultiplayerAPI:
 
         del GAME_STORE[game_id]
 
+    def test_cleanup_stale_locks_preserves_held_lock(self) -> None:
+        """_cleanup_stale_locks should NOT remove a lock that is currently held."""
+        game_id = "held-stale-lock-game"
+        _game_locks.pop(game_id, None)
+        _lock_last_access.pop(game_id, None)
+
+        lock = _get_lock(game_id)
+        assert game_id in _game_locks
+
+        # Acquire the lock (simulating being inside a `with` block)
+        lock.acquire()
+        try:
+            _cleanup_stale_locks()
+        finally:
+            lock.release()
+
+        # The lock should still be present because it was held during cleanup
+        assert game_id in _game_locks
+        _cleanup_game_lock(game_id)
+
+    def test_cleanup_stale_locks_removes_unheld_lock(self) -> None:
+        """_cleanup_stale_locks should remove a lock that is NOT currently held."""
+        game_id = "unheld-stale-lock-game"
+        _game_locks.pop(game_id, None)
+        _lock_last_access.pop(game_id, None)
+
+        _get_lock(game_id)
+        assert game_id in _game_locks
+
+        _cleanup_stale_locks()
+
+        assert game_id not in _game_locks
+
     def test_get_lock_returns_same_lock_for_existing_game(self) -> None:
         resp = client.post("/api/game/new", json={"shared_universe": True})
         assert resp.status_code == 200

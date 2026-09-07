@@ -4278,6 +4278,82 @@ class TestRoutesLocks:
 
         assert stale_id not in routes_mod._game_locks
 
+    def test_get_lock_periodic_cleanup_preserves_held_lock(self) -> None:
+        """Periodic cleanup should NOT remove a lock that is currently held."""
+        from unittest.mock import patch
+
+        import backend.api.routes as routes_mod
+
+        game_id = "held-lock-game"
+        # Game is NOT in GAME_STORE (simulating being loaded from DB)
+        routes_mod._game_locks.pop(game_id, None)
+        routes_mod._lock_last_access.pop(game_id, None)
+
+        # First call at time 0.0 to create the lock
+        times = iter([0.0] + [61.0] * 300)
+        with patch("backend.api.routes.time.time", side_effect=lambda: next(times)):
+            lock = routes_mod._get_lock(game_id)
+            assert game_id in routes_mod._game_locks
+
+            # Acquire the lock (simulating being inside a `with` block)
+            lock.acquire()
+            try:
+                # Trigger periodic cleanup at count=100 with time=61.0
+                for i in range(200):
+                    routes_mod._get_lock(f"dummy-held-{i}")
+            finally:
+                lock.release()
+
+        # The lock should still be present because it was held during cleanup
+        assert game_id in routes_mod._game_locks
+        routes_mod._cleanup_game_lock(game_id)
+
+    def test_get_lock_periodic_cleanup_removes_unheld_lock(self) -> None:
+        """Periodic cleanup should remove a lock that is NOT currently held."""
+        from unittest.mock import patch
+
+        import backend.api.routes as routes_mod
+
+        game_id = "unheld-lock-game"
+        # Game is NOT in GAME_STORE (simulating being loaded from DB)
+        routes_mod._game_locks.pop(game_id, None)
+        routes_mod._lock_last_access.pop(game_id, None)
+
+        # First call at time 0.0 to create the lock
+        times = iter([0.0] + [61.0] * 300)
+        with patch("backend.api.routes.time.time", side_effect=lambda: next(times)):
+            routes_mod._get_lock(game_id)
+            assert game_id in routes_mod._game_locks
+
+            # Trigger periodic cleanup at count=100 with time=61.0
+            for i in range(200):
+                routes_mod._get_lock(f"dummy-unheld-{i}")
+
+        # The lock should be removed because it was not held during cleanup
+        assert game_id not in routes_mod._game_locks
+
+    def test_cleanup_stale_locks_preserves_held_lock(self) -> None:
+        """_cleanup_stale_locks should NOT remove a lock that is currently held."""
+        import backend.api.routes as routes_mod
+
+        game_id = "held-stale-lock-game"
+        routes_mod._game_locks.pop(game_id, None)
+        routes_mod._lock_last_access.pop(game_id, None)
+
+        lock = routes_mod._get_lock(game_id)
+        assert game_id in routes_mod._game_locks
+
+        # Acquire the lock (simulating being inside a `with` block)
+        lock.acquire()
+        try:
+            routes_mod._cleanup_stale_locks()
+        finally:
+            lock.release()
+
+        # The lock should still be present because it was held during cleanup
+        assert game_id in routes_mod._game_locks
+        routes_mod._cleanup_game_lock(game_id)
+
     def test_new_game_lock_exists(self) -> None:
         import threading
 
