@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from backend.config import (
     ATMOSPHERIC_SCAN_FUEL_COST,
+    EXPLORE_FUEL_COST,
     SCAN_FUEL_COST,
     SUB_SURFACE_CREW_COST,
     SUB_SURFACE_FUEL_COST,
@@ -4868,7 +4869,7 @@ class TestDiminishingReturns:
         assert body.exploration_count == 3
 
     def test_second_exploration_zero_finds_early_return(self) -> None:
-        """When second exploration yields 0 finds after diminishing returns, return early."""
+        """When second exploration yields 0 finds after diminishing returns, deduct fuel and increment count."""
         from unittest import mock
         state, body = self._make_state()
         state.ship.fuel = 100
@@ -4881,13 +4882,17 @@ class TestDiminishingReturns:
         with mock.patch("random.Random.randint", return_value=1):
             discoveries = explore_surface(state)
         assert discoveries == []
-        # Fuel should NOT be deducted when we return early
-        assert state.ship.fuel == 100
-        # exploration_count should NOT be incremented
-        assert body.exploration_count == 1
+        # Fuel SHOULD be deducted even when nothing is found
+        assert state.ship.fuel == 100 - EXPLORE_FUEL_COST
+        # exploration_count SHOULD be incremented even when nothing is found
+        assert body.exploration_count == 2
+        # A log entry SHOULD be created even when nothing is found
+        log_entry = state.log_entries[-1]
+        assert "Found nothing of interest" in log_entry["message"]
+        assert log_entry["fuel_change"] == -EXPLORE_FUEL_COST
 
     def test_third_exploration_zero_finds_early_return(self) -> None:
-        """When third exploration yields 0 finds after diminishing returns, return early."""
+        """When third exploration yields 0 finds after diminishing returns, deduct fuel and increment count."""
         from unittest import mock
         state, body = self._make_state()
         state.ship.fuel = 100
@@ -4905,8 +4910,12 @@ class TestDiminishingReturns:
         with mock.patch("random.Random.randint", return_value=1):
             discoveries = explore_surface(state)
         assert discoveries == []
-        assert state.ship.fuel == 100
-        assert body.exploration_count == 2
+        assert state.ship.fuel == 100 - EXPLORE_FUEL_COST
+        assert body.exploration_count == 3
+        # A log entry SHOULD be created even when nothing is found
+        log_entry = state.log_entries[-1]
+        assert "Found nothing of interest" in log_entry["message"]
+        assert log_entry["fuel_change"] == -EXPLORE_FUEL_COST
 
 
 class TestMotherlodeDiscoveries:

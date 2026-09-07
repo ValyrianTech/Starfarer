@@ -412,6 +412,9 @@ def explore_surface(state: GameState) -> list[Discovery]:
         num_finds = num_finds // 4
 
     if num_finds == 0:
+        ship.fuel -= EXPLORE_FUEL_COST
+        body.exploration_count += 1
+        state.add_log("exploration", f"Explored {body.name}. Found nothing of interest.", category="exploration", title="Surface Exploration", system=system.name, body=body.name, fuel_change=-EXPLORE_FUEL_COST)
         return []
 
     lore_frag = get_fragment_for_body(system.id, body.id, state.lore_fragments)
