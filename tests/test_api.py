@@ -4151,6 +4151,99 @@ class TestApiNewEndpoints:
             assert "discoveries" in data
 
 
+class TestApiExploreValidation:
+    """Tests that api_explore returns 400 when exploration is impossible."""
+
+    def _landed_planet_state(self, game_id: str) -> GameState:
+        state = GAME_STORE[game_id]
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
+        assert planet is not None
+        land_on_body(state, planet.id)
+        return state
+
+    def test_explore_not_landed(self) -> None:
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+        resp = client.post(f"/api/game/{game_id}/explore")
+        assert resp.status_code == 400
+        assert "Not landed" in resp.json()["detail"]
+
+    def test_explore_not_enough_fuel(self) -> None:
+        from backend.config import EXPLORE_FUEL_COST
+
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+        state = self._landed_planet_state(game_id)
+        state.ship.fuel = EXPLORE_FUEL_COST - 1
+        GAME_STORE[game_id] = state
+        resp = client.post(f"/api/game/{game_id}/explore")
+        assert resp.status_code == 400
+        assert "Not enough fuel" in resp.json()["detail"]
+
+    def test_explore_zero_poi_count(self) -> None:
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+        state = self._landed_planet_state(game_id)
+        system = state.get_current_system()
+        for body in system.bodies:
+            if body.id == state.ship.current_body_id:
+                body.poi_count = 0
+                break
+        GAME_STORE[game_id] = state
+        resp = client.post(f"/api/game/{game_id}/explore")
+        assert resp.status_code == 400
+        assert "No points of interest" in resp.json()["detail"]
+
+    def test_explore_fully_explored(self) -> None:
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+        state = self._landed_planet_state(game_id)
+        system = state.get_current_system()
+        for body in system.bodies:
+            if body.id == state.ship.current_body_id:
+                body.exploration_count = 3
+                break
+        GAME_STORE[game_id] = state
+        resp = client.post(f"/api/game/{game_id}/explore")
+        assert resp.status_code == 400
+        assert "fully explored" in resp.json()["detail"]
+
+    def test_explore_success(self) -> None:
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+        self._landed_planet_state(game_id)
+        resp = client.post(f"/api/game/{game_id}/explore")
+        assert resp.status_code == 200
+        assert "discoveries" in resp.json()
+
+    def test_explore_success_nothing_found_diminishing_returns(self) -> None:
+        from unittest.mock import patch
+
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+        state = self._landed_planet_state(game_id)
+        system = state.get_current_system()
+        for body in system.bodies:
+            if body.id == state.ship.current_body_id:
+                body.poi_count = 2
+                break
+        state.ship.fuel = 100
+        GAME_STORE[game_id] = state
+        # Force randint to return 1: the first exploration finds 1 discovery
+        # (exploration_count == 0, so no halving), and the second exploration
+        # yields 0 finds after the diminishing-returns halving (1 // 2 == 0).
+        with patch("random.Random.randint", return_value=1):
+            first = client.post(f"/api/game/{game_id}/explore")
+            assert first.status_code == 200
+            assert len(first.json()["discoveries"]) == 1
+
+            second = client.post(f"/api/game/{game_id}/explore")
+        assert second.status_code == 200
+        assert second.json()["discoveries"] == []
+
+
 class TestRoutesLocks:
     """Tests for the per-game lock infrastructure in routes.py."""
 
