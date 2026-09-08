@@ -431,7 +431,7 @@ class TestExploreEdgeCases:
             land_on_body(state, planet.id)
             planet.poi_count = 0
             fuel_before = state.ship.fuel
-            ok, msg, discoveries = explore_surface(state)
+            ok, _msg, discoveries = explore_surface(state)
             assert ok is False
             assert discoveries == []
             assert state.ship.fuel == fuel_before  # fuel should NOT be deducted
@@ -4878,7 +4878,7 @@ class TestDiminishingReturns:
         assert body.exploration_count == 3
         # Fourth exploration should return empty due to >= 3 check
         state.ship.fuel = 100
-        ok4, msg4, discoveries4 = explore_surface(state)
+        ok4, _msg4, discoveries4 = explore_surface(state)
         assert ok4 is False
         assert discoveries4 == []
         assert body.exploration_count == 3
