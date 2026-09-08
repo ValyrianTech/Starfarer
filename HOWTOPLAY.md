@@ -103,7 +103,7 @@ Costs fuel based on distance (3 fuel per LY, minimum 1). Morale decays by 2 per 
 POST /api/game/{game_id}/scan
 ```
 
-Costs 5 fuel. Reveals all orbital bodies (planets, moons, asteroid belts) and their biomes. A system only needs to be scanned once.
+Costs 5 fuel. Reveals all orbital bodies (planets, moons, asteroid belts) and their biomes. A system only needs to be scanned once. Returns HTTP 400 if a scan is not possible (e.g., not enough fuel or no current system).
 
 Higher scanner levels unlock progressively richer scan output, both in the `result` message and in a structured `scanner_tier_data` field on the response:
 - **L3** (`value_estimation`) — estimated discovery value ranges per body (10–200 cr)
@@ -736,7 +736,7 @@ The game persists all state to SQLite. Save frequently — especially before ris
 | GET | `/api/game/{id}/galaxy` | Galaxy map data |
 | GET | `/api/game/{id}/system/{sid}` | System details |
 | POST | `/api/game/{id}/jump/{sid}` | Jump to system |
-| POST | `/api/game/{id}/scan` | Scan current system (response includes `scanner_tier_data` at scanner L3+) |
+| POST | `/api/game/{id}/scan` | Scan current system (response includes `scanner_tier_data` at scanner L3+; returns HTTP 400 if scan is not possible) |
 | POST | `/api/game/{id}/land/{bid}` | Land on body |
 | POST | `/api/game/{id}/explore` | Explore surface |
 | POST | `/api/game/{id}/atmospheric-scan` | Atmospheric scan (1 fuel, gas giants/volcanic/ocean) |
