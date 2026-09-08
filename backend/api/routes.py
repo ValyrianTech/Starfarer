@@ -364,13 +364,16 @@ def api_scan(game_id: str) -> dict:
     :returns: A dictionary with ``result``, ``system``, ``ship``
         status, and ``pending_event`` if triggered.
     :rtype: dict
-    :raises HTTPException: 404 if the game is not found.
+    :raises HTTPException: 404 if the game is not found; 400 if the
+        scan is not possible (insufficient fuel or no current system).
     """
     with _get_lock(game_id):
         state = _get_state(game_id)
         if not state:
             raise HTTPException(status_code=404, detail="Game not found")
         result = perform_scan(state)
+        if result.startswith("Not enough fuel") or result.startswith("No current system"):
+            raise HTTPException(status_code=400, detail=result)
 
         decrement_cooldowns(state)
         event = trigger_event(state)
