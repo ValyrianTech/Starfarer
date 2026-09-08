@@ -4244,6 +4244,56 @@ class TestApiExploreValidation:
         assert second.json()["discoveries"] == []
 
 
+class TestApiScanValidation:
+    """Tests that api_scan returns 400 when scanning is impossible."""
+
+    def test_scan_not_enough_fuel(self) -> None:
+        from backend.config import SCAN_FUEL_COST
+
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        state.ship.fuel = SCAN_FUEL_COST - 1
+        GAME_STORE[game_id] = state
+        resp = client.post(f"/api/game/{game_id}/scan")
+        assert resp.status_code == 400
+        assert "Not enough fuel" in resp.json()["detail"]
+
+    def test_scan_no_current_system(self) -> None:
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        state.ship.current_system_id = ""
+        GAME_STORE[game_id] = state
+        resp = client.post(f"/api/game/{game_id}/scan")
+        assert resp.status_code == 400
+        assert "No current system" in resp.json()["detail"]
+
+    def test_scan_failure_skips_cooldowns_events_and_save(self) -> None:
+        from unittest.mock import patch
+
+        from backend.config import SCAN_FUEL_COST
+
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        state.ship.fuel = SCAN_FUEL_COST - 1
+        state.event_cooldowns["Ancient Signal"] = 3
+        GAME_STORE[game_id] = state
+
+        with patch("backend.api.routes.decrement_cooldowns") as mock_dec, \
+             patch("backend.api.routes.trigger_event") as mock_trigger, \
+             patch("backend.api.routes.game_save") as mock_save:
+            resp = client.post(f"/api/game/{game_id}/scan")
+
+        assert resp.status_code == 400
+        assert "Not enough fuel" in resp.json()["detail"]
+        mock_dec.assert_not_called()
+        mock_trigger.assert_not_called()
+        mock_save.assert_not_called()
+        assert state.event_cooldowns["Ancient Signal"] == 3
+
+
 class TestRoutesLocks:
     """Tests for the per-game lock infrastructure in routes.py."""
 
