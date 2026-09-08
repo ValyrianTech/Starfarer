@@ -366,7 +366,7 @@ def land_on_body(state: GameState, body_id: str) -> tuple[bool, str]:
 
 
 
-def explore_surface(state: GameState) -> list[Discovery]:
+def explore_surface(state: GameState) -> tuple[bool, str, list[Discovery]]:
     """Explore the surface of the currently landed-on body.
 
     Deducts explore fuel cost and generates a random number of
@@ -377,15 +377,19 @@ def explore_surface(state: GameState) -> list[Discovery]:
 
     :param state: The current game state.
     :type state: GameState
-    :returns: A list of newly generated :class:`Discovery` objects.
-    :rtype: list[Discovery]
+    :returns: A tuple of ``(success, message, discoveries)`` where
+        ``success`` indicates whether the exploration was possible,
+        ``message`` is a human-readable status or error description,
+        and ``discoveries`` is the list of newly generated
+        :class:`Discovery` objects (empty on failure).
+    :rtype: tuple[bool, str, list[Discovery]]
     """
     system = state.get_current_system()
     if not system:
-        return []
+        return False, "No current system.", []
     ship = state.ship
     if ship.fuel < EXPLORE_FUEL_COST:
-        return []
+        return False, "Not enough fuel to explore.", []
 
     body = None
     for b in system.bodies:
@@ -393,10 +397,10 @@ def explore_surface(state: GameState) -> list[Discovery]:
             body = b
             break
     if not body:
-        return []
+        return False, "Not landed on any body.", []
 
     if body.poi_count == 0:
-        return []
+        return False, "No points of interest remain on this body.", []
 
     discoveries = []
     # Include len(state.discoveries) in the seed so that repeated calls produce different results (the discovery count changes between calls).
@@ -404,7 +408,7 @@ def explore_surface(state: GameState) -> list[Discovery]:
 
     # Diminishing returns based on exploration count
     if body.exploration_count >= 3:
-        return []
+        return False, "This body has been fully explored.", []
     num_finds = min(body.poi_count, item_rng.randint(1, 3))
     if body.exploration_count == 1:
         num_finds = num_finds // 2
@@ -415,7 +419,7 @@ def explore_surface(state: GameState) -> list[Discovery]:
         ship.fuel -= EXPLORE_FUEL_COST
         body.exploration_count += 1
         state.add_log("exploration", f"Explored {body.name}. Found nothing of interest.", category="exploration", title="Surface Exploration", system=system.name, body=body.name, fuel_change=-EXPLORE_FUEL_COST)
-        return []
+        return True, f"Explored {body.name}. Found nothing of interest.", []
 
     lore_frag = get_fragment_for_body(system.id, body.id, state.lore_fragments)
     lore_linked = False
@@ -448,7 +452,7 @@ def explore_surface(state: GameState) -> list[Discovery]:
         state.record_biome_visit(body.biome)
 
 
-    return discoveries
+    return True, f"Explored {body.name}. Found {len(discoveries)} points of interest.", discoveries
 
 
 def perform_atmospheric_scan(state: GameState) -> list[Discovery]:
