@@ -132,7 +132,7 @@ Select a body from the system detail. Planets yield more discoveries than astero
 POST /api/game/{game_id}/explore
 ```
 
-Costs 2 fuel. Generates discoveries (minerals, artifacts, lifeforms, signals, ruins). Each discovery has:
+Costs 2 fuel. Generates discoveries (minerals, artifacts, lifeforms, signals, ruins). Returns HTTP 400 if exploration is not possible (e.g., no current system, not enough fuel, not landed on a body, body fully explored, or no points of interest remain). Each discovery has:
 - `category` — type of find
 - `name` — what you found
 - `value` — credit value if sold
@@ -145,7 +145,7 @@ The response also includes a `lore_fragments_discovered` field listing any lore 
 - `discovery_location` — where it was found (system name - body name)
 - `discovery_timestamp` — ISO format datetime of discovery
 
-**Diminishing returns:** Each body tracks how many times it has been explored (`exploration_count`). Your first exploration yields the most finds; the second yields about half, the third about a quarter, and after 3 explorations a body is exhausted and returns no further discoveries. Move on to fresh bodies to keep finding valuable discoveries. Fuel is only deducted (and `exploration_count` only incremented) when an exploration attempt actually resolves. A body with `poi_count` of 0, or one already exhausted (`exploration_count >= 3`), returns immediately at no fuel cost. Diminishing returns can also reduce the number of finds to zero (at `exploration_count` 1 or 2); in that case the attempt still costs 2 fuel and increments `exploration_count`, but yields no discoveries. Bodies with a high `poi_count` (4+) also have a small chance of yielding a **motherlode** — a discovery worth 3–5x its normal value.
+**Diminishing returns:** Each body tracks how many times it has been explored (`exploration_count`). Your first exploration yields the most finds; the second yields about half, the third about a quarter, and after 3 explorations a body is exhausted and returns no further discoveries. Move on to fresh bodies to keep finding valuable discoveries. When exploration is not possible — no current system, not enough fuel, not landed on a body, a body with `poi_count` of 0, or a body already exhausted (`exploration_count >= 3`) — the endpoint returns HTTP 400 with an error message. When exploration succeeds but yields no finds due to diminishing returns (at `exploration_count` 1 or 2), the attempt still costs 2 fuel and increments `exploration_count`, but returns HTTP 200 with an empty discoveries list. Bodies with a high `poi_count` (4+) also have a small chance of yielding a **motherlode** — a discovery worth 3–5x its normal value.
 
 ### 3.8 Atmospheric Scan
 
