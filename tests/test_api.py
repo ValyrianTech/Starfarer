@@ -4224,13 +4224,24 @@ class TestApiExploreValidation:
         resp = client.post("/api/game/new", json={"seed": 42})
         game_id = resp.json()["game_id"]
         state = self._landed_planet_state(game_id)
-        # Force randint to return 1 so the second exploration yields 0 finds
-        # after the diminishing-returns halving (1 // 2 == 0).
+        system = state.get_current_system()
+        for body in system.bodies:
+            if body.id == state.ship.current_body_id:
+                body.poi_count = 2
+                break
         state.ship.fuel = 100
         GAME_STORE[game_id] = state
+        # Force randint to return 1: the first exploration finds 1 discovery
+        # (exploration_count == 0, so no halving), and the second exploration
+        # yields 0 finds after the diminishing-returns halving (1 // 2 == 0).
         with patch("random.Random.randint", return_value=1):
-            resp = client.post(f"/api/game/{game_id}/explore")
-        assert resp.status_code == 200
+            first = client.post(f"/api/game/{game_id}/explore")
+            assert first.status_code == 200
+            assert len(first.json()["discoveries"]) == 1
+
+            second = client.post(f"/api/game/{game_id}/explore")
+        assert second.status_code == 200
+        assert second.json()["discoveries"] == []
 
 
 class TestRoutesLocks:
