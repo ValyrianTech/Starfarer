@@ -195,7 +195,8 @@ class TestNavigation:
         if planet:
             land_on_body(state, planet.id)
             poi_before = planet.poi_count
-            discoveries = explore_surface(state)
+            ok, _msg, discoveries = explore_surface(state)
+            assert ok is True
             assert len(discoveries) > 0
             assert len(state.discoveries) > 0
             assert planet.poi_count < poi_before
@@ -392,8 +393,10 @@ class TestExploreEdgeCases:
         """Explore should return empty when no current system."""
         state = new_game(seed=42)
         state.ship.current_system_id = "nonexistent"
-        discoveries = explore_surface(state)
+        ok, msg, discoveries = explore_surface(state)
+        assert ok is False
         assert discoveries == []
+        assert "No current system" in msg
 
     def test_explore_not_enough_fuel(self) -> None:
         """Explore should return empty when not enough fuel."""
@@ -404,15 +407,19 @@ class TestExploreEdgeCases:
         if planet:
             land_on_body(state, planet.id)
             state.ship.fuel = 1
-            discoveries = explore_surface(state)
+            ok, msg, discoveries = explore_surface(state)
+            assert ok is False
             assert discoveries == []
+            assert "Not enough fuel" in msg
 
     def test_explore_no_current_body(self) -> None:
         """Explore should return empty when no body is landed on."""
         state = new_game(seed=42)
         state.ship.current_body_id = "nonexistent"
-        discoveries = explore_surface(state)
+        ok, msg, discoveries = explore_surface(state)
+        assert ok is False
         assert discoveries == []
+        assert "Not landed" in msg
 
     def test_explore_surface_zero_poi_count(self) -> None:
         """Explore should not deduct fuel when poi_count is 0."""
@@ -424,7 +431,8 @@ class TestExploreEdgeCases:
             land_on_body(state, planet.id)
             planet.poi_count = 0
             fuel_before = state.ship.fuel
-            discoveries = explore_surface(state)
+            ok, msg, discoveries = explore_surface(state)
+            assert ok is False
             assert discoveries == []
             assert state.ship.fuel == fuel_before  # fuel should NOT be deducted
 
@@ -2108,7 +2116,8 @@ class TestLoreExploration:
         state.ship.current_system_id = sys_id
         state.ship.current_body_id = body_id
 
-        discoveries = explore_surface(state)
+        ok, _msg, discoveries = explore_surface(state)
+        assert ok is True
         assert len(discoveries) > 0
 
         lore_discoveries = [d for d in discoveries if d.lore_fragment_id is not None]
@@ -2133,7 +2142,8 @@ class TestLoreExploration:
         assert frag.discovered is True
 
         state.ship.fuel = 1000
-        discoveries2 = explore_surface(state)
+        ok2, _msg2, discoveries2 = explore_surface(state)
+        assert ok2 is True
         lore_discs2 = [d for d in discoveries2 if d.lore_fragment_id is not None]
         assert len(lore_discs2) == 0
 
@@ -2182,7 +2192,8 @@ class TestLoreExploration:
         state.ship.current_body_id = body.id
         state.ship.fuel = 100
 
-        discoveries = explore_surface(state)
+        ok, _msg, discoveries = explore_surface(state)
+        assert ok is True
         lore_discs = [d for d in discoveries if d.lore_fragment_id is not None]
         assert len(lore_discs) == 0
 
@@ -2266,7 +2277,8 @@ class TestLoreExploration:
         state.ship.current_body_id = body_id
 
         with patch("random.Random.randint", return_value=3), caplog.at_level(logging.WARNING):
-            discoveries = explore_surface(state)
+            ok, _msg, discoveries = explore_surface(state)
+        assert ok is True
 
         # The lore fragment should be linked to exactly one discovery
         lore_discs = [d for d in discoveries if d.lore_fragment_id == frag.id]
@@ -4812,7 +4824,8 @@ class TestDiminishingReturns:
 
     def test_first_exploration_full_yield(self):
         state, body = self._make_state()
-        discoveries = explore_surface(state)
+        ok, _msg, discoveries = explore_surface(state)
+        assert ok is True
         assert len(discoveries) > 0
         assert body.exploration_count == 1
 
@@ -4841,7 +4854,8 @@ class TestDiminishingReturns:
         # Third exploration: randint returns 4, 4 // 4 == 1 find
         state.ship.fuel = 100
         with mock.patch("random.Random.randint", return_value=4):
-            discoveries3 = explore_surface(state)
+            ok3, _msg3, discoveries3 = explore_surface(state)
+        assert ok3 is True
         assert len(discoveries3) == 1
         assert body.exploration_count == 3
 
@@ -4864,7 +4878,8 @@ class TestDiminishingReturns:
         assert body.exploration_count == 3
         # Fourth exploration should return empty due to >= 3 check
         state.ship.fuel = 100
-        discoveries4 = explore_surface(state)
+        ok4, msg4, discoveries4 = explore_surface(state)
+        assert ok4 is False
         assert discoveries4 == []
         assert body.exploration_count == 3
 
@@ -4880,7 +4895,8 @@ class TestDiminishingReturns:
         # Second exploration: seed RNG so randint returns 1, then 1 // 2 == 0
         state.ship.fuel = 100
         with mock.patch("random.Random.randint", return_value=1):
-            discoveries = explore_surface(state)
+            ok, _msg, discoveries = explore_surface(state)
+        assert ok is True
         assert discoveries == []
         # Fuel SHOULD be deducted even when nothing is found
         assert state.ship.fuel == 100 - EXPLORE_FUEL_COST
@@ -4908,7 +4924,8 @@ class TestDiminishingReturns:
         # Third exploration: randint returns 1, 2, or 3 -> 1 // 4 == 0, 2 // 4 == 0, 3 // 4 == 0
         state.ship.fuel = 100
         with mock.patch("random.Random.randint", return_value=1):
-            discoveries = explore_surface(state)
+            ok, _msg, discoveries = explore_surface(state)
+        assert ok is True
         assert discoveries == []
         assert state.ship.fuel == 100 - EXPLORE_FUEL_COST
         assert body.exploration_count == 3
@@ -5109,7 +5126,8 @@ class TestSyncCargoInvariant:
         planet.poi_count = 5
         ok, _msg = land_on_body(state, planet.id)
         assert ok is True
-        discoveries = explore_surface(state)
+        explore_ok, _msg, discoveries = explore_surface(state)
+        assert explore_ok is True
         assert len(discoveries) > 0
         assert state.ship.cargo == len(state.discoveries)
 

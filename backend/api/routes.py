@@ -490,13 +490,16 @@ def api_explore(game_id: str) -> dict:
         list, ``ship`` status, ``lore_fragments_discovered``, and
         ``pending_event`` if triggered.
     :rtype: dict
-    :raises HTTPException: 404 if the game is not found.
+    :raises HTTPException: 404 if the game is not found; 400 if
+        exploration is not possible.
     """
     with _get_lock(game_id):
         state = _get_state(game_id)
         if not state:
             raise HTTPException(status_code=404, detail="Game not found")
-        discoveries = explore_surface(state)
+        ok, msg, discoveries = explore_surface(state)
+        if not ok:
+            raise HTTPException(status_code=400, detail=msg)
 
         lore_fragment_map = {lf.id: lf for lf in state.lore_fragments}
         lore_fragments_found = []
