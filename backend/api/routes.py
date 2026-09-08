@@ -372,7 +372,7 @@ def api_scan(game_id: str) -> dict:
         if not state:
             raise HTTPException(status_code=404, detail="Game not found")
         result = perform_scan(state)
-        if result.startswith("Not enough fuel") or result.startswith("No current system"):
+        if result.startswith(("Not enough fuel", "No current system")):
             raise HTTPException(status_code=400, detail=result)
 
         decrement_cooldowns(state)
