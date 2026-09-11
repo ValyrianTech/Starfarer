@@ -5,6 +5,8 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 
@@ -155,6 +157,13 @@ class TestMainLifespan:
 
 
 class TestDatabaseSaveHistory:
+    @pytest.fixture(autouse=True)
+    def _isolated_db(self, tmp_path) -> None:
+        db_path = tmp_path / "starfarer.db"
+        with patch("backend.database.DB_PATH", db_path), \
+             patch("backend.database.DATA_DIR", tmp_path):
+            yield
+
     def _cleanup(self, game_id: str) -> None:
         from backend.database import get_db
         conn = get_db()
