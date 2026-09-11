@@ -73,10 +73,10 @@ class Discovery:
         :rtype: Discovery
         """
         return cls(
-            id=d["id"],
-            category=d["category"],
-            name=d["name"],
-            description=d["description"],
+            id=str(d.get("id", "")),
+            category=d.get("category", "unknown"),
+            name=d.get("name", "Unknown"),
+            description=d.get("description", ""),
             lore_fragment_id=d.get("lore_fragment_id"),
             value=d.get("value", 0),
             system_id=d.get("system_id", ""),
@@ -134,10 +134,10 @@ class LoreFragment:
         :rtype: LoreFragment
         """
         return cls(
-            id=d["id"],
-            arc=d["arc"],
-            title=d["title"],
-            text=d["text"],
+            id=str(d.get("id", "")),
+            arc=d.get("arc", "unknown"),
+            title=d.get("title", "Unknown"),
+            text=d.get("text", ""),
             discovered=d.get("discovered", False),
             discovery_id=d.get("discovery_id"),
             fragment_number=d.get("fragment_number", -1),

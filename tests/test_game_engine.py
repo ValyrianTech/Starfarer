@@ -5261,3 +5261,129 @@ class TestSyncCargoInvariant:
         assert loaded is not None
         assert len(loaded.discoveries) == 3
         assert loaded.ship.cargo == len(loaded.discoveries)
+
+
+class TestDiscoveryLoreFragmentDefensiveLoad:
+    def test_discovery_missing_category_loads_with_defaults(self) -> None:
+        state = new_game(seed=42)
+        data = get_game_state(state)
+        data["discoveries"] = [
+            {
+                "id": "disc-no-cat",
+                "name": "Orphan",
+                "description": "partial",
+                "value": 7,
+                "system_id": "sys_1",
+            }
+        ]
+        loaded = _state_from_dict(data)
+        assert loaded is not None
+        assert len(loaded.discoveries) == 1
+        assert loaded.discoveries[0].category == "unknown"
+        assert loaded.discoveries[0].id == "disc-no-cat"
+
+    def test_lore_fragment_missing_fields_loads_with_defaults(self) -> None:
+        data = get_game_state(new_game(seed=42))
+        data["lore_fragments"] = [{"id": "lore_x_5"}]
+        loaded = _state_from_dict(data)
+        assert len(loaded.lore_fragments) == 1
+        assert loaded.lore_fragments[0].arc == "unknown"
+        assert loaded.lore_fragments[0].title == "Unknown"
+        assert loaded.lore_fragments[0].text == ""
+
+    def test_non_dict_discovery_entry_skipped(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        import logging
+
+        data = get_game_state(new_game(seed=42))
+        data["discoveries"] = [
+            "a string",
+            123,
+            None,
+            {"id": "good_disc", "category": "mineral", "name": "Good", "description": "ok"},
+        ]
+        with caplog.at_level(logging.WARNING):
+            loaded = _state_from_dict(data)
+        assert len(loaded.discoveries) == 1
+        assert loaded.discoveries[0].id == "good_disc"
+        assert any(
+            "Skipping malformed discovery entry" in record.message
+            for record in caplog.records
+        )
+
+    def test_non_dict_lore_entry_skipped(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        import logging
+
+        data = get_game_state(new_game(seed=42))
+        data["lore_fragments"] = [
+            42,
+            None,
+            {"id": "lore_ok_1", "arc": "a", "title": "T", "text": "x"},
+        ]
+        with caplog.at_level(logging.WARNING):
+            loaded = _state_from_dict(data)
+        assert len(loaded.lore_fragments) == 1
+        assert loaded.lore_fragments[0].id == "lore_ok_1"
+        assert any(
+            "Skipping malformed lore fragment entry" in record.message
+            for record in caplog.records
+        )
+
+    def test_discovery_from_dict_raises_keyerror_is_skipped(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        import logging
+        from unittest import mock
+
+        from backend.models.discovery import Discovery
+
+        data = get_game_state(new_game(seed=42))
+        data["discoveries"] = [{"id": "x"}]
+        with mock.patch.object(
+            Discovery, "from_dict", side_effect=KeyError("boom")
+        ), caplog.at_level(logging.WARNING):
+            loaded = _state_from_dict(data)
+        assert loaded.discoveries == []
+        assert any(
+            "Skipping malformed discovery entry" in record.message
+            for record in caplog.records
+        )
+
+    def test_lore_from_dict_raises_typeerror_is_skipped(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        import logging
+        from unittest import mock
+
+        from backend.models.discovery import LoreFragment
+
+        data = get_game_state(new_game(seed=42))
+        data["lore_fragments"] = [{"id": "y"}]
+        with mock.patch.object(
+            LoreFragment, "from_dict", side_effect=TypeError("boom")
+        ), caplog.at_level(logging.WARNING):
+            loaded = _state_from_dict(data)
+        assert loaded.lore_fragments == []
+        assert any(
+            "Skipping malformed lore fragment entry" in record.message
+            for record in caplog.records
+        )
+
+    def test_discovery_from_dict_empty_dict_defaults(self) -> None:
+        d = Discovery.from_dict({})
+        assert d.category == "unknown"
+        assert d.name == "Unknown"
+        assert d.description == ""
+        assert d.id == ""
+        assert d.value == 0
+        assert d.system_id == ""
+
+    def test_lore_fragment_from_dict_empty_dict_defaults(self) -> None:
+        lf = LoreFragment.from_dict({})
+        assert lf.arc == "unknown"
+        assert lf.title == "Unknown"
+        assert lf.text == ""
+        assert lf.id == ""

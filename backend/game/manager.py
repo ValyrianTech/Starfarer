@@ -287,8 +287,28 @@ def _state_from_dict(d: dict) -> GameState:
         systems[k] = StarSystem.from_dict(v)
 
     events = [Event.from_dict(e) for e in d.get("events", [])]
-    discoveries = [Discovery.from_dict(disc) for disc in d.get("discoveries", [])]
-    lore = [LoreFragment.from_dict(lf) for lf in d.get("lore_fragments", [])]
+
+    discoveries = []
+    for raw in d.get("discoveries", []):
+        if not isinstance(raw, dict):
+            logger.warning("Skipping malformed discovery entry: %r", raw)
+            continue
+        try:
+            discoveries.append(Discovery.from_dict(raw))
+        except (KeyError, TypeError):
+            logger.warning("Skipping malformed discovery entry: %r", raw)
+            continue
+
+    lore = []
+    for raw in d.get("lore_fragments", []):
+        if not isinstance(raw, dict):
+            logger.warning("Skipping malformed lore fragment entry: %r", raw)
+            continue
+        try:
+            lore.append(LoreFragment.from_dict(raw))
+        except (KeyError, TypeError):
+            logger.warning("Skipping malformed lore fragment entry: %r", raw)
+            continue
     _fixup_old_lore_fragment_numbers(lore)
 
     faction_relations = {}
