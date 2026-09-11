@@ -168,8 +168,8 @@ class TestDatabaseSaveHistory:
     def test_two_consecutive_saves_keep_two_rows(self) -> None:
         from backend.database import get_db, init_db, save_game
         game_id = "save-history-test-1"
-        self._cleanup(game_id)
         init_db()
+        self._cleanup(game_id)
         state_a = {"seed": 1, "ship": {"name": "Test Ship"}, "credits": 10}
         state_b = {"seed": 1, "ship": {"name": "Test Ship"}, "credits": 20}
         try:
@@ -189,8 +189,8 @@ class TestDatabaseSaveHistory:
     def test_three_consecutive_saves_keep_three_rows(self) -> None:
         from backend.database import get_db, init_db, save_game
         game_id = "save-history-test-2"
-        self._cleanup(game_id)
         init_db()
+        self._cleanup(game_id)
         state_a = {"seed": 1, "ship": {"name": "Test Ship"}, "credits": 10}
         state_b = {"seed": 1, "ship": {"name": "Test Ship"}, "credits": 20}
         state_c = {"seed": 1, "ship": {"name": "Test Ship"}, "credits": 30}
@@ -212,8 +212,8 @@ class TestDatabaseSaveHistory:
     def test_save_game_preserves_created_at(self) -> None:
         from backend.database import get_db, init_db, save_game
         game_id = "save-history-test-3"
-        self._cleanup(game_id)
         init_db()
+        self._cleanup(game_id)
         state_a = {"seed": 1, "ship": {"name": "Test Ship"}, "credits": 10}
         state_b = {"seed": 1, "ship": {"name": "Test Ship"}, "credits": 20}
         try:
@@ -240,8 +240,8 @@ class TestDatabaseSaveHistory:
     def test_load_save_returns_most_recent(self) -> None:
         from backend.database import init_db, load_save, save_game
         game_id = "save-history-test-4"
-        self._cleanup(game_id)
         init_db()
+        self._cleanup(game_id)
         state_a = {"seed": 1, "ship": {"name": "Test Ship"}, "credits": 10}
         state_b = {"seed": 1, "ship": {"name": "Test Ship"}, "credits": 20}
         try:
@@ -254,8 +254,8 @@ class TestDatabaseSaveHistory:
     def test_create_game_upsert_does_not_delete_saves(self) -> None:
         from backend.database import create_game, get_db, init_db, save_game
         game_id = "save-history-test-5"
-        self._cleanup(game_id)
         init_db()
+        self._cleanup(game_id)
         state_a = {"seed": 1, "ship": {"name": "Test Ship"}, "credits": 10}
         state_c = {"seed": 7, "ship": {"name": "Upsert Ship"}, "credits": 30}
         try:
