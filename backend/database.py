@@ -108,7 +108,13 @@ def create_game(game_id: str, seed: int, ship_name: str, state: dict) -> None:
         else:
             created_at = now
         conn.execute(
-            "INSERT OR REPLACE INTO games (id, seed, ship_name, created_at, updated_at, state_json) VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO games (id, seed, ship_name, created_at, updated_at, state_json) "
+            "VALUES (?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(id) DO UPDATE SET "
+            "seed=excluded.seed, "
+            "ship_name=excluded.ship_name, "
+            "updated_at=excluded.updated_at, "
+            "state_json=excluded.state_json",
             (game_id, seed, ship_name, created_at, now, json.dumps(state)),
         )
         conn.commit()
@@ -174,7 +180,13 @@ def save_game(game_id: str, state: dict) -> None:
             ship_data = state.get("ship", {})
             ship_name = ship_data.get("name", "Unknown") if isinstance(ship_data, dict) else "Unknown"
         conn.execute(
-            "INSERT OR REPLACE INTO games (id, seed, ship_name, created_at, updated_at, state_json) VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO games (id, seed, ship_name, created_at, updated_at, state_json) "
+            "VALUES (?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(id) DO UPDATE SET "
+            "seed=excluded.seed, "
+            "ship_name=excluded.ship_name, "
+            "updated_at=excluded.updated_at, "
+            "state_json=excluded.state_json",
             (game_id, seed, ship_name, created_at, now, json.dumps(state)),
         )
         conn.execute(
