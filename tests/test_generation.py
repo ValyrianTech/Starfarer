@@ -602,8 +602,10 @@ class TestGameState:
         assert len(state.discoveries) == 50
         assert state.ship.cargo == 50
 
-    def test_cargo_negative_prefers_sellable(self) -> None:
-        """cargo:-N should remove sellable discoveries before lore-linked ones."""
+    def test_cargo_negative_prefers_sellable(self, caplog) -> None:
+        """cargo:-N should remove sellable discoveries and preserve lore-linked ones."""
+        import logging
+        caplog.set_level(logging.WARNING)
         ship = Ship(cargo=4, max_cargo=50)
         state = GameState(id="test-cargo-sellable", seed=42, ship=ship)
         state.discoveries = [
@@ -615,9 +617,11 @@ class TestGameState:
         state.sync_cargo()
         state.apply_choice_outcome("cargo:-3")
         remaining_ids = {d.id for d in state.discoveries}
-        assert len(state.discoveries) == 1
-        assert remaining_ids == {"lore-2"}
-        assert state.ship.cargo == 1
+        assert len(state.discoveries) == 2
+        assert remaining_ids == {"lore-1", "lore-2"}
+        assert state.ship.cargo == 2
+        warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("shortfall ignored" in msg for msg in warning_messages)
 
     def test_cargo_outcome_then_sync_cargo_consistent(self) -> None:
         """Applying a cargo outcome then sync_cargo keeps cargo consistent."""

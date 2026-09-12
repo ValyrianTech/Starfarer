@@ -197,18 +197,18 @@ class GameState:
                 )
         elif cargo_delta < 0:
             to_remove = -cargo_delta
-            removed = 0
-            for discovery in list(self.discoveries):
-                if removed >= to_remove:
-                    break
-                if discovery.lore_fragment_id is None:
-                    self.discoveries.remove(discovery)
-                    removed += 1
-            for discovery in list(self.discoveries):
-                if removed >= to_remove:
-                    break
-                self.discoveries.remove(discovery)
-                removed += 1
+            removable = [d for d in self.discoveries if d.lore_fragment_id is None]
+            overflow = to_remove - len(removable)
+            if overflow > 0:
+                # Do NOT delete lore-linked discoveries: they represent irreplaceable
+                # collection progress. Log the shortfall instead of silently destroying them.
+                logger.warning(
+                    "Event requested removal of %d cargo but only %d non-lore items available; %d shortfall ignored",
+                    to_remove, len(removable), overflow,
+                )
+            to_remove = min(to_remove, len(removable))
+            removed_ids = {d.id for d in removable[:to_remove]}
+            self.discoveries = [d for d in self.discoveries if d.id not in removed_ids]
 
         self.sync_cargo()
         return effects
