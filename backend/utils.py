@@ -29,5 +29,6 @@ def seeded_random(seed: int, *extra: str) -> random.Random:
     :returns: A seeded :class:`random.Random` instance.
     :rtype: random.Random
     """
-    rng = random.Random(str(seed) + "".join(str(e) for e in extra))
-    return rng
+    parts = [str(seed), *[str(e) for e in extra]]
+    key = "|".join(f"{len(p)}:{p}" for p in parts)
+    return random.Random(key)
