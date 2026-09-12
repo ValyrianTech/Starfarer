@@ -2135,6 +2135,12 @@ class TestLoreExploration:
         if not sys_id:
             return
 
+        system = state.systems[sys_id]
+        for b in system.bodies:
+            if b.id == body_id:
+                b.poi_count = 10
+                break
+
         state.ship.current_system_id = sys_id
         state.ship.current_body_id = body_id
 
