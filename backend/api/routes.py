@@ -25,7 +25,7 @@ from backend.api.schemas import (
     TradeRequest,
     UpgradeRequest,
 )
-from backend.database import get_leaderboard
+from backend.database import game_exists, get_leaderboard
 from backend.fuel import get_fuel_status
 from backend.game.engine import (
     activate_distress_beacon,
@@ -197,11 +197,14 @@ def api_new_game(req: NewGameRequest) -> dict:
     :type req: NewGameRequest
     :returns: A dictionary with ``game_id`` and a ``state`` summary.
     :rtype: dict
+    :raises HTTPException: 409 if the requested game_id already exists.
     """
     with _new_game_lock:
         shared_universe = req.shared_universe if req.shared_universe is not None else False
         state = new_game(seed=req.seed, ship_name=req.ship_name, shared_universe=shared_universe)
         if req.game_id:
+            if game_exists(req.game_id) or req.game_id in GAME_STORE:
+                raise HTTPException(status_code=409, detail="Game id already exists")
             state.id = req.game_id
         GAME_STORE[state.id] = state
         game_save(state)
