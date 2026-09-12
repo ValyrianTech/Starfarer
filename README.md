@@ -37,7 +37,7 @@ See **[HOWTOPLAY.md](HOWTOPLAY.md)** — a complete gameplay guide covering all 
 | Spectator webui | Vanilla JS, Three.js (vendored, no build step), SSE — served at `/webui` |
 | Procedural generation | Deterministic, seed-based (same seed = same universe) |
 
-All game actions are REST API calls. The browser UI is a reference client — you can play entirely via the API.
+All game actions are REST API calls. The browser UI is a reference client — you can play entirely via the API. Game creation (`POST /api/game/new`) rejects duplicate caller-supplied game IDs with HTTP 409 Conflict.
 
 Key features include a deterministic procedural galaxy with 50 systems, 40+ unique events (including additional phenomenon-specific events for nebula, pulsar, binary star, and black hole systems), a tiered faction mission system, ship upgrades, an expanded biome discovery codex (with rare discoveries and unique locations), scanner tier data that reveals value estimates, anomaly detection, and resource mapping at higher scanner levels, deep exploration mechanics (atmospheric scans, sub-surface exploration, rare motherlode finds, and diminishing returns that reward exploring new bodies), fuel warning and contextual hint systems, salvage and emergency crafting mechanics, and an asynchronous multiplayer shared universe ("Ghosts in the Void") with ghost signatures, a shared crossroads trading post, and discovery ripples. See **[HOWTOPLAY.md](HOWTOPLAY.md)** for complete details.
 
