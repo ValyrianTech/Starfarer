@@ -98,6 +98,8 @@
 - Pagination support for Crossroads messages endpoint: `GET /api/crossroads/messages` now accepts optional `page` (default 1) and `per_page` (default 10, max 50) query parameters. Returns paginated response with `messages`, `page`, `per_page`, `total_messages`, and `total_pages` fields.
 - Comprehensive test suite for the vulture whitelist (`tests/test_vulture_whitelist.py`): covers the `Whitelist` class `__getattr__` behavior and verifies representative route names, config constants, pytest fixtures, and misc framework-magic names are accessible via the module-level `whitelist` instance.
 - Added `backend/vulture_whitelist.py` to whitelist framework magic names (FastAPI route decorators, Pydantic fields, pytest fixtures, mock attribute assignments) and public API constants that vulture would otherwise flag as false positives
+- Opt-in per-game token access control (IDOR fix): `POST /api/game/new` now returns a `token` alongside `game_id` and `state`. When `STARFARER_REQUIRE_GAME_TOKEN` is enabled (truthy values `1`/`true`/`yes`/`on`, case-insensitive; default off), state-mutating endpoints require the `X-Game-Token` header matching the game's token — a missing token returns HTTP 403 (`"Game token required"`) and an invalid token returns HTTP 403 (`"Invalid game token"`). The token is stored on `GameState` and persists across save/load; read-only GET endpoints are unaffected. Introduces `get_require_game_token()` in `backend/config.py` and `_authorize_game()` in `backend/api/routes.py`.
+- `resolve_allow_credentials()` / `ALLOW_CREDENTIALS` (CORS credentials safety): CORS credentials are automatically disabled when a wildcard origin (`*`) is present and enabled otherwise, preventing the invalid `allow_credentials=True` + wildcard-origin combination. Covered by `tests/test_access_control.py`.
 
 ### Changed
 - Ion Storm event rebalanced: choices changed and it is now phenomenon-specific to nebula systems
@@ -280,3 +282,4 @@
 - Unused `uuid` import from `backend/models/game_state.py`
 - Unused Pydantic request/response schemas (`JumpRequest`, `LandRequest`, `GameResponse`, `ErrorResponse`) from `backend/api/schemas.py`
 - Unused `MAX_INITIAL_JUMP` constant from `backend/generation/universe.py`
+- Unused module-level constant `REQUIRE_GAME_TOKEN` from `backend/config.py` (the `get_require_game_token()` function is retained)
