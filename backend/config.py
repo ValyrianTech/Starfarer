@@ -60,8 +60,6 @@ def get_require_game_token() -> bool:
     return raw.strip().lower() in ("1", "true", "yes", "on")
 
 
-REQUIRE_GAME_TOKEN = get_require_game_token()
-
 GAME_NAME = "Starfarer: Echoes of the Void"
 GAME_VERSION = "0.1.0"
 
