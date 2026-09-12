@@ -7,6 +7,7 @@ querying galaxy and system data.
 """
 
 import logging
+import secrets
 import uuid
 
 from backend.config import (
@@ -63,6 +64,7 @@ def new_game(seed: int | None = None, ship_name: str | None = None, shared_unive
         s = seed if seed is not None else DEFAULT_SEED
     name = ship_name if ship_name else DEFAULT_SHIP_NAME
     game_id = str(uuid.uuid4())
+    token = secrets.token_urlsafe(32)
 
     systems, lore_fragments = generate_universe(s)
     first_sys_id = next(iter(systems.keys()))
@@ -82,7 +84,7 @@ def new_game(seed: int | None = None, ship_name: str | None = None, shared_unive
     state = GameState(
         id=game_id, seed=s, ship=ship, systems=systems,
         lore_fragments=lore_fragments, faction_relations=faction_relations,
-        shared_universe=shared_universe,
+        shared_universe=shared_universe, token=token,
     )
     first_sys = state.get_current_system()
     if first_sys:
@@ -263,6 +265,7 @@ def _state_to_dict(state: GameState) -> dict:
         "biomes_visited": list(state.biomes_visited),
         "shared_universe": state.shared_universe,
         "_next_log_id": state._next_log_id,
+        "token": state.token,
     }
 
 
@@ -390,6 +393,7 @@ def _state_from_dict(d: dict) -> GameState:
         biomes_visited=set(d.get("biomes_visited", [])),
         shared_universe=d.get("shared_universe", False),
         _next_log_id=_next_log_id,
+        token=d.get("token", ""),
     )
     state.sync_cargo()
     return state

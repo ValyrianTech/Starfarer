@@ -37,6 +37,31 @@ def get_allowed_origins() -> list[str]:
 
 ALLOWED_ORIGINS = get_allowed_origins()
 
+
+def resolve_allow_credentials(origins: list[str]) -> bool:
+    """Return whether credentials may be allowed for the given origins.
+
+    A wildcard origin ('*') combined with allow_credentials=True is an
+    invalid/unsafe combination (browsers reject it and proxies may not
+    honor it). Returns False when '*' is present, True otherwise.
+    """
+    return "*" not in origins
+
+
+ALLOW_CREDENTIALS = resolve_allow_credentials(ALLOWED_ORIGINS)
+
+
+def get_require_game_token() -> bool:
+    """Return whether per-game token enforcement is enabled.
+
+    Reads STARFARER_REQUIRE_GAME_TOKEN. Truthy values ('1','true','yes','on', case-insensitive) enable enforcement. Default is False so local single-player usage is unaffected.
+    """
+    raw = os.environ.get("STARFARER_REQUIRE_GAME_TOKEN", "")
+    return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
+REQUIRE_GAME_TOKEN = get_require_game_token()
+
 GAME_NAME = "Starfarer: Echoes of the Void"
 GAME_VERSION = "0.1.0"
 

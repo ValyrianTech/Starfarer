@@ -78,6 +78,7 @@ class GameState:
     biomes_visited: set[str] = field(default_factory=set)
     shared_universe: bool = True
     _next_log_id: int = 1
+    token: str = ""
 
     def __post_init__(self) -> None:
         """Initialize the ``game_started`` timestamp if not already set.
