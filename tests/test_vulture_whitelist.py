@@ -122,7 +122,7 @@ class TestModule:
 
     def test_all_fixtures_present(self) -> None:
         whitelist = vulture_whitelist.whitelist
-        expected = {"setup_db", "lore_frags", "cleanup_messages"}
+        expected = {"setup_db", "lore_frags", "cleanup_messages", "_isolated_db"}
         missing = expected - set(whitelist.__dict__.keys())
         assert not missing, f"Missing fixtures in whitelist: {sorted(missing)}"
 
