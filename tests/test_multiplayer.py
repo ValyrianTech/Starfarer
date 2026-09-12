@@ -2572,3 +2572,264 @@ class TestSyncCargoCrossroads:
         assert claimer.ship.cargo == len(claimer.discoveries)
         GAME_STORE.pop(donor.id, None)
         GAME_STORE.pop(claimer.id, None)
+
+
+# ---------------------------------------------------------------------------
+# TestMultiplayerTokenEnforcement
+# ---------------------------------------------------------------------------
+
+class TestMultiplayerTokenEnforcement:
+    """Verify per-game token enforcement on mutating multiplayer endpoints."""
+
+    def _new_game(self) -> tuple[str, str]:
+        resp = client.post("/api/game/new", json={"shared_universe": True})
+        assert resp.status_code == 200
+        data = resp.json()
+        return data["game_id"], data["token"]
+
+    def test_leave_ghost_token_enforcement(self, monkeypatch) -> None:
+        monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        game_id, token = self._new_game()
+        try:
+            resp = client.post(
+                f"/api/game/{game_id}/leave-ghost", json={"message": "no token"}
+            )
+            assert resp.status_code == 403
+
+            resp = client.post(
+                f"/api/game/{game_id}/leave-ghost",
+                json={"message": "wrong token"},
+                headers={"X-Game-Token": "wrong"},
+            )
+            assert resp.status_code == 403
+
+            resp = client.post(
+                f"/api/game/{game_id}/leave-ghost",
+                json={"message": "correct token"},
+                headers={"X-Game-Token": token},
+            )
+            assert resp.status_code == 200
+        finally:
+            GAME_STORE.pop(game_id, None)
+
+    def test_donate_item_token_enforcement(self, monkeypatch) -> None:
+        monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        game_id, token = self._new_game()
+        try:
+            state = GAME_STORE[game_id]
+            disc = _make_discovery(name="Token Donate Item")
+            state.discoveries.append(disc)
+            game_save(state)
+
+            payload = {"game_id": game_id, "item_name": "Token Donate Item", "quantity": 1}
+            resp = client.post("/api/crossroads/donate-item", json=payload)
+            assert resp.status_code == 403
+
+            resp = client.post(
+                "/api/crossroads/donate-item",
+                json=payload,
+                headers={"X-Game-Token": "wrong"},
+            )
+            assert resp.status_code == 403
+
+            resp = client.post(
+                "/api/crossroads/donate-item",
+                json=payload,
+                headers={"X-Game-Token": token},
+            )
+            assert resp.status_code == 200
+        finally:
+            GAME_STORE.pop(game_id, None)
+
+    def test_claim_item_token_enforcement(self, monkeypatch) -> None:
+        monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        donor_id, donor_token = self._new_game()
+        claimer_id, claimer_token = self._new_game()
+        try:
+            donor_state = GAME_STORE[donor_id]
+            disc = _make_discovery(name="Token Claim Item")
+            donor_state.discoveries.append(disc)
+            game_save(donor_state)
+
+            don_resp = client.post(
+                "/api/crossroads/donate-item",
+                json={"game_id": donor_id, "item_name": "Token Claim Item", "quantity": 1},
+                headers={"X-Game-Token": donor_token},
+            )
+            assert don_resp.status_code == 200
+            item_id = don_resp.json()["donation"]["id"]
+
+            resp = client.post(
+                f"/api/crossroads/claim-item/{item_id}", json={"game_id": claimer_id}
+            )
+            assert resp.status_code == 403
+
+            resp = client.post(
+                f"/api/crossroads/claim-item/{item_id}",
+                json={"game_id": claimer_id},
+                headers={"X-Game-Token": "wrong"},
+            )
+            assert resp.status_code == 403
+
+            resp = client.post(
+                f"/api/crossroads/claim-item/{item_id}",
+                json={"game_id": claimer_id},
+                headers={"X-Game-Token": claimer_token},
+            )
+            assert resp.status_code == 200
+        finally:
+            GAME_STORE.pop(donor_id, None)
+            GAME_STORE.pop(claimer_id, None)
+
+    def test_donate_lore_token_enforcement(self, monkeypatch) -> None:
+        monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        game_id, token = self._new_game()
+        try:
+            state = GAME_STORE[game_id]
+            lf = _make_lore_fragment("lore_token_donate", discovered=True)
+            state.lore_fragments.append(lf)
+            game_save(state)
+
+            payload = {"game_id": game_id, "fragment_id": "lore_token_donate"}
+            resp = client.post("/api/crossroads/donate-lore", json=payload)
+            assert resp.status_code == 403
+
+            resp = client.post(
+                "/api/crossroads/donate-lore",
+                json=payload,
+                headers={"X-Game-Token": "wrong"},
+            )
+            assert resp.status_code == 403
+
+            resp = client.post(
+                "/api/crossroads/donate-lore",
+                json=payload,
+                headers={"X-Game-Token": token},
+            )
+            assert resp.status_code == 200
+        finally:
+            GAME_STORE.pop(game_id, None)
+
+    def test_claim_lore_token_enforcement(self, monkeypatch) -> None:
+        monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        donor_id, donor_token = self._new_game()
+        claimer_id, claimer_token = self._new_game()
+        try:
+            donor_state = GAME_STORE[donor_id]
+            lf = _make_lore_fragment("lore_token_claim", discovered=True)
+            donor_state.lore_fragments.append(lf)
+            game_save(donor_state)
+
+            don_resp = client.post(
+                "/api/crossroads/donate-lore",
+                json={"game_id": donor_id, "fragment_id": "lore_token_claim"},
+                headers={"X-Game-Token": donor_token},
+            )
+            assert don_resp.status_code == 200
+            donation_id = don_resp.json()["donation"]["id"]
+
+            claimer_state = GAME_STORE[claimer_id]
+            clf = _make_lore_fragment("lore_token_claim", discovered=False)
+            claimer_state.lore_fragments.append(clf)
+            game_save(claimer_state)
+
+            resp = client.post(
+                f"/api/crossroads/claim-lore/{donation_id}",
+                json={"game_id": claimer_id},
+            )
+            assert resp.status_code == 403
+
+            resp = client.post(
+                f"/api/crossroads/claim-lore/{donation_id}",
+                json={"game_id": claimer_id},
+                headers={"X-Game-Token": "wrong"},
+            )
+            assert resp.status_code == 403
+
+            resp = client.post(
+                f"/api/crossroads/claim-lore/{donation_id}",
+                json={"game_id": claimer_id},
+                headers={"X-Game-Token": claimer_token},
+            )
+            assert resp.status_code == 200
+        finally:
+            GAME_STORE.pop(donor_id, None)
+            GAME_STORE.pop(claimer_id, None)
+
+    def test_post_message_token_enforcement(self, monkeypatch) -> None:
+        monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        game_id, token = self._new_game()
+        try:
+            payload = {"game_id": game_id, "text": "Token test message"}
+            resp = client.post("/api/crossroads/post-message", json=payload)
+            assert resp.status_code == 403
+
+            resp = client.post(
+                "/api/crossroads/post-message",
+                json=payload,
+                headers={"X-Game-Token": "wrong"},
+            )
+            assert resp.status_code == 403
+
+            resp = client.post(
+                "/api/crossroads/post-message",
+                json=payload,
+                headers={"X-Game-Token": token},
+            )
+            assert resp.status_code == 200
+        finally:
+            GAME_STORE.pop(game_id, None)
+
+    def test_acknowledge_ripple_token_enforcement(self, monkeypatch) -> None:
+        monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        game_id, token = self._new_game()
+        try:
+            import uuid
+
+            from backend.multiplayer.database import save_ripple_event
+
+            state = GAME_STORE[game_id]
+            current_sys = state.get_current_system()
+            ripple_id = str(uuid.uuid4())
+            ripple = RippleEvent(
+                id=ripple_id,
+                source_game_id="other-game",
+                source_player_name="OtherPilot",
+                source_system_id="other-sys",
+                target_system_id=current_sys.id,
+                discovery_type="lore",
+                discovery_name="Token Ack Ripple",
+                created_at=datetime.now(timezone.utc).isoformat(),
+            )
+            save_ripple_event(ripple)
+
+            resp = client.post(
+                f"/api/game/{game_id}/ripple/{ripple_id}/acknowledge"
+            )
+            assert resp.status_code == 403
+
+            resp = client.post(
+                f"/api/game/{game_id}/ripple/{ripple_id}/acknowledge",
+                headers={"X-Game-Token": "wrong"},
+            )
+            assert resp.status_code == 403
+
+            resp = client.post(
+                f"/api/game/{game_id}/ripple/{ripple_id}/acknowledge",
+                headers={"X-Game-Token": token},
+            )
+            assert resp.status_code == 200
+        finally:
+            GAME_STORE.pop(game_id, None)
+
+    def test_enforcement_disabled_allows_no_token(self, monkeypatch) -> None:
+        monkeypatch.delenv("STARFARER_REQUIRE_GAME_TOKEN", raising=False)
+        game_id, _ = self._new_game()
+        try:
+            resp = client.post(
+                "/api/crossroads/post-message",
+                json={"game_id": game_id, "text": "No token needed"},
+            )
+            assert resp.status_code == 200
+        finally:
+            GAME_STORE.pop(game_id, None)

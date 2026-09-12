@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field, field_validator
 class LeaveGhostRequest(BaseModel):
     """Request body for leaving a ghost signature in a star system."""
 
+    game_id: str = ""
     message: str | None = None
 
 

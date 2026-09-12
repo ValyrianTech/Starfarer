@@ -8,10 +8,11 @@ and the leaderboard.
 
 import itertools
 import logging
+import secrets
 import time
 from threading import Lock
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Header, HTTPException
 
 from backend.api.schemas import (
     AcceptMissionRequest,
@@ -25,6 +26,7 @@ from backend.api.schemas import (
     TradeRequest,
     UpgradeRequest,
 )
+from backend.config import get_require_game_token
 from backend.database import game_exists, get_leaderboard
 from backend.fuel import get_fuel_status
 from backend.game.engine import (
@@ -171,6 +173,44 @@ def _save_state(game_id: str) -> None:
         game_save(GAME_STORE[game_id])
 
 
+def _authorize_game(game_id: str, token: str | None) -> None:
+    """Enforce per-game token access control on mutating endpoints.
+
+    When token enforcement is disabled (the default), this is a no-op so
+    single-player/local usage keeps working. When enabled via the
+    STARFARER_REQUIRE_GAME_TOKEN env var, a caller must present the token
+    issued by POST /api/game/new. Raises HTTP 403 for missing/invalid tokens.
+    When enforcement is enabled and the game cannot be resolved, raises
+    HTTP 404 (fail-closed) rather than silently allowing the request to
+    proceed.
+
+    :param game_id: The game being accessed.
+    :type game_id: str
+    :param token: The caller-supplied token (X-Game-Token header), or None.
+    :type token: str | None
+    :raises HTTPException: 403 if enforcement is on and the token is missing or invalid.
+    :raises HTTPException: 404 if enforcement is on and the game cannot be resolved.
+    """
+    if not get_require_game_token():
+        return
+    if game_id not in GAME_STORE:
+        loaded = game_load_func(game_id)
+        if loaded:
+            GAME_STORE[game_id] = loaded
+    state = GAME_STORE.get(game_id)
+    if state is None:
+        # Fail closed: the game cannot be resolved, so we cannot verify its
+        # token. Raise 404 explicitly rather than silently returning a
+        # fail-open path that future callers might inherit. This matches the
+        # downstream _get_state -> 404 contract.
+        raise HTTPException(status_code=404, detail="Game not found")
+    expected = getattr(state, "token", "")
+    if not expected:
+        raise HTTPException(status_code=403, detail="Game token required")
+    if not token or not secrets.compare_digest(token, expected):
+        raise HTTPException(status_code=403, detail="Invalid game token")
+
+
 @router.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
     """Health check endpoint.
@@ -211,6 +251,7 @@ def api_new_game(req: NewGameRequest) -> dict:
         return {
             "game_id": state.id,
             "state": state.state_summary(),
+            "token": state.token,
         }
 
 
@@ -282,7 +323,7 @@ def api_system_detail(game_id: str, sys_id: str) -> dict:
 
 
 @router.post("/game/{game_id}/jump/{sys_id}")
-def api_jump(game_id: str, sys_id: str) -> dict:
+def api_jump(game_id: str, sys_id: str, x_game_token: str | None = Header(default=None)) -> dict:
     """Execute a hyperspace jump to the target star system.
 
     Validates jump feasibility, performs the jump, saves the game,
@@ -299,6 +340,7 @@ def api_jump(game_id: str, sys_id: str) -> dict:
         found; 400 if the jump is not possible.
     """
     with _get_lock(game_id):
+        _authorize_game(game_id, x_game_token)
         state = _get_state(game_id)
         if not state:
             raise HTTPException(status_code=404, detail="Game not found")
@@ -356,7 +398,7 @@ def api_jump(game_id: str, sys_id: str) -> dict:
 
 
 @router.post("/game/{game_id}/scan")
-def api_scan(game_id: str) -> dict:
+def api_scan(game_id: str, x_game_token: str | None = Header(default=None)) -> dict:
     """Scan the current star system for orbital bodies.
 
     Deducts fuel and reveals the bodies in the current system. May
@@ -371,6 +413,7 @@ def api_scan(game_id: str) -> dict:
         scan is not possible (insufficient fuel or no current system).
     """
     with _get_lock(game_id):
+        _authorize_game(game_id, x_game_token)
         state = _get_state(game_id)
         if not state:
             raise HTTPException(status_code=404, detail="Game not found")
@@ -395,7 +438,7 @@ def api_scan(game_id: str) -> dict:
 
 
 @router.post("/game/{game_id}/land/{body_id}")
-def api_land(game_id: str, body_id: str) -> dict:
+def api_land(game_id: str, body_id: str, x_game_token: str | None = Header(default=None)) -> dict:
     """Land the ship on a specific celestial body.
 
     :param game_id: The unique identifier of the game.
@@ -409,6 +452,7 @@ def api_land(game_id: str, body_id: str) -> dict:
         landing is not possible.
     """
     with _get_lock(game_id):
+        _authorize_game(game_id, x_game_token)
         state = _get_state(game_id)
         if not state:
             raise HTTPException(status_code=404, detail="Game not found")
@@ -424,7 +468,7 @@ def api_land(game_id: str, body_id: str) -> dict:
 
 
 @router.post("/game/{game_id}/atmospheric-scan")
-def api_atmospheric_scan(game_id: str) -> dict:
+def api_atmospheric_scan(game_id: str, x_game_token: str | None = Header(default=None)) -> dict:
     """Perform an atmospheric scan of the current body.
 
     Costs 1 fuel, no landing required. Works on gas giants, volcanic,
@@ -439,6 +483,7 @@ def api_atmospheric_scan(game_id: str) -> dict:
         atmospheric scan is not possible.
     """
     with _get_lock(game_id):
+        _authorize_game(game_id, x_game_token)
         state = _get_state(game_id)
         if not state:
             raise HTTPException(status_code=404, detail="Game not found")
@@ -454,7 +499,7 @@ def api_atmospheric_scan(game_id: str) -> dict:
 
 
 @router.post("/game/{game_id}/sub-surface-explore")
-def api_sub_surface_explore(game_id: str) -> dict:
+def api_sub_surface_explore(game_id: str, x_game_token: str | None = Header(default=None)) -> dict:
     """Perform a sub-surface exploration of the current body.
 
     Costs 3 fuel + 1 crew. Works on volcanic, desert, tundra (cave systems)
@@ -469,6 +514,7 @@ def api_sub_surface_explore(game_id: str) -> dict:
         sub-surface exploration is not possible.
     """
     with _get_lock(game_id):
+        _authorize_game(game_id, x_game_token)
         state = _get_state(game_id)
         if not state:
             raise HTTPException(status_code=404, detail="Game not found")
@@ -484,7 +530,7 @@ def api_sub_surface_explore(game_id: str) -> dict:
 
 
 @router.post("/game/{game_id}/explore")
-def api_explore(game_id: str) -> dict:
+def api_explore(game_id: str, x_game_token: str | None = Header(default=None)) -> dict:
     """Explore the surface of the currently landed-on body.
 
     Deducts fuel and generates discoveries based on the body's points
@@ -500,6 +546,7 @@ def api_explore(game_id: str) -> dict:
         exploration is not possible.
     """
     with _get_lock(game_id):
+        _authorize_game(game_id, x_game_token)
         state = _get_state(game_id)
         if not state:
             raise HTTPException(status_code=404, detail="Game not found")
@@ -534,7 +581,7 @@ def api_explore(game_id: str) -> dict:
 
 
 @router.post("/game/{game_id}/event/{event_id}/resolve")
-def api_resolve_event(game_id: str, event_id: str, req: ResolveEventRequest) -> dict:
+def api_resolve_event(game_id: str, event_id: str, req: ResolveEventRequest, x_game_token: str | None = Header(default=None)) -> dict:
     """Resolve a pending in-game event by choosing an outcome.
 
     :param game_id: The unique identifier of the game.
@@ -551,6 +598,7 @@ def api_resolve_event(game_id: str, event_id: str, req: ResolveEventRequest) -> 
         invalid.
     """
     with _get_lock(game_id):
+        _authorize_game(game_id, x_game_token)
         state = _get_state(game_id)
         if not state:
             raise HTTPException(status_code=404, detail="Game not found")
@@ -833,7 +881,7 @@ def api_codex(game_id: str) -> dict:
 
 
 @router.post("/game/{game_id}/trade")
-def api_trade(game_id: str, req: TradeRequest) -> dict:
+def api_trade(game_id: str, req: TradeRequest, x_game_token: str | None = Header(default=None)) -> dict:
     """Perform a buy or sell trade action.
 
     Supports buying fuel, repairing hull, or selling discoveries
@@ -850,6 +898,7 @@ def api_trade(game_id: str, req: TradeRequest) -> dict:
         trade is not possible.
     """
     with _get_lock(game_id):
+        _authorize_game(game_id, x_game_token)
         state = _get_state(game_id)
         if not state:
             raise HTTPException(status_code=404, detail="Game not found")
@@ -864,7 +913,7 @@ def api_trade(game_id: str, req: TradeRequest) -> dict:
 
 
 @router.post("/game/{game_id}/trade/bulk-sell")
-def api_bulk_sell(game_id: str, req: BulkSellRequest) -> dict:
+def api_bulk_sell(game_id: str, req: BulkSellRequest, x_game_token: str | None = Header(default=None)) -> dict:
     """Sell multiple discoveries at once in a single transaction.
 
     Accepts a list of items with quantities. Items that don't exist
@@ -882,6 +931,7 @@ def api_bulk_sell(game_id: str, req: BulkSellRequest) -> dict:
         sell is not possible.
     """
     with _get_lock(game_id):
+        _authorize_game(game_id, x_game_token)
         state = _get_state(game_id)
         if not state:
             raise HTTPException(status_code=404, detail="Game not found")
@@ -905,7 +955,7 @@ def api_bulk_sell(game_id: str, req: BulkSellRequest) -> dict:
 
 
 @router.post("/game/{game_id}/upgrade")
-def api_upgrade(game_id: str, req: UpgradeRequest) -> dict:
+def api_upgrade(game_id: str, req: UpgradeRequest, x_game_token: str | None = Header(default=None)) -> dict:
     """Purchase a ship upgrade.
 
     :param game_id: The unique identifier of the game.
@@ -919,6 +969,7 @@ def api_upgrade(game_id: str, req: UpgradeRequest) -> dict:
         upgrade is not possible.
     """
     with _get_lock(game_id):
+        _authorize_game(game_id, x_game_token)
         state = _get_state(game_id)
         if not state:
             raise HTTPException(status_code=404, detail="Game not found")
@@ -977,7 +1028,7 @@ def api_nearby(game_id: str) -> dict:
 
 
 @router.post("/game/{game_id}/distress")
-def api_distress(game_id: str) -> dict:
+def api_distress(game_id: str, x_game_token: str | None = Header(default=None)) -> dict:
     """Activate the distress beacon to call for help.
 
     :param game_id: The unique identifier of the game.
@@ -989,6 +1040,7 @@ def api_distress(game_id: str) -> dict:
         beacon cannot be activated.
     """
     with _get_lock(game_id):
+        _authorize_game(game_id, x_game_token)
         state = _get_state(game_id)
         if not state:
             raise HTTPException(status_code=404, detail="Game not found")
@@ -1005,7 +1057,7 @@ def api_distress(game_id: str) -> dict:
 
 
 @router.post("/game/{game_id}/salvage")
-def api_salvage(game_id: str) -> dict:
+def api_salvage(game_id: str, x_game_token: str | None = Header(default=None)) -> dict:
     """Perform a salvage operation on the current body.
 
     :param game_id: The unique identifier of the game.
@@ -1017,6 +1069,7 @@ def api_salvage(game_id: str) -> dict:
         salvage is not possible.
     """
     with _get_lock(game_id):
+        _authorize_game(game_id, x_game_token)
         state = _get_state(game_id)
         if not state:
             raise HTTPException(status_code=404, detail="Game not found")
@@ -1033,7 +1086,7 @@ def api_salvage(game_id: str) -> dict:
 
 
 @router.post("/game/{game_id}/salvage/craft")
-def api_salvage_craft(game_id: str, req: CraftRequest) -> dict:
+def api_salvage_craft(game_id: str, req: CraftRequest, x_game_token: str | None = Header(default=None)) -> dict:
     """Emergency craft a discovery into resources.
 
     :param game_id: The unique identifier of the game.
@@ -1047,6 +1100,7 @@ def api_salvage_craft(game_id: str, req: CraftRequest) -> dict:
         crafting is not possible.
     """
     with _get_lock(game_id):
+        _authorize_game(game_id, x_game_token)
         state = _get_state(game_id)
         if not state:
             raise HTTPException(status_code=404, detail="Game not found")
@@ -1113,7 +1167,7 @@ def api_faction_detail(game_id: str, faction_id: str) -> dict:
 
 
 @router.post("/game/{game_id}/faction/{faction_id}/mission")
-def api_faction_mission(game_id: str, faction_id: str) -> dict:
+def api_faction_mission(game_id: str, faction_id: str, x_game_token: str | None = Header(default=None)) -> dict:
     """Accept a faction mission to earn reputation with that faction.
 
     Uses the tiered mission system. Costs and rewards scale with the
@@ -1133,6 +1187,7 @@ def api_faction_mission(game_id: str, faction_id: str) -> dict:
         the mission cannot be accepted.
     """
     with _get_lock(game_id):
+        _authorize_game(game_id, x_game_token)
         state = _get_state(game_id)
         if not state:
             raise HTTPException(status_code=404, detail="Game not found")
@@ -1267,7 +1322,7 @@ def api_missions(game_id: str) -> dict:
 
 
 @router.post("/game/{game_id}/missions/{mission_id}/accept")
-def api_accept_mission(game_id: str, mission_id: str, req: AcceptMissionRequest) -> dict:
+def api_accept_mission(game_id: str, mission_id: str, req: AcceptMissionRequest, x_game_token: str | None = Header(default=None)) -> dict:
     """Accept a faction mission.
 
     The mission must exist in the current system and not have been
@@ -1287,6 +1342,7 @@ def api_accept_mission(game_id: str, mission_id: str, req: AcceptMissionRequest)
         mission cannot be accepted.
     """
     with _get_lock(game_id):
+        _authorize_game(game_id, x_game_token)
         state = _get_state(game_id)
         if not state:
             raise HTTPException(status_code=404, detail="Game not found")
@@ -1370,7 +1426,7 @@ def api_accept_mission(game_id: str, mission_id: str, req: AcceptMissionRequest)
 
 
 @router.post("/game/{game_id}/missions/{mission_id}/complete")
-def api_complete_mission(game_id: str, mission_id: str, req: CompleteMissionRequest) -> dict:
+def api_complete_mission(game_id: str, mission_id: str, req: CompleteMissionRequest, x_game_token: str | None = Header(default=None)) -> dict:
     """Complete an accepted faction mission and claim rewards.
 
     The mission must exist in the current system, not have been
@@ -1389,6 +1445,7 @@ def api_complete_mission(game_id: str, mission_id: str, req: CompleteMissionRequ
         mission cannot be completed.
     """
     with _get_lock(game_id):
+        _authorize_game(game_id, x_game_token)
         state = _get_state(game_id)
         if not state:
             raise HTTPException(status_code=404, detail="Game not found")
@@ -1441,7 +1498,7 @@ def api_complete_mission(game_id: str, mission_id: str, req: CompleteMissionRequ
 
 
 @router.post("/game/{game_id}/save")
-def api_save(game_id: str) -> dict:
+def api_save(game_id: str, x_game_token: str | None = Header(default=None)) -> dict:
     """Save the current game state to the database.
 
     :param game_id: The unique identifier of the game.
@@ -1451,6 +1508,7 @@ def api_save(game_id: str) -> dict:
     :raises HTTPException: 404 if the game is not found.
     """
     with _get_lock(game_id):
+        _authorize_game(game_id, x_game_token)
         state = _get_state(game_id)
         if not state:
             raise HTTPException(status_code=404, detail="Game not found")
@@ -1459,7 +1517,7 @@ def api_save(game_id: str) -> dict:
 
 
 @router.post("/game/{game_id}/load")
-def api_load(game_id: str) -> dict:
+def api_load(game_id: str, x_game_token: str | None = Header(default=None)) -> dict:
     """Load the most recently saved state for a game.
 
     Retrieves the saved state from the database and restores it
@@ -1473,6 +1531,7 @@ def api_load(game_id: str) -> dict:
     :raises HTTPException: 404 if no save is found for the game.
     """
     with _get_lock(game_id):
+        _authorize_game(game_id, x_game_token)
         state = game_load_func(game_id)
         if not state:
             raise HTTPException(status_code=404, detail="Save not found for this game")
@@ -1484,7 +1543,7 @@ def api_load(game_id: str) -> dict:
 
 
 @router.post("/game/{game_id}/hints/dismiss")
-def api_dismiss_hint(game_id: str, req: DismissHintRequest) -> dict:
+def api_dismiss_hint(game_id: str, req: DismissHintRequest, x_game_token: str | None = Header(default=None)) -> dict:
     """Dismiss a hint for the remainder of the session.
 
     :param game_id: The unique identifier of the game.
@@ -1496,6 +1555,7 @@ def api_dismiss_hint(game_id: str, req: DismissHintRequest) -> dict:
     :raises HTTPException: 404 if the game is not found; 400 if the hint is critical and cannot be dismissed.
     """
     with _get_lock(game_id):
+        _authorize_game(game_id, x_game_token)
         state = _get_state(game_id)
         if not state:
             raise HTTPException(status_code=404, detail="Game not found")

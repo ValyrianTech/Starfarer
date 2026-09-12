@@ -43,11 +43,15 @@ Key features include a deterministic procedural galaxy with 50 systems, 40+ uniq
 
 Both the ghost signatures and Crossroads messages endpoints accept `page` (default 1) and `per_page` (default 10, max 50) query parameters. Invalid values are clamped (not rejected with 422), making validation behavior consistent across endpoints. Responses include `page`, `per_page`, `total_ghosts`/`total_messages`, and `total_pages`. When there are no entries, `total_pages` returns 0 (not 1). The `api_ripples` endpoint reads ripple data directly from the database without acquiring the game lock. State-modifying API routes serialize access to a game's state with a per-game lock to prevent race conditions under concurrent requests.
 
+`POST /api/game/new` returns a per-game `token` alongside `game_id` and `state`. When `STARFARER_REQUIRE_GAME_TOKEN` is enabled, state-mutating endpoints require that token via the `X-Game-Token` header (read-only GET endpoints are unaffected). CORS credentials are automatically disabled when a wildcard origin is configured.
+
 ## Configuration
 
 | Variable | Purpose |
 |----------|---------|
 | `STARFARER_DATA_DIR` | Persistent data directory (default: `~/.starfarer/data/`) |
+| `STARFARER_ALLOWED_ORIGINS` | Comma-separated list of CORS allowed origins (default: local dev origins `http://localhost:3000`, `http://localhost:8080`, `http://localhost:8001`) |
+| `STARFARER_REQUIRE_GAME_TOKEN` | When truthy (`1`, `true`, `yes`, `on`, case-insensitive), require the per-game `X-Game-Token` header on state-mutating endpoints (default: off) |
 
 The data directory is created automatically on first run. Database migrations run at startup — no manual steps required.
 
