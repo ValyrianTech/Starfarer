@@ -53,6 +53,40 @@ class TestAPIGameCreation:
         assert resp.status_code == 200
         assert resp.json()["game_id"] == "test-game-id"
 
+    def test_create_game_with_existing_id_returns_409(self) -> None:
+        game_id = "existing-id-409-test"
+        resp = client.post("/api/game/new", json={"game_id": game_id})
+        assert resp.status_code == 200
+        resp = client.post("/api/game/new", json={"game_id": game_id})
+        assert resp.status_code == 409
+        assert resp.json()["detail"] == "Game id already exists"
+
+    def test_create_game_with_id_in_memory_returns_409(self) -> None:
+        game_id = "in-memory-id-409-test"
+        state = new_game(seed=42)
+        state.id = game_id
+        GAME_STORE[game_id] = state
+        try:
+            resp = client.post("/api/game/new", json={"game_id": game_id})
+            assert resp.status_code == 409
+            assert resp.json()["detail"] == "Game id already exists"
+        finally:
+            GAME_STORE.pop(game_id, None)
+
+    def test_create_game_id_not_overwriting_existing_state(self) -> None:
+        game_id = "no-overwrite-id-test"
+        resp = client.post("/api/game/new", json={"game_id": game_id, "seed": 42})
+        assert resp.status_code == 200
+        state = GAME_STORE[game_id]
+        state.ship.credits = 9999
+        game_save(state)
+        resp = client.post("/api/game/new", json={"game_id": game_id, "seed": 42})
+        assert resp.status_code == 409
+        assert GAME_STORE[game_id].ship.credits == 9999
+        resp = client.get(f"/api/game/{game_id}")
+        assert resp.status_code == 200
+        assert resp.json()["ship"]["credits"] == 9999
+
 
 class TestAPIGameFlow:
     def test_full_game_flow(self) -> None:

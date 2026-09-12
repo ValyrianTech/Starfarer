@@ -25,6 +25,7 @@ Content-Type: application/json
 {
   "seed": 42,                    // optional: universe seed (same seed = same universe)
   "ship_name": "MyShip",         // optional: name your ship (default: "Serendipity")
+  "game_id": "my-game-id",       // optional: custom game id (omit to auto-generate)
   "shared_universe": false       // optional: enable multiplayer features (default: false)
 }
 ```
@@ -41,6 +42,8 @@ Response:
 ```
 
 **Save the `game_id`** — you need it for every subsequent request.
+
+`game_id` is optional — if omitted, the server generates one. If you supply a `game_id` that already exists (in the database or in memory), the request returns HTTP 409 Conflict with `{"detail": "Game id already exists"}` and does **not** overwrite the existing game.
 
 ### 2.2 Continue a Saved Game
 
@@ -731,7 +734,7 @@ The game persists all state to SQLite. Save frequently — especially before ris
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/health` | Server health check |
-| POST | `/api/game/new` | Create new game |
+| POST | `/api/game/new` | Create new game (optional `game_id`; returns HTTP 409 Conflict if a caller-supplied `game_id` already exists) |
 | GET | `/api/game/{id}?sort={value\|name}&order={asc\|desc}` | Full game state (ship, system, events, log, fuel_status, hints, missions_available, reputation, shared_universe, total_value, top3_ids) |
 | GET | `/api/game/{id}/galaxy` | Galaxy map data |
 | GET | `/api/game/{id}/system/{sid}` | System details |
