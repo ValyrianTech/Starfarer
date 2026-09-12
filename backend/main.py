@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 
 from backend.api.routes import router
 from backend.api.spectate import router as spectate_router
-from backend.config import ALLOWED_ORIGINS, DATA_DIR
+from backend.config import ALLOW_CREDENTIALS, ALLOWED_ORIGINS, DATA_DIR
 from backend.database import init_db, run_migrations
 from backend.multiplayer.api import router as multiplayer_router
 from backend.multiplayer.database import init_multiplayer_db
@@ -59,7 +59,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
-    allow_credentials=True,
+    allow_credentials=ALLOW_CREDENTIALS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
