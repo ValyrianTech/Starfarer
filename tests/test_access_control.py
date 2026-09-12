@@ -176,6 +176,17 @@ class TestEndpointEnforcement:
         resp = client.post("/api/game/nonexistent-xyz/scan")
         assert resp.status_code == 404
 
+    def test_authorize_game_raises_404_for_unknown_game(self, monkeypatch) -> None:
+        from fastapi import HTTPException
+
+        from backend.api.routes import _authorize_game
+
+        monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        assert "nonexistent-xyz" not in GAME_STORE
+        with pytest.raises(HTTPException) as exc_info:
+            _authorize_game("nonexistent-xyz", None)
+        assert exc_info.value.status_code == 404
+
     def test_enforcement_disabled_allows_no_token(self, monkeypatch) -> None:
         monkeypatch.delenv("STARFARER_REQUIRE_GAME_TOKEN", raising=False)
         data = _new_game_via_api()

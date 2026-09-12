@@ -180,12 +180,16 @@ def _authorize_game(game_id: str, token: str | None) -> None:
     single-player/local usage keeps working. When enabled via the
     STARFARER_REQUIRE_GAME_TOKEN env var, a caller must present the token
     issued by POST /api/game/new. Raises HTTP 403 for missing/invalid tokens.
+    When enforcement is enabled and the game cannot be resolved, raises
+    HTTP 404 (fail-closed) rather than silently allowing the request to
+    proceed.
 
     :param game_id: The game being accessed.
     :type game_id: str
     :param token: The caller-supplied token (X-Game-Token header), or None.
     :type token: str | None
     :raises HTTPException: 403 if enforcement is on and the token is missing or invalid.
+    :raises HTTPException: 404 if enforcement is on and the game cannot be resolved.
     """
     if not get_require_game_token():
         return
@@ -195,7 +199,11 @@ def _authorize_game(game_id: str, token: str | None) -> None:
             GAME_STORE[game_id] = loaded
     state = GAME_STORE.get(game_id)
     if state is None:
-        return
+        # Fail closed: the game cannot be resolved, so we cannot verify its
+        # token. Raise 404 explicitly rather than silently returning a
+        # fail-open path that future callers might inherit. This matches the
+        # downstream _get_state -> 404 contract.
+        raise HTTPException(status_code=404, detail="Game not found")
     expected = getattr(state, "token", "")
     if not expected:
         raise HTTPException(status_code=403, detail="Game token required")
