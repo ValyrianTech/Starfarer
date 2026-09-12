@@ -3740,17 +3740,20 @@ class TestAPIMissionsAvailable:
         _state = GAME_STORE[game_id]
         nearby = client.get(f"/api/game/{game_id}/nearby").json()
         reachable = [n for n in nearby["nearby"] if n["reachable"]]
-        if reachable:
-            target = reachable[0]
-            resp = client.post("/api/game/" + game_id + "/jump/" + target["id"])
-            assert resp.status_code == 200
-            resp = client.get(f"/api/game/{game_id}/log")
-            assert resp.status_code == 200
-            entries = resp.json()["entries"]
-            titles = [e.get("title", "") for e in entries]
-            has_mission_notif = any("Missions Available" in t for t in titles)
-            has_daily_notif = any("Daily Mission" in t for t in titles)
-            assert has_mission_notif or has_daily_notif, f"Expected mission notification in log titles: {titles}"
+        assert reachable, "Expected at least one reachable system"
+        target = reachable[0]
+        # Ensure the arrival system has a trade station so the mission
+        # notification is logged on arrival (see api_jump in routes.py).
+        _state.systems[target["id"]].has_trading_station = True
+        resp = client.post("/api/game/" + game_id + "/jump/" + target["id"])
+        assert resp.status_code == 200
+        resp = client.get(f"/api/game/{game_id}/log")
+        assert resp.status_code == 200
+        entries = resp.json()["entries"]
+        titles = [e.get("title", "") for e in entries]
+        has_mission_notif = any("Missions Available" in t for t in titles)
+        has_daily_notif = any("Daily Mission" in t for t in titles)
+        assert has_mission_notif or has_daily_notif, f"Expected mission notification in log titles: {titles}"
 
 
 class TestSpectateGetState:
@@ -4130,9 +4133,14 @@ class TestApiNewEndpoints:
         assert resp.status_code == 404
 
     def test_atmospheric_scan_not_possible(self):
-        resp = client.post("/api/game/new", json={"seed": 42})
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "atmo-not-possible"})
+        assert resp.status_code == 200
         game_id = resp.json()["game_id"]
-        # Not landed, scan should fail
+        # No eligible body (gas_giant/volcanic/ocean) available -> scan must fail
+        state = GAME_STORE[game_id]
+        system = state.get_current_system()
+        for body in system.bodies:
+            body.biome = "barren"
         resp = client.post(f"/api/game/{game_id}/atmospheric-scan")
         assert resp.status_code == 400
 
