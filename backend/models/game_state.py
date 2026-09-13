@@ -151,12 +151,15 @@ class GameState:
         to their valid ranges after application.
 
         Parsing is defensive: each part is split on the first ``:`` only
-        (``split(":", 1)``) so values containing additional colons are not
-        silently truncated, and the value is converted to an integer inside
-        a try/except. If a recognized stat carries a non-integer value
-        (e.g. ``"fuel:5x"``, ``"credits:50:bonus"``), a warning is logged and
-        that part is skipped, leaving its effect at the default of 0 rather
-        than raising :class:`ValueError`.
+        (``split(":", 1)``), and only the leading segment of the value (the
+        substring before any additional colon) is converted to an integer
+        inside a try/except. Values containing extra colons keep applying
+        their leading integer segment for backward compatibility (e.g.
+        ``"credits:50:bonus"`` still applies 50 credits). If a recognized
+        stat carries a non-integer leading value (e.g. ``"fuel:5x"``,
+        ``"fuel:2.5"``), a warning is logged and that part is skipped, leaving
+        its effect at the default of 0 rather than raising
+        :class:`ValueError`.
 
         :param outcome: Semicolon-separated stat effects.
         :type outcome: str
@@ -172,7 +175,7 @@ class GameState:
                 if part.startswith(prefix):
                     value = part.split(":", 1)[1].strip()
                     try:
-                        effects[stat] = int(value)
+                        effects[stat] = int(value.split(":", 1)[0].strip())
                     except ValueError:
                         logger.warning("Invalid outcome value for %s: %r", stat, part)
                     break
