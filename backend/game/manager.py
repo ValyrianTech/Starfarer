@@ -8,7 +8,9 @@ querying galaxy and system data.
 
 import logging
 import secrets
+import threading
 import uuid
+from collections import OrderedDict
 
 from backend.config import (
     DEFAULT_SEED,
@@ -418,4 +420,65 @@ def _fixup_old_lore_fragment_numbers(lore_fragments: list) -> None:
                 pass
 
 
-GAME_STORE: dict[str, GameState] = {}
+GAME_STORE: OrderedDict[str, GameState] = OrderedDict()
+MAX_IN_MEMORY_GAMES: int = 200
+_store_lock = threading.Lock()
+
+
+def touch_game(game_id: str) -> None:
+    """Mark a game as most-recently-used in the in-memory cache.
+
+    If the game is resident in :data:`GAME_STORE`, move it to the end of
+    the ordering so that LRU-based eviction treats it as the most recently
+    used entry.
+
+    :param game_id: The unique identifier of the game.
+    :type game_id: str
+    """
+    with _store_lock:
+        if game_id in GAME_STORE:
+            GAME_STORE.move_to_end(game_id)
+
+
+def evict_if_needed(active_ids: set[str] | None = None) -> None:
+    """Evict least-recently-used games until the in-memory cache is within cap.
+
+    While :data:`GAME_STORE` holds more than :data:`MAX_IN_MEMORY_GAMES`
+    entries, the least-recently-used key is selected via ``next(iter(...))``.
+    If that key is in ``active_ids`` (i.e. currently locked/in use), it is
+    moved to the most-recently-used end and the next candidate is tried;
+    otherwise the game is persisted via :func:`game_save` and removed. A
+    failed save is logged as a warning and the entry is still popped so a
+    database error cannot wedge eviction or leak memory. The number of
+    consecutive skipped (active) candidates is bounded to avoid an infinite
+    loop when every resident game is active.
+
+    The entire critical section (key selection, membership checks, ``move_to_end``,
+    ``game_save``, and ``pop``) is serialized under the module-level
+    :data:`_store_lock` so concurrent eviction calls cannot interleave.
+
+    :param active_ids: Optional set of game IDs currently in use (held
+        locks) that must not be evicted.
+    :type active_ids: set[str] | None
+    """
+    active_ids = active_ids or set()
+    with _store_lock:
+        skipped = 0
+        while len(GAME_STORE) > MAX_IN_MEMORY_GAMES:
+            game_id = next(iter(GAME_STORE))
+            if game_id in active_ids:
+                GAME_STORE.move_to_end(game_id)
+                skipped += 1
+                if skipped >= len(GAME_STORE):
+                    break
+                continue
+            skipped = 0
+            state = GAME_STORE.get(game_id)
+            try:
+                if state is not None:
+                    game_save(state)
+            except Exception as exc:  # noqa: BLE001 - eviction must never wedge on any save failure
+                logger.warning(
+                    "Failed to persist game %s during LRU eviction: %s", game_id, exc
+                )
+            GAME_STORE.pop(game_id, None)

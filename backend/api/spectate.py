@@ -19,7 +19,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
 from backend.database import _safe_ship_credits, get_db_ctx
-from backend.game.manager import GAME_STORE, game_load
+from backend.game.manager import GAME_STORE, evict_if_needed, game_load, touch_game
 from backend.models.game_state import GameState
 
 logger = logging.getLogger(__name__)
@@ -36,7 +36,9 @@ def _get_state(game_id: str) -> GameState | None:
 
     Looks up the game ID in the in-memory ``GAME_STORE`` first so that a
     spectator observes the same live object the playing agent mutates.
-    Falls back to loading from the database and caching the result.
+    Falls back to loading from the database and caching the result. When
+    caching triggers LRU eviction, games whose per-game lock is currently
+    held are skipped so an in-flight mutation is never evicted.
 
     :param game_id: The unique identifier of the game.
     :type game_id: str
@@ -44,10 +46,13 @@ def _get_state(game_id: str) -> GameState | None:
     :rtype: GameState | None
     """
     if game_id in GAME_STORE:
+        touch_game(game_id)
         return GAME_STORE[game_id]
     state = game_load(game_id)
     if state:
         GAME_STORE[game_id] = state
+        from backend.api.routes import _locked_game_ids
+        evict_if_needed(_locked_game_ids())
         return state
     return None
 
@@ -92,7 +97,7 @@ def api_spectate_games(limit: int = 25) -> dict:
             "active": row["id"] in GAME_STORE,
         })
     # Include in-memory games that were never persisted yet.
-    for game_id, state in GAME_STORE.items():
+    for game_id, state in list(GAME_STORE.items()):
         if game_id in seen:
             continue
         games.insert(0, {
@@ -210,8 +215,9 @@ async def api_spectate_stream(game_id: str) -> StreamingResponse:
             await asyncio.sleep(POLL_INTERVAL_SECONDS)
             state = GAME_STORE.get(game_id)
             if state is None:
-                # Game evicted from memory; end the stream so the client
-                # reconnects (which reloads from the database).
+                # Game evicted from memory (due to the LRU cap or an explicit
+                # removal); end the stream so the client reconnects and
+                # reloads the game from the database.
                 yield "event: end\ndata: {}\n\n"
                 return
             signature = _state_signature(state)
