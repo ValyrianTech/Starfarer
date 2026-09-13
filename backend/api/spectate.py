@@ -19,7 +19,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
 from backend.database import _safe_ship_credits, get_db_ctx
-from backend.game.manager import GAME_STORE, evict_if_needed, game_load, touch_game
+from backend.game.manager import GAME_STORE, evict_if_needed, game_load, register_game, touch_game
 from backend.models.game_state import GameState
 
 logger = logging.getLogger(__name__)
@@ -50,9 +50,9 @@ def _get_state(game_id: str) -> GameState | None:
         return GAME_STORE[game_id]
     state = game_load(game_id)
     if state:
-        GAME_STORE[game_id] = state
+        register_game(state)
         from backend.api.routes import _locked_game_ids
-        evict_if_needed(_locked_game_ids())
+        evict_if_needed(_locked_game_ids() | {game_id})
         return state
     return None
 

@@ -482,3 +482,23 @@ def evict_if_needed(active_ids: set[str] | None = None) -> None:
                     "Failed to persist game %s during LRU eviction: %s", game_id, exc
                 )
             GAME_STORE.pop(game_id, None)
+
+
+def register_game(state: GameState) -> None:
+    """Insert or replace a game state in the in-memory cache under the lock.
+
+    Acquires the module-level :data:`_store_lock` before mutating
+    :data:`GAME_STORE` so that a concurrent :func:`evict_if_needed` cannot
+    observe a partially-updated ``OrderedDict`` (which would raise
+    ``RuntimeError: dictionary changed size during iteration``). The entry is
+    also moved to the most-recently-used end. This only guarantees the
+    insertion itself is atomic; the freshly-registered game is not evicted by
+    an immediately-following :func:`evict_if_needed` pass unless the caller
+    passes the new game id in that call's ``active_ids``.
+
+    :param state: The game state to cache, keyed by ``state.id``.
+    :type state: GameState
+    """
+    with _store_lock:
+        GAME_STORE[state.id] = state
+        GAME_STORE.move_to_end(state.id)
