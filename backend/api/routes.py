@@ -149,7 +149,8 @@ def _locked_game_ids() -> set[str]:
     :returns: A set of game IDs with held locks.
     :rtype: set[str]
     """
-    return {gid for gid, lock in _game_locks.items() if lock.locked()}
+    with _lock_for_locks:
+        return {gid for gid, lock in list(_game_locks.items()) if lock.locked()}
 
 
 def _get_state(game_id: str) -> GameState | None:
