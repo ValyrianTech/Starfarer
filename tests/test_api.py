@@ -428,6 +428,28 @@ class TestAPILeaderboardMalformedState:
         ids = [entry["game_id"] for entry in result]
         assert "direct-malformed-test" not in ids
 
+    def test_leaderboard_non_dict_ship_null_returns_200(self) -> None:
+        """Insert a game with ship=null; the leaderboard should return 200 with credits 0."""
+        from backend.database import get_db
+        now = datetime.now(timezone.utc).isoformat()
+        conn = get_db()
+        try:
+            conn.execute(
+                "INSERT OR REPLACE INTO games (id, seed, ship_name, created_at, updated_at, state_json) VALUES (?, ?, ?, ?, ?, ?)",
+                ("lb-non-dict-ship-null", 1, "Test Ship", now, now, '{"ship": null}')
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        resp = client.get("/api/leaderboard")
+        assert resp.status_code == 200
+        data = resp.json()
+        entry = next(
+            e for e in data["leaderboard"]
+            if e["game_id"] == "lb-non-dict-ship-null"
+        )
+        assert entry["credits"] == 0
+
 
 class TestAPIAllEndpoints404:
     """Tests that all endpoints return 404 for nonexistent games."""
@@ -4123,6 +4145,52 @@ class TestSpectateStreamEndpoint:
         ids = {g["game_id"] for g in resp.json()["games"]}
         assert "spectate-bad-json" not in ids
         assert "spectate-nondict-json" not in ids
+
+    def test_games_non_dict_ship_state_json(self) -> None:
+        """A persisted state_json with ship=null should not crash the games listing."""
+        from datetime import datetime, timezone
+
+        from backend.database import get_db
+        now = datetime.now(timezone.utc).isoformat()
+        conn = get_db()
+        try:
+            conn.execute(
+                "INSERT OR REPLACE INTO games (id, seed, ship_name, created_at, updated_at, state_json) VALUES (?, ?, ?, ?, ?, ?)",
+                ("spectate-ship-null", 42, "NullShip", now, now, '{"ship": null}'),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        resp = client.get("/api/spectate/games?limit=100")
+        assert resp.status_code == 200
+        games = resp.json()["games"]
+        ids = {g["game_id"] for g in games}
+        assert "spectate-ship-null" in ids
+        entry = next(g for g in games if g["game_id"] == "spectate-ship-null")
+        assert entry["credits"] == 0
+
+    def test_games_non_dict_ship_list_state_json(self) -> None:
+        """A persisted state_json with ship as a list should not crash the games listing."""
+        from datetime import datetime, timezone
+
+        from backend.database import get_db
+        now = datetime.now(timezone.utc).isoformat()
+        conn = get_db()
+        try:
+            conn.execute(
+                "INSERT OR REPLACE INTO games (id, seed, ship_name, created_at, updated_at, state_json) VALUES (?, ?, ?, ?, ?, ?)",
+                ("spectate-ship-list", 42, "ListShip", now, now, '{"ship": [1,2,3]}'),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        resp = client.get("/api/spectate/games?limit=100")
+        assert resp.status_code == 200
+        games = resp.json()["games"]
+        ids = {g["game_id"] for g in games}
+        assert "spectate-ship-list" in ids
+        entry = next(g for g in games if g["game_id"] == "spectate-ship-list")
+        assert entry["credits"] == 0
 
 
 class TestApiNewEndpoints:
