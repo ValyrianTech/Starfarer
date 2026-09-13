@@ -215,6 +215,27 @@ def load_save(game_id: str) -> dict | None:
     return None
 
 
+def _safe_ship_credits(state: dict) -> int:
+    """Extract the ship's credits from a deserialized game state defensively.
+
+    Persisted state is not guaranteed to be well-formed, so this helper
+    never assumes the ``ship`` value is a dictionary or that its
+    ``credits`` field is an integer. Malformed values are treated as a
+    missing ``credits`` value and return 0.
+
+    :param state: The deserialized game state dictionary.
+    :type state: dict
+    :returns: The ship's credits as a non-negative integer, or 0 if the
+        value is missing or malformed.
+    :rtype: int
+    """
+    ship = state.get("ship")
+    if not isinstance(ship, dict):
+        return 0
+    credits = ship.get("credits", 0)
+    return credits if isinstance(credits, int) else 0
+
+
 def get_leaderboard(limit: int = 10) -> list[dict]:
     """Retrieve the top players from the leaderboard.
 
@@ -273,7 +294,7 @@ def get_leaderboard(limit: int = 10) -> list[dict]:
                 "last_played": row["updated_at"],
                 "discoveries": len(state.get("discoveries", [])),
                 "systems_visited": state.get("systems_visited", 0),
-                "credits": state.get("ship", {}).get("credits", 0),
+                "credits": _safe_ship_credits(state),
                 "ghost_signatures_left": ghost_count,
                 "items_donated": items_donated,
                 "lore_donated": lore_donated,
