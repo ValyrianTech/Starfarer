@@ -5026,7 +5026,7 @@ class TestRegisterGame:
             GAME_STORE[s2.id] = s2
             register_game(s1)
             assert list(GAME_STORE.keys())[-1] == s1.id
-            assert list(GAME_STORE.keys())[0] == s2.id
+            assert next(iter(GAME_STORE.keys())) == s2.id
         finally:
             GAME_STORE.pop(s1.id, None)
             GAME_STORE.pop(s2.id, None)
