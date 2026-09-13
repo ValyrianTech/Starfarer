@@ -4890,3 +4890,34 @@ class TestGameStoreEviction:
             assert routes_mod._locked_game_ids() == set()
         finally:
             routes_mod._cleanup_game_lock(gid)
+
+    def test_evict_concurrent_calls_are_thread_safe(self) -> None:
+        """Concurrent evict_if_needed calls must not raise or corrupt the store."""
+        import concurrent.futures
+
+        from backend.game import manager
+
+        created = []
+        try:
+            with patch.object(manager, "MAX_IN_MEMORY_GAMES", 1):
+                for _ in range(12):
+                    state = new_game(seed=42)
+                    game_save(state)
+                    GAME_STORE[state.id] = state
+                    created.append(state.id)
+
+                assert len(GAME_STORE) > manager.MAX_IN_MEMORY_GAMES
+
+                def _hammer() -> None:
+                    for _ in range(25):
+                        manager.evict_if_needed()
+
+                with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+                    futures = [executor.submit(_hammer) for _ in range(8)]
+                    for future in concurrent.futures.as_completed(futures):
+                        future.result()
+
+                assert len(GAME_STORE) <= manager.MAX_IN_MEMORY_GAMES
+        finally:
+            for gid in created:
+                GAME_STORE.pop(gid, None)
