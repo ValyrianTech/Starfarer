@@ -97,7 +97,7 @@ def api_spectate_games(limit: int = 25) -> dict:
             "active": row["id"] in GAME_STORE,
         })
     # Include in-memory games that were never persisted yet.
-    for game_id, state in GAME_STORE.items():
+    for game_id, state in list(GAME_STORE.items()):
         if game_id in seen:
             continue
         games.insert(0, {
