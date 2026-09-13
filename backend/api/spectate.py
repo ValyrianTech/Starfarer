@@ -19,7 +19,13 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
 from backend.database import _safe_ship_credits, get_db_ctx
-from backend.game.manager import GAME_STORE, evict_if_needed, game_load, register_game, touch_game
+from backend.game.manager import (
+    GAME_STORE,
+    evict_if_needed,
+    game_load,
+    register_game,
+    touch_game,
+)
 from backend.models.game_state import GameState
 
 logger = logging.getLogger(__name__)

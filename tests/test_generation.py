@@ -545,6 +545,134 @@ class TestGameState:
         assert any("scanner:1" in msg for msg in warning_messages)
         assert any("Another note" in msg for msg in warning_messages)
 
+    def test_apply_choice_outcome_non_numeric_value_skipped(self, caplog) -> None:
+        """A non-integer stat value should be skipped (effect 0) without raising."""
+        import logging
+        caplog.set_level(logging.WARNING)
+        ship = Ship(fuel=50, max_fuel=100)
+        state = GameState(id="test-nonnumeric", seed=42, ship=ship)
+        effects = state.apply_choice_outcome("fuel:5x")
+        assert effects["fuel"] == 0
+        assert state.ship.fuel == 50
+        warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("fuel:5x" in msg for msg in warning_messages)
+
+    def test_apply_choice_outcome_float_value_skipped(self, caplog) -> None:
+        """A float stat value should be skipped (effect 0) without raising."""
+        import logging
+        caplog.set_level(logging.WARNING)
+        ship = Ship(fuel=50, max_fuel=100)
+        state = GameState(id="test-float", seed=42, ship=ship)
+        effects = state.apply_choice_outcome("fuel:2.5")
+        assert effects["fuel"] == 0
+        assert state.ship.fuel == 50
+        warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("fuel:2.5" in msg for msg in warning_messages)
+
+    def test_apply_choice_outcome_extra_colons_applies_leading_int(self, caplog) -> None:
+        """A value with extra colons applies its leading integer segment."""
+        import logging
+        caplog.set_level(logging.WARNING)
+        ship = Ship(credits=500)
+        state = GameState(id="test-colons", seed=42, ship=ship)
+        effects = state.apply_choice_outcome("credits:50:bonus")
+        assert effects["credits"] == 50
+        assert state.ship.credits == 550
+        warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+        assert not any("credits:50:bonus" in msg for msg in warning_messages)
+
+    def test_apply_choice_outcome_mixed_malformed_and_valid(self, caplog) -> None:
+        """Malformed parts are skipped while valid parts still apply."""
+        import logging
+        caplog.set_level(logging.WARNING)
+        ship = Ship(fuel=50, max_fuel=100, credits=500)
+        state = GameState(id="test-mixed", seed=42, ship=ship)
+        effects = state.apply_choice_outcome("fuel:5x; credits:100")
+        assert effects["fuel"] == 0
+        assert effects["credits"] == 100
+        assert state.ship.fuel == 50
+        assert state.ship.credits == 600
+        warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("fuel:5x" in msg for msg in warning_messages)
+        assert not any("credits:100" in msg for msg in warning_messages)
+
+    def test_apply_choice_outcome_none_returns_zeroed_effects(self, caplog) -> None:
+        """A non-string outcome (None) should return zeroed effects without raising."""
+        import logging
+        caplog.set_level(logging.WARNING)
+        ship = Ship(fuel=50, hull=50, morale=50, credits=500, cargo=10, crew=5,
+                    max_fuel=100, max_hull=100, max_cargo=50, max_crew=10)
+        state = GameState(id="test-none", seed=42, ship=ship)
+        effects = state.apply_choice_outcome(None)
+        assert effects == {"fuel": 0, "hull": 0, "morale": 0, "credits": 0, "cargo": 0, "crew": 0}
+        assert state.ship.fuel == 50
+        assert state.ship.hull == 50
+        assert state.ship.morale == 50
+        assert state.ship.credits == 500
+        assert state.ship.cargo == 10
+        assert state.ship.crew == 5
+        warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("non-string outcome" in msg for msg in warning_messages)
+
+    @pytest.mark.parametrize("bad", [123, ["fuel:-10"]])
+    def test_apply_choice_outcome_non_string_returns_zeroed_effects(self, caplog, bad) -> None:
+        """A non-string outcome (int/list) should return zeroed effects without raising."""
+        import logging
+        caplog.set_level(logging.WARNING)
+        ship = Ship(fuel=50, hull=50, morale=50, credits=500, cargo=10, crew=5,
+                    max_fuel=100, max_hull=100, max_cargo=50, max_crew=10)
+        state = GameState(id="test-nonstr", seed=42, ship=ship)
+        effects = state.apply_choice_outcome(bad)
+        assert effects == {"fuel": 0, "hull": 0, "morale": 0, "credits": 0, "cargo": 0, "crew": 0}
+        assert state.ship.fuel == 50
+        assert state.ship.hull == 50
+        assert state.ship.morale == 50
+        assert state.ship.credits == 500
+        assert state.ship.cargo == 10
+        assert state.ship.crew == 5
+        warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("non-string outcome" in msg for msg in warning_messages)
+
+    def test_resolve_event_sets_resolved_after_outcome(self) -> None:
+        """A normal resolve marks the event resolved after applying the outcome."""
+        from backend.generation.events import resolve_event
+
+        ship = Ship(fuel=50, max_fuel=100)
+        state = GameState(id="test-resolve-atomic", seed=42, ship=ship)
+        event = Event(
+            id="evt_1", title="Test", flavor="x", event_type="exploration",
+            choices=[Choice(text="Go", outcome="credits:100")], system_id="sys_1",
+        )
+        state.events = [event]
+        ok, _msg, _extra = resolve_event(state, event.id, 0)
+        assert ok is True
+        assert event.resolved is True
+        assert event.chosen == 0
+        assert state.ship.credits == 1100
+
+    def test_resolve_event_malformed_outcome_no_crash(self, caplog) -> None:
+        """resolve_event should not crash on a malformed outcome and still resolve."""
+        import logging
+
+        from backend.generation.events import resolve_event
+
+        caplog.set_level(logging.WARNING)
+        ship = Ship(fuel=50, max_fuel=100, credits=500)
+        state = GameState(id="test-resolve-malformed", seed=42, ship=ship)
+        event = Event(
+            id="evt_2", title="Test", flavor="x", event_type="exploration",
+            choices=[Choice(text="Go", outcome="fuel:5x; credits:100")], system_id="sys_1",
+        )
+        state.events = [event]
+        ok, _msg, extra = resolve_event(state, event.id, 0)
+        assert ok is True
+        assert event.resolved is True
+        assert event.chosen == 0
+        assert state.ship.fuel == 50
+        assert state.ship.credits == 600
+        assert extra["effects"]["fuel"] == 0
+        assert extra["effects"]["credits"] == 100
+
     def test_cargo_positive_creates_discovery_objects(self) -> None:
         """cargo:+N should create N Discovery objects that can be synced."""
         ship = Ship(cargo=0, max_cargo=50)

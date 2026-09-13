@@ -150,27 +150,43 @@ class GameState:
         (e.g. ``"credits:50; fuel:-10; hull:-5"``). Stat values are clamped
         to their valid ranges after application.
 
+        Parsing is defensive: each part is split on the first ``:`` only
+        (``split(":", 1)``), and only the leading segment of the value (the
+        substring before any additional colon) is converted to an integer
+        inside a try/except. Values containing extra colons keep applying
+        their leading integer segment for backward compatibility (e.g.
+        ``"credits:50:bonus"`` still applies 50 credits). If a recognized
+        stat carries a non-integer leading value (e.g. ``"fuel:5x"``,
+        ``"fuel:2.5"``), a warning is logged and that part is skipped, leaving
+        its effect at the default of 0 rather than raising
+        :class:`ValueError`.
+
+        A non-string ``outcome`` (e.g. ``None``, an int, or a list) is handled
+        gracefully: a warning is logged and the zeroed effects dict is returned
+        without modifying the ship, rather than raising
+        :class:`AttributeError`.
+
         :param outcome: Semicolon-separated stat effects.
         :type outcome: str
         :returns: A dictionary mapping stat names to their applied deltas.
         :rtype: dict
         """
         effects = {"fuel": 0, "hull": 0, "morale": 0, "credits": 0, "cargo": 0, "crew": 0}
+        if not isinstance(outcome, str):
+            logger.warning("apply_choice_outcome received non-string outcome: %r", outcome)
+            return effects
         parts = outcome.split(";")
         for part in parts:
             part = part.strip()
-            if part.startswith("fuel:"):
-                effects["fuel"] = int(part.split(":")[1])
-            elif part.startswith("hull:"):
-                effects["hull"] = int(part.split(":")[1])
-            elif part.startswith("morale:"):
-                effects["morale"] = int(part.split(":")[1])
-            elif part.startswith("credits:"):
-                effects["credits"] = int(part.split(":")[1])
-            elif part.startswith("cargo:"):
-                effects["cargo"] = int(part.split(":")[1])
-            elif part.startswith("crew:"):
-                effects["crew"] = int(part.split(":")[1])
+            for stat in effects:
+                prefix = f"{stat}:"
+                if part.startswith(prefix):
+                    value = part.split(":", 1)[1].strip()
+                    try:
+                        effects[stat] = int(value.split(":", 1)[0].strip())
+                    except ValueError:
+                        logger.warning("Invalid outcome value for %s: %r", stat, part)
+                    break
             else:
                 # Narrative text or unrecognized stat - warn so typos aren't silently ignored
                 logger.warning("Unrecognized outcome part: %s", part)

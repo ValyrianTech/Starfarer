@@ -1000,8 +1000,11 @@ def resolve_event(state: GameState, event_id: str, choice_idx: int) -> tuple[boo
     """Resolve a pending event by applying the chosen outcome.
 
     Validates that the event exists, is not already resolved, and that
-    the choice index is valid. Applies the outcome effects to the ship
-    and logs the resolution.
+    the choice index is valid. The choice outcome is applied to the
+    in-memory ship state in place before the event is marked ``resolved``
+    and ``chosen``; this ordering is defensive only (it avoids marking an
+    event resolved if outcome application ever raises) and does not
+    provide a transactional/rollback guarantee.
 
     :param state: The current game state.
     :type state: GameState
@@ -1013,9 +1016,8 @@ def resolve_event(state: GameState, event_id: str, choice_idx: int) -> tuple[boo
         ``extra_output`` is a dictionary containing the event title,
         chosen text, outcome text, and applied effects.
     :rtype: tuple[bool, str, dict]
-    :raises ValueError: If the event is not found, already resolved,
-        or the choice index is invalid (caught and returned as
-        ``(False, message, {})``).
+    :raises ValueError: Not raised by this function; failures are
+        returned as ``(False, message, {})``.
     """
     event = None
     for e in state.events:
@@ -1029,11 +1031,12 @@ def resolve_event(state: GameState, event_id: str, choice_idx: int) -> tuple[boo
     if choice_idx < 0 or choice_idx >= len(event.choices):
         return False, f"Invalid choice index: {choice_idx}.", {}
 
+    choice = event.choices[choice_idx]
+    effects = state.apply_choice_outcome(choice.outcome)
+
     event.resolved = True
     event.chosen = choice_idx
 
-    choice = event.choices[choice_idx]
-    effects = state.apply_choice_outcome(choice.outcome)
     state.add_log("event", f"Event '{event.title}' resolved: {choice.text}. {choice.outcome}", category="event", title=event.title)
 
     event_rng = seeded_random(state.seed, "event_reputation", event.id, str(choice_idx))
