@@ -596,6 +596,43 @@ class TestGameState:
         assert any("fuel:5x" in msg for msg in warning_messages)
         assert not any("credits:100" in msg for msg in warning_messages)
 
+    def test_apply_choice_outcome_none_returns_zeroed_effects(self, caplog) -> None:
+        """A non-string outcome (None) should return zeroed effects without raising."""
+        import logging
+        caplog.set_level(logging.WARNING)
+        ship = Ship(fuel=50, hull=50, morale=50, credits=500, cargo=10, crew=5,
+                    max_fuel=100, max_hull=100, max_cargo=50, max_crew=10)
+        state = GameState(id="test-none", seed=42, ship=ship)
+        effects = state.apply_choice_outcome(None)
+        assert effects == {"fuel": 0, "hull": 0, "morale": 0, "credits": 0, "cargo": 0, "crew": 0}
+        assert state.ship.fuel == 50
+        assert state.ship.hull == 50
+        assert state.ship.morale == 50
+        assert state.ship.credits == 500
+        assert state.ship.cargo == 10
+        assert state.ship.crew == 5
+        warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("non-string outcome" in msg for msg in warning_messages)
+
+    @pytest.mark.parametrize("bad", [123, ["fuel:-10"]])
+    def test_apply_choice_outcome_non_string_returns_zeroed_effects(self, caplog, bad) -> None:
+        """A non-string outcome (int/list) should return zeroed effects without raising."""
+        import logging
+        caplog.set_level(logging.WARNING)
+        ship = Ship(fuel=50, hull=50, morale=50, credits=500, cargo=10, crew=5,
+                    max_fuel=100, max_hull=100, max_cargo=50, max_crew=10)
+        state = GameState(id="test-nonstr", seed=42, ship=ship)
+        effects = state.apply_choice_outcome(bad)
+        assert effects == {"fuel": 0, "hull": 0, "morale": 0, "credits": 0, "cargo": 0, "crew": 0}
+        assert state.ship.fuel == 50
+        assert state.ship.hull == 50
+        assert state.ship.morale == 50
+        assert state.ship.credits == 500
+        assert state.ship.cargo == 10
+        assert state.ship.crew == 5
+        warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("non-string outcome" in msg for msg in warning_messages)
+
     def test_resolve_event_sets_resolved_after_outcome(self) -> None:
         """A normal resolve marks the event resolved after applying the outcome."""
         from backend.generation.events import resolve_event
