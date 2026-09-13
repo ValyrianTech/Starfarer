@@ -490,9 +490,11 @@ def register_game(state: GameState) -> None:
     Acquires the module-level :data:`_store_lock` before mutating
     :data:`GAME_STORE` so that a concurrent :func:`evict_if_needed` cannot
     observe a partially-updated ``OrderedDict`` (which would raise
-    ``RuntimeError: dictionary changed size during iteration``) and so a
-    freshly-registered game is never evicted out from underneath the caller
-    mid-insertion. The entry is also moved to the most-recently-used end.
+    ``RuntimeError: dictionary changed size during iteration``). The entry is
+    also moved to the most-recently-used end. This only guarantees the
+    insertion itself is atomic; the freshly-registered game is not evicted by
+    an immediately-following :func:`evict_if_needed` pass unless the caller
+    passes the new game id in that call's ``active_ids``.
 
     :param state: The game state to cache, keyed by ``state.id``.
     :type state: GameState

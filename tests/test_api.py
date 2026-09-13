@@ -4921,3 +4921,63 @@ class TestGameStoreEviction:
         finally:
             for gid in created:
                 GAME_STORE.pop(gid, None)
+
+    def test_evict_with_active_ids_protects_unlocked_game(self) -> None:
+        """A caller can protect a freshly-registered game via active_ids."""
+        from backend.game import manager
+        from backend.game.manager import evict_if_needed
+
+        s1 = new_game(seed=42)
+        s2 = new_game(seed=42)
+        try:
+            with patch.object(manager, "MAX_IN_MEMORY_GAMES", 1):
+                GAME_STORE[s1.id] = s1
+                GAME_STORE[s2.id] = s2
+                evict_if_needed({s1.id})
+                assert s1.id in GAME_STORE
+                assert s2.id not in GAME_STORE
+        finally:
+            GAME_STORE.pop(s1.id, None)
+            GAME_STORE.pop(s2.id, None)
+
+    def test_get_state_db_load_protects_newly_registered_game(self) -> None:
+        """_get_state protects the game it just registered from eviction."""
+        from backend.api.routes import _get_state
+        from backend.game import manager
+
+        state = new_game(seed=42)
+        game_save(state)
+        GAME_STORE.pop(state.id, None)
+        unrelated = new_game(seed=42)
+        game_save(unrelated)
+        try:
+            with patch.object(manager, "MAX_IN_MEMORY_GAMES", 1):
+                GAME_STORE[unrelated.id] = unrelated
+                result = _get_state(state.id)
+                assert result is not None
+                assert result.id == state.id
+                assert state.id in GAME_STORE
+        finally:
+            GAME_STORE.pop(state.id, None)
+            GAME_STORE.pop(unrelated.id, None)
+
+    def test_spectate_get_state_db_load_protects_newly_registered_game(self) -> None:
+        """The spectator _get_state protects its freshly-registered game."""
+        from backend.api.spectate import _get_state as spectate_get_state
+        from backend.game import manager
+
+        state = new_game(seed=42)
+        game_save(state)
+        GAME_STORE.pop(state.id, None)
+        unrelated = new_game(seed=42)
+        game_save(unrelated)
+        try:
+            with patch.object(manager, "MAX_IN_MEMORY_GAMES", 1):
+                GAME_STORE[unrelated.id] = unrelated
+                result = spectate_get_state(state.id)
+                assert result is not None
+                assert result.id == state.id
+                assert state.id in GAME_STORE
+        finally:
+            GAME_STORE.pop(state.id, None)
+            GAME_STORE.pop(unrelated.id, None)

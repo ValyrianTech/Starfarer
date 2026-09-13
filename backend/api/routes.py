@@ -174,7 +174,7 @@ def _get_state(game_id: str) -> GameState | None:
     if state:
         register_game(state)
         touch_game(game_id)
-        evict_if_needed(_locked_game_ids())
+        evict_if_needed(_locked_game_ids() | {game_id})
         return state
     
     return None
@@ -218,7 +218,7 @@ def _authorize_game(game_id: str, token: str | None) -> None:
         if loaded:
             register_game(loaded)
             touch_game(game_id)
-            evict_if_needed(_locked_game_ids())
+            evict_if_needed(_locked_game_ids() | {game_id})
     state = GAME_STORE.get(game_id)
     if state is None:
         # Fail closed: the game cannot be resolved, so we cannot verify its
@@ -270,7 +270,7 @@ def api_new_game(req: NewGameRequest) -> dict:
             state.id = req.game_id
         register_game(state)
         touch_game(state.id)
-        evict_if_needed(_locked_game_ids())
+        evict_if_needed(_locked_game_ids() | {state.id})
         game_save(state)
         return {
             "game_id": state.id,
@@ -1561,7 +1561,7 @@ def api_load(game_id: str, x_game_token: str | None = Header(default=None)) -> d
             raise HTTPException(status_code=404, detail="Save not found for this game")
         register_game(state)
         touch_game(game_id)
-        evict_if_needed(_locked_game_ids())
+        evict_if_needed(_locked_game_ids() | {game_id})
         return {
             "result": "Game loaded.",
             "state": state.state_summary(),
