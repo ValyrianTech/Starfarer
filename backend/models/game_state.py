@@ -150,6 +150,14 @@ class GameState:
         (e.g. ``"credits:50; fuel:-10; hull:-5"``). Stat values are clamped
         to their valid ranges after application.
 
+        Parsing is defensive: each part is split on the first ``:`` only
+        (``split(":", 1)``) so values containing additional colons are not
+        silently truncated, and the value is converted to an integer inside
+        a try/except. If a recognized stat carries a non-integer value
+        (e.g. ``"fuel:5x"``, ``"credits:50:bonus"``), a warning is logged and
+        that part is skipped, leaving its effect at the default of 0 rather
+        than raising :class:`ValueError`.
+
         :param outcome: Semicolon-separated stat effects.
         :type outcome: str
         :returns: A dictionary mapping stat names to their applied deltas.
@@ -159,18 +167,15 @@ class GameState:
         parts = outcome.split(";")
         for part in parts:
             part = part.strip()
-            if part.startswith("fuel:"):
-                effects["fuel"] = int(part.split(":")[1])
-            elif part.startswith("hull:"):
-                effects["hull"] = int(part.split(":")[1])
-            elif part.startswith("morale:"):
-                effects["morale"] = int(part.split(":")[1])
-            elif part.startswith("credits:"):
-                effects["credits"] = int(part.split(":")[1])
-            elif part.startswith("cargo:"):
-                effects["cargo"] = int(part.split(":")[1])
-            elif part.startswith("crew:"):
-                effects["crew"] = int(part.split(":")[1])
+            for stat in effects:
+                prefix = f"{stat}:"
+                if part.startswith(prefix):
+                    value = part.split(":", 1)[1].strip()
+                    try:
+                        effects[stat] = int(value)
+                    except ValueError:
+                        logger.warning("Invalid outcome value for %s: %r", stat, part)
+                    break
             else:
                 # Narrative text or unrecognized stat - warn so typos aren't silently ignored
                 logger.warning("Unrecognized outcome part: %s", part)
