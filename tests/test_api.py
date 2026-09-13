@@ -4981,3 +4981,84 @@ class TestGameStoreEviction:
         finally:
             GAME_STORE.pop(state.id, None)
             GAME_STORE.pop(unrelated.id, None)
+
+
+class TestRegisterGame:
+    """Tests for register_game in backend/game/manager.py."""
+
+    def test_register_game_inserts_new_entry(self) -> None:
+        """Registering a brand-new state inserts it under its id."""
+        from backend.game.manager import register_game
+
+        state = new_game(seed=42)
+        GAME_STORE.pop(state.id, None)
+        try:
+            register_game(state)
+            assert state.id in GAME_STORE
+            assert GAME_STORE[state.id] is state
+        finally:
+            GAME_STORE.pop(state.id, None)
+
+    def test_register_game_replaces_existing_entry(self) -> None:
+        """Registering a state with an existing id replaces, not duplicates."""
+        from backend.game.manager import register_game
+
+        first_state = new_game(seed=42)
+        second_state = new_game(seed=42)
+        second_state.id = first_state.id
+        try:
+            GAME_STORE[first_state.id] = first_state
+            before = len(GAME_STORE)
+            register_game(second_state)
+            assert GAME_STORE[first_state.id] is second_state
+            assert len(GAME_STORE) == before
+        finally:
+            GAME_STORE.pop(first_state.id, None)
+
+    def test_register_game_moves_existing_to_end(self) -> None:
+        """Re-registering an existing entry moves it to the MRU end."""
+        from backend.game.manager import register_game
+
+        s1 = new_game(seed=42)
+        s2 = new_game(seed=42)
+        try:
+            GAME_STORE[s1.id] = s1
+            GAME_STORE[s2.id] = s2
+            register_game(s1)
+            assert list(GAME_STORE.keys())[-1] == s1.id
+            assert list(GAME_STORE.keys())[0] == s2.id
+        finally:
+            GAME_STORE.pop(s1.id, None)
+            GAME_STORE.pop(s2.id, None)
+
+    def test_register_game_concurrency_smoke_with_evict_if_needed(self) -> None:
+        """register_game is thread-safe alongside concurrent evict_if_needed."""
+        import concurrent.futures
+        import threading
+
+        from backend.game import manager
+        from backend.game.manager import register_game
+
+        created = []
+        created_lock = threading.Lock()
+        try:
+            with patch.object(manager, "MAX_IN_MEMORY_GAMES", 5):
+                def _register_worker() -> None:
+                    for _ in range(10):
+                        state = new_game(seed=42)
+                        with created_lock:
+                            created.append(state.id)
+                        register_game(state)
+
+                def _evict_worker() -> None:
+                    for _ in range(25):
+                        manager.evict_if_needed()
+
+                with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+                    futures = [executor.submit(_register_worker) for _ in range(4)]
+                    futures += [executor.submit(_evict_worker) for _ in range(2)]
+                    for future in concurrent.futures.as_completed(futures):
+                        future.result()
+        finally:
+            for gid in created:
+                GAME_STORE.pop(gid, None)
