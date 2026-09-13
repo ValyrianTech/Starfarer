@@ -173,7 +173,6 @@ def _get_state(game_id: str) -> GameState | None:
     state = game_load_func(game_id)
     if state:
         register_game(state)
-        touch_game(game_id)
         evict_if_needed(_locked_game_ids() | {game_id})
         return state
     
@@ -217,7 +216,6 @@ def _authorize_game(game_id: str, token: str | None) -> None:
         loaded = game_load_func(game_id)
         if loaded:
             register_game(loaded)
-            touch_game(game_id)
             evict_if_needed(_locked_game_ids() | {game_id})
     state = GAME_STORE.get(game_id)
     if state is None:
@@ -269,7 +267,6 @@ def api_new_game(req: NewGameRequest) -> dict:
                 raise HTTPException(status_code=409, detail="Game id already exists")
             state.id = req.game_id
         register_game(state)
-        touch_game(state.id)
         evict_if_needed(_locked_game_ids() | {state.id})
         game_save(state)
         return {
@@ -1560,7 +1557,6 @@ def api_load(game_id: str, x_game_token: str | None = Header(default=None)) -> d
         if not state:
             raise HTTPException(status_code=404, detail="Save not found for this game")
         register_game(state)
-        touch_game(game_id)
         evict_if_needed(_locked_game_ids() | {game_id})
         return {
             "result": "Game loaded.",
