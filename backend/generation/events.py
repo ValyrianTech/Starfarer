@@ -1000,10 +1000,11 @@ def resolve_event(state: GameState, event_id: str, choice_idx: int) -> tuple[boo
     """Resolve a pending event by applying the chosen outcome.
 
     Validates that the event exists, is not already resolved, and that
-    the choice index is valid. Applies the outcome effects to the ship
-    and logs the resolution. Resolution is atomic: the event is only
-    marked ``resolved`` and ``chosen`` after the outcome has been applied
-    successfully.
+    the choice index is valid. The choice outcome is applied to the
+    in-memory ship state in place before the event is marked ``resolved``
+    and ``chosen``; this ordering is defensive only (it avoids marking an
+    event resolved if outcome application ever raises) and does not
+    provide a transactional/rollback guarantee.
 
     :param state: The current game state.
     :type state: GameState
@@ -1015,9 +1016,8 @@ def resolve_event(state: GameState, event_id: str, choice_idx: int) -> tuple[boo
         ``extra_output`` is a dictionary containing the event title,
         chosen text, outcome text, and applied effects.
     :rtype: tuple[bool, str, dict]
-    :raises ValueError: If the event is not found, already resolved,
-        or the choice index is invalid (caught and returned as
-        ``(False, message, {})``).
+    :raises ValueError: Not raised by this function; failures are
+        returned as ``(False, message, {})``.
     """
     event = None
     for e in state.events:
