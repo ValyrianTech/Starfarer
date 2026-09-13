@@ -31,4 +31,4 @@ def seeded_random(seed: int, *extra: str) -> random.Random:
     """
     parts = [str(seed), *[str(e) for e in extra]]
     key = "|".join(f"{len(p)}:{p}" for p in parts)
-    return random.Random(key)
+    return random.Random(key)  # nosec B311 - game RNG, not crypto

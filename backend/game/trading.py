@@ -247,7 +247,7 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
         return False, "No trading facilities in this system."
 
     det_seed = deterministic_hash(state.seed, system.id, len(state.log_entries))
-    rng = random.Random(det_seed)
+    rng = random.Random(det_seed)  # nosec B311 - game RNG, not crypto
     price_mod = rng.uniform(0.7, 1.5)
 
     stellar_rep = state.get_faction_reputation("stellar_cartographers")
@@ -368,7 +368,7 @@ def perform_bulk_sell(state: GameState, items: list[dict]) -> tuple[bool, str, i
         return False, "No trading facilities in this system.", 0, 0
 
     det_seed = deterministic_hash(state.seed, system.id, len(state.log_entries))
-    rng = random.Random(det_seed)
+    rng = random.Random(det_seed)  # nosec B311 - game RNG, not crypto
     price_mod = rng.uniform(0.7, 1.5)
 
     stellar_rep = state.get_faction_reputation("stellar_cartographers")

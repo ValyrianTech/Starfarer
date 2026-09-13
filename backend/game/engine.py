@@ -404,7 +404,7 @@ def explore_surface(state: GameState) -> tuple[bool, str, list[Discovery]]:
 
     discoveries = []
     # Include len(state.discoveries) in the seed so that repeated calls produce different results (the discovery count changes between calls).
-    item_rng = random.Random(state.seed + len(state.discoveries) + deterministic_hash(body.id))
+    item_rng = random.Random(state.seed + len(state.discoveries) + deterministic_hash(body.id))  # nosec B311 - game RNG, not crypto
 
     # Diminishing returns based on exploration count
     if body.exploration_count >= 3:
@@ -497,7 +497,7 @@ def perform_atmospheric_scan(state: GameState) -> list[Discovery]:
 
     discoveries = []
     # Include len(state.discoveries) in the seed so that repeated calls produce different results (the discovery count changes between calls).
-    item_rng = random.Random(state.seed + len(state.discoveries) + deterministic_hash(body.id) + 999)
+    item_rng = random.Random(state.seed + len(state.discoveries) + deterministic_hash(body.id) + 999)  # nosec B311 - game RNG, not crypto
     num_finds = item_rng.randint(1, 2)
 
     for i in range(num_finds):
@@ -564,7 +564,7 @@ def perform_sub_surface_exploration(state: GameState) -> list[Discovery]:
 
     discoveries = []
     # Include len(state.discoveries) in the seed so that repeated calls produce different results (the discovery count changes between calls).
-    item_rng = random.Random(state.seed + len(state.discoveries) + deterministic_hash(body.id) + 777)
+    item_rng = random.Random(state.seed + len(state.discoveries) + deterministic_hash(body.id) + 777)  # nosec B311 - game RNG, not crypto
     num_finds = item_rng.randint(1, 2)
 
     for i in range(num_finds):

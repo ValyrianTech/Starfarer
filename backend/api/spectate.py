@@ -197,7 +197,7 @@ async def api_spectate_stream(game_id: str) -> StreamingResponse:
             heartbeats (``: ping``) while idle.
         """
         state = _get_state(game_id)
-        assert state is not None
+        assert state is not None  # nosec B101 - runtime guard, not test assertion
         # Initial snapshot: include only the most recent log entries.
         initial_since = 0
         int_ids = [
