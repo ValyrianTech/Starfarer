@@ -36,7 +36,9 @@ def _get_state(game_id: str) -> GameState | None:
 
     Looks up the game ID in the in-memory ``GAME_STORE`` first so that a
     spectator observes the same live object the playing agent mutates.
-    Falls back to loading from the database and caching the result.
+    Falls back to loading from the database and caching the result. When
+    caching triggers LRU eviction, games whose per-game lock is currently
+    held are skipped so an in-flight mutation is never evicted.
 
     :param game_id: The unique identifier of the game.
     :type game_id: str
@@ -49,7 +51,8 @@ def _get_state(game_id: str) -> GameState | None:
     state = game_load(game_id)
     if state:
         GAME_STORE[game_id] = state
-        evict_if_needed()
+        from backend.api.routes import _locked_game_ids
+        evict_if_needed(_locked_game_ids())
         return state
     return None
 

@@ -3811,6 +3811,44 @@ class TestSpectateGetState:
         GAME_STORE.pop("spectate-nonexistent-id", None)
         assert _get_state("spectate-nonexistent-id") is None
 
+    def test_get_state_db_load_evicts_but_skips_locked(self) -> None:
+        """A DB-loading _get_state evicts but skips a lock-held game."""
+        import backend.api.routes as routes_mod
+        from backend.api.spectate import _get_state
+        from backend.game import manager
+
+        s_locked = new_game(seed=42, ship_name="SpecLocked")
+        s_unlocked = new_game(seed=42, ship_name="SpecUnlocked")
+        s_loading = new_game(seed=42, ship_name="SpecLoading")
+
+        game_save(s_locked)
+        game_save(s_unlocked)
+        game_save(s_loading)
+
+        for s in (s_locked, s_unlocked, s_loading):
+            GAME_STORE.pop(s.id, None)
+
+        try:
+            with patch.object(manager, "MAX_IN_MEMORY_GAMES", 2):
+                GAME_STORE[s_locked.id] = s_locked
+                GAME_STORE[s_unlocked.id] = s_unlocked
+
+                lock = routes_mod._get_lock(s_locked.id)
+                lock.acquire()
+                try:
+                    result = _get_state(s_loading.id)
+                    assert result is not None
+                    assert result.id == s_loading.id
+                    assert s_loading.id in GAME_STORE
+                    assert s_locked.id in GAME_STORE
+                    assert s_unlocked.id not in GAME_STORE
+                finally:
+                    lock.release()
+        finally:
+            for s in (s_locked, s_unlocked, s_loading):
+                GAME_STORE.pop(s.id, None)
+            routes_mod._cleanup_game_lock(s_locked.id)
+
 
 class TestSpectateBuildPayload:
     def test_build_payload_keys(self) -> None:
