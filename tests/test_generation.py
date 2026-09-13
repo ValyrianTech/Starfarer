@@ -569,17 +569,17 @@ class TestGameState:
         warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
         assert any("fuel:2.5" in msg for msg in warning_messages)
 
-    def test_apply_choice_outcome_extra_colons_skipped(self, caplog) -> None:
-        """A value with extra colons should be skipped (effect 0) without raising."""
+    def test_apply_choice_outcome_extra_colons_applies_leading_int(self, caplog) -> None:
+        """A value with extra colons applies its leading integer segment."""
         import logging
         caplog.set_level(logging.WARNING)
         ship = Ship(credits=500)
         state = GameState(id="test-colons", seed=42, ship=ship)
         effects = state.apply_choice_outcome("credits:50:bonus")
-        assert effects["credits"] == 0
-        assert state.ship.credits == 500
+        assert effects["credits"] == 50
+        assert state.ship.credits == 550
         warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
-        assert any("credits:50:bonus" in msg for msg in warning_messages)
+        assert not any("credits:50:bonus" in msg for msg in warning_messages)
 
     def test_apply_choice_outcome_mixed_malformed_and_valid(self, caplog) -> None:
         """Malformed parts are skipped while valid parts still apply."""
