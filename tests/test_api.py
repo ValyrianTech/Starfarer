@@ -4690,3 +4690,165 @@ class TestRoutesLocks:
             assert max_active == 1
         finally:
             routes_mod._cleanup_game_lock(game_id)
+
+
+class TestGameStoreEviction:
+    """Tests for the LRU eviction cap on the in-memory GAME_STORE."""
+
+    def test_store_bounded_at_max(self) -> None:
+        """Creating more than MAX_IN_MEMORY_GAMES games keeps the store bounded."""
+        from backend.game import manager
+
+        created = []
+        try:
+            with patch.object(manager, "MAX_IN_MEMORY_GAMES", 5):
+                for i in range(8):
+                    resp = client.post(
+                        "/api/game/new",
+                        json={"seed": 42, "ship_name": f"BoundedShip{i}"},
+                    )
+                    assert resp.status_code == 200
+                    created.append(resp.json()["game_id"])
+                assert len(GAME_STORE) == 5
+        finally:
+            for gid in created:
+                GAME_STORE.pop(gid, None)
+
+    def test_lru_evicts_least_recently_used(self) -> None:
+        """Touching a game makes it survive while an older one is evicted."""
+        from backend.game import manager
+        from backend.game.manager import touch_game
+
+        created = []
+        try:
+            with patch.object(manager, "MAX_IN_MEMORY_GAMES", 3):
+                first = client.post("/api/game/new", json={"seed": 42}).json()["game_id"]
+                created.append(first)
+                second = client.post("/api/game/new", json={"seed": 42}).json()["game_id"]
+                created.append(second)
+                third = client.post("/api/game/new", json={"seed": 42}).json()["game_id"]
+                created.append(third)
+
+                touch_game(first)
+
+                fourth = client.post("/api/game/new", json={"seed": 42}).json()["game_id"]
+                created.append(fourth)
+
+                assert first in GAME_STORE
+                assert second not in GAME_STORE
+        finally:
+            for gid in created:
+                GAME_STORE.pop(gid, None)
+
+    def test_evict_skips_locked_game(self) -> None:
+        """Eviction must skip a game whose per-game lock is currently held."""
+        import backend.api.routes as routes_mod
+        from backend.game import manager
+        from backend.game.manager import evict_if_needed
+
+        s1 = new_game(seed=42)
+        s2 = new_game(seed=42)
+        try:
+            with patch.object(manager, "MAX_IN_MEMORY_GAMES", 1):
+                GAME_STORE[s1.id] = s1
+                GAME_STORE[s2.id] = s2
+                lock = routes_mod._get_lock(s1.id)
+                lock.acquire()
+                try:
+                    evict_if_needed(routes_mod._locked_game_ids())
+                    assert s1.id in GAME_STORE
+                    assert s2.id not in GAME_STORE
+                finally:
+                    lock.release()
+        finally:
+            GAME_STORE.pop(s1.id, None)
+            GAME_STORE.pop(s2.id, None)
+            routes_mod._cleanup_game_lock(s1.id)
+
+    def test_evict_persists_dirty_state_before_removal(self) -> None:
+        """An evicted game is persisted so its in-memory changes are not lost."""
+        from backend.game import manager
+        from backend.game.manager import game_load
+
+        created = []
+        try:
+            with patch.object(manager, "MAX_IN_MEMORY_GAMES", 1):
+                first = client.post("/api/game/new", json={"seed": 42}).json()["game_id"]
+                created.append(first)
+                GAME_STORE[first].ship.credits = 12345
+
+                second = client.post("/api/game/new", json={"seed": 42}).json()["game_id"]
+                created.append(second)
+
+                assert first not in GAME_STORE
+                loaded = game_load(first)
+                assert loaded is not None
+                assert loaded.ship.credits == 12345
+        finally:
+            for gid in created:
+                GAME_STORE.pop(gid, None)
+
+    def test_evict_swallows_save_failure(self) -> None:
+        """A game_save failure must not propagate or wedge eviction."""
+        from backend.game import manager
+        from backend.game.manager import evict_if_needed
+
+        s1 = new_game(seed=42)
+        s2 = new_game(seed=42)
+        try:
+            with patch.object(manager, "MAX_IN_MEMORY_GAMES", 1):
+                GAME_STORE[s1.id] = s1
+                GAME_STORE[s2.id] = s2
+                with patch.object(
+                    manager, "game_save", side_effect=RuntimeError("db down")
+                ):
+                    evict_if_needed()
+                assert s1.id not in GAME_STORE
+                assert s2.id in GAME_STORE
+        finally:
+            GAME_STORE.pop(s1.id, None)
+            GAME_STORE.pop(s2.id, None)
+
+    def test_evict_all_active_breaks(self) -> None:
+        """Eviction must break out (not loop forever) when every game is active."""
+        from backend.game import manager
+        from backend.game.manager import evict_if_needed
+
+        s1 = new_game(seed=42)
+        s2 = new_game(seed=42)
+        try:
+            with patch.object(manager, "MAX_IN_MEMORY_GAMES", 1):
+                GAME_STORE[s1.id] = s1
+                GAME_STORE[s2.id] = s2
+                evict_if_needed({s1.id, s2.id})
+                assert s1.id in GAME_STORE
+                assert s2.id in GAME_STORE
+        finally:
+            GAME_STORE.pop(s1.id, None)
+            GAME_STORE.pop(s2.id, None)
+
+    def test_touch_game_unknown_id_noop(self) -> None:
+        """touch_game is a no-op for an unknown game id."""
+        from backend.game.manager import touch_game
+
+        before = len(GAME_STORE)
+        touch_game("definitely-not-a-game")
+        assert len(GAME_STORE) == before
+        assert "definitely-not-a-game" not in GAME_STORE
+
+    def test_locked_game_ids_returns_held_locks(self) -> None:
+        """_locked_game_ids reports only games whose lock is held."""
+        import backend.api.routes as routes_mod
+
+        gid = "locked-ids-eviction-test"
+        try:
+            lock = routes_mod._get_lock(gid)
+            assert routes_mod._locked_game_ids() == set()
+            lock.acquire()
+            try:
+                assert gid in routes_mod._locked_game_ids()
+            finally:
+                lock.release()
+            assert routes_mod._locked_game_ids() == set()
+        finally:
+            routes_mod._cleanup_game_lock(gid)
