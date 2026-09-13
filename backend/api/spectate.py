@@ -52,7 +52,7 @@ def _get_state(game_id: str) -> GameState | None:
     if state:
         register_game(state)
         from backend.api.routes import _locked_game_ids
-        evict_if_needed(_locked_game_ids())
+        evict_if_needed(_locked_game_ids() | {game_id})
         return state
     return None
 
