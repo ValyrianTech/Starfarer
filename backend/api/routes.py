@@ -50,6 +50,7 @@ from backend.game.manager import (
     get_galaxy,
     get_system_detail,
     new_game,
+    register_game,
     touch_game,
 )
 from backend.game.manager import (
@@ -171,7 +172,8 @@ def _get_state(game_id: str) -> GameState | None:
     
     state = game_load_func(game_id)
     if state:
-        GAME_STORE[game_id] = state
+        register_game(state)
+        touch_game(game_id)
         evict_if_needed(_locked_game_ids())
         return state
     
@@ -214,7 +216,7 @@ def _authorize_game(game_id: str, token: str | None) -> None:
     if game_id not in GAME_STORE:
         loaded = game_load_func(game_id)
         if loaded:
-            GAME_STORE[game_id] = loaded
+            register_game(loaded)
             touch_game(game_id)
             evict_if_needed(_locked_game_ids())
     state = GAME_STORE.get(game_id)
@@ -266,7 +268,7 @@ def api_new_game(req: NewGameRequest) -> dict:
             if game_exists(req.game_id) or req.game_id in GAME_STORE:
                 raise HTTPException(status_code=409, detail="Game id already exists")
             state.id = req.game_id
-        GAME_STORE[state.id] = state
+        register_game(state)
         touch_game(state.id)
         evict_if_needed(_locked_game_ids())
         game_save(state)
@@ -1557,7 +1559,7 @@ def api_load(game_id: str, x_game_token: str | None = Header(default=None)) -> d
         state = game_load_func(game_id)
         if not state:
             raise HTTPException(status_code=404, detail="Save not found for this game")
-        GAME_STORE[game_id] = state
+        register_game(state)
         touch_game(game_id)
         evict_if_needed(_locked_game_ids())
         return {
