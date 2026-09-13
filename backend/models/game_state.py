@@ -161,12 +161,20 @@ class GameState:
         its effect at the default of 0 rather than raising
         :class:`ValueError`.
 
+        A non-string ``outcome`` (e.g. ``None``, an int, or a list) is handled
+        gracefully: a warning is logged and the zeroed effects dict is returned
+        without modifying the ship, rather than raising
+        :class:`AttributeError`.
+
         :param outcome: Semicolon-separated stat effects.
         :type outcome: str
         :returns: A dictionary mapping stat names to their applied deltas.
         :rtype: dict
         """
         effects = {"fuel": 0, "hull": 0, "morale": 0, "credits": 0, "cargo": 0, "crew": 0}
+        if not isinstance(outcome, str):
+            logger.warning("apply_choice_outcome received non-string outcome: %r", outcome)
+            return effects
         parts = outcome.split(";")
         for part in parts:
             part = part.strip()
