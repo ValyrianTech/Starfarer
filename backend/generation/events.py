@@ -1001,7 +1001,9 @@ def resolve_event(state: GameState, event_id: str, choice_idx: int) -> tuple[boo
 
     Validates that the event exists, is not already resolved, and that
     the choice index is valid. Applies the outcome effects to the ship
-    and logs the resolution.
+    and logs the resolution. Resolution is atomic: the event is only
+    marked ``resolved`` and ``chosen`` after the outcome has been applied
+    successfully.
 
     :param state: The current game state.
     :type state: GameState
@@ -1029,11 +1031,12 @@ def resolve_event(state: GameState, event_id: str, choice_idx: int) -> tuple[boo
     if choice_idx < 0 or choice_idx >= len(event.choices):
         return False, f"Invalid choice index: {choice_idx}.", {}
 
+    choice = event.choices[choice_idx]
+    effects = state.apply_choice_outcome(choice.outcome)
+
     event.resolved = True
     event.chosen = choice_idx
 
-    choice = event.choices[choice_idx]
-    effects = state.apply_choice_outcome(choice.outcome)
     state.add_log("event", f"Event '{event.title}' resolved: {choice.text}. {choice.outcome}", category="event", title=event.title)
 
     event_rng = seeded_random(state.seed, "event_reputation", event.id, str(choice_idx))
