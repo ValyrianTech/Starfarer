@@ -2056,6 +2056,118 @@ class TestDatabaseGetLeaderboard:
         ids = [e["game_id"] for e in result]
         assert "lb-bad-json" not in ids
 
+    def test_leaderboard_non_dict_ship_null(self) -> None:
+        """A ship value of null should not crash the leaderboard."""
+        from datetime import datetime, timezone
+
+        from backend.database import get_db, get_leaderboard, init_db
+        init_db()
+        now = datetime.now(timezone.utc).isoformat()
+        conn = get_db()
+        try:
+            conn.execute(
+                "INSERT OR REPLACE INTO games (id, seed, ship_name, created_at, updated_at, state_json) VALUES (?, ?, ?, ?, ?, ?)",
+                ("lb-ship-null", 1, "Test", now, now, '{"ship": null}')
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        result = get_leaderboard(limit=10)
+        entry = next(e for e in result if e["game_id"] == "lb-ship-null")
+        assert entry["credits"] == 0
+
+    def test_leaderboard_non_dict_ship_list(self) -> None:
+        """A ship value that is a list should not crash the leaderboard."""
+        from datetime import datetime, timezone
+
+        from backend.database import get_db, get_leaderboard, init_db
+        init_db()
+        now = datetime.now(timezone.utc).isoformat()
+        conn = get_db()
+        try:
+            conn.execute(
+                "INSERT OR REPLACE INTO games (id, seed, ship_name, created_at, updated_at, state_json) VALUES (?, ?, ?, ?, ?, ?)",
+                ("lb-ship-list", 1, "Test", now, now, '{"ship": [1, 2, 3]}')
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        result = get_leaderboard(limit=10)
+        entry = next(e for e in result if e["game_id"] == "lb-ship-list")
+        assert entry["credits"] == 0
+
+    def test_leaderboard_non_dict_ship_string(self) -> None:
+        """A ship value that is a string should not crash the leaderboard."""
+        from datetime import datetime, timezone
+
+        from backend.database import get_db, get_leaderboard, init_db
+        init_db()
+        now = datetime.now(timezone.utc).isoformat()
+        conn = get_db()
+        try:
+            conn.execute(
+                "INSERT OR REPLACE INTO games (id, seed, ship_name, created_at, updated_at, state_json) VALUES (?, ?, ?, ?, ?, ?)",
+                ("lb-ship-string", 1, "Test", now, now, '{"ship": "corrupted"}')
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        result = get_leaderboard(limit=10)
+        entry = next(e for e in result if e["game_id"] == "lb-ship-string")
+        assert entry["credits"] == 0
+
+    def test_leaderboard_ship_credits_non_int(self) -> None:
+        """A non-integer credits value should default to 0."""
+        from datetime import datetime, timezone
+
+        from backend.database import get_db, get_leaderboard, init_db
+        init_db()
+        now = datetime.now(timezone.utc).isoformat()
+        conn = get_db()
+        try:
+            conn.execute(
+                "INSERT OR REPLACE INTO games (id, seed, ship_name, created_at, updated_at, state_json) VALUES (?, ?, ?, ?, ?, ?)",
+                ("lb-ship-credits-str", 1, "Test", now, now, '{"ship": {"credits": "lots"}}')
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        result = get_leaderboard(limit=10)
+        entry = next(e for e in result if e["game_id"] == "lb-ship-credits-str")
+        assert entry["credits"] == 0
+
+    def test_leaderboard_ship_credits_valid_int(self) -> None:
+        """A valid integer credits value should be reported as-is."""
+        from datetime import datetime, timezone
+
+        from backend.database import get_db, get_leaderboard, init_db
+        init_db()
+        now = datetime.now(timezone.utc).isoformat()
+        conn = get_db()
+        try:
+            conn.execute(
+                "INSERT OR REPLACE INTO games (id, seed, ship_name, created_at, updated_at, state_json) VALUES (?, ?, ?, ?, ?, ?)",
+                ("lb-ship-credits-int", 1, "Test", now, now, '{"ship": {"credits": 500}}')
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        result = get_leaderboard(limit=10)
+        entry = next(e for e in result if e["game_id"] == "lb-ship-credits-int")
+        assert entry["credits"] == 500
+
+    def test_safe_ship_credits_helper_direct(self) -> None:
+        """_safe_ship_credits should handle malformed states defensively."""
+        from backend.database import _safe_ship_credits
+
+        assert _safe_ship_credits({}) == 0
+        assert _safe_ship_credits({"ship": None}) == 0
+        assert _safe_ship_credits({"ship": []}) == 0
+        assert _safe_ship_credits({"ship": "x"}) == 0
+        assert _safe_ship_credits({"ship": {"credits": "x"}}) == 0
+        assert _safe_ship_credits({"ship": {"credits": 42}}) == 42
+        assert _safe_ship_credits({"ship": {}}) == 0
+
 
 class TestLoreFragmentsCollected:
     """Tests for the GameState.lore_fragments_collected property."""

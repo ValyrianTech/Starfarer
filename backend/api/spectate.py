@@ -18,7 +18,7 @@ from collections.abc import AsyncGenerator
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
-from backend.database import get_db_ctx
+from backend.database import _safe_ship_credits, get_db_ctx
 from backend.game.manager import GAME_STORE, game_load
 from backend.models.game_state import GameState
 
@@ -88,7 +88,7 @@ def api_spectate_games(limit: int = 25) -> dict:
             "seed": row["seed"],
             "updated_at": row["updated_at"],
             "systems_visited": state.get("systems_visited", 0),
-            "credits": state.get("ship", {}).get("credits", 0),
+            "credits": _safe_ship_credits(state),
             "active": row["id"] in GAME_STORE,
         })
     # Include in-memory games that were never persisted yet.
