@@ -46,7 +46,7 @@ Response:
 
 `game_id` is optional — if omitted, the server generates one. If you supply a `game_id` that already exists (in the database or in memory), the request returns HTTP 409 Conflict with `{"detail": "Game id already exists"}` and does **not** overwrite the existing game.
 
-The response also includes a `token`. In the default configuration this token is informational and not required, but when the server is started with `STARFARER_REQUIRE_GAME_TOKEN` enabled, every state-mutating endpoint (jump, scan, land, explore, atmospheric-scan, sub-surface-explore, event resolve, trade, bulk-sell, upgrade, distress, salvage, salvage/craft, faction mission accept, missions accept/complete, save, load, hints/dismiss) requires the header `X-Game-Token: <token>`. A missing token returns HTTP 403 with detail "Game token required"; a wrong token returns HTTP 403 with detail "Invalid game token". Read-only GET endpoints never require it.
+The response also includes a `token`. In the default configuration this token is informational and not required, but when the server is started with `STARFARER_REQUIRE_GAME_TOKEN` enabled, every endpoint that accesses a specific game — both the state-mutating endpoints (jump, scan, land, explore, atmospheric-scan, sub-surface-explore, event resolve, trade, bulk-sell, upgrade, distress, salvage, salvage/craft, faction mission accept, missions accept/complete, save, load, hints/dismiss) and the read-only GET endpoints (full game state, galaxy, system detail, log, log/paginated, discoveries, cargo, lore, codex, upgrades, nearby, factions, faction detail, missions) — requires the token. For mutating endpoints the token is supplied via the header `X-Game-Token: <token>`; for read-only endpoints it may be supplied either via the `X-Game-Token` header or a `token` query parameter. A missing token returns HTTP 403 with detail "Game token required"; a wrong token returns HTTP 403 with detail "Invalid game token".
 
 ### 2.2 Continue a Saved Game
 
@@ -734,7 +734,7 @@ The game persists all state to SQLite. Save frequently — especially before ris
 
 ## 10. API Reference (Quick)
 
-Mutating endpoints accept an optional `X-Game-Token` header (enforced when `STARFARER_REQUIRE_GAME_TOKEN` is enabled; see Section 2.1).
+All endpoints that access a specific game (mutating and read-only GET) accept the token via the `X-Game-Token` header or `token` query parameter, enforced when `STARFARER_REQUIRE_GAME_TOKEN` is enabled; see Section 2.1.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|

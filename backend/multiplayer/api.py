@@ -86,7 +86,14 @@ def _check_game(game_id: str) -> GameState:
 
 
 @router.get("/game/{game_id}/system/{sys_id}/ghosts")
-def api_system_ghosts(game_id: str, sys_id: str, page: int = 1, per_page: int = 10) -> dict:
+def api_system_ghosts(
+    game_id: str,
+    sys_id: str,
+    page: int = 1,
+    per_page: int = 10,
+    x_game_token: str | None = Header(default=None),
+    token: str | None = None,
+) -> dict:
     """Retrieve ghost signatures left by other players in a star system.
 
     Ghost signatures provide a trace of other travellers who
@@ -101,17 +108,25 @@ def api_system_ghosts(game_id: str, sys_id: str, page: int = 1, per_page: int = 
     :type page: int
     :param per_page: Number of ghosts per page (max 50, default 10).
     :type per_page: int
+    :param x_game_token: The caller-supplied per-game token (X-Game-Token header).
+    :type x_game_token: str | None
+    :param token: The caller-supplied per-game token (query parameter).
+    :type token: str | None
     :returns: A dictionary with ``ghosts``, ``page``, ``per_page``,
         ``total_ghosts``, and ``total_pages``.
     :rtype: dict
     :raises HTTPException: 404 if the game is not found.
     :raises HTTPException: 404 if page exceeds total pages with active ghosts.
+    :raises HTTPException: 403 if token enforcement is enabled and the
+        token is missing or invalid.
     """
-    if not _game_exists(game_id):
-        raise HTTPException(status_code=404, detail="Game not found")
-    result = get_system_ghosts(sys_id, page=page, per_page=per_page)
-    if page > result["total_pages"] and result["total_ghosts"] > 0:
-        raise HTTPException(status_code=404, detail="Page out of range")
+    with _get_lock(game_id):
+        _authorize_game(game_id, x_game_token or token)
+        if not _game_exists(game_id):
+            raise HTTPException(status_code=404, detail="Game not found")
+        result = get_system_ghosts(sys_id, page=page, per_page=per_page)
+        if page > result["total_pages"] and result["total_ghosts"] > 0:
+            raise HTTPException(status_code=404, detail="Page out of range")
     return result
 
 
@@ -368,7 +383,11 @@ def api_post_message(
 
 
 @router.get("/game/{game_id}/ripples")
-def api_ripples(game_id: str) -> dict:
+def api_ripples(
+    game_id: str,
+    x_game_token: str | None = Header(default=None),
+    token: str | None = None,
+) -> dict:
     """Retrieve pending discovery ripple events for a game.
 
     Ripples are generated when other players make discoveries in
@@ -376,11 +395,18 @@ def api_ripples(game_id: str) -> dict:
 
     :param game_id: The unique identifier of the game.
     :type game_id: str
+    :param x_game_token: The caller-supplied per-game token (X-Game-Token header).
+    :type x_game_token: str | None
+    :param token: The caller-supplied per-game token (query parameter).
+    :type token: str | None
     :returns: A dictionary with ``ripples`` list of pending ripple dicts.
     :rtype: dict
     :raises HTTPException: 404 if the game is not found.
+    :raises HTTPException: 403 if token enforcement is enabled and the
+        token is missing or invalid.
     """
     with _get_lock(game_id):
+        _authorize_game(game_id, x_game_token or token)
         state = _check_game(game_id)
     # Ripple data is read from the database, not from in-memory game state.
     # The game state is only used to determine the player's current system for filtering.

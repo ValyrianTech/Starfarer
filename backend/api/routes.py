@@ -193,7 +193,7 @@ def _save_state(game_id: str) -> None:
 
 
 def _authorize_game(game_id: str, token: str | None) -> None:
-    """Enforce per-game token access control on mutating endpoints.
+    """Enforce per-game token access control on endpoints that access a specific game.
 
     When token enforcement is disabled (the default), this is a no-op so
     single-player/local usage keeps working. When enabled via the
@@ -277,7 +277,13 @@ def api_new_game(req: NewGameRequest) -> dict:
 
 
 @router.get("/game/{game_id}")
-def api_get_game(game_id: str, sort: str | None = None, order: str | None = None) -> dict:
+def api_get_game(
+    game_id: str,
+    sort: str | None = None,
+    order: str | None = None,
+    x_game_token: str | None = Header(default=None),
+    token: str | None = None,
+) -> dict:
     """Retrieve the full game state for a given game ID.
 
     :param game_id: The unique identifier of the game.
@@ -296,6 +302,7 @@ def api_get_game(game_id: str, sort: str | None = None, order: str | None = None
         ``sort`` or ``order`` is invalid.
     """
     with _get_lock(game_id):
+        _authorize_game(game_id, x_game_token or token)
         state = _get_state(game_id)
         if not state:
             raise HTTPException(status_code=404, detail="Game not found")
@@ -303,7 +310,11 @@ def api_get_game(game_id: str, sort: str | None = None, order: str | None = None
 
 
 @router.get("/game/{game_id}/galaxy")
-def api_galaxy(game_id: str) -> dict:
+def api_galaxy(
+    game_id: str,
+    x_game_token: str | None = Header(default=None),
+    token: str | None = None,
+) -> dict:
     """Retrieve galaxy map data for a game.
 
     :param game_id: The unique identifier of the game.
@@ -314,6 +325,7 @@ def api_galaxy(game_id: str) -> dict:
     :raises HTTPException: 404 if the game is not found.
     """
     with _get_lock(game_id):
+        _authorize_game(game_id, x_game_token or token)
         state = _get_state(game_id)
         if not state:
             raise HTTPException(status_code=404, detail="Game not found")
@@ -321,7 +333,12 @@ def api_galaxy(game_id: str) -> dict:
 
 
 @router.get("/game/{game_id}/system/{sys_id}")
-def api_system_detail(game_id: str, sys_id: str) -> dict:
+def api_system_detail(
+    game_id: str,
+    sys_id: str,
+    x_game_token: str | None = Header(default=None),
+    token: str | None = None,
+) -> dict:
     """Retrieve detailed information for a specific star system.
 
     :param game_id: The unique identifier of the game.
@@ -334,6 +351,7 @@ def api_system_detail(game_id: str, sys_id: str) -> dict:
     :raises HTTPException: 404 if the game or system is not found.
     """
     with _get_lock(game_id):
+        _authorize_game(game_id, x_game_token or token)
         state = _get_state(game_id)
         if not state:
             raise HTTPException(status_code=404, detail="Game not found")
@@ -635,7 +653,11 @@ def api_resolve_event(game_id: str, event_id: str, req: ResolveEventRequest, x_g
 
 
 @router.get("/game/{game_id}/log")
-def api_log(game_id: str) -> dict:
+def api_log(
+    game_id: str,
+    x_game_token: str | None = Header(default=None),
+    token: str | None = None,
+) -> dict:
     """Retrieve the ship's log entries in reverse chronological order.
 
     :param game_id: The unique identifier of the game.
@@ -646,6 +668,7 @@ def api_log(game_id: str) -> dict:
     :raises HTTPException: 404 if the game is not found.
     """
     with _get_lock(game_id):
+        _authorize_game(game_id, x_game_token or token)
         state = _get_state(game_id)
         if not state:
             raise HTTPException(status_code=404, detail="Game not found")
@@ -663,6 +686,8 @@ def api_log_paginated(
     per_page: int = 20,
     category: str | None = None,
     search: str | None = None,
+    x_game_token: str | None = Header(default=None),
+    token: str | None = None,
 ) -> dict:
     """Retrieve paginated, filterable ship's log entries.
 
@@ -683,6 +708,7 @@ def api_log_paginated(
     :raises HTTPException: 404 if the game is not found.
     """
     with _get_lock(game_id):
+        _authorize_game(game_id, x_game_token or token)
         state = _get_state(game_id)
         if not state:
             raise HTTPException(status_code=404, detail="Game not found")
@@ -721,7 +747,11 @@ def api_log_paginated(
 
 
 @router.get("/game/{game_id}/discoveries")
-def api_discoveries(game_id: str) -> dict:
+def api_discoveries(
+    game_id: str,
+    x_game_token: str | None = Header(default=None),
+    token: str | None = None,
+) -> dict:
     """Retrieve all discoveries made during the game.
 
     :param game_id: The unique identifier of the game.
@@ -732,6 +762,7 @@ def api_discoveries(game_id: str) -> dict:
     :raises HTTPException: 404 if the game is not found.
     """
     with _get_lock(game_id):
+        _authorize_game(game_id, x_game_token or token)
         state = _get_state(game_id)
         if not state:
             raise HTTPException(status_code=404, detail="Game not found")
@@ -742,7 +773,13 @@ def api_discoveries(game_id: str) -> dict:
 
 
 @router.get("/game/{game_id}/cargo")
-def api_cargo(game_id: str, sort: str = "value", order: str = "desc") -> dict:
+def api_cargo(
+    game_id: str,
+    sort: str = "value",
+    order: str = "desc",
+    x_game_token: str | None = Header(default=None),
+    token: str | None = None,
+) -> dict:
     """Retrieve detailed cargo hold contents.
 
     Returns the current cargo count, cargo capacity, and a list of
@@ -761,6 +798,7 @@ def api_cargo(game_id: str, sort: str = "value", order: str = "desc") -> dict:
     :raises HTTPException: 404 if the game is not found.
     """
     with _get_lock(game_id):
+        _authorize_game(game_id, x_game_token or token)
         state = _get_state(game_id)
         if not state:
             raise HTTPException(status_code=404, detail="Game not found")
@@ -801,7 +839,11 @@ def api_cargo(game_id: str, sort: str = "value", order: str = "desc") -> dict:
 
 
 @router.get("/game/{game_id}/lore")
-def api_lore(game_id: str) -> dict:
+def api_lore(
+    game_id: str,
+    x_game_token: str | None = Header(default=None),
+    token: str | None = None,
+) -> dict:
     """Retrieve all lore fragments grouped by story arc.
 
     Returns lore fragments organized by arc with discovered/undiscovered
@@ -815,6 +857,7 @@ def api_lore(game_id: str) -> dict:
     :raises HTTPException: 404 if the game is not found.
     """
     with _get_lock(game_id):
+        _authorize_game(game_id, x_game_token or token)
         state = _get_state(game_id)
         if not state:
             raise HTTPException(status_code=404, detail="Game not found")
@@ -877,7 +920,11 @@ def api_lore(game_id: str) -> dict:
 
 
 @router.get("/game/{game_id}/codex")
-def api_codex(game_id: str) -> dict:
+def api_codex(
+    game_id: str,
+    x_game_token: str | None = Header(default=None),
+    token: str | None = None,
+) -> dict:
     """Retrieve the player's current biome codex.
 
     The codex tracks which biomes the player has encountered and
@@ -891,6 +938,7 @@ def api_codex(game_id: str) -> dict:
     :raises HTTPException: 404 if the game is not found.
     """
     with _get_lock(game_id):
+        _authorize_game(game_id, x_game_token or token)
         state = _get_state(game_id)
         if not state:
             raise HTTPException(status_code=404, detail="Game not found")
@@ -1005,7 +1053,11 @@ def api_upgrade(game_id: str, req: UpgradeRequest, x_game_token: str | None = He
 
 
 @router.get("/game/{game_id}/upgrades")
-def api_upgrades_info(game_id: str) -> dict:
+def api_upgrades_info(
+    game_id: str,
+    x_game_token: str | None = Header(default=None),
+    token: str | None = None,
+) -> dict:
     """Get information about all available ship upgrades.
 
     :param game_id: The unique identifier of the game.
@@ -1016,6 +1068,7 @@ def api_upgrades_info(game_id: str) -> dict:
     :raises HTTPException: 404 if the game is not found.
     """
     with _get_lock(game_id):
+        _authorize_game(game_id, x_game_token or token)
         state = _get_state(game_id)
         if not state:
             raise HTTPException(status_code=404, detail="Game not found")
@@ -1026,7 +1079,11 @@ def api_upgrades_info(game_id: str) -> dict:
 
 
 @router.get("/game/{game_id}/nearby")
-def api_nearby(game_id: str) -> dict:
+def api_nearby(
+    game_id: str,
+    x_game_token: str | None = Header(default=None),
+    token: str | None = None,
+) -> dict:
     """Get a list of nearby star systems within jump range.
 
     :param game_id: The unique identifier of the game.
@@ -1037,6 +1094,7 @@ def api_nearby(game_id: str) -> dict:
     :raises HTTPException: 404 if the game is not found.
     """
     with _get_lock(game_id):
+        _authorize_game(game_id, x_game_token or token)
         state = _get_state(game_id)
         if not state:
             raise HTTPException(status_code=404, detail="Game not found")
@@ -1138,7 +1196,11 @@ def api_salvage_craft(game_id: str, req: CraftRequest, x_game_token: str | None 
 
 
 @router.get("/game/{game_id}/factions")
-def api_factions(game_id: str) -> dict:
+def api_factions(
+    game_id: str,
+    x_game_token: str | None = Header(default=None),
+    token: str | None = None,
+) -> dict:
     """Retrieve all faction definitions and the player's reputation with each.
 
     :param game_id: The unique identifier of the game.
@@ -1148,6 +1210,7 @@ def api_factions(game_id: str) -> dict:
     :raises HTTPException: 404 if the game is not found.
     """
     with _get_lock(game_id):
+        _authorize_game(game_id, x_game_token or token)
         state = _get_state(game_id)
         if not state:
             raise HTTPException(status_code=404, detail="Game not found")
@@ -1155,7 +1218,12 @@ def api_factions(game_id: str) -> dict:
 
 
 @router.get("/game/{game_id}/faction/{faction_id}")
-def api_faction_detail(game_id: str, faction_id: str) -> dict:
+def api_faction_detail(
+    game_id: str,
+    faction_id: str,
+    x_game_token: str | None = Header(default=None),
+    token: str | None = None,
+) -> dict:
     """Retrieve detailed information about a specific faction.
 
     :param game_id: The unique identifier of the game.
@@ -1167,6 +1235,7 @@ def api_faction_detail(game_id: str, faction_id: str) -> dict:
     :raises HTTPException: 404 if the game or faction is not found.
     """
     with _get_lock(game_id):
+        _authorize_game(game_id, x_game_token or token)
         state = _get_state(game_id)
         if not state:
             raise HTTPException(status_code=404, detail="Game not found")
@@ -1291,7 +1360,11 @@ def api_faction_mission(game_id: str, faction_id: str, x_game_token: str | None 
 
 
 @router.get("/game/{game_id}/missions")
-def api_missions(game_id: str) -> dict:
+def api_missions(
+    game_id: str,
+    x_game_token: str | None = Header(default=None),
+    token: str | None = None,
+) -> dict:
     """Retrieve available tiered missions for the current system.
 
     Missions are generated procedurally based on the system type,
@@ -1308,6 +1381,7 @@ def api_missions(game_id: str) -> dict:
         not in a system or no trading station.
     """
     with _get_lock(game_id):
+        _authorize_game(game_id, x_game_token or token)
         state = _get_state(game_id)
         if not state:
             raise HTTPException(status_code=404, detail="Game not found")
