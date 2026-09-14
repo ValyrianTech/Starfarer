@@ -1,7 +1,7 @@
 // Spectator entry point: game selection, scene boot, SSE wiring.
 
 import * as THREE from "three";
-import { fetchGames, fetchGalaxy, fetchSystemDetail, connectStream } from "./api.js";
+import { fetchGames, fetchGalaxy, fetchSystemDetail, connectStream, setToken } from "./api.js";
 import { SpectatorScene } from "./scene.js";
 import { Galaxy } from "./galaxy.js";
 import { SystemView } from "./system.js";
@@ -18,6 +18,10 @@ let spectator = null;
 
 async function boot() {
   const params = new URLSearchParams(window.location.search);
+  const token = params.get("token");
+  if (token) {
+    setToken(token);
+  }
   const gameId = params.get("game");
   if (gameId) {
     startSpectating(gameId);
