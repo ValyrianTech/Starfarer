@@ -2423,6 +2423,57 @@ class TestLoreExploration:
         finally:
             func.__globals__["new_game"] = original_new_game
 
+    def test_explore_lore_fragment_not_flagged_when_discovery_dropped(self) -> None:
+        """Regression: if the discovery carrying the lore link is dropped because the
+        hold is full, the lore fragment must NOT be flagged discovered (no orphan)."""
+        from unittest.mock import patch
+
+        from backend.generation.lore import get_lore_fragments_for_system
+
+        state = new_game(seed=42)
+        state.ship.fuel = 1000
+
+        # Find a system/body that hosts a lore fragment.
+        found = None
+        for sys_id in state.systems:
+            frags = get_lore_fragments_for_system(sys_id, state.lore_fragments)
+            if frags:
+                body_id = frags[0].discovery_id.split("::")[1]
+                found = (sys_id, body_id, frags[0])
+                break
+        if not found:
+            return  # pragma: no cover
+        sys_id, body_id, frag = found
+
+        system = state.systems[sys_id]
+        for b in system.bodies:
+            if b.id == body_id:
+                b.poi_count = 3
+                break
+
+        state.ship.current_system_id = sys_id
+        state.ship.current_body_id = body_id
+
+        # Fill the cargo hold completely so _add_discoveries drops every discovery.
+        state.ship.max_cargo = 1
+        state.discoveries.clear()
+        state.discoveries.append(
+            Discovery(id="lore_drop_filler", category="mineral", name="Filler", description="f", value=1)
+        )
+        state.sync_cargo()
+        assert state.ship.cargo == 1
+
+        with patch("random.Random.randint", return_value=3):
+            ok, _msg, discoveries = explore_surface(state)
+
+        # Nothing was accepted, so the lore fragment must remain undiscovered and unlinked.
+        assert ok is True
+        assert discoveries == []
+        assert frag.discovered is False
+        assert all(d.lore_fragment_id is None for d in state.discoveries)
+        assert state.lore_fragments_collected == 0
+        assert not any(e["type"] == "lore" for e in state.log_entries)
+
 
 class TestDistressBeacon:
     """Tests for activate_distress_beacon."""

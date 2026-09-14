@@ -443,26 +443,24 @@ def explore_surface(state: GameState) -> tuple[bool, str, list[Discovery]]:
         return True, f"Explored {body.name}. Found nothing of interest.", []
 
     lore_frag = get_fragment_for_body(system.id, body.id, state.lore_fragments)
-    lore_linked = False
 
-    for i in range(num_finds):
+    for _ in range(num_finds):
         cat = item_rng.choice(["mineral", "artifact", "lifeform", "signal", "ruin"])
         disc = _generate_discovery(item_rng, cat, body, system)
-
-        if lore_frag and not lore_frag.discovered and not lore_linked:
-            disc.lore_fragment_id = lore_frag.id
-            lore_frag.discovered = True
-            lore_frag.discovery_timestamp = datetime.now(timezone.utc).isoformat()
-            lore_linked = True
-            state.add_log("lore", f"Discovered lore fragment: {lore_frag.title} ({lore_frag.id}).", category="discovery", title="Lore Fragment Discovered", system=system.name, body=body.name)
-
-        elif lore_frag and lore_frag.discovered and not lore_linked:
-            logger.debug(f"Lore fragment {lore_frag.id} ({lore_frag.title}) already discovered but found on body {body.id}.")
-            lore_linked = True
-
         discoveries.append(disc)
 
     accepted = _add_discoveries(state, discoveries)
+
+    if lore_frag is not None:
+        if lore_frag.discovered:
+            logger.debug(f"Lore fragment {lore_frag.id} ({lore_frag.title}) already discovered but found on body {body.id}.")
+        elif accepted:
+            # Only link and flag the fragment for a discovery that was actually
+            # stored, so a dropped discovery cannot orphan the lore fragment.
+            accepted[0].lore_fragment_id = lore_frag.id
+            lore_frag.discovered = True
+            lore_frag.discovery_timestamp = datetime.now(timezone.utc).isoformat()
+            state.add_log("lore", f"Discovered lore fragment: {lore_frag.title} ({lore_frag.id}).", category="discovery", title="Lore Fragment Discovered", system=system.name, body=body.name)
 
     if accepted:
         ship.fuel -= EXPLORE_FUEL_COST
