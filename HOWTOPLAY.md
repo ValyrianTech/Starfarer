@@ -301,7 +301,7 @@ Content-Type: application/json
 - **Fuel < 10:** Cannot jump to most systems. Find a station to refuel.
 - **Hull < 30:** High risk. Repair at a station.
 - **Morale < 30:** Crew events trigger more frequently and are more dangerous.
-- **Cargo > max_cargo:** Can't collect more. Sell or discard items.
+- **Cargo > max_cargo:** Cargo is capped at `max_cargo`. Exploration actions (surface exploration, atmospheric scan, sub-surface exploration) and Crossroads item claims stop storing discoveries once capacity is reached, dropping any excess finds, so the cargo count never exceeds `max_cargo`. Sell or discard items to free up space.
 
 ### 4.3 Fuel Warning Levels
 
@@ -778,7 +778,7 @@ All endpoints that access a specific game (mutating and read-only GET) accept th
 | POST | `/api/game/{id}/leave-ghost` | Leave a ghost signature |
 | GET | `/api/crossroads/items` | List available items at the Crossroads |
 | POST | `/api/crossroads/donate-item` | Donate an item to the Crossroads |
-| POST | `/api/crossroads/claim-item/{item_id}` | Claim an item from the Crossroads |
+| POST | `/api/crossroads/claim-item/{item_id}` | Claim an item from the Crossroads (claims are capped at remaining cargo capacity; the response's `item.stored` reports how many were actually stored, and a partial claim logs a "cargo hold full" message) |
 | GET | `/api/crossroads/lore` | List available lore at the Crossroads |
 | POST | `/api/crossroads/donate-lore` | Donate a lore fragment to the Crossroads |
 | POST | `/api/crossroads/claim-lore/{donation_id}` | Claim a lore fragment from the Crossroads |
