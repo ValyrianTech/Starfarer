@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 from backend.models.discovery import Discovery
 from backend.models.game_state import GameState
 from backend.multiplayer.database import (
-    claim_item as db_claim_item,
+    claim_item_partial as db_claim_item_partial,
 )
 from backend.multiplayer.database import (
     claim_lore as db_claim_lore,
@@ -112,16 +112,25 @@ def claim_item(item_id: str, game_state: GameState) -> dict:
     if not game_state.ship.current_system_id:
         return {"success": False, "detail": "Cannot claim item: ship has no current system."}
 
-    item_data = db_claim_item(item_id, game_state.id)
+    free = max(0, game_state.ship.max_cargo - len(game_state.discoveries))
+    if free == 0:
+        return {"success": False, "detail": "Cannot claim item: cargo hold is full."}
+
+    item_data = db_claim_item_partial(item_id, game_state.id, free)
     if not item_data:
         return {"success": False, "detail": "Item not found or already claimed."}
 
-    for _ in range(item_data["quantity"]):
+    claimed = item_data["quantity"]
+    remaining = item_data["remaining_quantity"]
+    item_name = item_data["item_name"]
+    donor_name = item_data["donor_name"]
+
+    for _ in range(claimed):
         disc = Discovery(
             id=str(uuid.uuid4()),
             category="artifact",
-            name=item_data["item_name"],
-            description=f"A gift from {item_data['donor_name']} via the Crossroads.",
+            name=item_name,
+            description=f"A gift from {donor_name} via the Crossroads.",
             value=0,
             system_id=game_state.ship.current_system_id or "",
         )
@@ -129,13 +138,19 @@ def claim_item(item_id: str, game_state: GameState) -> dict:
 
     game_state.sync_cargo()
 
+    if remaining > 0:
+        message = f"Claimed {claimed} of {claimed + remaining}x {item_name} from the Crossroads (donated by {donor_name}) — cargo hold full; {remaining} left for others."
+    else:
+        message = f"Claimed {claimed}x {item_name} from the Crossroads (donated by {donor_name})."
+
     game_state.add_log(
         "multiplayer",
-        f"Claimed {item_data['quantity']}x {item_data['item_name']} from the Crossroads (donated by {item_data['donor_name']}).",
+        message,
         category="multiplayer",
         title="Item Claimed",
-        cargo_change=item_data["quantity"],
+        cargo_change=claimed,
     )
+    item_data["stored"] = claimed
     return {"success": True, "item": item_data}
 
 

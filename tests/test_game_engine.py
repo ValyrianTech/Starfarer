@@ -17,6 +17,7 @@ from backend.config import (
 from backend.game.engine import (
     BIOME_DISCOVERY_CATEGORIES,
     DEFAULT_DISCOVERY_CATEGORIES,
+    _add_discoveries,
     _body_has_anomaly,
     _categories_for_biome,
     _generate_discovery,
@@ -2421,6 +2422,57 @@ class TestLoreExploration:
             self.test_explore_body_without_lore()
         finally:
             func.__globals__["new_game"] = original_new_game
+
+    def test_explore_lore_fragment_not_flagged_when_discovery_dropped(self) -> None:
+        """Regression: if the discovery carrying the lore link is dropped because the
+        hold is full, the lore fragment must NOT be flagged discovered (no orphan)."""
+        from unittest.mock import patch
+
+        from backend.generation.lore import get_lore_fragments_for_system
+
+        state = new_game(seed=42)
+        state.ship.fuel = 1000
+
+        # Find a system/body that hosts a lore fragment.
+        found = None
+        for sys_id in state.systems:
+            frags = get_lore_fragments_for_system(sys_id, state.lore_fragments)
+            if frags:
+                body_id = frags[0].discovery_id.split("::")[1]
+                found = (sys_id, body_id, frags[0])
+                break
+        if not found:
+            return  # pragma: no cover
+        sys_id, body_id, frag = found
+
+        system = state.systems[sys_id]
+        for b in system.bodies:
+            if b.id == body_id:
+                b.poi_count = 3
+                break
+
+        state.ship.current_system_id = sys_id
+        state.ship.current_body_id = body_id
+
+        # Fill the cargo hold completely so _add_discoveries drops every discovery.
+        state.ship.max_cargo = 1
+        state.discoveries.clear()
+        state.discoveries.append(
+            Discovery(id="lore_drop_filler", category="mineral", name="Filler", description="f", value=1)
+        )
+        state.sync_cargo()
+        assert state.ship.cargo == 1
+
+        with patch("random.Random.randint", return_value=3):
+            ok, _msg, discoveries = explore_surface(state)
+
+        # Nothing was accepted, so the lore fragment must remain undiscovered and unlinked.
+        assert ok is True
+        assert discoveries == []
+        assert frag.discovered is False
+        assert all(d.lore_fragment_id is None for d in state.discoveries)
+        assert state.lore_fragments_collected == 0
+        assert not any(e["type"] == "lore" for e in state.log_entries)
 
 
 class TestDistressBeacon:
@@ -5379,6 +5431,164 @@ class TestSyncCargoInvariant:
         assert loaded is not None
         assert len(loaded.discoveries) == 3
         assert loaded.ship.cargo == len(loaded.discoveries)
+
+
+class TestCargoCapacityEnforcement:
+    """Tests verifying that the ``_add_discoveries`` helper and the additive
+    discovery code paths enforce ``ship.max_cargo`` and never let
+    ``len(discoveries)`` exceed cargo capacity."""
+
+    def test_explore_surface_capacity_enforced(self) -> None:
+        """explore_surface should not store more discoveries than max_cargo."""
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
+        if planet is None:
+            return  # pragma: no cover
+        planet.poi_count = 5
+        landed, _msg = land_on_body(state, planet.id)
+        assert landed is True
+        state.ship.max_cargo = 1
+        state.discoveries.clear()
+        state.sync_cargo()
+        ok, _msg, discoveries = explore_surface(state)
+        assert ok is True
+        assert len(discoveries) <= 1
+        assert len(state.discoveries) <= 1
+        assert state.ship.cargo == len(state.discoveries)
+
+    def test_explore_surface_drops_excess_discoveries(self) -> None:
+        """explore_surface should drop discoveries beyond max_cargo deterministically."""
+        from unittest.mock import patch
+
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
+        if planet is None:
+            return  # pragma: no cover
+        planet.poi_count = 3
+        landed, _msg = land_on_body(state, planet.id)
+        assert landed is True
+        state.ship.max_cargo = 1
+        state.discoveries.clear()
+        state.sync_cargo()
+        with patch("random.Random.randint", return_value=3):
+            ok, _msg, discoveries = explore_surface(state)
+        assert ok is True
+        assert len(state.discoveries) == 1
+        assert len(discoveries) == 1
+        assert state.ship.cargo == 1
+
+    def test_atmospheric_scan_capacity_enforced(self) -> None:
+        """perform_atmospheric_scan should respect max_cargo."""
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        body = Body(
+            id="b_atmo_cap", name="AtmoWorld", body_type="planet",
+            biome="gas_giant", size=5, distance_from_star=0.5, poi_count=3,
+        )
+        system.bodies = [body]
+        state.ship.current_body_id = body.id
+        state.ship.max_cargo = 1
+        state.discoveries.clear()
+        state.sync_cargo()
+        discoveries = perform_atmospheric_scan(state)
+        assert len(state.discoveries) <= 1
+        assert state.ship.cargo == len(state.discoveries)
+        if discoveries:
+            assert len(discoveries) <= 1
+
+    def test_sub_surface_capacity_enforced(self) -> None:
+        """perform_sub_surface_exploration should respect max_cargo."""
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        body = Body(
+            id="b_sub_cap", name="SubWorld", body_type="planet",
+            biome="volcanic", size=5, distance_from_star=0.5, poi_count=3,
+        )
+        system.bodies = [body]
+        state.ship.current_body_id = body.id
+        state.ship.crew = 5
+        state.ship.max_cargo = 1
+        state.discoveries.clear()
+        state.sync_cargo()
+        perform_sub_surface_exploration(state)
+        assert len(state.discoveries) <= 1
+        assert state.ship.cargo == len(state.discoveries)
+
+    def test_add_discoveries_zero_capacity(self) -> None:
+        """_add_discoveries should accept nothing when max_cargo is 0."""
+        state = new_game(seed=42)
+        state.ship.max_cargo = 0
+        state.discoveries.clear()
+        state.sync_cargo()
+        discs = [
+            Discovery(id="cap_d1", category="mineral", name="A", description="a", value=10),
+            Discovery(id="cap_d2", category="mineral", name="B", description="b", value=20),
+        ]
+        accepted = _add_discoveries(state, discs)
+        assert accepted == []
+        assert state.discoveries == []
+        assert state.ship.cargo == 0
+
+    def test_add_discoveries_partial_capacity(self) -> None:
+        """_add_discoveries should accept only up to the remaining capacity."""
+        state = new_game(seed=42)
+        state.ship.max_cargo = 2
+        state.discoveries.clear()
+        existing = Discovery(id="cap_e1", category="mineral", name="Existing", description="e", value=5)
+        state.discoveries.append(existing)
+        state.sync_cargo()
+        d1 = Discovery(id="cap_d1", category="mineral", name="A", description="a", value=10)
+        d2 = Discovery(id="cap_d2", category="mineral", name="B", description="b", value=20)
+        d3 = Discovery(id="cap_d3", category="mineral", name="C", description="c", value=30)
+        accepted = _add_discoveries(state, [d1, d2, d3])
+        assert len(accepted) == 1
+        assert len(state.discoveries) == 2
+        assert state.ship.cargo == 2
+
+    def test_explore_surface_cargo_full_no_side_effects(self) -> None:
+        """explore_surface with a full cargo hold must not waste POIs, attempts, or fuel."""
+        from unittest.mock import patch
+
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
+        if planet is None:
+            return  # pragma: no cover
+        planet.poi_count = 5
+        landed, _msg = land_on_body(state, planet.id)
+        assert landed is True
+        # Fill the cargo hold completely so _add_discoveries stores nothing.
+        state.ship.max_cargo = 1
+        state.discoveries.clear()
+        state.ship.cargo = 0
+        filler = Discovery(id="full_1", category="mineral", name="Filler", description="f", value=1)
+        state.discoveries.append(filler)
+        state.sync_cargo()
+        assert state.ship.cargo == 1
+
+        fuel_before = state.ship.fuel
+        poi_before = planet.poi_count
+        count_before = planet.exploration_count
+
+        with patch("random.Random.randint", return_value=2):
+            ok, _msg, discoveries = explore_surface(state)
+
+        assert ok is True
+        assert discoveries == []
+        # No fuel spent, no POIs consumed, no exploration attempt used.
+        assert state.ship.fuel == fuel_before
+        assert planet.poi_count == poi_before
+        assert planet.exploration_count == count_before
+        # The filler remains the only discovery and cargo stays in sync.
+        assert len(state.discoveries) == 1
+        assert state.ship.cargo == 1
 
 
 class TestDiscoveryLoreFragmentDefensiveLoad:

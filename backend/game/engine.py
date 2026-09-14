@@ -157,6 +157,27 @@ def _categories_for_biome(biome: str | None) -> list[str]:
     return BIOME_DISCOVERY_CATEGORIES.get(biome or "", DEFAULT_DISCOVERY_CATEGORIES)
 
 
+def _add_discoveries(state: GameState, discs: list[Discovery]) -> list[Discovery]:
+    """Append discoveries up to ``max_cargo``; return those actually added.
+
+    Enforces the ship's cargo capacity at the point of addition so that
+    ``len(state.discoveries)`` never exceeds ``state.ship.max_cargo``.
+    Discoveries beyond the available capacity are silently dropped.
+
+    :param state: The current game state.
+    :type state: GameState
+    :param discs: The candidate discoveries to append, in order.
+    :type discs: list[Discovery]
+    :returns: The subset of ``discs`` that was actually stored.
+    :rtype: list[Discovery]
+    """
+    free = max(0, state.ship.max_cargo - len(state.discoveries))
+    accepted = discs[:free]
+    state.discoveries.extend(accepted)
+    state.sync_cargo()
+    return accepted
+
+
 def _body_has_anomaly(state: GameState, system: StarSystem, body: Body) -> bool:
     """Determine whether a body contains a rare/unique anomaly (scanner L4)."""
     lore_frag = get_fragment_for_body(system.id, body.id, state.lore_fragments)
@@ -422,37 +443,36 @@ def explore_surface(state: GameState) -> tuple[bool, str, list[Discovery]]:
         return True, f"Explored {body.name}. Found nothing of interest.", []
 
     lore_frag = get_fragment_for_body(system.id, body.id, state.lore_fragments)
-    lore_linked = False
 
-    for i in range(num_finds):
+    for _ in range(num_finds):
         cat = item_rng.choice(["mineral", "artifact", "lifeform", "signal", "ruin"])
         disc = _generate_discovery(item_rng, cat, body, system)
+        discoveries.append(disc)
 
-        if lore_frag and not lore_frag.discovered and not lore_linked:
-            disc.lore_fragment_id = lore_frag.id
+    accepted = _add_discoveries(state, discoveries)
+
+    if lore_frag is not None:
+        if lore_frag.discovered:
+            logger.debug(f"Lore fragment {lore_frag.id} ({lore_frag.title}) already discovered but found on body {body.id}.")
+        elif accepted:
+            # Only link and flag the fragment for a discovery that was actually
+            # stored, so a dropped discovery cannot orphan the lore fragment.
+            accepted[0].lore_fragment_id = lore_frag.id
             lore_frag.discovered = True
             lore_frag.discovery_timestamp = datetime.now(timezone.utc).isoformat()
-            lore_linked = True
             state.add_log("lore", f"Discovered lore fragment: {lore_frag.title} ({lore_frag.id}).", category="discovery", title="Lore Fragment Discovered", system=system.name, body=body.name)
 
-        elif lore_frag and lore_frag.discovered and not lore_linked:
-            logger.debug(f"Lore fragment {lore_frag.id} ({lore_frag.title}) already discovered but found on body {body.id}.")
-            lore_linked = True
+    if accepted:
+        ship.fuel -= EXPLORE_FUEL_COST
 
-        discoveries.append(disc)
-        state.discoveries.append(disc)
-
-    state.sync_cargo()
-    ship.fuel -= EXPLORE_FUEL_COST
-
-    state.add_log("exploration", f"Explored {body.name}. Found {len(discoveries)} points of interest.", category="exploration", title="Surface Exploration", system=system.name, body=body.name, fuel_change=-EXPLORE_FUEL_COST)
-    body.poi_count = max(0, body.poi_count - num_finds)
-    body.exploration_count += 1
-    if body.biome:
-        state.record_biome_visit(body.biome)
+        state.add_log("exploration", f"Explored {body.name}. Found {len(accepted)} points of interest.", category="exploration", title="Surface Exploration", system=system.name, body=body.name, fuel_change=-EXPLORE_FUEL_COST)
+        body.poi_count = max(0, body.poi_count - num_finds)
+        body.exploration_count += 1
+        if body.biome:
+            state.record_biome_visit(body.biome)
 
 
-    return True, f"Explored {body.name}. Found {len(discoveries)} points of interest.", discoveries
+    return True, f"Explored {body.name}. Found {len(accepted)} points of interest.", accepted
 
 
 def perform_atmospheric_scan(state: GameState) -> list[Discovery]:
@@ -503,10 +523,10 @@ def perform_atmospheric_scan(state: GameState) -> list[Discovery]:
     for i in range(num_finds):
         disc = _generate_discovery(item_rng, "atmospheric_phenomena", body, system)
         discoveries.append(disc)
-        state.discoveries.append(disc)
+
+    discoveries = _add_discoveries(state, discoveries)
 
     if discoveries:
-        state.sync_cargo()
         ship.fuel -= ATMOSPHERIC_SCAN_FUEL_COST
 
         body.atmospheric_scan_count += 1
@@ -570,10 +590,10 @@ def perform_sub_surface_exploration(state: GameState) -> list[Discovery]:
     for i in range(num_finds):
         disc = _generate_discovery(item_rng, category, body, system)
         discoveries.append(disc)
-        state.discoveries.append(disc)
+
+    discoveries = _add_discoveries(state, discoveries)
 
     if discoveries:
-        state.sync_cargo()
         ship.fuel -= SUB_SURFACE_FUEL_COST
         ship.crew -= SUB_SURFACE_CREW_COST
         body.sub_surface_explored = True

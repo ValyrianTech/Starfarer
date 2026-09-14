@@ -1247,7 +1247,7 @@ class TestMultiplayerCrossroads:
         claimer = new_game(43, "Claimer", shared_universe=True)
         GAME_STORE[claimer.id] = claimer
 
-        with patch("backend.multiplayer.crossroads.db_claim_item", return_value=None):
+        with patch("backend.multiplayer.crossroads.db_claim_item_partial", return_value=None):
             result = claim_item(don_result["donation"]["id"], claimer)
         assert result["success"] is False
 
@@ -1289,7 +1289,7 @@ class TestMultiplayerCrossroads:
         GAME_STORE[claimer.id] = claimer
         claimer.ship.current_system_id = ""
 
-        with patch("backend.multiplayer.crossroads.db_claim_item") as mock_db_claim:
+        with patch("backend.multiplayer.crossroads.db_claim_item_partial") as mock_db_claim:
             result = claim_item(don_result["donation"]["id"], claimer)
         assert result["success"] is False
         mock_db_claim.assert_not_called()
@@ -2572,6 +2572,303 @@ class TestSyncCargoCrossroads:
         assert claimer.ship.cargo == len(claimer.discoveries)
         GAME_STORE.pop(donor.id, None)
         GAME_STORE.pop(claimer.id, None)
+
+    def test_claim_item_capacity_enforced_and_reports_stored(self) -> None:
+        """claim_item should partially claim up to max_cargo and leave the remainder available."""
+        donor = new_game(42, "DonorCap", shared_universe=True)
+        GAME_STORE[donor.id] = donor
+        for _ in range(3):
+            donor.discoveries.append(_make_discovery(name="Capacity Gem"))
+        don_result = donate_item(donor, "Capacity Gem", 3)
+
+        claimer = new_game(43, "ClaimerCap", shared_universe=True)
+        GAME_STORE[claimer.id] = claimer
+        claimer.ship.max_cargo = 1
+        claimer.discoveries.clear()
+        claimer.sync_cargo()
+
+        try:
+            result = claim_item(don_result["donation"]["id"], claimer)
+        finally:
+            GAME_STORE.pop(donor.id, None)
+            GAME_STORE.pop(claimer.id, None)
+
+        assert result["success"] is True
+        assert len(claimer.discoveries) == 1
+        assert claimer.ship.cargo == 1
+        assert result["item"]["stored"] == 1
+        assert result["item"]["quantity"] == 1
+        assert result["item"]["remaining_quantity"] == 2
+
+        items = get_available_items_list()
+        leftover = [i for i in items if i["id"] == don_result["donation"]["id"]]
+        assert len(leftover) == 1
+        assert leftover[0]["quantity"] == 2
+
+        last_message = claimer.log_entries[-1]["message"]
+        assert "left for others" in last_message
+
+    def test_claim_item_full_cargo_accepts_nothing(self) -> None:
+        """claim_item should refuse to claim anything when max_cargo is 0."""
+        donor = new_game(42, "DonorFull", shared_universe=True)
+        GAME_STORE[donor.id] = donor
+        donor.discoveries.append(_make_discovery(name="Full Hold Artifact"))
+        donor.discoveries.append(_make_discovery(name="Full Hold Artifact"))
+        don_result = donate_item(donor, "Full Hold Artifact", 2)
+
+        claimer = new_game(43, "ClaimerFull", shared_universe=True)
+        GAME_STORE[claimer.id] = claimer
+        claimer.ship.max_cargo = 0
+        claimer.discoveries.clear()
+        claimer.sync_cargo()
+
+        try:
+            result = claim_item(don_result["donation"]["id"], claimer)
+        finally:
+            GAME_STORE.pop(donor.id, None)
+            GAME_STORE.pop(claimer.id, None)
+
+        assert result["success"] is False
+        assert "cargo hold is full" in result["detail"].lower()
+        assert len(claimer.discoveries) == 0
+        assert claimer.ship.cargo == 0
+
+        items = get_available_items_list()
+        leftover = [i for i in items if i["id"] == don_result["donation"]["id"]]
+        assert len(leftover) == 1
+        assert leftover[0]["quantity"] == 2
+
+    def test_claim_item_partial_leaves_remainder_available(self) -> None:
+        """A partial claim must leave the remainder claimable by another player."""
+        donor = new_game(42, "DonorPartial", shared_universe=True)
+        GAME_STORE[donor.id] = donor
+        for _ in range(5):
+            donor.discoveries.append(_make_discovery(name="Partial Gem"))
+        don_result = donate_item(donor, "Partial Gem", 5)
+
+        claimer1 = new_game(43, "ClaimerPartial1", shared_universe=True)
+        GAME_STORE[claimer1.id] = claimer1
+        claimer1.ship.max_cargo = 2
+        claimer1.discoveries.clear()
+        claimer1.sync_cargo()
+
+        result1 = claim_item(don_result["donation"]["id"], claimer1)
+        assert result1["success"] is True
+        assert result1["item"]["stored"] == 2
+        assert len(claimer1.discoveries) == 2
+
+        claimer2 = new_game(44, "ClaimerPartial2", shared_universe=True)
+        GAME_STORE[claimer2.id] = claimer2
+        result2 = claim_item(don_result["donation"]["id"], claimer2)
+        assert result2["success"] is True
+        assert result2["item"]["stored"] == 3
+        assert len(claimer2.discoveries) == 3
+
+        items = get_available_items_list()
+        remaining = [i for i in items if i["id"] == don_result["donation"]["id"]]
+        assert len(remaining) == 0
+
+        GAME_STORE.pop(donor.id, None)
+        GAME_STORE.pop(claimer1.id, None)
+        GAME_STORE.pop(claimer2.id, None)
+
+    def test_claim_item_full_hold_does_not_claim(self) -> None:
+        """claim_item must not invoke the DB claim when the hold is full."""
+        donor = new_game(42, "DonorFullHold", shared_universe=True)
+        GAME_STORE[donor.id] = donor
+        donor.discoveries.append(_make_discovery(name="FullHold Gem"))
+        don_result = donate_item(donor, "FullHold Gem", 1)
+
+        claimer = new_game(43, "ClaimerFullHold", shared_universe=True)
+        GAME_STORE[claimer.id] = claimer
+        claimer.ship.max_cargo = 0
+        claimer.discoveries.clear()
+        claimer.sync_cargo()
+
+        with patch("backend.multiplayer.crossroads.db_claim_item_partial") as mock_db_claim:
+            result = claim_item(don_result["donation"]["id"], claimer)
+        assert result["success"] is False
+        assert "cargo hold is full" in result["detail"].lower()
+        mock_db_claim.assert_not_called()
+
+        items = get_available_items_list()
+        remaining = [i for i in items if i["id"] == don_result["donation"]["id"]]
+        assert len(remaining) == 1
+        assert remaining[0]["quantity"] == 1
+
+        GAME_STORE.pop(donor.id, None)
+        GAME_STORE.pop(claimer.id, None)
+
+    def test_claim_item_partial_db_partial_branch(self) -> None:
+        """claim_item_partial should leave the remainder available for partial claims."""
+        from backend.multiplayer.database import (
+            claim_item_partial,
+            get_available_items,
+            save_crossroads_item,
+        )
+        ci = CrossroadsItem(
+            id="item-partial-1",
+            donor_game_id="game-db-1",
+            donor_name="DBTester",
+            item_name="Partial Gem",
+            quantity=3,
+            claimed=False,
+            created_at=datetime.now(timezone.utc).isoformat(),
+        )
+        save_crossroads_item(ci)
+        result = claim_item_partial("item-partial-1", "claimer", 1)
+        assert result["quantity"] == 1
+        assert result["remaining_quantity"] == 2
+        assert result["claimed"] is False
+
+        items = get_available_items()
+        found = [i for i in items if i.id == "item-partial-1"]
+        assert len(found) == 1
+        assert found[0].quantity == 2
+
+        result2 = claim_item_partial("item-partial-1", "claimer2", 2)
+        assert result2["claimed"] is True
+        assert result2["remaining_quantity"] == 0
+        items_after = get_available_items()
+        found_after = [i for i in items_after if i.id == "item-partial-1"]
+        assert len(found_after) == 0
+
+    def test_claim_item_partial_db_quantity_zero_or_not_found(self) -> None:
+        """claim_item_partial should return None for a missing item or non-positive quantity."""
+        from backend.multiplayer.database import (
+            claim_item_partial,
+            get_available_items,
+            save_crossroads_item,
+        )
+        assert claim_item_partial("nonexistent", "c", 1) is None
+
+        ci = CrossroadsItem(
+            id="item-partial-2",
+            donor_game_id="game-db-1",
+            donor_name="DBTester",
+            item_name="Zero Gem",
+            quantity=2,
+            claimed=False,
+            created_at=datetime.now(timezone.utc).isoformat(),
+        )
+        save_crossroads_item(ci)
+        assert claim_item_partial("item-partial-2", "c", 0) is None
+
+        items = get_available_items()
+        found = [i for i in items if i.id == "item-partial-2"]
+        assert len(found) == 1
+        assert found[0].quantity == 2
+
+    def test_claim_item_partial_db_exact_full_claim(self) -> None:
+        """claim_item_partial should fully claim when the requested amount covers the row."""
+        from backend.multiplayer.database import (
+            claim_item_partial,
+            get_available_items,
+            save_crossroads_item,
+        )
+        ci = CrossroadsItem(
+            id="item-partial-3",
+            donor_game_id="game-db-1",
+            donor_name="DBTester",
+            item_name="Exact Gem",
+            quantity=2,
+            claimed=False,
+            created_at=datetime.now(timezone.utc).isoformat(),
+        )
+        save_crossroads_item(ci)
+        result = claim_item_partial("item-partial-3", "c", 2)
+        assert result["claimed"] is True
+        assert result["remaining_quantity"] == 0
+        items = get_available_items()
+        assert len([i for i in items if i.id == "item-partial-3"]) == 0
+
+        ci2 = CrossroadsItem(
+            id="item-partial-4",
+            donor_game_id="game-db-1",
+            donor_name="DBTester",
+            item_name="Overflow Gem",
+            quantity=1,
+            claimed=False,
+            created_at=datetime.now(timezone.utc).isoformat(),
+        )
+        save_crossroads_item(ci2)
+        result2 = claim_item_partial("item-partial-4", "c", 99)
+        assert result2["claimed"] is True
+        assert result2["quantity"] == 1
+        assert result2["remaining_quantity"] == 0
+        items_after = get_available_items()
+        assert len([i for i in items_after if i.id == "item-partial-4"]) == 0
+
+    def test_claim_item_partial_db_race_rowcount_zero(self) -> None:
+        """claim_item_partial should return None when another claimer wins the race."""
+        from backend.multiplayer.database import claim_item_partial
+
+        row = {
+            "id": "item-race",
+            "donor_game_id": "game-db-1",
+            "donor_name": "DBTester",
+            "item_name": "Race Gem",
+            "quantity": 2,
+            "message": None,
+            "claimed": 0,
+            "claimer_game_id": None,
+            "created_at": "",
+        }
+
+        select_cursor = MagicMock()
+        select_cursor.fetchone.return_value = row
+        update_cursor = MagicMock()
+        update_cursor.rowcount = 0
+        mock_conn = MagicMock()
+        mock_conn.execute.side_effect = [select_cursor, update_cursor]
+
+        with patch("backend.multiplayer.database.get_db_ctx") as mock_get_db_ctx:
+            mock_get_db_ctx.return_value.__enter__.return_value = mock_conn
+            result = claim_item_partial("item-race", "claimer", 5)
+            assert result is None
+
+        select_cursor2 = MagicMock()
+        select_cursor2.fetchone.return_value = row
+        update_cursor2 = MagicMock()
+        update_cursor2.rowcount = 0
+        mock_conn2 = MagicMock()
+        mock_conn2.execute.side_effect = [select_cursor2, update_cursor2]
+
+        with patch("backend.multiplayer.database.get_db_ctx") as mock_get_db_ctx:
+            mock_get_db_ctx.return_value.__enter__.return_value = mock_conn2
+            result2 = claim_item_partial("item-race", "claimer", 1)
+            assert result2 is None
+
+    def test_api_claim_item_full_hold_returns_400(self) -> None:
+        donor_resp = client.post("/api/game/new", json={"shared_universe": True, "ship_name": "DonorFull"})
+        assert donor_resp.status_code == 200
+        donor_id = donor_resp.json()["game_id"]
+
+        donor_state = GAME_STORE[donor_id]
+        donor_state.discoveries.append(_make_discovery(name="Full Hold API Item"))
+        game_save(donor_state)
+
+        don_resp = client.post(
+            "/api/crossroads/donate-item",
+            json={"game_id": donor_id, "item_name": "Full Hold API Item", "quantity": 1},
+        )
+        assert don_resp.status_code == 200
+        item_id = don_resp.json()["donation"]["id"]
+
+        claimer_resp = client.post("/api/game/new", json={"shared_universe": True, "ship_name": "ClaimerFull"})
+        assert claimer_resp.status_code == 200
+        claimer_id = claimer_resp.json()["game_id"]
+
+        claimer_state = GAME_STORE[claimer_id]
+        claimer_state.ship.max_cargo = 0
+        claimer_state.discoveries.clear()
+        game_save(claimer_state)
+
+        resp = client.post(
+            f"/api/crossroads/claim-item/{item_id}",
+            json={"game_id": claimer_id},
+        )
+        assert resp.status_code == 400
 
 
 # ---------------------------------------------------------------------------

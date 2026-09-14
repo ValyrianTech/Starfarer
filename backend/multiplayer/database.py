@@ -316,6 +316,81 @@ def claim_item(item_id: str, claimer_game_id: str) -> dict | None:
         }
 
 
+def claim_item_partial(item_id: str, claimer_game_id: str, quantity: int) -> dict | None:
+    """Claim up to ``quantity`` of a crossroads item, leaving the remainder available.
+
+    Atomically claims only the requested amount of an item donation rather
+    than marking the entire row as claimed. If the requested amount covers
+    the whole remaining quantity, the row is fully claimed; otherwise the
+    leftover quantity stays claimable by other players.
+
+    :param item_id: The unique identifier of the item to claim.
+    :type item_id: str
+    :param claimer_game_id: The game ID of the claiming player.
+    :type claimer_game_id: str
+    :param quantity: The maximum number of items to claim.
+    :type quantity: int
+    :returns: A dictionary describing the claim on success (with ``quantity``
+        being the amount actually claimed now and ``remaining_quantity`` the
+        amount left for others), or ``None`` if the item does not exist, was
+        already claimed, ``quantity`` is not positive, or another claimer won
+        the race.
+    :rtype: dict or None
+    """
+    with get_db_ctx() as conn:
+        row = conn.execute(
+            "SELECT * FROM crossroads_items WHERE id = ? AND claimed = 0",
+            (item_id,),
+        ).fetchone()
+        if not row:
+            conn.commit()
+            return None
+        if quantity <= 0:
+            conn.commit()
+            return None
+
+        row_quantity = row["quantity"]
+        claim_amount = min(quantity, row_quantity)
+        remaining = row_quantity - claim_amount
+
+        if remaining <= 0:
+            cursor = conn.execute(
+                "UPDATE crossroads_items SET claimed = 1, claimer_game_id = ? "
+                "WHERE id = ? AND claimed = 0",
+                (claimer_game_id, item_id),
+            )
+            if cursor.rowcount == 0:
+                conn.commit()
+                return None
+            claimed = True
+            updated_claimer_game_id = claimer_game_id
+        else:
+            cursor = conn.execute(
+                "UPDATE crossroads_items SET quantity = ? "
+                "WHERE id = ? AND claimed = 0",
+                (remaining, item_id),
+            )
+            if cursor.rowcount == 0:
+                conn.commit()
+                return None
+            claimed = False
+            updated_claimer_game_id = row["claimer_game_id"]
+
+        conn.commit()
+        return {
+            "id": row["id"],
+            "donor_game_id": row["donor_game_id"],
+            "donor_name": row["donor_name"],
+            "item_name": row["item_name"],
+            "message": row["message"],
+            "claimed": claimed,
+            "claimer_game_id": updated_claimer_game_id,
+            "created_at": row["created_at"],
+            "quantity": claim_amount,
+            "remaining_quantity": remaining,
+        }
+
+
 # ---------------------------------------------------------------------------
 # Crossroads Lore
 # ---------------------------------------------------------------------------
