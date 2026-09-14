@@ -16,6 +16,7 @@ from backend.database import init_db
 from backend.game.manager import GAME_STORE, new_game
 from backend.main import app
 from backend.models.game_state import GameState
+from backend.multiplayer.database import init_multiplayer_db
 
 client = TestClient(app)
 
@@ -279,6 +280,76 @@ class TestReadEndpointEnforcement:
                 f"/api/game/{gid}/faction/{faction_id}",
                 headers={"X-Game-Token": token},
             )
+            assert resp.status_code == 200
+        finally:
+            GAME_STORE.pop(gid, None)
+
+
+class TestMultiplayerReadEndpointEnforcement:
+    def test_ripples_requires_token(self, monkeypatch) -> None:
+        monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        init_multiplayer_db()
+        data = _new_game_via_api()
+        gid = data["game_id"]
+        token = data["token"]
+        try:
+            resp = client.get(f"/api/game/{gid}/ripples")
+            assert resp.status_code == 403
+
+            resp = client.get(
+                f"/api/game/{gid}/ripples", headers={"X-Game-Token": "wrong"}
+            )
+            assert resp.status_code == 403
+
+            resp = client.get(
+                f"/api/game/{gid}/ripples", headers={"X-Game-Token": token}
+            )
+            assert resp.status_code == 200
+            assert "ripples" in resp.json()
+
+            resp = client.get(f"/api/game/{gid}/ripples", params={"token": token})
+            assert resp.status_code == 200
+        finally:
+            GAME_STORE.pop(gid, None)
+
+    def test_system_ghosts_requires_token(self, monkeypatch) -> None:
+        monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        init_multiplayer_db()
+        data = _new_game_via_api()
+        gid = data["game_id"]
+        token = data["token"]
+        sys_id = GAME_STORE[gid].ship.current_system_id
+        try:
+            resp = client.get(f"/api/game/{gid}/system/{sys_id}/ghosts")
+            assert resp.status_code == 403
+
+            resp = client.get(
+                f"/api/game/{gid}/system/{sys_id}/ghosts",
+                headers={"X-Game-Token": token},
+            )
+            assert resp.status_code == 200
+            assert "ghosts" in resp.json()
+
+            resp = client.get(
+                f"/api/game/{gid}/system/{sys_id}/ghosts", params={"token": token}
+            )
+            assert resp.status_code == 200
+        finally:
+            GAME_STORE.pop(gid, None)
+
+    def test_multiplayer_read_endpoints_disabled_allows_no_token(
+        self, monkeypatch
+    ) -> None:
+        monkeypatch.delenv("STARFARER_REQUIRE_GAME_TOKEN", raising=False)
+        init_multiplayer_db()
+        data = _new_game_via_api()
+        gid = data["game_id"]
+        sys_id = GAME_STORE[gid].ship.current_system_id
+        try:
+            resp = client.get(f"/api/game/{gid}/ripples")
+            assert resp.status_code == 200
+
+            resp = client.get(f"/api/game/{gid}/system/{sys_id}/ghosts")
             assert resp.status_code == 200
         finally:
             GAME_STORE.pop(gid, None)
