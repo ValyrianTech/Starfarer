@@ -463,13 +463,15 @@ def explore_surface(state: GameState) -> tuple[bool, str, list[Discovery]]:
         discoveries.append(disc)
 
     accepted = _add_discoveries(state, discoveries)
-    ship.fuel -= EXPLORE_FUEL_COST
 
-    state.add_log("exploration", f"Explored {body.name}. Found {len(accepted)} points of interest.", category="exploration", title="Surface Exploration", system=system.name, body=body.name, fuel_change=-EXPLORE_FUEL_COST)
-    body.poi_count = max(0, body.poi_count - num_finds)
-    body.exploration_count += 1
-    if body.biome:
-        state.record_biome_visit(body.biome)
+    if accepted:
+        ship.fuel -= EXPLORE_FUEL_COST
+
+        state.add_log("exploration", f"Explored {body.name}. Found {len(accepted)} points of interest.", category="exploration", title="Surface Exploration", system=system.name, body=body.name, fuel_change=-EXPLORE_FUEL_COST)
+        body.poi_count = max(0, body.poi_count - num_finds)
+        body.exploration_count += 1
+        if body.biome:
+            state.record_biome_visit(body.biome)
 
 
     return True, f"Explored {body.name}. Found {len(accepted)} points of interest.", accepted
