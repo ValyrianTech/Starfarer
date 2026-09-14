@@ -116,6 +116,7 @@ def claim_item(item_id: str, game_state: GameState) -> dict:
     if not item_data:
         return {"success": False, "detail": "Item not found or already claimed."}
 
+    candidates = []
     for _ in range(item_data["quantity"]):
         disc = Discovery(
             id=str(uuid.uuid4()),
@@ -125,17 +126,27 @@ def claim_item(item_id: str, game_state: GameState) -> dict:
             value=0,
             system_id=game_state.ship.current_system_id or "",
         )
-        game_state.discoveries.append(disc)
+        candidates.append(disc)
 
+    free = max(0, game_state.ship.max_cargo - len(game_state.discoveries))
+    accepted = candidates[:free]
+    game_state.discoveries.extend(accepted)
     game_state.sync_cargo()
+    stored = len(accepted)
+
+    if stored < item_data["quantity"]:
+        message = f"Claimed {stored} of {item_data['quantity']}x {item_data['item_name']} from the Crossroads (donated by {item_data['donor_name']}) — cargo hold full."
+    else:
+        message = f"Claimed {item_data['quantity']}x {item_data['item_name']} from the Crossroads (donated by {item_data['donor_name']})."
 
     game_state.add_log(
         "multiplayer",
-        f"Claimed {item_data['quantity']}x {item_data['item_name']} from the Crossroads (donated by {item_data['donor_name']}).",
+        message,
         category="multiplayer",
         title="Item Claimed",
-        cargo_change=item_data["quantity"],
+        cargo_change=stored,
     )
+    item_data["stored"] = stored
     return {"success": True, "item": item_data}
 
 

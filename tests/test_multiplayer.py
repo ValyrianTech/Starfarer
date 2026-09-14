@@ -2573,6 +2573,62 @@ class TestSyncCargoCrossroads:
         GAME_STORE.pop(donor.id, None)
         GAME_STORE.pop(claimer.id, None)
 
+    def test_claim_item_capacity_enforced_and_reports_stored(self) -> None:
+        """claim_item should cap stored items at max_cargo and log a 'cargo hold full' message."""
+        donor = new_game(42, "DonorCap", shared_universe=True)
+        GAME_STORE[donor.id] = donor
+        for _ in range(3):
+            donor.discoveries.append(_make_discovery(name="Capacity Gem"))
+        don_result = donate_item(donor, "Capacity Gem", 3)
+
+        claimer = new_game(43, "ClaimerCap", shared_universe=True)
+        GAME_STORE[claimer.id] = claimer
+        claimer.ship.max_cargo = 1
+        claimer.discoveries.clear()
+        claimer.sync_cargo()
+
+        try:
+            result = claim_item(don_result["donation"]["id"], claimer)
+        finally:
+            GAME_STORE.pop(donor.id, None)
+            GAME_STORE.pop(claimer.id, None)
+
+        assert result["success"] is True
+        assert len(claimer.discoveries) == 1
+        assert claimer.ship.cargo == 1
+        assert result["item"]["stored"] == 1
+        assert result["item"]["quantity"] == 3
+        last_message = claimer.log_entries[-1]["message"]
+        assert "cargo hold full" in last_message
+        assert "1 of 3" in last_message
+
+    def test_claim_item_full_cargo_accepts_nothing(self) -> None:
+        """claim_item should store nothing when max_cargo is 0 and log 'cargo hold full'."""
+        donor = new_game(42, "DonorFull", shared_universe=True)
+        GAME_STORE[donor.id] = donor
+        donor.discoveries.append(_make_discovery(name="Full Hold Artifact"))
+        donor.discoveries.append(_make_discovery(name="Full Hold Artifact"))
+        don_result = donate_item(donor, "Full Hold Artifact", 2)
+
+        claimer = new_game(43, "ClaimerFull", shared_universe=True)
+        GAME_STORE[claimer.id] = claimer
+        claimer.ship.max_cargo = 0
+        claimer.discoveries.clear()
+        claimer.sync_cargo()
+
+        try:
+            result = claim_item(don_result["donation"]["id"], claimer)
+        finally:
+            GAME_STORE.pop(donor.id, None)
+            GAME_STORE.pop(claimer.id, None)
+
+        assert result["success"] is True
+        assert len(claimer.discoveries) == 0
+        assert claimer.ship.cargo == 0
+        assert result["item"]["stored"] == 0
+        last_message = claimer.log_entries[-1]["message"]
+        assert "cargo hold full" in last_message
+
 
 # ---------------------------------------------------------------------------
 # TestMultiplayerTokenEnforcement
