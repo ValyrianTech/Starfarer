@@ -127,12 +127,22 @@ class TestEndpointEnforcement:
         finally:
             GAME_STORE.pop(gid, None)
 
-    def test_get_endpoints_do_not_require_token(self, monkeypatch) -> None:
+    def test_get_endpoints_require_token_when_enabled(self, monkeypatch) -> None:
         monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
         data = _new_game_via_api()
         gid = data["game_id"]
+        token = data["token"]
         try:
             resp = client.get(f"/api/game/{gid}")
+            assert resp.status_code == 403
+
+            resp = client.get(f"/api/game/{gid}", headers={"X-Game-Token": "wrong"})
+            assert resp.status_code == 403
+
+            resp = client.get(f"/api/game/{gid}", headers={"X-Game-Token": token})
+            assert resp.status_code == 200
+
+            resp = client.get(f"/api/game/{gid}", params={"token": token})
             assert resp.status_code == 200
         finally:
             GAME_STORE.pop(gid, None)
@@ -194,5 +204,127 @@ class TestEndpointEnforcement:
         try:
             resp = client.post(f"/api/game/{gid}/scan")
             assert resp.status_code == 200
+        finally:
+            GAME_STORE.pop(gid, None)
+
+
+class TestReadEndpointEnforcement:
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "",
+            "/galaxy",
+            "/log",
+            "/log/paginated",
+            "/discoveries",
+            "/cargo",
+            "/lore",
+            "/codex",
+            "/upgrades",
+            "/nearby",
+            "/factions",
+            "/missions",
+        ],
+    )
+    def test_read_endpoints_require_token(self, monkeypatch, path) -> None:
+        monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        data = _new_game_via_api()
+        gid = data["game_id"]
+        token = data["token"]
+        current = GAME_STORE[gid].get_current_system()
+        if current is not None:
+            current.has_trading_station = True
+        try:
+            resp = client.get(f"/api/game/{gid}{path}")
+            assert resp.status_code == 403
+
+            resp = client.get(
+                f"/api/game/{gid}{path}", headers={"X-Game-Token": token}
+            )
+            assert resp.status_code == 200
+        finally:
+            GAME_STORE.pop(gid, None)
+
+    def test_system_detail_requires_token(self, monkeypatch) -> None:
+        monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        data = _new_game_via_api()
+        gid = data["game_id"]
+        token = data["token"]
+        sys_id = GAME_STORE[gid].ship.current_system_id
+        try:
+            resp = client.get(f"/api/game/{gid}/system/{sys_id}")
+            assert resp.status_code == 403
+
+            resp = client.get(
+                f"/api/game/{gid}/system/{sys_id}",
+                headers={"X-Game-Token": token},
+            )
+            assert resp.status_code == 200
+        finally:
+            GAME_STORE.pop(gid, None)
+
+    def test_faction_detail_requires_token(self, monkeypatch) -> None:
+        from backend.models.faction import FACTION_DEFINITIONS
+
+        monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        data = _new_game_via_api()
+        gid = data["game_id"]
+        token = data["token"]
+        faction_id = next(iter(FACTION_DEFINITIONS))
+        try:
+            resp = client.get(f"/api/game/{gid}/faction/{faction_id}")
+            assert resp.status_code == 403
+
+            resp = client.get(
+                f"/api/game/{gid}/faction/{faction_id}",
+                headers={"X-Game-Token": token},
+            )
+            assert resp.status_code == 200
+        finally:
+            GAME_STORE.pop(gid, None)
+
+
+class TestSpectateEnforcement:
+    def test_games_listing_disabled_when_enabled(self, monkeypatch) -> None:
+        monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        resp = client.get("/api/spectate/games")
+        assert resp.status_code == 403
+
+    def test_games_listing_allowed_when_disabled(self, monkeypatch) -> None:
+        monkeypatch.delenv("STARFARER_REQUIRE_GAME_TOKEN", raising=False)
+        resp = client.get("/api/spectate/games")
+        assert resp.status_code == 200
+
+    def test_stream_requires_token_when_enabled(self, monkeypatch) -> None:
+        import asyncio
+
+        from fastapi import HTTPException
+
+        from backend.api.spectate import api_spectate_stream
+
+        monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        data = _new_game_via_api()
+        gid = data["game_id"]
+        token = data["token"]
+        try:
+            with pytest.raises(HTTPException) as exc:
+                asyncio.run(api_spectate_stream(gid, x_game_token=None))
+            assert exc.value.status_code == 403
+
+            async def run_and_close(**kwargs) -> str:
+                response = await api_spectate_stream(gid, **kwargs)
+                assert response.media_type == "text/event-stream"
+                agen = response.body_iterator
+                try:
+                    chunk = await agen.__anext__()
+                finally:
+                    await agen.aclose()
+                return chunk if isinstance(chunk, str) else chunk.decode()
+
+            chunk = asyncio.run(run_and_close(token=token, x_game_token=None))
+            assert "event: state" in chunk
+
+            chunk = asyncio.run(run_and_close(x_game_token=token))
+            assert "event: state" in chunk
         finally:
             GAME_STORE.pop(gid, None)

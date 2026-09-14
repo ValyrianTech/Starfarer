@@ -15,9 +15,11 @@ import json
 import logging
 from collections.abc import AsyncGenerator
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Header, HTTPException
 from fastapi.responses import StreamingResponse
 
+from backend.api.routes import _authorize_game
+from backend.config import get_require_game_token
 from backend.database import _safe_ship_credits, get_db_ctx
 from backend.game.manager import (
     GAME_STORE,
@@ -75,7 +77,15 @@ def api_spectate_games(limit: int = 25) -> dict:
     :returns: A dictionary with a ``games`` list sorted by most recently
         updated first.
     :rtype: dict
+    :raises HTTPException: 403 if STARFARER_REQUIRE_GAME_TOKEN enforcement
+        is enabled (the listing cannot be authorized per-game, so it is
+        disabled while enforcement is on).
     """
+    if get_require_game_token():
+        raise HTTPException(
+            status_code=403,
+            detail="Spectate game listing disabled while game token enforcement is enabled",
+        )
     limit = max(1, min(100, limit))
     games = []
     with get_db_ctx() as conn:
@@ -168,7 +178,11 @@ def _state_signature(state: GameState) -> tuple:
 
 
 @router.get("/{game_id}/stream")
-async def api_spectate_stream(game_id: str) -> StreamingResponse:
+async def api_spectate_stream(
+    game_id: str,
+    x_game_token: str | None = Header(default=None),
+    token: str | None = None,
+) -> StreamingResponse:
     """Stream game state changes to a spectator via Server-Sent Events.
 
     On connect, immediately sends a snapshot containing the state summary,
@@ -177,12 +191,24 @@ async def api_spectate_stream(game_id: str) -> StreamingResponse:
     log entries added since the previous push. Sends a comment heartbeat
     while idle so proxies keep the connection open.
 
+    When STARFARER_REQUIRE_GAME_TOKEN enforcement is enabled, the caller
+    must present the game's token via the ``X-Game-Token`` header or the
+    ``token`` query parameter.
+
     :param game_id: The unique identifier of the game to spectate.
     :type game_id: str
+    :param x_game_token: Optional game token supplied via the
+        ``X-Game-Token`` header.
+    :type x_game_token: str | None
+    :param token: Optional game token supplied via the ``token`` query
+        parameter.
+    :type token: str | None
     :returns: A ``text/event-stream`` response.
     :rtype: StreamingResponse
-    :raises HTTPException: 404 if the game does not exist.
+    :raises HTTPException: 404 if the game does not exist; 403 if token
+        enforcement is enabled and the token is missing or invalid.
     """
+    _authorize_game(game_id, x_game_token or token)
     if _get_state(game_id) is None:
         raise HTTPException(status_code=404, detail="Game not found")
 
