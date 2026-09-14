@@ -5500,6 +5500,45 @@ class TestCargoCapacityEnforcement:
         assert len(state.discoveries) == 2
         assert state.ship.cargo == 2
 
+    def test_explore_surface_cargo_full_no_side_effects(self) -> None:
+        """explore_surface with a full cargo hold must not waste POIs, attempts, or fuel."""
+        from unittest.mock import patch
+
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
+        if planet is None:
+            return  # pragma: no cover
+        planet.poi_count = 5
+        landed, _msg = land_on_body(state, planet.id)
+        assert landed is True
+        # Fill the cargo hold completely so _add_discoveries stores nothing.
+        state.ship.max_cargo = 1
+        state.discoveries.clear()
+        state.ship.cargo = 0
+        filler = Discovery(id="full_1", category="mineral", name="Filler", description="f", value=1)
+        state.discoveries.append(filler)
+        state.sync_cargo()
+        assert state.ship.cargo == 1
+
+        fuel_before = state.ship.fuel
+        poi_before = planet.poi_count
+        count_before = planet.exploration_count
+
+        with patch("random.Random.randint", return_value=2):
+            ok, _msg, discoveries = explore_surface(state)
+
+        assert ok is True
+        assert discoveries == []
+        # No fuel spent, no POIs consumed, no exploration attempt used.
+        assert state.ship.fuel == fuel_before
+        assert planet.poi_count == poi_before
+        assert planet.exploration_count == count_before
+        # The filler remains the only discovery and cargo stays in sync.
+        assert len(state.discoveries) == 1
+        assert state.ship.cargo == 1
+
 
 class TestDiscoveryLoreFragmentDefensiveLoad:
     def test_discovery_missing_category_loads_with_defaults(self) -> None:
