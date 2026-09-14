@@ -46,7 +46,7 @@ Response:
 
 `game_id` is optional — if omitted, the server generates one. If you supply a `game_id` that already exists (in the database or in memory), the request returns HTTP 409 Conflict with `{"detail": "Game id already exists"}` and does **not** overwrite the existing game.
 
-The response also includes a `token`. In the default configuration this token is informational and not required, but when the server is started with `STARFARER_REQUIRE_GAME_TOKEN` enabled, every endpoint that accesses a specific game — both the state-mutating endpoints (jump, scan, land, explore, atmospheric-scan, sub-surface-explore, event resolve, trade, bulk-sell, upgrade, distress, salvage, salvage/craft, faction mission accept, missions accept/complete, save, load, hints/dismiss) and the read-only GET endpoints (full game state, galaxy, system detail, log, log/paginated, discoveries, cargo, lore, codex, upgrades, nearby, factions, faction detail, missions) — requires the token. For mutating endpoints the token is supplied via the header `X-Game-Token: <token>`; for read-only endpoints it may be supplied either via the `X-Game-Token` header or a `token` query parameter. A missing token returns HTTP 403 with detail "Game token required"; a wrong token returns HTTP 403 with detail "Invalid game token".
+The response also includes a `token`. In the default configuration this token is informational and not required, but when the server is started with `STARFARER_REQUIRE_GAME_TOKEN` enabled, every endpoint that accesses a specific game — both the state-mutating endpoints (jump, scan, land, explore, atmospheric-scan, sub-surface-explore, event resolve, trade, bulk-sell, upgrade, distress, salvage, salvage/craft, faction mission accept, missions accept/complete, save, load, hints/dismiss) and the read-only GET endpoints (full game state, galaxy, system detail, log, log/paginated, discoveries, cargo, lore, codex, upgrades, nearby, factions, faction detail, missions, crossroads items, crossroads lore, crossroads messages) — requires the token. For mutating endpoints the token is supplied via the header `X-Game-Token: <token>`; for read-only endpoints it may be supplied either via the `X-Game-Token` header or a `token` query parameter. A missing token returns HTTP 403 with detail "Game token required"; a wrong token returns HTTP 403 with detail "Invalid game token".
 
 ### 2.2 Continue a Saved Game
 
@@ -734,7 +734,7 @@ The game persists all state to SQLite. Save frequently — especially before ris
 
 ## 10. API Reference (Quick)
 
-All endpoints that access a specific game (mutating and read-only GET) accept the token via the `X-Game-Token` header or `token` query parameter, enforced when `STARFARER_REQUIRE_GAME_TOKEN` is enabled; see Section 2.1.
+All endpoints that access a specific game (mutating and read-only GET) accept the token via the `X-Game-Token` header or `token` query parameter, enforced when `STARFARER_REQUIRE_GAME_TOKEN` is enabled; see Section 2.1. The Crossroads read endpoints (`/api/crossroads/items`, `/api/crossroads/lore`, `/api/crossroads/messages`) are authenticated the same way (they require a `game_id` and pass the token like the other game-scoped endpoints) and return sanitized public views: raw donor/claimer game IDs are omitted (a stable opaque `donor_id` is provided instead), and free text is truncated (`donor_name`/`player_name` to 100 chars, `message`/`text` to 500 chars).
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -776,13 +776,13 @@ All endpoints that access a specific game (mutating and read-only GET) accept th
 | GET | `/api/leaderboard` | Top players |
 | GET | `/api/game/{id}/system/{sys_id}/ghosts?page={n}&per_page={n}` | Get ghost signatures in a system (paginated, returns total_ghosts, total_pages) |
 | POST | `/api/game/{id}/leave-ghost` | Leave a ghost signature |
-| GET | `/api/crossroads/items` | List available items at the Crossroads |
+| GET | `/api/crossroads/items?game_id={id}&page={n}&per_page={n}` | List available items at the Crossroads (requires `game_id`; paginated, default 25/max 50, returns `total_items`/`total_pages`; sanitized public view) |
 | POST | `/api/crossroads/donate-item` | Donate an item to the Crossroads |
 | POST | `/api/crossroads/claim-item/{item_id}` | Claim an item from the Crossroads (claims are capped at remaining cargo capacity; the response's `item.stored` reports how many were actually stored, and a partial claim logs a "cargo hold full" message) |
-| GET | `/api/crossroads/lore` | List available lore at the Crossroads |
+| GET | `/api/crossroads/lore?game_id={id}&page={n}&per_page={n}` | List available lore at the Crossroads (requires `game_id`; paginated, default 25/max 50, returns `total_lore`/`total_pages`; sanitized public view) |
 | POST | `/api/crossroads/donate-lore` | Donate a lore fragment to the Crossroads |
 | POST | `/api/crossroads/claim-lore/{donation_id}` | Claim a lore fragment from the Crossroads |
-| GET | `/api/crossroads/messages?page={n}&per_page={n}` | Get recent Crossroads messages (paginated, returns total_messages, total_pages) |
+| GET | `/api/crossroads/messages?game_id={id}&page={n}&per_page={n}` | Get recent Crossroads messages (requires `game_id`; paginated, returns `total_messages`/`total_pages`) |
 | POST | `/api/crossroads/post-message` | Post a message to the Crossroads |
 | GET | `/api/game/{id}/ripples` | Get pending discovery ripples |
 | POST | `/api/game/{id}/ripple/{ripple_id}/acknowledge` | Acknowledge a discovery ripple |
@@ -810,6 +810,8 @@ Both the ghost signatures and Crossroads messages endpoints support pagination w
 Returns 404 if the requested page exceeds the total number of pages with active items.
 
 Invalid `page` or `per_page` values (e.g., negative numbers, non-integer strings) are clamped to valid ranges rather than rejected with a 422 error. Both the ghost signatures and Crossroads messages endpoints use this consistent clamping behavior.
+
+The Crossroads items and lore endpoints also support pagination with `page` (default 1) and `per_page` (default 25, max 50), returning `items`/`lore`, `page`, `per_page`, `total_items`/`total_lore`, and `total_pages`.
 
 The `api_ripples` endpoint (`GET /api/game/{id}/ripples`) reads ripple data directly from the database using database-level filtering and does not acquire the game lock.
 
