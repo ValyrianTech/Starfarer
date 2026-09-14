@@ -22,6 +22,8 @@ A separate, read-only web app for humans to watch a game in progress (e.g. while
 - Live HUD: ship vitals (fuel/hull/morale/cargo), credits, crew, faction reputation, expedition stats, pending event card, and a scrolling ship log
 - Powered by two read-only endpoints: `GET /api/spectate/games` (game list) and `GET /api/spectate/{game_id}/stream` (Server-Sent Events stream pushing a state summary plus new log entries whenever the game changes). When `STARFARER_REQUIRE_GAME_TOKEN` is enabled, the SSE stream requires the game token and the game list is disabled (HTTP 403).
 
+When `STARFARER_REQUIRE_GAME_TOKEN` is enabled, supply the game token to the spectator webui by opening it with an explicit `?game=<game_id>&token=<token>` URL, e.g. `http://localhost:8001/webui/?game=<game_id>&token=<token>`. The webui reads the token from the `token` URL parameter first, then from `localStorage` under the key `starfarer_game_token` (settable in the browser console via `localStorage.setItem('starfarer_game_token', '<token>')`); a token passed via the URL is persisted to `localStorage` so subsequent fetches and the SSE stream reuse it. Because `EventSource` cannot set request headers, the token is passed to the SSE stream as the `token` query parameter (a documented, supported mechanism) rather than the `X-Game-Token` header. Since `GET /api/spectate/games` is disabled (403) while enforcement is on, open the webui with an explicit `?game=<id>&token=<token>` URL rather than relying on the game picker.
+
 No interaction is possible from the spectator view — it never mutates game state.
 
 ## How to Play
