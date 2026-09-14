@@ -22,7 +22,14 @@ from backend.database import init_db
 from backend.game.manager import GAME_STORE, game_save, new_game
 from backend.main import app
 from backend.models.discovery import Discovery, LoreFragment
-from backend.multiplayer.api import _game_exists
+from backend.multiplayer.api import (
+    _game_exists,
+    _opaque_donor_id,
+    _public_item_view,
+    _public_lore_view,
+    _public_message_view,
+    _safe_text,
+)
 from backend.multiplayer.crossroads import (
     claim_item,
     claim_lore,
@@ -1555,6 +1562,117 @@ class TestMultiplayerRipples:
 
 
 # ---------------------------------------------------------------------------
+# TestCrossroadsPublicViews
+# ---------------------------------------------------------------------------
+
+class TestCrossroadsPublicViews:
+    def test_safe_text_none_returns_none(self) -> None:
+        assert _safe_text(None) is None
+
+    def test_safe_text_truncates(self) -> None:
+        assert _safe_text("x" * 10, 4) == "xxxx"
+
+    def test_safe_text_default_max_len(self) -> None:
+        assert len(_safe_text("x" * 600)) == 500
+
+    def test_opaque_donor_id_is_stable_and_short(self) -> None:
+        assert _opaque_donor_id("game-1") == _opaque_donor_id("game-1")
+        assert len(_opaque_donor_id("game-1")) == 12
+        assert _opaque_donor_id("game-1") != _opaque_donor_id("game-2")
+
+    def test_public_item_view_removes_game_ids_and_adds_donor_id(self) -> None:
+        item = CrossroadsItem(
+            id="item-1",
+            donor_game_id="donor-game",
+            donor_name="Name",
+            item_name="Thing",
+            quantity=1,
+            message=None,
+            claimed=False,
+            claimer_game_id="claimer",
+        ).to_dict()
+        view = _public_item_view(item)
+        assert "donor_game_id" not in view
+        assert "claimer_game_id" not in view
+        assert view["donor_id"] == _opaque_donor_id("donor-game")
+        assert view["message"] is None
+        assert "donor_game_id" in item
+
+    def test_public_item_view_truncates_fields(self) -> None:
+        item = CrossroadsItem(
+            id="item-2",
+            donor_game_id="donor-game",
+            donor_name="x" * 200,
+            item_name="Thing",
+            quantity=1,
+            message="y" * 600,
+        ).to_dict()
+        view = _public_item_view(item)
+        assert len(view["donor_name"]) == 100
+        assert len(view["message"]) == 500
+
+    def test_public_lore_view_removes_game_ids_and_adds_donor_id(self) -> None:
+        lore = CrossroadsLore(
+            id="lore-1",
+            donor_game_id="donor-game",
+            donor_name="Name",
+            fragment_id="lore_architects_1",
+            message=None,
+            claimed=False,
+            claimer_game_id="claimer",
+        ).to_dict()
+        view = _public_lore_view(lore)
+        assert "donor_game_id" not in view
+        assert "claimer_game_id" not in view
+        assert view["donor_id"] == _opaque_donor_id("donor-game")
+        assert view["fragment_id"] == "lore_architects_1"
+        assert "donor_game_id" in lore
+
+    def test_public_lore_view_truncates_fields(self) -> None:
+        lore = CrossroadsLore(
+            id="lore-2",
+            donor_game_id="donor-game",
+            donor_name="x" * 200,
+            fragment_id="lore_architects_1",
+            message="y" * 600,
+        ).to_dict()
+        view = _public_lore_view(lore)
+        assert len(view["donor_name"]) == 100
+        assert len(view["message"]) == 500
+
+    def test_public_message_view_removes_game_id(self) -> None:
+        msg = CrossroadsMessage(
+            id="msg-1",
+            game_id="game-1",
+            player_name="Pilot",
+            text="Hello",
+            created_at="2025-01-01T00:00:00Z",
+            expires_at="2025-01-08T00:00:00Z",
+        ).to_dict()
+        view = _public_message_view(msg)
+        assert "game_id" not in view
+        assert view["player_name"] == "Pilot"
+        assert view["text"] == "Hello"
+        assert view["id"] == "msg-1"
+        assert view["created_at"] == "2025-01-01T00:00:00Z"
+        assert view["expires_at"] == "2025-01-08T00:00:00Z"
+        assert "game_id" in msg
+
+    def test_public_message_view_truncates_fields(self) -> None:
+        msg = CrossroadsMessage(
+            id="msg-2",
+            game_id="game-1",
+            player_name="x" * 200,
+            text="y" * 600,
+            created_at="2025-01-01T00:00:00Z",
+            expires_at="2025-01-08T00:00:00Z",
+        ).to_dict()
+        view = _public_message_view(msg)
+        assert len(view["player_name"]) == 100
+        assert len(view["text"]) == 500
+
+
+# ---------------------------------------------------------------------------
 # TestMultiplayerAPI
 # ---------------------------------------------------------------------------
 
@@ -1746,9 +1864,36 @@ class TestMultiplayerAPI:
         assert len(data["ghosts"]) == 3
 
     def test_api_crossroads_items(self) -> None:
-        resp = client.get("/api/crossroads/items")
+        resp = client.post("/api/game/new", json={"shared_universe": True})
         assert resp.status_code == 200
-        assert "items" in resp.json()
+        game_id = resp.json()["game_id"]
+
+        state = GAME_STORE[game_id]
+        disc = _make_discovery(
+            name="Public View Item",
+            system_id=state.get_current_system().id if state.get_current_system() else "sys-1",
+        )
+        state.discoveries.append(disc)
+        game_save(state)
+
+        resp = client.post(
+            "/api/crossroads/donate-item",
+            json={"game_id": game_id, "item_name": "Public View Item", "quantity": 1},
+        )
+        assert resp.status_code == 200
+
+        resp = client.get("/api/crossroads/items?game_id=test-game")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "items" in data
+        assert "page" in data
+        assert "per_page" in data
+        assert "total_items" in data
+        assert "total_pages" in data
+        assert len(data["items"]) >= 1
+        for item in data["items"]:
+            assert "donor_game_id" not in item
+            assert "donor_id" in item
 
     def test_api_donate_item(self) -> None:
         resp = client.post("/api/game/new", json={"shared_universe": True})
@@ -1822,9 +1967,14 @@ class TestMultiplayerAPI:
         assert resp.status_code == 400
 
     def test_api_crossroads_lore(self) -> None:
-        resp = client.get("/api/crossroads/lore")
+        resp = client.get("/api/crossroads/lore?game_id=test-game")
         assert resp.status_code == 200
-        assert "lore" in resp.json()
+        data = resp.json()
+        assert "lore" in data
+        assert "page" in data
+        assert "per_page" in data
+        assert "total_lore" in data
+        assert "total_pages" in data
 
     def test_api_donate_lore(self) -> None:
         resp = client.post("/api/game/new", json={"shared_universe": True})
@@ -1906,7 +2056,7 @@ class TestMultiplayerAPI:
         assert resp.status_code == 400
 
     def test_api_crossroads_messages(self) -> None:
-        resp = client.get("/api/crossroads/messages")
+        resp = client.get("/api/crossroads/messages?game_id=test-game")
         assert resp.status_code == 200
         data = resp.json()
         assert "messages" in data
@@ -1926,7 +2076,7 @@ class TestMultiplayerAPI:
                 json={"game_id": game_id, "text": f"Pagination test message {i}"},
             )
 
-        r1 = client.get("/api/crossroads/messages?page=1&per_page=5")
+        r1 = client.get("/api/crossroads/messages?game_id=test-game&page=1&per_page=5")
         assert r1.status_code == 200
         d1 = r1.json()
         assert len(d1["messages"]) == 5
@@ -1935,26 +2085,26 @@ class TestMultiplayerAPI:
         assert d1["total_messages"] >= 15
         assert d1["total_pages"] >= 3
 
-        r2 = client.get("/api/crossroads/messages?page=2&per_page=5")
+        r2 = client.get("/api/crossroads/messages?game_id=test-game&page=2&per_page=5")
         assert r2.status_code == 200
         d2 = r2.json()
         assert len(d2["messages"]) == 5
 
-        r3 = client.get("/api/crossroads/messages?page=3&per_page=5")
+        r3 = client.get("/api/crossroads/messages?game_id=test-game&page=3&per_page=5")
         assert r3.status_code == 200
         d3 = r3.json()
         assert len(d3["messages"]) == 5
 
-        r4 = client.get("/api/crossroads/messages?page=4&per_page=5")
+        r4 = client.get("/api/crossroads/messages?game_id=test-game&page=4&per_page=5")
         assert r4.status_code == 404
 
-        r_default = client.get("/api/crossroads/messages")
+        r_default = client.get("/api/crossroads/messages?game_id=test-game")
         assert r_default.status_code == 200
         d_default = r_default.json()
         assert len(d_default["messages"]) >= 10
         assert d_default["per_page"] == 10
 
-        r_capped = client.get("/api/crossroads/messages?per_page=100")
+        r_capped = client.get("/api/crossroads/messages?game_id=test-game&per_page=100")
         assert r_capped.status_code == 200
         d_capped = r_capped.json()
         assert d_capped["per_page"] == 50
@@ -1966,7 +2116,7 @@ class TestMultiplayerAPI:
 
     def test_api_crossroads_messages_page_less_than_one(self) -> None:
         """api_crossroads_messages should clamp page < 1 to 1."""
-        resp = client.get("/api/crossroads/messages?page=0")
+        resp = client.get("/api/crossroads/messages?game_id=test-game&page=0")
         assert resp.status_code == 200
         data = resp.json()
         assert data["page"] == 1
@@ -1976,7 +2126,7 @@ class TestMultiplayerAPI:
 
     def test_api_crossroads_messages_per_page_less_than_one(self) -> None:
         """api_crossroads_messages should clamp per_page < 1 to 1."""
-        resp = client.get("/api/crossroads/messages?per_page=0")
+        resp = client.get("/api/crossroads/messages?game_id=test-game&per_page=0")
         assert resp.status_code == 200
         data = resp.json()
         assert data["per_page"] == 1
@@ -1997,27 +2147,159 @@ class TestMultiplayerAPI:
             )
 
         # Page 1 should work fine
-        r1 = client.get("/api/crossroads/messages?page=1&per_page=5")
+        r1 = client.get("/api/crossroads/messages?game_id=test-game&page=1&per_page=5")
         assert r1.status_code == 200
         data = r1.json()
         assert len(data["messages"]) == 5
         assert data["total_pages"] == 1
 
         # Page 2 should return 404 (out of range, and total_messages > 0)
-        r2 = client.get("/api/crossroads/messages?page=2&per_page=5")
+        r2 = client.get("/api/crossroads/messages?game_id=test-game&page=2&per_page=5")
         assert r2.status_code == 404
         assert r2.json()["detail"] == "Page out of range"
 
     def test_api_crossroads_messages_page_out_of_range_empty_db(self) -> None:
         """api_crossroads_messages should NOT return 404 for out-of-range pages when there are no messages."""
         # No messages posted, so total_messages == 0
-        r = client.get("/api/crossroads/messages?page=2&per_page=5")
+        r = client.get("/api/crossroads/messages?game_id=test-game&page=2&per_page=5")
         assert r.status_code == 200
         data = r.json()
         assert len(data["messages"]) == 0
         assert data["total_messages"] == 0
         assert data["total_pages"] == 0
 
+    def test_api_crossroads_items_pagination(self) -> None:
+        resp = client.post("/api/game/new", json={"shared_universe": True})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+
+        state = GAME_STORE[game_id]
+        for i in range(30):
+            state.discoveries.append(_make_discovery(name=f"Pag Item {i}"))
+        game_save(state)
+
+        for i in range(30):
+            resp = client.post(
+                "/api/crossroads/donate-item",
+                json={"game_id": game_id, "item_name": f"Pag Item {i}", "quantity": 1},
+            )
+            assert resp.status_code == 200
+
+        r1 = client.get("/api/crossroads/items?game_id=test-game&page=1&per_page=10")
+        assert r1.status_code == 200
+        d1 = r1.json()
+        assert len(d1["items"]) == 10
+        assert d1["page"] == 1
+        assert d1["per_page"] == 10
+        assert d1["total_items"] >= 30
+        assert d1["total_pages"] >= 3
+
+        r2 = client.get("/api/crossroads/items?game_id=test-game&page=2&per_page=10")
+        assert r2.status_code == 200
+        d2 = r2.json()
+        assert len(d2["items"]) == 10
+
+        page1_ids = {i["id"] for i in d1["items"]}
+        page2_ids = {i["id"] for i in d2["items"]}
+        assert page1_ids.isdisjoint(page2_ids)
+
+        for item in d1["items"] + d2["items"]:
+            assert "donor_game_id" not in item
+            assert "donor_id" in item
+
+    def test_api_crossroads_items_per_page_capped(self) -> None:
+        resp = client.get("/api/crossroads/items?game_id=test-game&per_page=100")
+        assert resp.status_code == 200
+        assert resp.json()["per_page"] == 50
+
+    def test_api_crossroads_items_page_clamped(self) -> None:
+        resp = client.get("/api/crossroads/items?game_id=test-game&page=0")
+        assert resp.status_code == 200
+        assert resp.json()["page"] == 1
+
+    def test_api_crossroads_items_page_out_of_range_empty(self) -> None:
+        resp = client.get("/api/crossroads/items?game_id=test-game&page=5&per_page=10")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["items"] == []
+        assert data["total_items"] == 0
+        assert data["total_pages"] == 0
+
+    def test_api_crossroads_lore_pagination(self) -> None:
+        resp = client.post("/api/game/new", json={"shared_universe": True})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+
+        state = GAME_STORE[game_id]
+        for i in range(30):
+            state.lore_fragments.append(_make_lore_fragment(f"lore_pag_{i}", discovered=True))
+        game_save(state)
+
+        for i in range(30):
+            resp = client.post(
+                "/api/crossroads/donate-lore",
+                json={"game_id": game_id, "fragment_id": f"lore_pag_{i}"},
+            )
+            assert resp.status_code == 200
+
+        r1 = client.get("/api/crossroads/lore?game_id=test-game&page=1&per_page=10")
+        assert r1.status_code == 200
+        d1 = r1.json()
+        assert len(d1["lore"]) == 10
+        assert d1["page"] == 1
+        assert d1["per_page"] == 10
+        assert d1["total_lore"] >= 30
+        assert d1["total_pages"] >= 3
+
+        r2 = client.get("/api/crossroads/lore?game_id=test-game&page=2&per_page=10")
+        assert r2.status_code == 200
+        d2 = r2.json()
+        assert len(d2["lore"]) == 10
+
+        for lore in d1["lore"] + d2["lore"]:
+            assert "donor_game_id" not in lore
+            assert "donor_id" in lore
+
+    def test_api_crossroads_lore_per_page_capped(self) -> None:
+        resp = client.get("/api/crossroads/lore?game_id=test-game&per_page=100")
+        assert resp.status_code == 200
+        assert resp.json()["per_page"] == 50
+
+    def test_api_crossroads_lore_page_clamped(self) -> None:
+        resp = client.get("/api/crossroads/lore?game_id=test-game&page=0")
+        assert resp.status_code == 200
+        assert resp.json()["page"] == 1
+
+    def test_api_crossroads_lore_page_out_of_range_empty(self) -> None:
+        resp = client.get("/api/crossroads/lore?game_id=test-game&page=5&per_page=10")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["lore"] == []
+        assert data["total_lore"] == 0
+        assert data["total_pages"] == 0
+
+    def test_api_crossroads_messages_sanitized(self) -> None:
+        resp = client.post("/api/game/new", json={"shared_universe": True, "ship_name": "MsgAuthor"})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+
+        resp = client.post(
+            "/api/crossroads/post-message",
+            json={"game_id": game_id, "text": "Sanitized message"},
+        )
+        assert resp.status_code == 200
+
+        resp = client.get("/api/crossroads/messages?game_id=test-game")
+        assert resp.status_code == 200
+        messages = resp.json()["messages"]
+        assert len(messages) >= 1
+        msg = messages[0]
+        assert "game_id" not in msg
+        assert msg["player_name"] == "MsgAuthor"
+        assert msg["text"] == "Sanitized message"
+        assert "id" in msg
+        assert "created_at" in msg
+        assert "expires_at" in msg
 
     def test_api_post_message(self) -> None:
         resp = client.post("/api/game/new", json={"shared_universe": True})
@@ -3130,3 +3412,101 @@ class TestMultiplayerTokenEnforcement:
             assert resp.status_code == 200
         finally:
             GAME_STORE.pop(game_id, None)
+
+
+# ---------------------------------------------------------------------------
+# TestCrossroadsReadTokenEnforcement
+# ---------------------------------------------------------------------------
+
+class TestCrossroadsReadTokenEnforcement:
+    """Verify token enforcement on the read-only Crossroads endpoints."""
+
+    def _new_game(self) -> tuple[str, str]:
+        resp = client.post("/api/game/new", json={"shared_universe": True})
+        assert resp.status_code == 200
+        data = resp.json()
+        return data["game_id"], data["token"]
+
+    def test_crossroads_items_token_enforcement(self, monkeypatch) -> None:
+        monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        game_id, token = self._new_game()
+        try:
+            resp = client.get(f"/api/crossroads/items?game_id={game_id}")
+            assert resp.status_code == 403
+
+            resp = client.get(
+                f"/api/crossroads/items?game_id={game_id}",
+                headers={"X-Game-Token": "wrong"},
+            )
+            assert resp.status_code == 403
+
+            resp = client.get(
+                f"/api/crossroads/items?game_id={game_id}",
+                headers={"X-Game-Token": token},
+            )
+            assert resp.status_code == 200
+        finally:
+            GAME_STORE.pop(game_id, None)
+
+    def test_crossroads_items_token_via_query_param(self, monkeypatch) -> None:
+        monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        game_id, token = self._new_game()
+        try:
+            resp = client.get(f"/api/crossroads/items?game_id={game_id}&token={token}")
+            assert resp.status_code == 200
+        finally:
+            GAME_STORE.pop(game_id, None)
+
+    def test_crossroads_lore_token_enforcement(self, monkeypatch) -> None:
+        monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        game_id, token = self._new_game()
+        try:
+            resp = client.get(f"/api/crossroads/lore?game_id={game_id}")
+            assert resp.status_code == 403
+
+            resp = client.get(
+                f"/api/crossroads/lore?game_id={game_id}",
+                headers={"X-Game-Token": "wrong"},
+            )
+            assert resp.status_code == 403
+
+            resp = client.get(
+                f"/api/crossroads/lore?game_id={game_id}",
+                headers={"X-Game-Token": token},
+            )
+            assert resp.status_code == 200
+        finally:
+            GAME_STORE.pop(game_id, None)
+
+    def test_crossroads_messages_token_enforcement(self, monkeypatch) -> None:
+        monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        game_id, token = self._new_game()
+        try:
+            resp = client.get(f"/api/crossroads/messages?game_id={game_id}")
+            assert resp.status_code == 403
+
+            resp = client.get(
+                f"/api/crossroads/messages?game_id={game_id}",
+                headers={"X-Game-Token": "wrong"},
+            )
+            assert resp.status_code == 403
+
+            resp = client.get(
+                f"/api/crossroads/messages?game_id={game_id}",
+                headers={"X-Game-Token": token},
+            )
+            assert resp.status_code == 200
+        finally:
+            GAME_STORE.pop(game_id, None)
+
+    def test_crossroads_items_token_enforcement_game_not_found(self, monkeypatch) -> None:
+        monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        assert client.get("/api/crossroads/items?game_id=nonexistent-game-xyz").status_code == 404
+        assert client.get("/api/crossroads/lore?game_id=nonexistent-game-xyz").status_code == 404
+        assert client.get("/api/crossroads/messages?game_id=nonexistent-game-xyz").status_code == 404
+
+    def test_crossroads_read_enforcement_disabled_allows_any_game(self, monkeypatch) -> None:
+        monkeypatch.delenv("STARFARER_REQUIRE_GAME_TOKEN", raising=False)
+        assert client.get("/api/crossroads/items?game_id=anything").status_code == 200
+        assert client.get("/api/crossroads/lore?game_id=anything").status_code == 200
+        assert client.get("/api/crossroads/messages?game_id=anything").status_code == 200

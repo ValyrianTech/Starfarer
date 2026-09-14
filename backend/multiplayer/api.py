@@ -6,6 +6,9 @@ and messages, and discovery ripple events. All endpoints are mounted
 under ``/api``.
 """
 
+import hashlib
+import math
+
 from fastapi import APIRouter, Header, HTTPException
 
 from backend.api.routes import (
@@ -78,6 +81,93 @@ def _check_game(game_id: str) -> GameState:
         _cleanup_game_lock(game_id)
         raise HTTPException(status_code=404, detail="Game not found")
     return state
+
+
+def _safe_text(value: str | None, max_len: int = 500) -> str | None:
+    """Truncate a free-text value to ``max_len`` characters.
+
+    :param value: The text to sanitize, or ``None``.
+    :type value: str | None
+    :param max_len: The maximum number of characters to retain.
+    :type max_len: int
+    :returns: The truncated text, or ``None`` if ``value`` is ``None``.
+    :rtype: str | None
+    """
+    if value is None:
+        return None
+    return value[:max_len]
+
+
+def _opaque_donor_id(game_id: str) -> str:
+    """Derive a short, stable, non-reversible opaque id from a game id.
+
+    :param game_id: The raw donor game id.
+    :type game_id: str
+    :returns: A 12-character hex digest prefix of the game id.
+    :rtype: str
+    """
+    return hashlib.sha256(game_id.encode()).hexdigest()[:12]
+
+
+def _public_item_view(item: dict) -> dict:
+    """Return a sanitized public view of a Crossroads item.
+
+    Removes the donor/claimer game ids, truncates free-text fields,
+    and adds a stable opaque ``donor_id`` so raw game ids are never
+    exposed to other players.
+
+    :param item: The item dict produced by ``CrossroadsItem.to_dict()``.
+    :type item: dict
+    :returns: A copy with sanitized fields plus an opaque ``donor_id``.
+    :rtype: dict
+    """
+    view = dict(item)
+    view.pop("donor_game_id", None)
+    view.pop("claimer_game_id", None)
+    view["donor_name"] = _safe_text(view["donor_name"], 100)
+    view["message"] = _safe_text(view["message"], 500)
+    view["donor_id"] = _opaque_donor_id(item["donor_game_id"])
+    return view
+
+
+def _public_lore_view(lore: dict) -> dict:
+    """Return a sanitized public view of a Crossroads lore donation.
+
+    Removes the donor/claimer game ids, truncates free-text fields,
+    and adds a stable opaque ``donor_id`` so raw game ids are never
+    exposed to other players.
+
+    :param lore: The lore dict produced by ``CrossroadsLore.to_dict()``.
+    :type lore: dict
+    :returns: A copy with sanitized fields plus an opaque ``donor_id``.
+    :rtype: dict
+    """
+    view = dict(lore)
+    view.pop("donor_game_id", None)
+    view.pop("claimer_game_id", None)
+    view["donor_name"] = _safe_text(view["donor_name"], 100)
+    view["message"] = _safe_text(view["message"], 500)
+    view["donor_id"] = _opaque_donor_id(lore["donor_game_id"])
+    return view
+
+
+def _public_message_view(msg: dict) -> dict:
+    """Return a sanitized public view of a Crossroads message.
+
+    Removes the author's raw game id and truncates free-text fields
+    so raw game ids and oversized text are never exposed to other
+    players.
+
+    :param msg: The message dict produced by ``CrossroadsMessage.to_dict()``.
+    :type msg: dict
+    :returns: A copy with sanitized fields.
+    :rtype: dict
+    """
+    view = dict(msg)
+    view.pop("game_id", None)
+    view["player_name"] = _safe_text(view["player_name"], 100)
+    view["text"] = _safe_text(view["text"], 500)
+    return view
 
 
 # ---------------------------------------------------------------------------
@@ -169,17 +259,50 @@ def api_leave_ghost(
 
 
 @router.get("/crossroads/items")
-def api_crossroads_items() -> dict:
+def api_crossroads_items(
+    game_id: str,
+    page: int = 1,
+    per_page: int = 25,
+    x_game_token: str | None = Header(default=None),
+    token: str | None = None,
+) -> dict:
     """Retrieve all unclaimed items available at the Crossroads.
 
     Items are donated by players and can be claimed by any other
-    player for their own cargo.
+    player for their own cargo. Supports pagination via optional
+    ``page`` and ``per_page`` query parameters.
 
-    :returns: A dictionary with ``items`` list of available item dicts.
+    :param game_id: The unique identifier of the caller's game.
+    :type game_id: str
+    :param page: The page number to retrieve (1-indexed, default 1).
+    :type page: int
+    :param per_page: Number of items per page (max 50, default 25).
+    :type per_page: int
+    :param x_game_token: The caller-supplied per-game token (X-Game-Token header).
+    :type x_game_token: str | None
+    :param token: The caller-supplied per-game token (query parameter).
+    :type token: str | None
+    :returns: A dictionary with ``items``, ``page``, ``per_page``,
+        ``total_items``, and ``total_pages``.
     :rtype: dict
+    :raises HTTPException: 403/404 when token enforcement is enabled and the
+        token is missing/invalid or the game cannot be resolved.
     """
-    items = get_available_items_list()
-    return {"items": items}
+    _authorize_game(game_id, x_game_token or token)
+    page = max(1, page)
+    per_page = max(1, min(per_page, 50))
+    all_items = get_available_items_list()
+    total = len(all_items)
+    start = (page - 1) * per_page
+    items = [_public_item_view(i) for i in all_items[start : start + per_page]]
+    total_pages = math.ceil(total / per_page)
+    return {
+        "items": items,
+        "page": page,
+        "per_page": per_page,
+        "total_items": total,
+        "total_pages": total_pages,
+    }
 
 
 @router.post("/crossroads/donate-item")
@@ -249,17 +372,50 @@ def api_claim_item(
 
 
 @router.get("/crossroads/lore")
-def api_crossroads_lore() -> dict:
+def api_crossroads_lore(
+    game_id: str,
+    page: int = 1,
+    per_page: int = 25,
+    x_game_token: str | None = Header(default=None),
+    token: str | None = None,
+) -> dict:
     """Retrieve all unclaimed lore donations available at the Crossroads.
 
     Lore fragments donated by players can be claimed to unlock their
-    narrative text in the claiming player's game.
+    narrative text in the claiming player's game. Supports pagination
+    via optional ``page`` and ``per_page`` query parameters.
 
-    :returns: A dictionary with ``lore`` list of available lore dicts.
+    :param game_id: The unique identifier of the caller's game.
+    :type game_id: str
+    :param page: The page number to retrieve (1-indexed, default 1).
+    :type page: int
+    :param per_page: Number of lore donations per page (max 50, default 25).
+    :type per_page: int
+    :param x_game_token: The caller-supplied per-game token (X-Game-Token header).
+    :type x_game_token: str | None
+    :param token: The caller-supplied per-game token (query parameter).
+    :type token: str | None
+    :returns: A dictionary with ``lore``, ``page``, ``per_page``,
+        ``total_lore``, and ``total_pages``.
     :rtype: dict
+    :raises HTTPException: 403/404 when token enforcement is enabled and the
+        token is missing/invalid or the game cannot be resolved.
     """
-    lore = get_available_lore_list()
-    return {"lore": lore}
+    _authorize_game(game_id, x_game_token or token)
+    page = max(1, page)
+    per_page = max(1, min(per_page, 50))
+    all_lore = get_available_lore_list()
+    total = len(all_lore)
+    start = (page - 1) * per_page
+    lore = [_public_lore_view(l) for l in all_lore[start : start + per_page]]
+    total_pages = math.ceil(total / per_page)
+    return {
+        "lore": lore,
+        "page": page,
+        "per_page": per_page,
+        "total_lore": total,
+        "total_pages": total_pages,
+    }
 
 
 @router.post("/crossroads/donate-lore")
@@ -328,24 +484,40 @@ def api_claim_lore(
 
 
 @router.get("/crossroads/messages")
-def api_crossroads_messages(page: int = 1, per_page: int = 10) -> dict:
+def api_crossroads_messages(
+    game_id: str,
+    page: int = 1,
+    per_page: int = 10,
+    x_game_token: str | None = Header(default=None),
+    token: str | None = None,
+) -> dict:
     """Retrieve recent messages posted at the Crossroads.
 
     Messages older than 7 days are automatically excluded. Supports
     pagination via optional ``page`` and ``per_page`` query parameters.
 
+    :param game_id: The unique identifier of the caller's game.
+    :type game_id: str
     :param page: The page number to retrieve (1-indexed, default 1).
     :type page: int
     :param per_page: Number of messages per page (max 50, default 10).
     :type per_page: int
+    :param x_game_token: The caller-supplied per-game token (X-Game-Token header).
+    :type x_game_token: str | None
+    :param token: The caller-supplied per-game token (query parameter).
+    :type token: str | None
     :returns: A dictionary with ``messages`` list, ``page``, ``per_page``,
         ``total_messages``, and ``total_pages``.
     :rtype: dict
     :raises HTTPException: 404 if page exceeds total pages with active messages.
+    :raises HTTPException: 403/404 when token enforcement is enabled and the
+        token is missing/invalid or the game cannot be resolved.
     """
+    _authorize_game(game_id, x_game_token or token)
     result = get_messages(page=page, per_page=per_page)
     if page > result["total_pages"] and result["total_messages"] > 0:
         raise HTTPException(status_code=404, detail="Page out of range")
+    result["messages"] = [_public_message_view(m) for m in result["messages"]]
     return result
 
 
