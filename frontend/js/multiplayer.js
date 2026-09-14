@@ -86,7 +86,7 @@ async function renderCrossroadsItems() {
   if (!content) return;
 
   try {
-    const data = await API.getCrossroadsItems();
+    const data = await API.getCrossroadsItems(GAME_ID);
     const items = data.items || [];
 
     let itemsHTML = '<div class="crossroads-section"><h3>Available Items</h3>';
@@ -128,7 +128,7 @@ async function renderCrossroadsLore() {
   if (!content) return;
 
   try {
-    const data = await API.getCrossroadsLore();
+    const data = await API.getCrossroadsLore(GAME_ID);
     const loreList = data.lore || [];
 
     let loreHTML = '<div class="crossroads-section"><h3>Available Lore Fragments</h3>';
@@ -169,7 +169,7 @@ async function renderCrossroadsMessages() {
   if (!content) return;
 
   try {
-    const data = await API.getCrossroadsMessages();
+    const data = await API.getCrossroadsMessages(GAME_ID);
     const messages = data.messages || [];
 
     let msgsHTML = '<div class="crossroads-section"><h3>Recent Messages</h3>';
