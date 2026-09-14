@@ -399,3 +399,28 @@ class TestSpectateEnforcement:
             assert "event: state" in chunk
         finally:
             GAME_STORE.pop(gid, None)
+
+    def test_stream_rejects_invalid_token_via_query_param(self, monkeypatch) -> None:
+        import asyncio
+
+        from fastapi import HTTPException
+
+        from backend.api.spectate import api_spectate_stream
+
+        monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        data = _new_game_via_api()
+        gid = data["game_id"]
+        try:
+            with pytest.raises(HTTPException) as exc:
+                asyncio.run(
+                    api_spectate_stream(
+                        gid,
+                        token="definitely-not-the-right-token",
+                        x_game_token=None,
+                    )
+                )
+            assert exc.value.status_code == 403
+            assert exc.value.status_code != 404
+            assert exc.value.status_code != 500
+        finally:
+            GAME_STORE.pop(gid, None)
