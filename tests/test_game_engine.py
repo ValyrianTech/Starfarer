@@ -2804,6 +2804,29 @@ class TestSalvage:
         assert state.ship.morale == morale_before
         assert state.ship.salvage_attempts.get(body_id, 0) == attempts_before
 
+    def test_perform_salvage_spare_parts_full_hold_restores_low_morale_exactly(self) -> None:
+        """Full-hold rejection must restore pre-call morale exactly, even when it was below the morale cost."""
+        from unittest.mock import MagicMock, patch
+        state = self._make_salvage_state()
+        state.ship.morale = 0
+
+        state.ship.max_cargo = 1
+        state.discoveries.clear()
+        state.discoveries.append(
+            Discovery(id="full_salvage_low_morale", category="mineral", name="Filler", description="f", value=1)
+        )
+        state.sync_cargo()
+
+        mock_rng = MagicMock()
+        mock_rng.random.side_effect = [0.8]
+        mock_rng.randint.side_effect = [30]
+        mock_rng.getrandbits.return_value = 0xABC123
+        with patch("backend.game.engine.seeded_random", return_value=mock_rng):
+            result = perform_salvage(state)
+
+        assert "error" in result
+        assert state.ship.morale == 0
+
     def test_perform_salvage_morale_cost(self) -> None:
         from unittest.mock import MagicMock, patch
         state = self._make_salvage_state()
