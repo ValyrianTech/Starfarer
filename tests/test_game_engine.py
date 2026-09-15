@@ -5646,7 +5646,7 @@ class TestCargoCapacityEnforcement:
         assert state.ship.cargo == 1
 
     def test_perform_salvage_spare_parts_full_hold(self) -> None:
-        """perform_salvage spare-parts branch must not bypass cargo capacity."""
+        """perform_salvage spare-parts branch must not bypass cargo capacity and must reverse its side-effects on the full-hold path."""
         from unittest.mock import MagicMock, patch
 
         state = new_game(seed=42)
@@ -5665,6 +5665,11 @@ class TestCargoCapacityEnforcement:
         state.sync_cargo()
         assert state.ship.cargo == 1
 
+        body_id = state.ship.current_body_id
+        morale_before = state.ship.morale
+        attempts_before = state.ship.salvage_attempts.get(body_id, 0)
+        log_count_before = len(state.log_entries)
+
         mock_rng = MagicMock()
         mock_rng.random.side_effect = [0.8]
         mock_rng.randint.side_effect = [30]
@@ -5673,9 +5678,13 @@ class TestCargoCapacityEnforcement:
             result = perform_salvage(state)
 
         assert "error" in result
+        assert state.ship.morale == morale_before
+        assert state.ship.salvage_attempts.get(body_id, 0) == attempts_before
+        assert (body_id in state.ship.salvage_attempts) == (attempts_before > 0)
         assert len(state.discoveries) == 1
-        assert len(state.discoveries) <= state.ship.max_cargo
         assert state.ship.cargo == len(state.discoveries)
+        assert len(state.log_entries) == log_count_before
+        assert all(entry.get("title") != "Salvage: Spare Parts" for entry in state.log_entries)
 
 
 class TestDiscoveryLoreFragmentDefensiveLoad:
