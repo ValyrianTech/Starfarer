@@ -1544,7 +1544,8 @@ class TestBulkSell:
         state.discoveries.append(regular_disc)
         credits_before = state.ship.credits
         # Try to sell by name - should only sell the non-lore one
-        ok, _msg, sold_count, _total_price = perform_bulk_sell(state, [{"item": "Ancient Artifact", "quantity": 2}])
+        # (only 1 non-lore match exists)
+        ok, _msg, sold_count, _total_price = perform_bulk_sell(state, [{"item": "Ancient Artifact", "quantity": 1}])
         assert ok is True
         assert sold_count == 1
         assert lore_disc in state.discoveries  # lore-linked should remain
@@ -1585,12 +1586,55 @@ class TestBulkSell:
         state.discoveries.append(regular_disc)
         credits_before = state.ship.credits
         # Try to sell by category - should only sell the non-lore one
-        ok, _msg, sold_count, _total_price = perform_bulk_sell(state, [{"item": "mineral", "quantity": 2}])
+        # (only 1 non-lore match exists)
+        ok, _msg, sold_count, _total_price = perform_bulk_sell(state, [{"item": "mineral", "quantity": 1}])
         assert ok is True
         assert sold_count == 1
         assert lore_disc in state.discoveries  # lore-linked should remain
         assert regular_disc not in state.discoveries  # regular should be sold
         assert state.ship.credits > credits_before
+
+    def test_bulk_sell_over_quantity_entry_is_rejected(self) -> None:
+        """Regression: an entry requesting more than available must sell NONE of
+        that item (not all matching items), while valid sibling entries still sell."""
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        system.has_trading_station = True
+        state.discoveries.clear()
+        # 2 artifacts available
+        state.discoveries.append(
+            Discovery(id="oq_art_1", name="Ancient Relic", category="artifact",
+                      description="A", lore_fragment_id=None, value=200)
+        )
+        state.discoveries.append(
+            Discovery(id="oq_art_2", name="Ancient Relic", category="artifact",
+                      description="A", lore_fragment_id=None, value=300)
+        )
+        # 1 mineral available (this entry is valid)
+        state.discoveries.append(
+            Discovery(id="oq_min_1", name="Common Ore", category="mineral",
+                      description="M", lore_fragment_id=None, value=100)
+        )
+        credits_before = state.ship.credits
+        # First entry requests 5 artifacts (only 2 exist) -> must be rejected and
+        # sell NOTHING; second entry (1 mineral) is valid and must still sell.
+        ok, msg, sold_count, _total_price = perform_bulk_sell(state, [
+            {"item": "artifact", "quantity": 5},
+            {"item": "mineral", "quantity": 1},
+        ])
+        assert ok is True
+        # Exactly one item was sold (the mineral), not 3.
+        assert sold_count == 1
+        assert "Only" in msg and "requested 5" in msg
+        assert state.ship.credits > credits_before
+        remaining_ids = {d.id for d in state.discoveries}
+        # Both artifacts remain unsold because the over-quantity entry was rejected.
+        assert "oq_art_1" in remaining_ids
+        assert "oq_art_2" in remaining_ids
+        # The valid mineral entry was sold.
+        assert "oq_min_1" not in remaining_ids
+        assert len(state.discoveries) == 2
 
 
 class TestDatabaseModule:
