@@ -935,6 +935,7 @@ def perform_salvage(state: GameState) -> dict:
     :rtype: dict
     """
     ship = state.ship
+    morale_before = ship.morale
 
     if ship.fuel > 0:
         return {"error": "Salvage is only possible when stranded with no fuel."}
@@ -994,7 +995,7 @@ def perform_salvage(state: GameState) -> dict:
         )
         accepted = _add_discoveries(state, [disc])
         if not accepted:
-            ship.morale = min(100, ship.morale + morale_cost)
+            ship.morale = morale_before
             if current_attempts == 0:
                 ship.salvage_attempts.pop(body_id, None)
             else:
