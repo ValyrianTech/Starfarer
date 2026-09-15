@@ -349,8 +349,11 @@ def perform_bulk_sell(state: GameState, items: list[dict]) -> tuple[bool, str, i
     """Sell multiple discoveries in a single transaction.
 
     Validates that all requested items exist in the ship's discoveries.
-    Items that don't exist are reported as errors, but the sale of
-    available items still proceeds (partial failure).
+    Items that don't exist, or for which the requested quantity exceeds
+    the number available, are reported as errors and are NOT sold. An
+    entry requesting more units than are available is rejected (no units
+    of that entry are sold) rather than being clamped. The sale of the
+    remaining valid items still proceeds (partial failure).
 
     :param state: The current game state.
     :type state: GameState
@@ -408,9 +411,8 @@ def perform_bulk_sell(state: GameState, items: list[dict]) -> tuple[bool, str, i
         matching.sort(key=lambda d: d.value, reverse=True)
         if quantity > len(matching):
             errors.append(f"Only {len(matching)} item(s) found matching '{item_name}', requested {quantity}.")
-            to_sell = matching
-        else:
-            to_sell = matching[:quantity]
+            continue
+        to_sell = matching[:quantity]
 
         for disc in to_sell:
             sell_price = int(disc.value * price_mod * stellar_sell_mod)
