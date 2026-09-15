@@ -992,8 +992,11 @@ def perform_salvage(state: GameState) -> dict:
             value=spare_value, system_id=system.id if system else "",
             body_id=body_id,
         )
-        state.discoveries.append(disc)
-        state.sync_cargo()
+        accepted = _add_discoveries(state, [disc])
+        if not accepted:
+            return {
+                "error": "Cargo hold is full — no room to store salvaged parts.",
+            }
         state.add_log("emergency", f"Salvaged spare parts on {body.name if body else body_id} (value: {spare_value} credits).", category="crisis", title="Salvage: Spare Parts", cargo_change=1)
         return {
             "result": f"Found salvageable spare parts! Value: {spare_value} credits.",

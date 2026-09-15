@@ -5590,6 +5590,38 @@ class TestCargoCapacityEnforcement:
         assert len(state.discoveries) == 1
         assert state.ship.cargo == 1
 
+    def test_perform_salvage_spare_parts_full_hold(self) -> None:
+        """perform_salvage spare-parts branch must not bypass cargo capacity."""
+        from unittest.mock import MagicMock, patch
+
+        state = new_game(seed=42)
+        state.ship.fuel = 0
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), system.bodies[0])
+        land_on_body(state, planet.id)
+
+        # Fill the cargo hold completely so _add_discoveries rejects the salvage.
+        state.ship.max_cargo = 1
+        state.discoveries.clear()
+        state.discoveries.append(
+            Discovery(id="full_salvage", category="mineral", name="Filler", description="f", value=1)
+        )
+        state.sync_cargo()
+        assert state.ship.cargo == 1
+
+        mock_rng = MagicMock()
+        mock_rng.random.side_effect = [0.8]
+        mock_rng.randint.side_effect = [30]
+        mock_rng.getrandbits.return_value = 0xABC123
+        with patch("backend.game.engine.seeded_random", return_value=mock_rng):
+            result = perform_salvage(state)
+
+        assert "error" in result
+        assert len(state.discoveries) == 1
+        assert len(state.discoveries) <= state.ship.max_cargo
+        assert state.ship.cargo == len(state.discoveries)
+
 
 class TestDiscoveryLoreFragmentDefensiveLoad:
     def test_discovery_missing_category_loads_with_defaults(self) -> None:
