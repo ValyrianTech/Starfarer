@@ -45,7 +45,7 @@ Key features include a deterministic procedural galaxy with 50 systems, 40+ uniq
 
 Both the ghost signatures and Crossroads messages endpoints accept `page` (default 1) and `per_page` (default 10, max 50) query parameters. Invalid values are clamped (not rejected with 422), making validation behavior consistent across endpoints. Responses include `page`, `per_page`, `total_ghosts`/`total_messages`, and `total_pages`. When there are no entries, `total_pages` returns 0 (not 1). The `api_ripples` endpoint reads ripple data directly from the database without acquiring the game lock. State-modifying API routes serialize access to a game's state with a per-game lock to prevent race conditions under concurrent requests. The in-memory game cache is bounded to `MAX_IN_MEMORY_GAMES` (200) games and evicts the least-recently-used games (persisting them to SQLite first) to cap memory use, while keeping currently-active (locked) games resident.
 
-`POST /api/game/new` returns a per-game `token` alongside `game_id` and `state`. When `STARFARER_REQUIRE_GAME_TOKEN` is enabled, all endpoints that access a specific game — both mutating and read-only GET endpoints — require that token via the `X-Game-Token` header (or the `token` query parameter for read-only consumers). The spectator SSE stream (`GET /api/spectate/{game_id}/stream`) also requires the token, and `GET /api/spectate/games` is disabled (HTTP 403) while enforcement is on. CORS credentials are automatically disabled when a wildcard origin is configured.
+`POST /api/game/new` returns a per-game `token` alongside `game_id` and `state`. When `STARFARER_REQUIRE_GAME_TOKEN` is enabled, all endpoints that access a specific game — both mutating and read-only GET endpoints — require that token via the `X-Game-Token` header or the `token` query parameter. The spectator SSE stream (`GET /api/spectate/{game_id}/stream`) also requires the token, and `GET /api/spectate/games` is disabled (HTTP 403) while enforcement is on. CORS credentials are automatically disabled when a wildcard origin is configured.
 
 ## Configuration
 
@@ -53,7 +53,7 @@ Both the ghost signatures and Crossroads messages endpoints accept `page` (defau
 |----------|---------|
 | `STARFARER_DATA_DIR` | Persistent data directory (default: `~/.starfarer/data/`) |
 | `STARFARER_ALLOWED_ORIGINS` | Comma-separated list of CORS allowed origins (default: local dev origins `http://localhost:3000`, `http://localhost:8080`, `http://localhost:8001`) |
-| `STARFARER_REQUIRE_GAME_TOKEN` | When truthy (`1`, `true`, `yes`, `on`, case-insensitive), require the per-game token (`X-Game-Token` header, or `token` query parameter for read-only consumers) on all endpoints that access a specific game — mutating and read endpoints — plus spectator endpoints (default: off) |
+| `STARFARER_REQUIRE_GAME_TOKEN` | When truthy (`1`, `true`, `yes`, `on`, case-insensitive), require the per-game token (`X-Game-Token` header, or `token` query parameter) on all endpoints that access a specific game — mutating and read endpoints — plus spectator endpoints (default: off) |
 
 The data directory is created automatically on first run. Database migrations run at startup — no manual steps required.
 
