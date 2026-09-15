@@ -424,6 +424,8 @@ Matches items by exact name first, then falls back to category match. Each `item
 
 **Partial failure mode:** If some items don't exist in your inventory, the available items still sell. Errors are reported alongside the success message.
 
+**Over-quantity entries:** If an entry requests more units than are available (for example, `{ "item": "artifact", "quantity": 5 }` when only 2 matching artifacts exist), that entry is rejected outright and none of its units are sold — the quantity is NOT clamped to what is available. An error is reported for that entry, but the other valid entries in the same request still sell, so the response remains a partial success.
+
 Returns the full game state plus a `trade_result` field with `sold_count` and `total_price`.
 
 ---
