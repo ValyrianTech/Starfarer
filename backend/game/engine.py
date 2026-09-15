@@ -994,6 +994,11 @@ def perform_salvage(state: GameState) -> dict:
         )
         accepted = _add_discoveries(state, [disc])
         if not accepted:
+            ship.morale = min(100, ship.morale + morale_cost)
+            if current_attempts == 0:
+                ship.salvage_attempts.pop(body_id, None)
+            else:
+                ship.salvage_attempts[body_id] = current_attempts
             return {
                 "error": "Cargo hold is full — no room to store salvaged parts.",
             }

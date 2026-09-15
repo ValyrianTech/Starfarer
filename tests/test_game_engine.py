@@ -2749,6 +2749,61 @@ class TestSalvage:
         assert "Nothing useful" in result["result"]
         assert "error" not in result
 
+    def test_perform_salvage_spare_parts_full_hold_does_not_consume_costs(self) -> None:
+        from unittest.mock import MagicMock, patch
+        state = self._make_salvage_state()
+        body_id = state.ship.current_body_id
+        morale_before = state.ship.morale
+        attempts_before = state.ship.salvage_attempts.get(body_id, 0)
+
+        state.ship.max_cargo = 1
+        state.discoveries.clear()
+        state.discoveries.append(
+            Discovery(id="full_salvage", category="mineral", name="Filler", description="f", value=1)
+        )
+        state.sync_cargo()
+        discoveries_before = len(state.discoveries)
+        cargo_before = state.ship.cargo
+
+        mock_rng = MagicMock()
+        mock_rng.random.side_effect = [0.8]
+        mock_rng.randint.side_effect = [30]
+        mock_rng.getrandbits.return_value = 0xABC123
+        with patch("backend.game.engine.seeded_random", return_value=mock_rng):
+            result = perform_salvage(state)
+
+        assert "error" in result
+        assert state.ship.morale == morale_before
+        assert state.ship.salvage_attempts.get(body_id, 0) == attempts_before
+        assert len(state.discoveries) == discoveries_before
+        assert state.ship.cargo == cargo_before
+
+    def test_perform_salvage_spare_parts_full_hold_restores_prior_attempt(self) -> None:
+        from unittest.mock import MagicMock, patch
+        state = self._make_salvage_state()
+        body_id = state.ship.current_body_id
+        state.ship.salvage_attempts[body_id] = 1
+        morale_before = state.ship.morale
+        attempts_before = state.ship.salvage_attempts.get(body_id, 0)
+
+        state.ship.max_cargo = 1
+        state.discoveries.clear()
+        state.discoveries.append(
+            Discovery(id="full_salvage2", category="mineral", name="Filler", description="f", value=1)
+        )
+        state.sync_cargo()
+
+        mock_rng = MagicMock()
+        mock_rng.random.side_effect = [0.8]
+        mock_rng.randint.side_effect = [30]
+        mock_rng.getrandbits.return_value = 0xABC123
+        with patch("backend.game.engine.seeded_random", return_value=mock_rng):
+            result = perform_salvage(state)
+
+        assert "error" in result
+        assert state.ship.morale == morale_before
+        assert state.ship.salvage_attempts.get(body_id, 0) == attempts_before
+
     def test_perform_salvage_morale_cost(self) -> None:
         from unittest.mock import MagicMock, patch
         state = self._make_salvage_state()
