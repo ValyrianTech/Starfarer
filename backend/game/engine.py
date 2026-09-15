@@ -935,6 +935,7 @@ def perform_salvage(state: GameState) -> dict:
     :rtype: dict
     """
     ship = state.ship
+    morale_before = ship.morale
 
     if ship.fuel > 0:
         return {"error": "Salvage is only possible when stranded with no fuel."}
@@ -992,8 +993,16 @@ def perform_salvage(state: GameState) -> dict:
             value=spare_value, system_id=system.id if system else "",
             body_id=body_id,
         )
-        state.discoveries.append(disc)
-        state.sync_cargo()
+        accepted = _add_discoveries(state, [disc])
+        if not accepted:
+            ship.morale = morale_before
+            if current_attempts == 0:
+                ship.salvage_attempts.pop(body_id, None)
+            else:
+                ship.salvage_attempts[body_id] = current_attempts
+            return {
+                "error": "Cargo hold is full — no room to store salvaged parts.",
+            }
         state.add_log("emergency", f"Salvaged spare parts on {body.name if body else body_id} (value: {spare_value} credits).", category="crisis", title="Salvage: Spare Parts", cargo_change=1)
         return {
             "result": f"Found salvageable spare parts! Value: {spare_value} credits.",
