@@ -285,6 +285,55 @@ class TestReadEndpointEnforcement:
             GAME_STORE.pop(gid, None)
 
 
+class TestMutatingEndpointEnforcement:
+    def test_mutating_endpoints_enforce_token(self, monkeypatch) -> None:
+        monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        init_multiplayer_db()
+        data = _new_game_via_api()
+        gid = data["game_id"]
+        token = data["token"]
+        try:
+            cases: list[tuple[str, str, dict | None]] = [
+                ("jump", f"/api/game/{gid}/jump/bogus-system", None),
+                ("scan", f"/api/game/{gid}/scan", None),
+                ("land", f"/api/game/{gid}/land/bogus-body", None),
+                ("atmospheric-scan", f"/api/game/{gid}/atmospheric-scan", None),
+                ("sub-surface-explore", f"/api/game/{gid}/sub-surface-explore", None),
+                ("explore", f"/api/game/{gid}/explore", None),
+                ("resolve-event", f"/api/game/{gid}/event/bogus-event/resolve", {"choice_index": 0}),
+                ("trade", f"/api/game/{gid}/trade", {"action": "buy", "item": "fuel", "quantity": 1}),
+                ("bulk-sell", f"/api/game/{gid}/trade/bulk-sell", {"items": []}),
+                ("upgrade", f"/api/game/{gid}/upgrade", {"upgrade_id": "bogus"}),
+                ("distress", f"/api/game/{gid}/distress", None),
+                ("salvage", f"/api/game/{gid}/salvage", None),
+                ("salvage-craft", f"/api/game/{gid}/salvage/craft", {"discovery_id": "bogus", "output": "fuel"}),
+                ("faction-mission", f"/api/game/{gid}/faction/bogus-faction/mission", None),
+                ("accept-mission", f"/api/game/{gid}/missions/bogus-mission/accept", {"mission_id": "bogus-mission"}),
+                ("complete-mission", f"/api/game/{gid}/missions/bogus-mission/complete", {"mission_id": "bogus-mission"}),
+                ("save", f"/api/game/{gid}/save", None),
+                ("load", f"/api/game/{gid}/load", None),
+                ("dismiss-hint", f"/api/game/{gid}/hints/dismiss", {"hint_id": "bogus-hint"}),
+                ("leave-ghost", f"/api/game/{gid}/leave-ghost", {}),
+                ("donate-item", "/api/crossroads/donate-item", {"game_id": gid, "item_name": "bogus", "quantity": 1}),
+                ("claim-item", "/api/crossroads/claim-item/bogus-item", {"game_id": gid}),
+                ("donate-lore", "/api/crossroads/donate-lore", {"game_id": gid, "fragment_id": "bogus"}),
+                ("claim-lore", "/api/crossroads/claim-lore/bogus-donation", {"game_id": gid}),
+                ("post-message", "/api/crossroads/post-message", {"game_id": gid, "text": "hello"}),
+                ("acknowledge-ripple", f"/api/game/{gid}/ripple/bogus-ripple/acknowledge", None),
+            ]
+            for name, url, body in cases:
+                resp = client.post(url, json=body, headers={"X-Game-Token": "wrong"})
+                assert resp.status_code == 403, f"{name}: wrong token should be 403, got {resp.status_code}"
+
+                resp = client.post(url, json=body, headers={"X-Game-Token": token})
+                assert resp.status_code != 403, f"{name}: header token should pass auth, got {resp.status_code}"
+
+                resp = client.post(url, json=body, params={"token": token})
+                assert resp.status_code != 403, f"{name}: query token should pass auth, got {resp.status_code}"
+        finally:
+            GAME_STORE.pop(gid, None)
+
+
 class TestMultiplayerReadEndpointEnforcement:
     def test_ripples_requires_token(self, monkeypatch) -> None:
         monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
