@@ -23,6 +23,7 @@ from backend.game.manager import GAME_STORE, game_save, new_game
 from backend.main import app
 from backend.models.discovery import Discovery, LoreFragment
 from backend.multiplayer.api import (
+    _check_game,
     _game_exists,
     _opaque_donor_id,
     _public_item_view,
@@ -2457,6 +2458,31 @@ class TestMultiplayerAPI:
 
     def test_cleanup_game_lock_nonexistent(self) -> None:
         _cleanup_game_lock("nonexistent-game-id")
+
+    def test_check_game_404_preserves_held_lock(self) -> None:
+        """_check_game's 404 path must not drop the lock the caller currently holds."""
+        from fastapi import HTTPException
+
+        game_id = "nonexistent-check-game-id"
+        _game_locks.pop(game_id, None)
+        _lock_last_access.pop(game_id, None)
+
+        lock = _get_lock(game_id)
+        assert game_id in _game_locks
+
+        lock.acquire()
+        try:
+            with pytest.raises(HTTPException) as exc_info:
+                _check_game(game_id)
+            assert exc_info.value.status_code == 404
+            assert game_id in _game_locks
+            assert game_id in _lock_last_access
+        finally:
+            lock.release()
+
+        _cleanup_game_lock(game_id)
+        assert game_id not in _game_locks
+        assert game_id not in _lock_last_access
 
     def test_get_lock_returns_same_lock_for_existing_game(self) -> None:
         resp = client.post("/api/game/new", json={"shared_universe": True})
