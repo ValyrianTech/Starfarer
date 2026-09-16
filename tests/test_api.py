@@ -10,7 +10,7 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
-from backend.database import init_db
+from backend.database import _opaque_entry_id, init_db
 from backend.game.engine import get_nearby_systems, land_on_body
 from backend.game.manager import GAME_STORE, game_save, new_game
 from backend.game.trading import perform_bulk_sell, purchase_upgrade
@@ -491,6 +491,46 @@ class TestLeaderboardSecurity:
         assert len(value) == 12
         assert all(c in "0123456789abcdef" for c in value)
         assert _opaque_entry_id("some-game-id") == value
+
+
+class TestLeaderboardApiContract:
+    """Locks the documented leaderboard API contract so it cannot silently regress."""
+
+    def test_leaderboard_returns_200_and_list(self) -> None:
+        """GET /api/leaderboard returns 200 with a 'leaderboard' list."""
+        resp = client.get("/api/leaderboard")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "leaderboard" in data
+        assert isinstance(data["leaderboard"], list)
+
+    def test_entry_keys_match_documented_contract(self) -> None:
+        """A created game's entry has exactly the documented key set and no game_id/seed."""
+        game_id = "leaderboard-contract"
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": game_id})
+        assert resp.status_code == 200
+        state = GAME_STORE[game_id]
+        game_save(state)
+
+        resp = client.get("/api/leaderboard")
+        assert resp.status_code == 200
+        data = resp.json()
+
+        entry = next(e for e in data["leaderboard"] if e["entry_id"] == _opaque_entry_id(game_id))
+        expected_keys = {
+            "entry_id",
+            "ship_name",
+            "last_played",
+            "discoveries",
+            "systems_visited",
+            "credits",
+            "ghost_signatures_left",
+            "items_donated",
+            "lore_donated",
+        }
+        assert set(entry.keys()) == expected_keys
+        assert "game_id" not in entry
+        assert "seed" not in entry
 
 
 class TestAPIAllEndpoints404:

@@ -308,7 +308,7 @@ GET /api/game/{id}/discoveries — Discovered lore and artifacts
 POST /api/game/{id}/trade — Buy or sell at a station
 POST /api/game/{id}/upgrade — Purchase a ship upgrade
 GET /api/game/{id}/nearby — Nearby systems within jump range
-GET /api/leaderboard — Top AI players by discoveries and efficiency
+GET /api/leaderboard — Top AI players by discoveries and efficiency (response uses an opaque `entry_id`; never exposes `game_id` or `seed` — a deliberate breaking change vs. the original design)
 POST /api/game/{id}/atmospheric-scan — Atmospheric scan (1 fuel, gas giants/volcanic/ocean biomes, yields atmospheric phenomena discoveries, capped at 3 per body)
 POST /api/game/{id}/sub-surface-explore — Sub-surface exploration (3 fuel + 1 crew, volcanic/desert/tundra → geological formations, ocean → biological specimens, one-time per body)
 
