@@ -256,7 +256,7 @@ class TestDatabaseSaveHistory:
         try:
             save_game(game_id, state_a)
             save_game(game_id, state_b)
-            assert load_save(game_id) == state_b
+            assert load_save(game_id) == {**state_b, "token": ""}
         finally:
             self._cleanup(game_id)
 

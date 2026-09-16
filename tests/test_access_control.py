@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 
@@ -473,3 +474,436 @@ class TestSpectateEnforcement:
             assert exc.value.status_code != 500
         finally:
             GAME_STORE.pop(gid, None)
+
+
+class TestTokenNotInStateJson:
+    def test_persisted_state_json_has_no_token_key(self) -> None:
+        from backend.database import get_db
+
+        data = _new_game_via_api()
+        gid = data["game_id"]
+        token = data["token"]
+        try:
+            conn = get_db()
+            try:
+                row = conn.execute(
+                    "SELECT state_json, token FROM games WHERE id = ?", (gid,)
+                ).fetchone()
+            finally:
+                conn.close()
+            assert row is not None
+            raw = row["state_json"]
+            assert "token" not in json.loads(raw)
+            assert '"token"' not in raw
+            assert row["token"] == token
+        finally:
+            GAME_STORE.pop(gid, None)
+
+    def test_saves_state_json_has_no_token_key(self) -> None:
+        from backend.database import get_db
+
+        data = _new_game_via_api()
+        gid = data["game_id"]
+        token = data["token"]
+        try:
+            resp = client.post(f"/api/game/{gid}/save")
+            assert resp.status_code == 200
+            conn = get_db()
+            try:
+                row = conn.execute(
+                    "SELECT state_json, token FROM saves WHERE game_id = ? "
+                    "ORDER BY id DESC LIMIT 1",
+                    (gid,),
+                ).fetchone()
+            finally:
+                conn.close()
+            assert row is not None
+            assert "token" not in json.loads(row["state_json"])
+            assert row["token"] == token
+        finally:
+            GAME_STORE.pop(gid, None)
+
+    def test_token_round_trips_through_column_only(self) -> None:
+        from backend.game.manager import game_load
+
+        data = _new_game_via_api()
+        gid = data["game_id"]
+        token = data["token"]
+        try:
+            GAME_STORE.pop(gid, None)
+            state = game_load(gid)
+            assert state is not None
+            assert state.token == token
+        finally:
+            GAME_STORE.pop(gid, None)
+
+    def test_create_game_strips_token_from_state_json(self) -> None:
+        from backend.database import create_game, get_db
+
+        gid = "token-strip-test"
+        create_game(
+            gid, 42, "TokShip",
+            {"seed": 42, "ship": {"name": "TokShip"}, "token": "sekret"},
+        )
+        try:
+            conn = get_db()
+            try:
+                row = conn.execute(
+                    "SELECT state_json, token FROM games WHERE id = ?", (gid,)
+                ).fetchone()
+            finally:
+                conn.close()
+            assert row is not None
+            assert "token" not in json.loads(row["state_json"])
+            assert row["token"] == "sekret"
+        finally:
+            conn = get_db()
+            try:
+                conn.execute("DELETE FROM games WHERE id = ?", (gid,))
+                conn.commit()
+            finally:
+                conn.close()
+
+    def test_load_game_reattaches_token_from_column(self) -> None:
+        from backend.database import create_game, get_db, load_game
+
+        gid = "token-reattach-test"
+        create_game(
+            gid, 42, "TokShip",
+            {"seed": 42, "ship": {"name": "TokShip"}, "token": "sekret"},
+        )
+        try:
+            loaded = load_game(gid)
+            assert loaded is not None
+            assert loaded["token"] == "sekret"
+        finally:
+            conn = get_db()
+            try:
+                conn.execute("DELETE FROM games WHERE id = ?", (gid,))
+                conn.commit()
+            finally:
+                conn.close()
+
+    def test_migration_adds_token_column_to_preexisting_db(self, tmp_path) -> None:
+        import sqlite3
+        from unittest.mock import patch
+
+        from backend.database import init_db
+
+        db_path = tmp_path / "legacy.db"
+        conn = sqlite3.connect(str(db_path))
+        conn.executescript(
+            """
+            CREATE TABLE games (
+                id TEXT PRIMARY KEY,
+                seed INTEGER NOT NULL,
+                ship_name TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                state_json TEXT NOT NULL
+            );
+            CREATE TABLE saves (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                game_id TEXT NOT NULL,
+                saved_at TEXT NOT NULL,
+                state_json TEXT NOT NULL
+            );
+            """
+        )
+        conn.commit()
+        conn.close()
+
+        with patch("backend.database.DB_PATH", db_path), \
+             patch("backend.database.DATA_DIR", tmp_path):
+            init_db()
+
+        conn = sqlite3.connect(str(db_path))
+        conn.row_factory = sqlite3.Row
+        try:
+            games_cols = {r["name"] for r in conn.execute("PRAGMA table_info(games)").fetchall()}
+            saves_cols = {r["name"] for r in conn.execute("PRAGMA table_info(saves)").fetchall()}
+        finally:
+            conn.close()
+        assert "token" in games_cols
+        assert "token" in saves_cols
+
+
+class TestLegacyTokenMigration:
+    def test_load_game_recovers_embedded_token(self) -> None:
+        from backend.database import get_db, load_game
+
+        gid = "legacy-game-embedded-token"
+        conn = get_db()
+        try:
+            conn.execute(
+                "INSERT INTO games (id, seed, ship_name, created_at, updated_at, state_json, token) "
+                "VALUES (?, ?, ?, ?, ?, ?, '')",
+                (
+                    gid,
+                    42,
+                    "LegacyShip",
+                    "2020-01-01T00:00:00+00:00",
+                    "2020-01-01T00:00:00+00:00",
+                    json.dumps({"seed": 42, "ship": {"name": "LegacyShip"}, "token": "legacy-sekret"}),
+                ),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        try:
+            loaded = load_game(gid)
+            assert loaded is not None
+            assert loaded["token"] == "legacy-sekret"
+
+            conn = get_db()
+            try:
+                row = conn.execute(
+                    "SELECT state_json, token FROM games WHERE id = ?", (gid,)
+                ).fetchone()
+            finally:
+                conn.close()
+            assert row is not None
+            assert row["token"] == "legacy-sekret"
+            assert "token" not in json.loads(row["state_json"])
+        finally:
+            conn = get_db()
+            try:
+                conn.execute("DELETE FROM games WHERE id = ?", (gid,))
+                conn.commit()
+            finally:
+                conn.close()
+
+    def test_load_save_recovers_embedded_token(self) -> None:
+        from backend.database import get_db, load_save
+
+        gid = "legacy-save-embedded-token"
+        conn = get_db()
+        try:
+            conn.execute(
+                "INSERT INTO games (id, seed, ship_name, created_at, updated_at, state_json, token) "
+                "VALUES (?, ?, ?, ?, ?, ?, '')",
+                (
+                    gid,
+                    42,
+                    "LegacyShip",
+                    "2020-01-01T00:00:00+00:00",
+                    "2020-01-01T00:00:00+00:00",
+                    json.dumps({"seed": 42}),
+                ),
+            )
+            conn.execute(
+                "INSERT INTO saves (game_id, saved_at, state_json, token) VALUES (?, ?, ?, '')",
+                (
+                    gid,
+                    "2020-01-01T00:00:00+00:00",
+                    json.dumps({"seed": 42, "token": "legacy-save-sekret"}),
+                ),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        try:
+            loaded = load_save(gid)
+            assert loaded is not None
+            assert loaded["token"] == "legacy-save-sekret"
+
+            conn = get_db()
+            try:
+                row = conn.execute(
+                    "SELECT state_json, token FROM saves WHERE game_id = ? ORDER BY id DESC LIMIT 1",
+                    (gid,),
+                ).fetchone()
+            finally:
+                conn.close()
+            assert row is not None
+            assert row["token"] == "legacy-save-sekret"
+            assert "token" not in json.loads(row["state_json"])
+        finally:
+            conn = get_db()
+            try:
+                conn.execute("DELETE FROM saves WHERE game_id = ?", (gid,))
+                conn.execute("DELETE FROM games WHERE id = ?", (gid,))
+                conn.commit()
+            finally:
+                conn.close()
+
+    def test_legacy_row_without_embedded_token_falls_back_to_empty(self) -> None:
+        from backend.database import get_db, load_game
+
+        gid = "legacy-game-no-token"
+        conn = get_db()
+        try:
+            conn.execute(
+                "INSERT INTO games (id, seed, ship_name, created_at, updated_at, state_json, token) "
+                "VALUES (?, ?, ?, ?, ?, ?, '')",
+                (
+                    gid,
+                    42,
+                    "LegacyShip",
+                    "2020-01-01T00:00:00+00:00",
+                    "2020-01-01T00:00:00+00:00",
+                    json.dumps({"seed": 42, "ship": {"name": "LegacyShip"}}),
+                ),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        try:
+            loaded = load_game(gid)
+            assert loaded is not None
+            assert loaded["token"] == ""
+
+            conn = get_db()
+            try:
+                row = conn.execute(
+                    "SELECT state_json, token FROM games WHERE id = ?", (gid,)
+                ).fetchone()
+            finally:
+                conn.close()
+            assert row is not None
+            assert row["token"] == ""
+        finally:
+            conn = get_db()
+            try:
+                conn.execute("DELETE FROM games WHERE id = ?", (gid,))
+                conn.commit()
+            finally:
+                conn.close()
+
+    def test_load_game_empty_column_does_not_clobber_present_token(self) -> None:
+        from backend.database import get_db, load_game
+
+        gid = "mixed-guard-game-present-token"
+        conn = get_db()
+        try:
+            conn.execute(
+                "INSERT INTO games (id, seed, ship_name, created_at, updated_at, state_json, token) "
+                "VALUES (?, ?, ?, ?, ?, ?, '')",
+                (
+                    gid,
+                    42,
+                    "MixedShip",
+                    "2020-01-01T00:00:00+00:00",
+                    "2020-01-01T00:00:00+00:00",
+                    json.dumps({"seed": 42, "ship": {"name": "MixedShip"}, "token": "embedded-sekret"}),
+                ),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        try:
+            loaded = load_game(gid)
+            assert loaded is not None
+            assert loaded["token"] == "embedded-sekret"
+
+            conn = get_db()
+            try:
+                row = conn.execute(
+                    "SELECT state_json, token FROM games WHERE id = ?", (gid,)
+                ).fetchone()
+            finally:
+                conn.close()
+            assert row is not None
+            assert row["token"] == "embedded-sekret"
+            assert "token" not in json.loads(row["state_json"])
+        finally:
+            conn = get_db()
+            try:
+                conn.execute("DELETE FROM games WHERE id = ?", (gid,))
+                conn.commit()
+            finally:
+                conn.close()
+
+    def test_load_game_empty_column_and_empty_embedded_returns_empty_string(self) -> None:
+        from backend.database import get_db, load_game
+
+        gid = "mixed-guard-game-empty-token"
+        conn = get_db()
+        try:
+            conn.execute(
+                "INSERT INTO games (id, seed, ship_name, created_at, updated_at, state_json, token) "
+                "VALUES (?, ?, ?, ?, ?, ?, '')",
+                (
+                    gid,
+                    42,
+                    "EmptyShip",
+                    "2020-01-01T00:00:00+00:00",
+                    "2020-01-01T00:00:00+00:00",
+                    json.dumps({"seed": 42, "ship": {"name": "EmptyShip"}}),
+                ),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        try:
+            loaded = load_game(gid)
+            assert loaded is not None
+            assert loaded["token"] == ""
+            assert loaded["seed"] == 42
+        finally:
+            conn = get_db()
+            try:
+                conn.execute("DELETE FROM games WHERE id = ?", (gid,))
+                conn.commit()
+            finally:
+                conn.close()
+
+    def test_load_save_empty_column_does_not_clobber_present_token(self) -> None:
+        from backend.database import get_db, load_save
+
+        gid = "mixed-guard-save-present-token"
+        conn = get_db()
+        try:
+            conn.execute(
+                "INSERT INTO games (id, seed, ship_name, created_at, updated_at, state_json, token) "
+                "VALUES (?, ?, ?, ?, ?, ?, '')",
+                (
+                    gid,
+                    7,
+                    "MixedShip",
+                    "2020-01-01T00:00:00+00:00",
+                    "2020-01-01T00:00:00+00:00",
+                    json.dumps({"seed": 7}),
+                ),
+            )
+            conn.execute(
+                "INSERT INTO saves (game_id, saved_at, state_json, token) VALUES (?, ?, ?, '')",
+                (
+                    gid,
+                    "2020-01-01T00:00:00+00:00",
+                    json.dumps({"seed": 7, "token": "save-embedded-sekret"}),
+                ),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        try:
+            loaded = load_save(gid)
+            assert loaded is not None
+            assert loaded["token"] == "save-embedded-sekret"
+
+            conn = get_db()
+            try:
+                row = conn.execute(
+                    "SELECT state_json, token FROM saves WHERE game_id = ? ORDER BY id DESC LIMIT 1",
+                    (gid,),
+                ).fetchone()
+            finally:
+                conn.close()
+            assert row is not None
+            assert row["token"] == "save-embedded-sekret"
+            assert "token" not in json.loads(row["state_json"])
+        finally:
+            conn = get_db()
+            try:
+                conn.execute("DELETE FROM saves WHERE game_id = ?", (gid,))
+                conn.execute("DELETE FROM games WHERE id = ?", (gid,))
+                conn.commit()
+            finally:
+                conn.close()

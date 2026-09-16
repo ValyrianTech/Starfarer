@@ -151,10 +151,10 @@ conn = sqlite3.connect('/home/wouter/Repos/starfarer/data/starfarer.db')
 cursor = conn.cursor()
 cursor.execute('SELECT * FROM games')
 rows = cursor.fetchall()
-# Each row: (id, seed, ship_name, created_at, updated_at, state_json)
+# Each row: (id, seed, ship_name, created_at, updated_at, state_json, token)
 # The most recent game is usually the last row
 ```
-**Tip:** The `state_json` column contains the full game state as a JSON string — you can extract everything from there without even calling the API!
+**Tip:** The `state_json` column holds the game state as a JSON string, but the per-game access token lives separately in its own `token` column (deliberately NOT in `state_json`, which broad endpoints parse) — so grab everything except the token from `state_json` without calling the API!
 
 **Method 2: Browser JavaScript (if browser is open)**
 Execute in the browser console:
