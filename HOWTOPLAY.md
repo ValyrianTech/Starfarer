@@ -819,7 +819,7 @@ All endpoints that access a specific game (mutating and read-only GET) accept th
 | GET | `/api/game/{id}/system/{sys_id}/ghosts?page={n}&per_page={n}` | Get ghost signatures in a system (paginated, returns total_ghosts, total_pages) |
 | POST | `/api/game/{id}/leave-ghost` | Leave a ghost signature |
 | GET | `/api/crossroads/items?game_id={id}&page={n}&per_page={n}` | List available items at the Crossroads (requires `game_id`; paginated, default 25/max 50, returns `total_items`/`total_pages`; sanitized public view) |
-| POST | `/api/crossroads/donate-item` | Donate an item to the Crossroads |
+| POST | `/api/crossroads/donate-item` | Donate an item to the Crossroads (`quantity` must be a positive integer, default 1; non-positive or non-integer values are rejected with 422) |
 | POST | `/api/crossroads/claim-item/{item_id}` | Claim an item from the Crossroads (claims are capped at remaining cargo capacity; the response's `item.stored` reports how many were actually stored, and a partial claim logs a "cargo hold full" message) |
 | GET | `/api/crossroads/lore?game_id={id}&page={n}&per_page={n}` | List available lore at the Crossroads (requires `game_id`; paginated, default 25/max 50, returns `total_lore`/`total_pages`; sanitized public view) |
 | POST | `/api/crossroads/donate-lore` | Donate a lore fragment to the Crossroads |

@@ -968,6 +968,57 @@ class TestMultiplayerCrossroads:
         assert result["success"] is False
         GAME_STORE.pop(state.id, None)
 
+    @pytest.mark.parametrize("quantity", [0, -5])
+    def test_donate_item_rejects_non_positive_quantity(self, quantity: int) -> None:
+        state = new_game(42, "DonorShip", shared_universe=True)
+        GAME_STORE[state.id] = state
+        try:
+            disc = _make_discovery(name="Reject Ore")
+            state.discoveries.append(disc)
+            result = donate_item(state, "Reject Ore", quantity)
+            assert result["success"] is False
+            assert "positive integer" in result["detail"]
+            assert any(d.name == "Reject Ore" for d in state.discoveries)
+            assert not any(i["item_name"] == "Reject Ore" for i in get_available_items_list())
+        finally:
+            GAME_STORE.pop(state.id, None)
+
+    def test_donate_item_rejects_bool_quantity(self) -> None:
+        state = new_game(42, "DonorShip", shared_universe=True)
+        GAME_STORE[state.id] = state
+        try:
+            disc = _make_discovery(name="Reject Ore")
+            state.discoveries.append(disc)
+            result = donate_item(state, "Reject Ore", True)
+            assert result["success"] is False
+        finally:
+            GAME_STORE.pop(state.id, None)
+
+    def test_donate_item_pydantic_rejects_non_positive(self) -> None:
+        from pydantic import ValidationError
+
+        from backend.multiplayer.schemas import DonateItemRequest
+        with pytest.raises(ValidationError):
+            DonateItemRequest(game_id="g", item_name="i", quantity=0)
+        with pytest.raises(ValidationError):
+            DonateItemRequest(game_id="g", item_name="i", quantity=-5)
+        req = DonateItemRequest(game_id="g", item_name="i", quantity=1)
+        assert req.quantity == 1
+        req_default = DonateItemRequest(game_id="g", item_name="i")
+        assert req_default.quantity == 1
+
+    def test_api_donate_item_non_positive_returns_422(self) -> None:
+        resp = client.post("/api/game/new", json={"shared_universe": True})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+
+        resp = client.post(
+            "/api/crossroads/donate-item",
+            json={"game_id": game_id, "item_name": "X", "quantity": -5},
+        )
+        assert resp.status_code == 422
+        assert not any(i["item_name"] == "X" for i in get_available_items_list())
+
     def test_donate_item_with_message(self) -> None:
         state = new_game(42, "DonorShip", shared_universe=True)
         GAME_STORE[state.id] = state
