@@ -686,7 +686,7 @@ Randomly picks a mission from the available pool and **accepts** it — adding i
 GET /api/leaderboard
 ```
 
-Top players ranked by discoveries and systems visited.
+Top players ranked by discoveries and systems visited. Each entry exposes an opaque `entry_id` (a 12-character SHA-256 hex digest prefix of the raw game id) rather than the raw `game_id`, and omits the `seed` — the raw game id and seed are intentionally not exposed.
 
 ---
 
