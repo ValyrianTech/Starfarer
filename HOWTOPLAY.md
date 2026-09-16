@@ -688,6 +688,46 @@ GET /api/leaderboard
 
 Top players ranked by discoveries and systems visited. Each entry exposes an opaque `entry_id` (a 12-character SHA-256 hex digest prefix of the raw game id) rather than the raw `game_id`, and omits the `seed` — the raw game id and seed are intentionally not exposed.
 
+> **Breaking change:** This is a **deliberate breaking API change**. The original leaderboard response exposed each game's raw `game_id` and `seed`, which let an unauthenticated caller harvest game ids and read any game's full state by default. The new response does **not** contain `game_id` or `seed`; it returns a stable, non-reversible opaque `entry_id` instead.
+
+**Response fields** (one object per leaderboard entry):
+
+| Field | Type | Description |
+|---|---|---|
+| `entry_id` | string | Stable, non-reversible 12-character SHA-256 hex digest prefix of the raw game id |
+| `ship_name` | string | The player's ship name |
+| `last_played` | string | Timestamp of the game's last update |
+| `discoveries` | integer | Number of discoveries made |
+| `systems_visited` | integer | Number of systems visited |
+| `credits` | integer | Current credits |
+| `ghost_signatures_left` | integer | Number of ghost signatures left by this game |
+| `items_donated` | integer | Number of items donated to the Crossroads |
+| `lore_donated` | integer | Number of lore fragments donated to the Crossroads |
+
+Example response:
+
+```json
+{
+  "leaderboard": [
+    {
+      "entry_id": "3f2a1b9c0d4e",
+      "ship_name": "Serendipity",
+      "last_played": "2026-09-16T12:00:00Z",
+      "discoveries": 42,
+      "systems_visited": 17,
+      "credits": 4200,
+      "ghost_signatures_left": 3,
+      "items_donated": 5,
+      "lore_donated": 2
+    }
+  ]
+}
+```
+
+The `entry_id` is stable (the same raw game id always maps to the same `entry_id`) but non-reversible: it cannot be used to look up game state, unlike the old raw `game_id`. There is intentionally no migration path back to raw ids, for security reasons.
+
+A repo-wide audit confirmed that no external consumer (the frontend or webui client) reads the removed `game_id`/`seed` fields.
+
 ---
 
 ## 8. Strategy Guide
