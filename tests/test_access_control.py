@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 
@@ -473,3 +474,155 @@ class TestSpectateEnforcement:
             assert exc.value.status_code != 500
         finally:
             GAME_STORE.pop(gid, None)
+
+
+class TestTokenNotInStateJson:
+    def test_persisted_state_json_has_no_token_key(self) -> None:
+        from backend.database import get_db
+
+        data = _new_game_via_api()
+        gid = data["game_id"]
+        token = data["token"]
+        try:
+            conn = get_db()
+            try:
+                row = conn.execute(
+                    "SELECT state_json, token FROM games WHERE id = ?", (gid,)
+                ).fetchone()
+            finally:
+                conn.close()
+            assert row is not None
+            raw = row["state_json"]
+            assert "token" not in json.loads(raw)
+            assert '"token"' not in raw
+            assert row["token"] == token
+        finally:
+            GAME_STORE.pop(gid, None)
+
+    def test_saves_state_json_has_no_token_key(self) -> None:
+        from backend.database import get_db
+
+        data = _new_game_via_api()
+        gid = data["game_id"]
+        token = data["token"]
+        try:
+            resp = client.post(f"/api/game/{gid}/save")
+            assert resp.status_code == 200
+            conn = get_db()
+            try:
+                row = conn.execute(
+                    "SELECT state_json, token FROM saves WHERE game_id = ? "
+                    "ORDER BY id DESC LIMIT 1",
+                    (gid,),
+                ).fetchone()
+            finally:
+                conn.close()
+            assert row is not None
+            assert "token" not in json.loads(row["state_json"])
+            assert row["token"] == token
+        finally:
+            GAME_STORE.pop(gid, None)
+
+    def test_token_round_trips_through_column_only(self) -> None:
+        from backend.game.manager import game_load
+
+        data = _new_game_via_api()
+        gid = data["game_id"]
+        token = data["token"]
+        try:
+            GAME_STORE.pop(gid, None)
+            state = game_load(gid)
+            assert state is not None
+            assert state.token == token
+        finally:
+            GAME_STORE.pop(gid, None)
+
+    def test_create_game_strips_token_from_state_json(self) -> None:
+        from backend.database import create_game, get_db
+
+        gid = "token-strip-test"
+        create_game(
+            gid, 42, "TokShip",
+            {"seed": 42, "ship": {"name": "TokShip"}, "token": "sekret"},
+        )
+        try:
+            conn = get_db()
+            try:
+                row = conn.execute(
+                    "SELECT state_json, token FROM games WHERE id = ?", (gid,)
+                ).fetchone()
+            finally:
+                conn.close()
+            assert row is not None
+            assert "token" not in json.loads(row["state_json"])
+            assert row["token"] == "sekret"
+        finally:
+            conn = get_db()
+            try:
+                conn.execute("DELETE FROM games WHERE id = ?", (gid,))
+                conn.commit()
+            finally:
+                conn.close()
+
+    def test_load_game_reattaches_token_from_column(self) -> None:
+        from backend.database import create_game, get_db, load_game
+
+        gid = "token-reattach-test"
+        create_game(
+            gid, 42, "TokShip",
+            {"seed": 42, "ship": {"name": "TokShip"}, "token": "sekret"},
+        )
+        try:
+            loaded = load_game(gid)
+            assert loaded is not None
+            assert loaded["token"] == "sekret"
+        finally:
+            conn = get_db()
+            try:
+                conn.execute("DELETE FROM games WHERE id = ?", (gid,))
+                conn.commit()
+            finally:
+                conn.close()
+
+    def test_migration_adds_token_column_to_preexisting_db(self, tmp_path) -> None:
+        import sqlite3
+        from unittest.mock import patch
+
+        from backend.database import init_db
+
+        db_path = tmp_path / "legacy.db"
+        conn = sqlite3.connect(str(db_path))
+        conn.executescript(
+            """
+            CREATE TABLE games (
+                id TEXT PRIMARY KEY,
+                seed INTEGER NOT NULL,
+                ship_name TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                state_json TEXT NOT NULL
+            );
+            CREATE TABLE saves (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                game_id TEXT NOT NULL,
+                saved_at TEXT NOT NULL,
+                state_json TEXT NOT NULL
+            );
+            """
+        )
+        conn.commit()
+        conn.close()
+
+        with patch("backend.database.DB_PATH", db_path), \
+             patch("backend.database.DATA_DIR", tmp_path):
+            init_db()
+
+        conn = sqlite3.connect(str(db_path))
+        conn.row_factory = sqlite3.Row
+        try:
+            games_cols = {r["name"] for r in conn.execute("PRAGMA table_info(games)").fetchall()}
+            saves_cols = {r["name"] for r in conn.execute("PRAGMA table_info(saves)").fetchall()}
+        finally:
+            conn.close()
+        assert "token" in games_cols
+        assert "token" in saves_cols

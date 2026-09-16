@@ -204,6 +204,7 @@ def game_save(state: GameState) -> None:
     :type state: GameState
     """
     data = _state_to_dict(state)
+    data["token"] = state.token
     db_save(state.id, data)
 
 
@@ -267,7 +268,6 @@ def _state_to_dict(state: GameState) -> dict:
         "biomes_visited": list(state.biomes_visited),
         "shared_universe": state.shared_universe,
         "_next_log_id": state._next_log_id,
-        "token": state.token,
     }
 
 
