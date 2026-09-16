@@ -147,6 +147,47 @@ def create_game(game_id: str, seed: int, ship_name: str, state: dict) -> None:
         conn.commit()
 
 
+def _resolve_legacy_token(
+    conn: sqlite3.Connection,
+    data: dict,
+    column_token: str,
+    update_sql: str,
+    update_params: tuple,
+) -> str:
+    """Resolve a row's effective token, migrating legacy embedded tokens.
+
+    When the ``token`` column already holds a value it is returned
+    unchanged and no write is performed. When the column is empty but the
+    deserialized ``state_json`` still contains a truthy embedded ``token``,
+    that value is recovered: it is written to the ``token`` column, scrubbed
+    from ``state_json``, and persisted. Otherwise the (possibly empty)
+    column value is returned.
+
+    :param conn: An open SQLite connection.
+    :type conn: sqlite3.Connection
+    :param data: The deserialized ``state_json`` dictionary.
+    :type data: dict
+    :param column_token: The value of the row's ``token`` column.
+    :type column_token: str
+    :param update_sql: Parameterized UPDATE statement used to persist the
+        migrated token and scrubbed state.
+    :type update_sql: str
+    :param update_params: Parameters bound to ``update_sql``.
+    :type update_params: tuple
+    :returns: The effective token for the loaded row.
+    :rtype: str
+    """
+    if column_token:
+        return column_token
+    embedded_token = data.get("token", "")
+    if embedded_token:
+        data.pop("token", None)
+        conn.execute(update_sql, (embedded_token, json.dumps(data), *update_params))
+        conn.commit()
+        return embedded_token
+    return column_token
+
+
 def load_game(game_id: str) -> dict | None:
     """Load a game's serialized state from the main games table.
 
@@ -158,11 +199,18 @@ def load_game(game_id: str) -> dict | None:
     """
     with get_db_ctx() as conn:
         row = conn.execute("SELECT state_json, token FROM games WHERE id = ?", (game_id,)).fetchone()
-    if row:
+        if row is None:
+            return None
         data = json.loads(row["state_json"])
-        data["token"] = row["token"]
-        return data
-    return None
+        token = _resolve_legacy_token(
+            conn,
+            data,
+            row["token"],
+            "UPDATE games SET token = ?, state_json = ? WHERE id = ?",
+            (game_id,),
+        )
+        data["token"] = token
+    return data
 
 
 def game_exists(game_id: str) -> bool:
@@ -240,14 +288,21 @@ def load_save(game_id: str) -> dict | None:
     """
     with get_db_ctx() as conn:
         row = conn.execute(
-            "SELECT state_json, token FROM saves WHERE game_id = ? ORDER BY id DESC LIMIT 1",
+            "SELECT id, state_json, token FROM saves WHERE game_id = ? ORDER BY id DESC LIMIT 1",
             (game_id,),
         ).fetchone()
-    if row:
+        if row is None:
+            return None
         data = json.loads(row["state_json"])
-        data["token"] = row["token"]
-        return data
-    return None
+        token = _resolve_legacy_token(
+            conn,
+            data,
+            row["token"],
+            "UPDATE saves SET token = ?, state_json = ? WHERE id = ?",
+            (row["id"],),
+        )
+        data["token"] = token
+    return data
 
 
 def _safe_ship_credits(state: dict) -> int:

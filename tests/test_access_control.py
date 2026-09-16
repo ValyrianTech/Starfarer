@@ -626,3 +626,149 @@ class TestTokenNotInStateJson:
             conn.close()
         assert "token" in games_cols
         assert "token" in saves_cols
+
+
+class TestLegacyTokenMigration:
+    def test_load_game_recovers_embedded_token(self) -> None:
+        from backend.database import get_db, load_game
+
+        gid = "legacy-game-embedded-token"
+        conn = get_db()
+        try:
+            conn.execute(
+                "INSERT INTO games (id, seed, ship_name, created_at, updated_at, state_json, token) "
+                "VALUES (?, ?, ?, ?, ?, ?, '')",
+                (
+                    gid,
+                    42,
+                    "LegacyShip",
+                    "2020-01-01T00:00:00+00:00",
+                    "2020-01-01T00:00:00+00:00",
+                    json.dumps({"seed": 42, "ship": {"name": "LegacyShip"}, "token": "legacy-sekret"}),
+                ),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        try:
+            loaded = load_game(gid)
+            assert loaded is not None
+            assert loaded["token"] == "legacy-sekret"
+
+            conn = get_db()
+            try:
+                row = conn.execute(
+                    "SELECT state_json, token FROM games WHERE id = ?", (gid,)
+                ).fetchone()
+            finally:
+                conn.close()
+            assert row is not None
+            assert row["token"] == "legacy-sekret"
+            assert "token" not in json.loads(row["state_json"])
+        finally:
+            conn = get_db()
+            try:
+                conn.execute("DELETE FROM games WHERE id = ?", (gid,))
+                conn.commit()
+            finally:
+                conn.close()
+
+    def test_load_save_recovers_embedded_token(self) -> None:
+        from backend.database import get_db, load_save
+
+        gid = "legacy-save-embedded-token"
+        conn = get_db()
+        try:
+            conn.execute(
+                "INSERT INTO games (id, seed, ship_name, created_at, updated_at, state_json, token) "
+                "VALUES (?, ?, ?, ?, ?, ?, '')",
+                (
+                    gid,
+                    42,
+                    "LegacyShip",
+                    "2020-01-01T00:00:00+00:00",
+                    "2020-01-01T00:00:00+00:00",
+                    json.dumps({"seed": 42}),
+                ),
+            )
+            conn.execute(
+                "INSERT INTO saves (game_id, saved_at, state_json, token) VALUES (?, ?, ?, '')",
+                (
+                    gid,
+                    "2020-01-01T00:00:00+00:00",
+                    json.dumps({"seed": 42, "token": "legacy-save-sekret"}),
+                ),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        try:
+            loaded = load_save(gid)
+            assert loaded is not None
+            assert loaded["token"] == "legacy-save-sekret"
+
+            conn = get_db()
+            try:
+                row = conn.execute(
+                    "SELECT state_json, token FROM saves WHERE game_id = ? ORDER BY id DESC LIMIT 1",
+                    (gid,),
+                ).fetchone()
+            finally:
+                conn.close()
+            assert row is not None
+            assert row["token"] == "legacy-save-sekret"
+            assert "token" not in json.loads(row["state_json"])
+        finally:
+            conn = get_db()
+            try:
+                conn.execute("DELETE FROM saves WHERE game_id = ?", (gid,))
+                conn.execute("DELETE FROM games WHERE id = ?", (gid,))
+                conn.commit()
+            finally:
+                conn.close()
+
+    def test_legacy_row_without_embedded_token_falls_back_to_empty(self) -> None:
+        from backend.database import get_db, load_game
+
+        gid = "legacy-game-no-token"
+        conn = get_db()
+        try:
+            conn.execute(
+                "INSERT INTO games (id, seed, ship_name, created_at, updated_at, state_json, token) "
+                "VALUES (?, ?, ?, ?, ?, ?, '')",
+                (
+                    gid,
+                    42,
+                    "LegacyShip",
+                    "2020-01-01T00:00:00+00:00",
+                    "2020-01-01T00:00:00+00:00",
+                    json.dumps({"seed": 42, "ship": {"name": "LegacyShip"}}),
+                ),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        try:
+            loaded = load_game(gid)
+            assert loaded is not None
+            assert loaded["token"] == ""
+
+            conn = get_db()
+            try:
+                row = conn.execute(
+                    "SELECT state_json, token FROM games WHERE id = ?", (gid,)
+                ).fetchone()
+            finally:
+                conn.close()
+            assert row is not None
+            assert row["token"] == ""
+        finally:
+            conn = get_db()
+            try:
+                conn.execute("DELETE FROM games WHERE id = ?", (gid,))
+                conn.commit()
+            finally:
+                conn.close()
