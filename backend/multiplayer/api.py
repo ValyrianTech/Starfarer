@@ -13,7 +13,6 @@ from fastapi import APIRouter, Header, HTTPException
 
 from backend.api.routes import (
     _authorize_game,
-    _cleanup_game_lock,
     _get_lock,
     _get_state,
     _save_state,
@@ -78,7 +77,6 @@ def _check_game(game_id: str) -> GameState:
     """
     state = _get_state(game_id)
     if not state:
-        _cleanup_game_lock(game_id)
         raise HTTPException(status_code=404, detail="Game not found")
     return state
 

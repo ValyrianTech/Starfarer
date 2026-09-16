@@ -118,10 +118,22 @@ def _get_lock(game_id: str) -> Lock:
 
 
 def _cleanup_game_lock(game_id: str) -> None:
-    """Remove the lock entry for the given game_id."""
+    """Remove the lock entry for the given game_id if it is not currently held.
+
+    Uses the same atomic check-and-acquire pattern as ``_get_lock``'s
+    periodic cleanup and ``_cleanup_stale_locks``: the lock is only removed
+    from ``_game_locks`` when it can be acquired non-blocking, which proves
+    no other thread currently holds it. If the lock is held, the entry is
+    intentionally left in place so a holder cannot have its lock object
+    dropped underneath it (which would let another thread create and acquire
+    a fresh lock for the same game_id concurrently).
+    """
     with _lock_for_locks:
-        _game_locks.pop(game_id, None)
-        _lock_last_access.pop(game_id, None)
+        lock = _game_locks.get(game_id)
+        if lock is not None and lock.acquire(blocking=False):
+            _game_locks.pop(game_id, None)
+            _lock_last_access.pop(game_id, None)
+            lock.release()
 
 
 def _cleanup_stale_locks() -> None:
