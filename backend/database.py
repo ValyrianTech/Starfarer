@@ -55,7 +55,9 @@ def init_db() -> None:
     """Initialize the database schema.
 
     Creates the ``games`` and ``saves`` tables and the ``idx_saves_game``
-    index if they do not already exist.
+    index if they do not already exist. For pre-existing databases created
+    before the ``token`` column was introduced, idempotently adds the
+    ``token`` column to both tables.
     """
     with get_db_ctx() as conn:
         conn.executescript("""
@@ -65,7 +67,8 @@ def init_db() -> None:
                 ship_name TEXT NOT NULL,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
-                state_json TEXT NOT NULL
+                state_json TEXT NOT NULL,
+                token TEXT NOT NULL DEFAULT ''
             );
 
             CREATE TABLE IF NOT EXISTS saves (
@@ -73,12 +76,32 @@ def init_db() -> None:
                 game_id TEXT NOT NULL,
                 saved_at TEXT NOT NULL,
                 state_json TEXT NOT NULL,
+                token TEXT NOT NULL DEFAULT '',
                 FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE
             );
 
             CREATE INDEX IF NOT EXISTS idx_saves_game ON saves(game_id);
         """)
+        _ensure_token_column(conn, "games")
+        _ensure_token_column(conn, "saves")
         conn.commit()
+
+
+def _ensure_token_column(conn: sqlite3.Connection, table: str) -> None:
+    """Add the ``token`` column to a table if it does not already exist.
+
+    Idempotent migration for databases created before the ``token`` column
+    was introduced. Inspects the table schema via ``PRAGMA table_info`` and
+    issues an ``ALTER TABLE`` only when the column is absent.
+
+    :param conn: An open SQLite connection.
+    :type conn: sqlite3.Connection
+    :param table: The name of the table to migrate.
+    :type table: str
+    """
+    columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+    if "token" not in columns:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN token TEXT NOT NULL DEFAULT ''")
 
 
 def create_game(game_id: str, seed: int, ship_name: str, state: dict) -> None:
@@ -97,6 +120,9 @@ def create_game(game_id: str, seed: int, ship_name: str, state: dict) -> None:
     :param state: The serialized game state dictionary.
     :type state: dict
     """
+    token = state.get("token", "") if isinstance(state, dict) else ""
+    state_data = dict(state) if isinstance(state, dict) else {}
+    state_data.pop("token", None)
     with get_db_ctx() as conn:
         now = datetime.now(timezone.utc).isoformat()
         existing = conn.execute(
@@ -108,14 +134,15 @@ def create_game(game_id: str, seed: int, ship_name: str, state: dict) -> None:
         else:
             created_at = now
         conn.execute(
-            "INSERT INTO games (id, seed, ship_name, created_at, updated_at, state_json) "
-            "VALUES (?, ?, ?, ?, ?, ?) "
+            "INSERT INTO games (id, seed, ship_name, created_at, updated_at, state_json, token) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?) "
             "ON CONFLICT(id) DO UPDATE SET "
             "seed=excluded.seed, "
             "ship_name=excluded.ship_name, "
             "updated_at=excluded.updated_at, "
-            "state_json=excluded.state_json",
-            (game_id, seed, ship_name, created_at, now, json.dumps(state)),
+            "state_json=excluded.state_json, "
+            "token=excluded.token",
+            (game_id, seed, ship_name, created_at, now, json.dumps(state_data), token),
         )
         conn.commit()
 
@@ -130,9 +157,11 @@ def load_game(game_id: str) -> dict | None:
     :rtype: dict | None
     """
     with get_db_ctx() as conn:
-        row = conn.execute("SELECT state_json FROM games WHERE id = ?", (game_id,)).fetchone()
+        row = conn.execute("SELECT state_json, token FROM games WHERE id = ?", (game_id,)).fetchone()
     if row:
-        return json.loads(row["state_json"])
+        data = json.loads(row["state_json"])
+        data["token"] = row["token"]
+        return data
     return None
 
 
@@ -163,6 +192,9 @@ def save_game(game_id: str, state: dict) -> None:
     :param state: The serialized game state dictionary.
     :type state: dict
     """
+    token = state.get("token", "") if isinstance(state, dict) else ""
+    state_data = dict(state) if isinstance(state, dict) else {}
+    state_data.pop("token", None)
     with get_db_ctx() as conn:
         now = datetime.now(timezone.utc).isoformat()
         existing = conn.execute(
@@ -176,22 +208,23 @@ def save_game(game_id: str, state: dict) -> None:
         else:
             # New game: seed and ship_name must be present in the state dict
             created_at = now
-            seed = state.get("seed", 0)
-            ship_data = state.get("ship", {})
+            seed = state_data.get("seed", 0)
+            ship_data = state_data.get("ship", {})
             ship_name = ship_data.get("name", "Unknown") if isinstance(ship_data, dict) else "Unknown"
         conn.execute(
-            "INSERT INTO games (id, seed, ship_name, created_at, updated_at, state_json) "
-            "VALUES (?, ?, ?, ?, ?, ?) "
+            "INSERT INTO games (id, seed, ship_name, created_at, updated_at, state_json, token) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?) "
             "ON CONFLICT(id) DO UPDATE SET "
             "seed=excluded.seed, "
             "ship_name=excluded.ship_name, "
             "updated_at=excluded.updated_at, "
-            "state_json=excluded.state_json",
-            (game_id, seed, ship_name, created_at, now, json.dumps(state)),
+            "state_json=excluded.state_json, "
+            "token=excluded.token",
+            (game_id, seed, ship_name, created_at, now, json.dumps(state_data), token),
         )
         conn.execute(
-            "INSERT INTO saves (game_id, saved_at, state_json) VALUES (?, ?, ?)",
-            (game_id, now, json.dumps(state)),
+            "INSERT INTO saves (game_id, saved_at, state_json, token) VALUES (?, ?, ?, ?)",
+            (game_id, now, json.dumps(state_data), token),
         )
         conn.commit()
 
@@ -207,11 +240,13 @@ def load_save(game_id: str) -> dict | None:
     """
     with get_db_ctx() as conn:
         row = conn.execute(
-            "SELECT state_json FROM saves WHERE game_id = ? ORDER BY id DESC LIMIT 1",
+            "SELECT state_json, token FROM saves WHERE game_id = ? ORDER BY id DESC LIMIT 1",
             (game_id,),
         ).fetchone()
     if row:
-        return json.loads(row["state_json"])
+        data = json.loads(row["state_json"])
+        data["token"] = row["token"]
+        return data
     return None
 
 
