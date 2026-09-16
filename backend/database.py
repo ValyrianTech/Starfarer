@@ -6,6 +6,7 @@ loading games, saving and restoring game states, and retrieving
 leaderboard data.
 """
 
+import hashlib
 import json
 import sqlite3
 from collections.abc import Generator
@@ -338,20 +339,31 @@ def _safe_ship_credits(state: dict) -> int:
     return credits if isinstance(credits, int) else 0
 
 
+def _opaque_entry_id(game_id: str) -> str:
+    """Derive a short, stable, non-reversible opaque id from a game id.
+
+    :param game_id: The raw game id.
+    :type game_id: str
+    :returns: A 12-character hex digest prefix of the game id.
+    :rtype: str
+    """
+    return hashlib.sha256(game_id.encode()).hexdigest()[:12]
+
+
 def get_leaderboard(limit: int = 10) -> list[dict]:
     """Retrieve the top players from the leaderboard.
 
     :param limit: Maximum number of leaderboard entries to return.
     :type limit: int
     :returns: A list of leaderboard entry dictionaries containing
-        game_id, ship_name, seed, last_played, discoveries count,
+        entry_id, ship_name, last_played, discoveries count,
         systems_visited, credits, ghost_signatures_left,
         items_donated, and lore_donated.
     :rtype: list[dict]
     """
     with get_db_ctx() as conn:
         rows = conn.execute(
-            "SELECT id, ship_name, seed, updated_at, state_json FROM games ORDER BY updated_at DESC LIMIT ?",
+            "SELECT id, ship_name, updated_at, state_json FROM games ORDER BY updated_at DESC LIMIT ?",
             (limit,),
         ).fetchall()
         results = []
@@ -390,9 +402,8 @@ def get_leaderboard(limit: int = 10) -> list[dict]:
                 lore_donated = 0
 
             results.append({
-                "game_id": game_id,
+                "entry_id": _opaque_entry_id(game_id),
                 "ship_name": row["ship_name"],
-                "seed": row["seed"],
                 "last_played": row["updated_at"],
                 "discoveries": len(state.get("discoveries", [])),
                 "systems_visited": state.get("systems_visited", 0),

@@ -2065,7 +2065,7 @@ class TestDatabaseGetLeaderboard:
         """json.loads returns a non-dict; leaderboard should skip it."""
         from datetime import datetime, timezone
 
-        from backend.database import get_db, get_leaderboard, init_db
+        from backend.database import _opaque_entry_id, get_db, get_leaderboard, init_db
         init_db()
         now = datetime.now(timezone.utc).isoformat()
         conn = get_db()
@@ -2078,14 +2078,14 @@ class TestDatabaseGetLeaderboard:
         finally:
             conn.close()
         result = get_leaderboard(limit=10)
-        ids = [e["game_id"] for e in result]
-        assert "lb-non-dict" not in ids
+        ids = [e["entry_id"] for e in result]
+        assert _opaque_entry_id("lb-non-dict") not in ids
 
     def test_leaderboard_skips_bad_json(self) -> None:
         """get_leaderboard should skip entries that can't be JSON parsed."""
         from datetime import datetime, timezone
 
-        from backend.database import get_db, get_leaderboard, init_db
+        from backend.database import _opaque_entry_id, get_db, get_leaderboard, init_db
         init_db()
         now = datetime.now(timezone.utc).isoformat()
         conn = get_db()
@@ -2098,14 +2098,14 @@ class TestDatabaseGetLeaderboard:
         finally:
             conn.close()
         result = get_leaderboard(limit=10)
-        ids = [e["game_id"] for e in result]
-        assert "lb-bad-json" not in ids
+        ids = [e["entry_id"] for e in result]
+        assert _opaque_entry_id("lb-bad-json") not in ids
 
     def test_leaderboard_non_dict_ship_null(self) -> None:
         """A ship value of null should not crash the leaderboard."""
         from datetime import datetime, timezone
 
-        from backend.database import get_db, get_leaderboard, init_db
+        from backend.database import _opaque_entry_id, get_db, get_leaderboard, init_db
         init_db()
         now = datetime.now(timezone.utc).isoformat()
         conn = get_db()
@@ -2118,14 +2118,14 @@ class TestDatabaseGetLeaderboard:
         finally:
             conn.close()
         result = get_leaderboard(limit=10)
-        entry = next(e for e in result if e["game_id"] == "lb-ship-null")
+        entry = next(e for e in result if e["entry_id"] == _opaque_entry_id("lb-ship-null"))
         assert entry["credits"] == 0
 
     def test_leaderboard_non_dict_ship_list(self) -> None:
         """A ship value that is a list should not crash the leaderboard."""
         from datetime import datetime, timezone
 
-        from backend.database import get_db, get_leaderboard, init_db
+        from backend.database import _opaque_entry_id, get_db, get_leaderboard, init_db
         init_db()
         now = datetime.now(timezone.utc).isoformat()
         conn = get_db()
@@ -2138,14 +2138,14 @@ class TestDatabaseGetLeaderboard:
         finally:
             conn.close()
         result = get_leaderboard(limit=10)
-        entry = next(e for e in result if e["game_id"] == "lb-ship-list")
+        entry = next(e for e in result if e["entry_id"] == _opaque_entry_id("lb-ship-list"))
         assert entry["credits"] == 0
 
     def test_leaderboard_non_dict_ship_string(self) -> None:
         """A ship value that is a string should not crash the leaderboard."""
         from datetime import datetime, timezone
 
-        from backend.database import get_db, get_leaderboard, init_db
+        from backend.database import _opaque_entry_id, get_db, get_leaderboard, init_db
         init_db()
         now = datetime.now(timezone.utc).isoformat()
         conn = get_db()
@@ -2158,14 +2158,14 @@ class TestDatabaseGetLeaderboard:
         finally:
             conn.close()
         result = get_leaderboard(limit=10)
-        entry = next(e for e in result if e["game_id"] == "lb-ship-string")
+        entry = next(e for e in result if e["entry_id"] == _opaque_entry_id("lb-ship-string"))
         assert entry["credits"] == 0
 
     def test_leaderboard_ship_credits_non_int(self) -> None:
         """A non-integer credits value should default to 0."""
         from datetime import datetime, timezone
 
-        from backend.database import get_db, get_leaderboard, init_db
+        from backend.database import _opaque_entry_id, get_db, get_leaderboard, init_db
         init_db()
         now = datetime.now(timezone.utc).isoformat()
         conn = get_db()
@@ -2178,14 +2178,14 @@ class TestDatabaseGetLeaderboard:
         finally:
             conn.close()
         result = get_leaderboard(limit=10)
-        entry = next(e for e in result if e["game_id"] == "lb-ship-credits-str")
+        entry = next(e for e in result if e["entry_id"] == _opaque_entry_id("lb-ship-credits-str"))
         assert entry["credits"] == 0
 
     def test_leaderboard_ship_credits_valid_int(self) -> None:
         """A valid integer credits value should be reported as-is."""
         from datetime import datetime, timezone
 
-        from backend.database import get_db, get_leaderboard, init_db
+        from backend.database import _opaque_entry_id, get_db, get_leaderboard, init_db
         init_db()
         now = datetime.now(timezone.utc).isoformat()
         conn = get_db()
@@ -2198,7 +2198,7 @@ class TestDatabaseGetLeaderboard:
         finally:
             conn.close()
         result = get_leaderboard(limit=10)
-        entry = next(e for e in result if e["game_id"] == "lb-ship-credits-int")
+        entry = next(e for e in result if e["entry_id"] == _opaque_entry_id("lb-ship-credits-int"))
         assert entry["credits"] == 500
 
     def test_safe_ship_credits_helper_direct(self) -> None:

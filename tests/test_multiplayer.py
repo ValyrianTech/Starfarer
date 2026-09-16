@@ -18,7 +18,7 @@ from backend.api.routes import (
     _get_lock,
     _lock_last_access,
 )
-from backend.database import init_db
+from backend.database import _opaque_entry_id, init_db
 from backend.game.manager import GAME_STORE, game_save, new_game
 from backend.main import app
 from backend.models.discovery import Discovery, LoreFragment
@@ -2720,7 +2720,7 @@ class TestLeaderboardMultiplayer:
         assert resp.status_code == 200
         data = resp.json()
         for entry in data["leaderboard"]:
-            if entry["game_id"] == game_id:
+            if entry["entry_id"] == _opaque_entry_id(game_id):
                 assert entry["ghost_signatures_left"] >= 0
                 assert entry["items_donated"] >= 0
                 assert entry["lore_donated"] >= 0
@@ -2742,7 +2742,7 @@ class TestLeaderboardMultiplayer:
         data = resp.json()
         assert "leaderboard" in data
         for entry in data["leaderboard"]:
-            if entry["game_id"] == "leaderboard-ghost-err":
+            if entry["entry_id"] == _opaque_entry_id("leaderboard-ghost-err"):
                 assert entry["ghost_signatures_left"] == 0
                 break
 
@@ -2763,7 +2763,7 @@ class TestLeaderboardMultiplayer:
         data = resp.json()
         assert "leaderboard" in data
         for entry in data["leaderboard"]:
-            if entry["game_id"] == "leaderboard-items-err":
+            if entry["entry_id"] == _opaque_entry_id("leaderboard-items-err"):
                 assert entry["items_donated"] == 0
                 break
 
@@ -2784,7 +2784,7 @@ class TestLeaderboardMultiplayer:
         data = resp.json()
         assert "leaderboard" in data
         for entry in data["leaderboard"]:
-            if entry["game_id"] == "leaderboard-lore-err":
+            if entry["entry_id"] == _opaque_entry_id("leaderboard-lore-err"):
                 assert entry["lore_donated"] == 0
                 break
 
@@ -2807,7 +2807,7 @@ class TestLeaderboardMultiplayer:
         data = resp.json()
         assert "leaderboard" in data
         for entry in data["leaderboard"]:
-            if entry["game_id"] == "leaderboard-all-err":
+            if entry["entry_id"] == _opaque_entry_id("leaderboard-all-err"):
                 assert entry["ghost_signatures_left"] == 0
                 assert entry["items_donated"] == 0
                 assert entry["lore_donated"] == 0
