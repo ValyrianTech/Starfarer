@@ -329,7 +329,7 @@ class TestAPILeaderboardMalformedState:
 
     def test_leaderboard_skips_malformed_json(self) -> None:
         """Insert a game with invalid JSON in state_json; leaderboard should skip it."""
-        from backend.database import get_db
+        from backend.database import _opaque_entry_id, get_db
         now = datetime.now(timezone.utc).isoformat()
         conn = get_db()
         try:
@@ -343,12 +343,12 @@ class TestAPILeaderboardMalformedState:
         resp = client.get("/api/leaderboard")
         assert resp.status_code == 200
         data = resp.json()
-        ids = [entry["game_id"] for entry in data["leaderboard"]]
-        assert "malformed-json-test" not in ids
+        ids = [entry["entry_id"] for entry in data["leaderboard"]]
+        assert _opaque_entry_id("malformed-json-test") not in ids
 
     def test_leaderboard_skips_empty_state_json(self) -> None:
         """Insert a game with an empty string in state_json; leaderboard should skip it."""
-        from backend.database import get_db
+        from backend.database import _opaque_entry_id, get_db
         now = datetime.now(timezone.utc).isoformat()
         conn = get_db()
         try:
@@ -362,12 +362,12 @@ class TestAPILeaderboardMalformedState:
         resp = client.get("/api/leaderboard")
         assert resp.status_code == 200
         data = resp.json()
-        ids = [entry["game_id"] for entry in data["leaderboard"]]
-        assert "empty-json-test" not in ids
+        ids = [entry["entry_id"] for entry in data["leaderboard"]]
+        assert _opaque_entry_id("empty-json-test") not in ids
 
     def test_leaderboard_skips_null_state_json(self) -> None:
         """Insert a game with a non-string state_json value (causes TypeError); leaderboard should skip it."""
-        from backend.database import get_db
+        from backend.database import _opaque_entry_id, get_db
         now = datetime.now(timezone.utc).isoformat()
         conn = get_db()
         try:
@@ -381,12 +381,12 @@ class TestAPILeaderboardMalformedState:
         resp = client.get("/api/leaderboard")
         assert resp.status_code == 200
         data = resp.json()
-        ids = [entry["game_id"] for entry in data["leaderboard"]]
-        assert "null-json-test" not in ids
+        ids = [entry["entry_id"] for entry in data["leaderboard"]]
+        assert _opaque_entry_id("null-json-test") not in ids
 
     def test_leaderboard_mixed_valid_and_malformed(self) -> None:
         """Insert mixed valid and malformed entries; only valid ones should appear in the leaderboard."""
-        from backend.database import get_db
+        from backend.database import _opaque_entry_id, get_db
         now = datetime.now(timezone.utc).isoformat()
         resp = client.post("/api/game/new", json={"seed": 42, "game_id": "mixed-valid-1"})
         assert resp.status_code == 200
@@ -406,14 +406,14 @@ class TestAPILeaderboardMalformedState:
         resp = client.get("/api/leaderboard")
         assert resp.status_code == 200
         data = resp.json()
-        ids = [entry["game_id"] for entry in data["leaderboard"]]
-        assert "mixed-valid-1" in ids
-        assert "mixed-malformed-1" not in ids
-        assert "mixed-malformed-2" not in ids
+        ids = [entry["entry_id"] for entry in data["leaderboard"]]
+        assert _opaque_entry_id("mixed-valid-1") in ids
+        assert _opaque_entry_id("mixed-malformed-1") not in ids
+        assert _opaque_entry_id("mixed-malformed-2") not in ids
 
     def test_get_leaderboard_direct_malformed(self) -> None:
         """Directly call get_leaderboard with malformed state_json to ensure coverage of except block."""
-        from backend.database import get_db, get_leaderboard
+        from backend.database import _opaque_entry_id, get_db, get_leaderboard
         now = datetime.now(timezone.utc).isoformat()
         conn = get_db()
         try:
@@ -425,12 +425,12 @@ class TestAPILeaderboardMalformedState:
         finally:
             conn.close()
         result = get_leaderboard(limit=10)
-        ids = [entry["game_id"] for entry in result]
-        assert "direct-malformed-test" not in ids
+        ids = [entry["entry_id"] for entry in result]
+        assert _opaque_entry_id("direct-malformed-test") not in ids
 
     def test_leaderboard_non_dict_ship_null_returns_200(self) -> None:
         """Insert a game with ship=null; the leaderboard should return 200 with credits 0."""
-        from backend.database import get_db
+        from backend.database import _opaque_entry_id, get_db
         now = datetime.now(timezone.utc).isoformat()
         conn = get_db()
         try:
@@ -446,9 +446,51 @@ class TestAPILeaderboardMalformedState:
         data = resp.json()
         entry = next(
             e for e in data["leaderboard"]
-            if e["game_id"] == "lb-non-dict-ship-null"
+            if e["entry_id"] == _opaque_entry_id("lb-non-dict-ship-null")
         )
         assert entry["credits"] == 0
+
+
+class TestLeaderboardSecurity:
+    """Tests that the leaderboard does not leak raw game ids or seeds."""
+
+    def test_leaderboard_hides_game_id_and_seed(self) -> None:
+        """Leaderboard entries must not expose game_id or seed."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "leaderboard-sec"})
+        assert resp.status_code == 200
+        state = GAME_STORE["leaderboard-sec"]
+        game_save(state)
+        resp = client.get("/api/leaderboard")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["leaderboard"]
+        for entry in data["leaderboard"]:
+            assert "game_id" not in entry
+            assert "seed" not in entry
+
+    def test_leaderboard_entry_id_is_stable_and_non_reversible(self) -> None:
+        """entry_id is a stable hash that differs from the raw game id."""
+        from backend.database import _opaque_entry_id
+        resp = client.post("/api/game/new", json={"seed": 7, "game_id": "leaderboard-sec-2"})
+        assert resp.status_code == 200
+        state = GAME_STORE["leaderboard-sec-2"]
+        game_save(state)
+        expected = _opaque_entry_id("leaderboard-sec-2")
+        resp = client.get("/api/leaderboard")
+        assert resp.status_code == 200
+        data = resp.json()
+        entry = next(e for e in data["leaderboard"] if e["entry_id"] == expected)
+        assert entry["entry_id"] == expected
+        assert entry["entry_id"] != "leaderboard-sec-2"
+
+    def test_opaque_entry_id_helper(self) -> None:
+        """_opaque_entry_id returns a 12-char hex string and is deterministic."""
+        from backend.database import _opaque_entry_id
+        value = _opaque_entry_id("some-game-id")
+        assert isinstance(value, str)
+        assert len(value) == 12
+        assert all(c in "0123456789abcdef" for c in value)
+        assert _opaque_entry_id("some-game-id") == value
 
 
 class TestAPIAllEndpoints404:
