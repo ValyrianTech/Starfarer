@@ -363,7 +363,7 @@ def get_leaderboard(limit: int = 10) -> list[dict]:
     """
     with get_db_ctx() as conn:
         rows = conn.execute(
-            "SELECT id, ship_name, seed, updated_at, state_json FROM games ORDER BY updated_at DESC LIMIT ?",
+            "SELECT id, ship_name, updated_at, state_json FROM games ORDER BY updated_at DESC LIMIT ?",
             (limit,),
         ).fetchall()
         results = []
