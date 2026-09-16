@@ -5603,6 +5603,34 @@ class TestCargoCapacityEnforcement:
         assert len(discoveries) == 1
         assert state.ship.cargo == 1
 
+    def test_explore_surface_partial_capacity_decrements_by_accepted(self) -> None:
+        """explore_surface should decrement poi_count by the number of stored
+        discoveries (len(accepted)), not the intended num_finds, when the
+        cargo hold can only accept a subset of the generated discoveries."""
+        from unittest.mock import patch
+
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
+        if planet is None:
+            return  # pragma: no cover
+        planet.poi_count = 5
+        poi_before = planet.poi_count
+        landed, _msg = land_on_body(state, planet.id)
+        assert landed is True
+        state.ship.max_cargo = 1
+        state.discoveries.clear()
+        state.sync_cargo()
+        with patch("random.Random.randint", return_value=3):
+            ok, _msg, discoveries = explore_surface(state)
+        assert ok is True
+        assert len(discoveries) == 1
+        assert len(state.discoveries) == 1
+        assert planet.poi_count == poi_before - 1
+        assert planet.poi_count != poi_before - 3
+        assert state.ship.cargo == len(state.discoveries)
+
     def test_atmospheric_scan_capacity_enforced(self) -> None:
         """perform_atmospheric_scan should respect max_cargo."""
         state = new_game(seed=42)
