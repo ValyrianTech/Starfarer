@@ -21,7 +21,7 @@ class DonateItemRequest(BaseModel):
 
     game_id: str
     item_name: str
-    quantity: int = 1
+    quantity: int = Field(default=1, gt=0)
     message: str | None = None
 
 
