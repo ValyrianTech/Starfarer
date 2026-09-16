@@ -156,12 +156,18 @@ def _resolve_legacy_token(
 ) -> str:
     """Resolve a row's effective token, migrating legacy embedded tokens.
 
-    When the ``token`` column already holds a value it is returned
-    unchanged and no write is performed. When the column is empty but the
-    deserialized ``state_json`` still contains a truthy embedded ``token``,
-    that value is recovered: it is written to the ``token`` column, scrubbed
-    from ``state_json``, and persisted. Otherwise the (possibly empty)
-    column value is returned.
+    The ``token`` column is authoritative when it holds a non-empty value:
+    in that case it is returned unchanged and ``data`` is left untouched.
+
+    When the column is empty but the deserialized ``state_json`` still
+    contains a truthy embedded ``token``, that value is recovered: it is
+    written to the ``token`` column, scrubbed from ``state_json``, and
+    persisted.
+
+    When neither the column nor the embedded ``state_json`` holds a truthy
+    token, an empty string is returned and ``data`` is left untouched so
+    that callers can apply guarded fallback logic instead of clobbering any
+    existing non-empty token already present in ``data``.
 
     :param conn: An open SQLite connection.
     :type conn: sqlite3.Connection
@@ -185,7 +191,7 @@ def _resolve_legacy_token(
         conn.execute(update_sql, (embedded_token, json.dumps(data), *update_params))
         conn.commit()
         return embedded_token
-    return column_token
+    return ""
 
 
 def load_game(game_id: str) -> dict | None:
@@ -209,7 +215,10 @@ def load_game(game_id: str) -> dict | None:
             "UPDATE games SET token = ?, state_json = ? WHERE id = ?",
             (game_id,),
         )
-        data["token"] = token
+        if token:
+            data["token"] = token
+        elif not data.get("token"):
+            data["token"] = ""
     return data
 
 
@@ -301,7 +310,10 @@ def load_save(game_id: str) -> dict | None:
             "UPDATE saves SET token = ?, state_json = ? WHERE id = ?",
             (row["id"],),
         )
-        data["token"] = token
+        if token:
+            data["token"] = token
+        elif not data.get("token"):
+            data["token"] = ""
     return data
 
 
