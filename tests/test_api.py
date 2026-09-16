@@ -4582,6 +4582,30 @@ class TestRoutesLocks:
         import backend.api.routes as routes_mod
         routes_mod._cleanup_game_lock("test-lock-nonexistent-game")
 
+    def test_cleanup_game_lock_preserves_held_lock(self) -> None:
+        """_cleanup_game_lock should NOT remove a lock that is currently held."""
+        import backend.api.routes as routes_mod
+
+        game_id = "test-lock-held-cleanup-game"
+        routes_mod._game_locks.pop(game_id, None)
+        routes_mod._lock_last_access.pop(game_id, None)
+
+        lock = routes_mod._get_lock(game_id)
+        assert game_id in routes_mod._game_locks
+        assert game_id in routes_mod._lock_last_access
+
+        lock.acquire()
+        try:
+            routes_mod._cleanup_game_lock(game_id)
+            assert game_id in routes_mod._game_locks
+            assert game_id in routes_mod._lock_last_access
+        finally:
+            lock.release()
+
+        routes_mod._cleanup_game_lock(game_id)
+        assert game_id not in routes_mod._game_locks
+        assert game_id not in routes_mod._lock_last_access
+
     def test_cleanup_stale_locks_removes_stale(self) -> None:
         import backend.api.routes as routes_mod
         state = new_game(42, "StaleRoutesTest")
