@@ -59,6 +59,9 @@ def donate_item(
     :returns: A dictionary with ``success`` flag and the donated item data.
     :rtype: dict
     """
+    if isinstance(quantity, bool) or not isinstance(quantity, int) or quantity <= 0:
+        return {"success": False, "detail": "Quantity must be a positive integer."}
+
     matching = [d for d in game_state.discoveries if d.name == item_name]
     if not matching:
         return {"success": False, "detail": f"No discovery named '{item_name}' in cargo."}
