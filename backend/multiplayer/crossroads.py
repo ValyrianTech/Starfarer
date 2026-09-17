@@ -188,7 +188,7 @@ def donate_lore(
     """
     fragment = None
     for lf in game_state.lore_fragments:
-        if lf.id == fragment_id and lf.discovered:
+        if lf.id == fragment_id and lf.discovered and not lf.donated:
             fragment = lf
             break
     if not fragment:
@@ -203,7 +203,7 @@ def donate_lore(
         created_at=datetime.now(timezone.utc).isoformat(),
     )
     save_crossroads_lore(lore)
-    game_state.lore_fragments = [lf for lf in game_state.lore_fragments if lf.id != fragment_id]
+    fragment.donated = True
     game_state.add_log(
         "multiplayer",
         f"Donated lore fragment '{fragment.title}' to the Crossroads.",
@@ -247,6 +247,7 @@ def claim_lore(donation_id: str, game_state: GameState) -> dict:
     for lf in game_state.lore_fragments:
         if lf.id == claimed_data["fragment_id"]:
             lf.discovered = True
+            lf.donated = False
             lf.discovery_timestamp = datetime.now(timezone.utc).isoformat()
             break
 
