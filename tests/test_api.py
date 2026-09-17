@@ -2125,6 +2125,53 @@ class TestAPILore:
             assert arc_data["collected"] == 0
             assert arc_data["fragments"] == []
 
+    def test_lore_donation_decrements_collected_not_total(self) -> None:
+        """Donating a discovered fragment decrements collected, not total."""
+        from backend.models.discovery import LoreFragment
+        from backend.multiplayer.database import init_multiplayer_db
+
+        init_multiplayer_db()
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "lore-donation-decrement"})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+
+        lf = LoreFragment(
+            id="lore-donation-decrement-frag",
+            arc="architects",
+            title="Donation Test Fragment",
+            text="Test lore fragment for donation.",
+            discovered=True,
+            fragment_number=1,
+        )
+        state.lore_fragments.append(lf)
+        game_save(state)
+
+        resp = client.get(f"/api/game/{game_id}/lore")
+        assert resp.status_code == 200
+        data = resp.json()
+
+        total_before = data["progress"]["total"]
+        collected_before = data["progress"]["collected"]
+        assert collected_before == 1
+        assert total_before == 21
+        assert data["arcs"]["architects"]["collected"] == 1
+
+        resp = client.post(
+            "/api/crossroads/donate-lore",
+            json={"game_id": game_id, "fragment_id": "lore-donation-decrement-frag"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["success"] is True
+
+        resp = client.get(f"/api/game/{game_id}/lore")
+        assert resp.status_code == 200
+        data = resp.json()
+
+        assert data["progress"]["total"] == total_before
+        assert data["progress"]["collected"] == collected_before - 1
+        assert data["arcs"]["architects"]["collected"] == 0
+
 
 class TestAPIMainIndex:
     """Tests for main.py index endpoint."""

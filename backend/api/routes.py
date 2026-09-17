@@ -73,7 +73,7 @@ from backend.missions import (
     get_missions_summary,
 )
 from backend.models.faction import FACTION_DEFINITIONS, get_faction
-from backend.models.game_state import GameState
+from backend.models.game_state import GameState, is_lore_fragment_collected
 from backend.utils import deterministic_hash, seeded_random
 
 logger = logging.getLogger(__name__)
@@ -887,7 +887,9 @@ def api_lore(
     """Retrieve all lore fragments grouped by story arc.
 
     Returns lore fragments organized by arc with discovered/undiscovered
-    status. Also includes overall collection progress.
+    status. Also includes overall collection progress. Collected counts
+    include only fragments that are discovered and not donated; donated
+    fragments remain in the totals but are excluded from collected counts.
 
     :param game_id: The unique identifier of the game.
     :type game_id: str
@@ -943,10 +945,10 @@ def api_lore(
 
                 arcs[arc]["fragments"].append(frag_dict)
                 arcs[arc]["total"] += 1
-                if lore.discovered:
+                if is_lore_fragment_collected(lore):
                     arcs[arc]["collected"] += 1
 
-        lore_collected = sum(1 for lf in state.lore_fragments if lf.discovered)
+        lore_collected = sum(1 for lf in state.lore_fragments if is_lore_fragment_collected(lf))
         lore_total = len(state.lore_fragments)
 
         return {
