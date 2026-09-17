@@ -1129,9 +1129,10 @@ class TestMultiplayerCrossroads:
         assert result["success"] is False
         GAME_STORE.pop(state.id, None)
 
-    def test_donate_lore_removes_fragment_from_player(self) -> None:
-        """After donating a lore fragment, it should be removed from the player's lore_fragments list,
-        preventing the same fragment from being donated multiple times."""
+    def test_donate_lore_marks_donated_not_removed(self) -> None:
+        """After donating a lore fragment, it should remain in the player's lore_fragments
+        list with ``donated`` set to True, preventing the same fragment from being donated
+        multiple times without destroying collection totals."""
         state = new_game(42, "LoreDonor", shared_universe=True)
         GAME_STORE[state.id] = state
         lf = _make_lore_fragment("lore_double_donate", discovered=True)
@@ -1142,12 +1143,13 @@ class TestMultiplayerCrossroads:
         result1 = donate_lore(state, "lore_double_donate")
         assert result1["success"] is True
 
-        # Fragment should be removed from player's state
-        assert len(state.lore_fragments) == initial_count - 1
+        # Fragment should remain in player's state, now marked as donated
+        assert len(state.lore_fragments) == initial_count
         fragment_ids = [f.id for f in state.lore_fragments]
-        assert "lore_double_donate" not in fragment_ids
+        assert "lore_double_donate" in fragment_ids
+        assert lf.donated is True
 
-        # Second donation should fail since fragment is gone
+        # Second donation should fail since fragment is already donated
         result2 = donate_lore(state, "lore_double_donate")
         assert result2["success"] is False
         assert "not found" in result2["detail"].lower()
@@ -1189,6 +1191,91 @@ class TestMultiplayerCrossroads:
                 break
         GAME_STORE.pop(donor.id, None)
         GAME_STORE.pop(claimer.id, None)
+
+    def test_donate_lore_preserves_total_and_decreases_collected(self) -> None:
+        """Donating a lore fragment keeps lore_fragments_total stable while
+        lore_fragments_collected decreases by one."""
+        state = new_game(42, "LoreDonor", shared_universe=True)
+        GAME_STORE[state.id] = state
+        lf = _make_lore_fragment("lore_total_test", discovered=True)
+        state.lore_fragments.append(lf)
+
+        summary_before = state.state_summary()
+        total_before = summary_before["lore_fragments_total"]
+        collected_before = summary_before["lore_fragments_collected"]
+
+        result = donate_lore(state, "lore_total_test")
+        assert result["success"] is True
+
+        summary_after = state.state_summary()
+        assert summary_after["lore_fragments_total"] == total_before
+        assert summary_after["lore_fragments_collected"] == collected_before - 1
+        GAME_STORE.pop(state.id, None)
+
+    def test_claim_lore_succeeds_after_donor_keeps_fragment(self) -> None:
+        """A fragment the donor still holds (now donated) can be claimed by another game."""
+        donor = new_game(42, "LoreDonor", shared_universe=True)
+        GAME_STORE[donor.id] = donor
+        lf = _make_lore_fragment("lore_claim_regression", discovered=True)
+        donor.lore_fragments.append(lf)
+        don_result = donate_lore(donor, "lore_claim_regression")
+        assert don_result["success"] is True
+
+        # Donor still holds the fragment (marked donated, not removed)
+        assert any(f.id == "lore_claim_regression" for f in donor.lore_fragments)
+
+        claimer = new_game(43, "LoreClaimer", shared_universe=True)
+        GAME_STORE[claimer.id] = claimer
+        clf = _make_lore_fragment("lore_claim_regression", discovered=False)
+        claimer.lore_fragments.append(clf)
+
+        result = claim_lore(don_result["donation"]["id"], claimer)
+        assert result["success"] is True
+        assert clf.discovered is True
+        GAME_STORE.pop(donor.id, None)
+        GAME_STORE.pop(claimer.id, None)
+
+    def test_claim_lore_resets_donated_flag(self) -> None:
+        """Claiming a fragment a player previously donated re-counts it as collected."""
+        donor = new_game(42, "LoreDonor", shared_universe=True)
+        GAME_STORE[donor.id] = donor
+        lf = _make_lore_fragment("lore_reset_donated", discovered=True)
+        donor.lore_fragments.append(lf)
+        don_result = donate_lore(donor, "lore_reset_donated")
+        assert don_result["success"] is True
+
+        claimer = new_game(43, "LoreClaimer", shared_universe=True)
+        GAME_STORE[claimer.id] = claimer
+        clf = _make_lore_fragment("lore_reset_donated", discovered=True)
+        clf.donated = True
+        claimer.lore_fragments.append(clf)
+
+        result = claim_lore(don_result["donation"]["id"], claimer)
+        assert result["success"] is True
+        assert clf.discovered is True
+        assert clf.donated is False
+        GAME_STORE.pop(donor.id, None)
+        GAME_STORE.pop(claimer.id, None)
+
+    def test_donate_lore_persists_donated_flag(self) -> None:
+        """The donated flag survives a full save/load persistence round-trip."""
+        from backend.game.manager import game_load
+
+        state = new_game(42, "LoreDonor", shared_universe=True)
+        GAME_STORE[state.id] = state
+        lf = _make_lore_fragment("lore_persist_donated", discovered=True)
+        state.lore_fragments.append(lf)
+        result = donate_lore(state, "lore_persist_donated")
+        assert result["success"] is True
+        assert lf.donated is True
+
+        game_save(state)
+        loaded = game_load(state.id)
+        assert loaded is not None
+        loaded_lf = next(f for f in loaded.lore_fragments if f.id == "lore_persist_donated")
+        assert loaded_lf.donated is True
+        assert loaded_lf.discovered is True
+        GAME_STORE.pop(state.id, None)
 
     def test_post_message_success(self) -> None:
         state = new_game(42, "Poster", shared_universe=True)

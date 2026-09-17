@@ -572,6 +572,8 @@ Discovered fragments include `discovery_location` (system - body), `discovery_da
 
 Lore fragments are found during exploration when you land on the right body. Hints from the lore viewer guide you toward their locations.
 
+**Donation semantics:** Donating a lore fragment to the Crossroads (`POST /api/crossroads/donate-lore`) marks it as `donated` rather than deleting it from your collection. The fragment remains visible in your lore collection with a `donated` status (and a `donated` field in the fragment entry), so collection totals stay stable; donated fragments are excluded from the `collected` count, and a fragment that has already been donated cannot be donated again. Claiming a fragment (`POST /api/crossroads/claim-lore/{donation_id}`) resets its `donated` flag to `false`.
+
 ### Biome Discovery Codex
 
 ```http

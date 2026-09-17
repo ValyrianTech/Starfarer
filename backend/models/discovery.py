@@ -103,6 +103,7 @@ class LoreFragment:
     discovery_date: str = ""
     discovery_timestamp: str = ""
     hint: str = ""
+    donated: bool = False
 
     def to_dict(self) -> dict:
         """Serialize the lore fragment to a dictionary.
@@ -122,6 +123,7 @@ class LoreFragment:
             "discovery_date": self.discovery_date,
             "discovery_timestamp": self.discovery_timestamp,
             "hint": self.hint,
+            "donated": self.donated,
         }
 
     @classmethod
@@ -145,4 +147,5 @@ class LoreFragment:
             discovery_date=d.get("discovery_date", ""),
             discovery_timestamp=d.get("discovery_timestamp", ""),
             hint=d.get("hint", ""),
+            donated=d.get("donated", False),
         )

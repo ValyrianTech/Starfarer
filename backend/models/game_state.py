@@ -44,6 +44,21 @@ def rep_label(rep: int) -> str:
 _rep_label = rep_label
 
 
+def is_lore_fragment_collected(lf: LoreFragment) -> bool:
+    """Return whether a lore fragment counts as collected.
+
+    A fragment counts as collected when it has been discovered and has not
+    yet been donated. Donated fragments remain in ``lore_fragments`` (so
+    collection totals stay stable), but are excluded from collected counts.
+
+    :param lf: The lore fragment to evaluate.
+    :type lf: LoreFragment
+    :returns: ``True`` if the fragment is discovered and not donated.
+    :rtype: bool
+    """
+    return lf.discovered and not lf.donated
+
+
 @dataclass
 class GameState:
     """Holds the complete state of a single game session.
@@ -242,12 +257,15 @@ class GameState:
 
     @property
     def lore_fragments_collected(self) -> int:
-        """Count of lore fragments that have been discovered.
+        """Count of lore fragments that are discovered and not yet donated.
 
-        :returns: The number of discovered lore fragments.
+        Donated fragments remain in ``lore_fragments`` (so collection
+        totals stay stable), but are no longer counted as collected.
+
+        :returns: The number of discovered, non-donated lore fragments.
         :rtype: int
         """
-        return sum(1 for lf in self.lore_fragments if lf.discovered)
+        return sum(1 for lf in self.lore_fragments if is_lore_fragment_collected(lf))
 
     def build_reputation_summary(self) -> dict:
         """Build a reputation summary dictionary for the three core factions.
