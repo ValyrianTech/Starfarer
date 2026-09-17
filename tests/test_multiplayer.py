@@ -3266,7 +3266,7 @@ class TestSyncCargoCrossroads:
         update_cursor = MagicMock()
         update_cursor.rowcount = 0
         mock_conn = MagicMock()
-        mock_conn.execute.side_effect = [select_cursor, update_cursor]
+        mock_conn.execute.side_effect = [MagicMock(), select_cursor, update_cursor]
 
         with patch("backend.multiplayer.database.get_db_ctx") as mock_get_db_ctx:
             mock_get_db_ctx.return_value.__enter__.return_value = mock_conn
@@ -3278,12 +3278,59 @@ class TestSyncCargoCrossroads:
         update_cursor2 = MagicMock()
         update_cursor2.rowcount = 0
         mock_conn2 = MagicMock()
-        mock_conn2.execute.side_effect = [select_cursor2, update_cursor2]
+        mock_conn2.execute.side_effect = [MagicMock(), select_cursor2, update_cursor2]
 
         with patch("backend.multiplayer.database.get_db_ctx") as mock_get_db_ctx:
             mock_get_db_ctx.return_value.__enter__.return_value = mock_conn2
             result2 = claim_item_partial("item-race", "claimer", 1)
             assert result2 is None
+
+    def test_claim_item_partial_concurrent_claims_never_exceed_donated_total(self) -> None:
+        import concurrent.futures
+        import threading
+
+        from backend.multiplayer.database import (
+            claim_item_partial,
+            get_available_items,
+            save_crossroads_item,
+        )
+
+        DONATED = 20
+        ci = CrossroadsItem(
+            id="item-concurrent-1",
+            donor_game_id="game-db-1",
+            donor_name="DBTester",
+            item_name="Concurrent Gem",
+            quantity=DONATED,
+            claimed=False,
+            created_at=datetime.now(timezone.utc).isoformat(),
+        )
+        save_crossroads_item(ci)
+
+        NUM_CLAIMERS = 8
+        PER_CLAIM = 4
+        barrier = threading.Barrier(NUM_CLAIMERS)
+
+        def _worker(i: int):
+            barrier.wait()
+            return claim_item_partial("item-concurrent-1", f"claimer-{i}", PER_CLAIM)
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=NUM_CLAIMERS) as executor:
+            futures = [executor.submit(_worker, i) for i in range(NUM_CLAIMERS)]
+            results = [f.result() for f in concurrent.futures.as_completed(futures)]
+
+        total_claimed = sum(r["quantity"] for r in results if r is not None)
+        assert total_claimed <= DONATED
+        assert total_claimed == DONATED
+
+        items = get_available_items()
+        remaining_rows = [i for i in items if i.id == "item-concurrent-1"]
+        db_remaining = remaining_rows[0].quantity if remaining_rows else 0
+        assert total_claimed + db_remaining == DONATED
+
+        for r in results:
+            if r is not None:
+                assert r["remaining_quantity"] >= 0
 
     def test_api_claim_item_full_hold_returns_400(self) -> None:
         donor_resp = client.post("/api/game/new", json={"shared_universe": True, "ship_name": "DonorFull"})
