@@ -338,6 +338,7 @@ def claim_item_partial(item_id: str, claimer_game_id: str, quantity: int) -> dic
     :rtype: dict or None
     """
     with get_db_ctx() as conn:
+        conn.execute("BEGIN IMMEDIATE")
         row = conn.execute(
             "SELECT * FROM crossroads_items WHERE id = ? AND claimed = 0",
             (item_id,),
@@ -366,9 +367,9 @@ def claim_item_partial(item_id: str, claimer_game_id: str, quantity: int) -> dic
             updated_claimer_game_id = claimer_game_id
         else:
             cursor = conn.execute(
-                "UPDATE crossroads_items SET quantity = ? "
-                "WHERE id = ? AND claimed = 0",
-                (remaining, item_id),
+                "UPDATE crossroads_items SET quantity = quantity - ? "
+                "WHERE id = ? AND claimed = 0 AND quantity >= ?",
+                (claim_amount, item_id, claim_amount),
             )
             if cursor.rowcount == 0:
                 conn.commit()
