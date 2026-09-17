@@ -910,6 +910,24 @@ class TestDiscoveryModel:
         restored = LoreFragment.from_dict(d)
         assert restored.fragment_number == -1
 
+    def test_lore_fragment_donated_roundtrip(self) -> None:
+        """LoreFragment donated flag should round-trip through to_dict/from_dict."""
+        lore = LoreFragment(id="l_1", arc="The Architects", title="First Contact",
+                            text="They came from beyond...", discovered=True, donated=True)
+        d = lore.to_dict()
+        assert d["donated"] is True
+        restored = LoreFragment.from_dict(d)
+        assert restored.donated is True
+
+    def test_lore_fragment_donated_defaults_false(self) -> None:
+        """LoreFragment donated should default to False and be absent-tolerant on load."""
+        lore = LoreFragment(id="l_test", arc="test", title="Test", text="Test text")
+        assert lore.donated is False
+        d = lore.to_dict()
+        assert d["donated"] is False
+        restored_missing = LoreFragment.from_dict({k: v for k, v in d.items() if k != "donated"})
+        assert restored_missing.donated is False
+
     def test_lore_fragment_sortable_by_number(self) -> None:
         """fragment_number should provide a robust sort key (simulating frontend)."""
         fragments = [
