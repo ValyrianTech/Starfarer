@@ -124,6 +124,7 @@ Each step has a corresponding API endpoint for AI play.
 - Yields 1–2 atmospheric phenomena discoveries (20–60 credits each)
 - Capped at 3 scans per body (tracked by `atmospheric_scan_count`)
 - The 1 fuel cost and the `atmospheric_scan_count` increment are applied up front (before discovery generation and cargo-capacity filtering), so a full cargo hold cannot be used to obtain free repeated scans
+- The endpoint returns HTTP 400 only when an atmospheric scan is genuinely not possible (no current system, no eligible body, insufficient fuel, or the body already at the 3-scan cap); a successful scan whose cargo hold is full returns HTTP 200 with an empty `discoveries` list
 
 **Sub-Surface Exploration:**
 - Available on volcanic, desert, and tundra biomes → yields cave systems and geological formations (50–120 credits each)
