@@ -5701,8 +5701,8 @@ class TestCargoCapacityEnforcement:
         assert len(state.discoveries) == 2
         assert state.ship.cargo == 2
 
-    def test_explore_surface_cargo_full_no_side_effects(self) -> None:
-        """explore_surface with a full cargo hold must not waste POIs, attempts, or fuel."""
+    def test_explore_surface_cargo_full_charges_cost_and_counts_attempt(self) -> None:
+        """explore_surface with a full cargo hold still charges fuel and counts the attempt without wasting POIs."""
         from unittest.mock import patch
 
         state = new_game(seed=42)
@@ -5732,10 +5732,11 @@ class TestCargoCapacityEnforcement:
 
         assert ok is True
         assert discoveries == []
-        # No fuel spent, no POIs consumed, no exploration attempt used.
-        assert state.ship.fuel == fuel_before
+        # Fuel is still spent and the attempt is counted, but no POIs are wasted
+        # because nothing was actually stored.
+        assert state.ship.fuel == fuel_before - EXPLORE_FUEL_COST
         assert planet.poi_count == poi_before
-        assert planet.exploration_count == count_before
+        assert planet.exploration_count == count_before + 1
         # The filler remains the only discovery and cargo stays in sync.
         assert len(state.discoveries) == 1
         assert state.ship.cargo == 1

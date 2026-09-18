@@ -436,9 +436,12 @@ def explore_surface(state: GameState) -> tuple[bool, str, list[Discovery]]:
     elif body.exploration_count == 2:
         num_finds = num_finds // 4
 
+    # Charge the exploration cost and count the attempt up front so a full
+    # cargo hold cannot grant free, repeated exploration (mirrors perform_scan).
+    ship.fuel -= EXPLORE_FUEL_COST
+    body.exploration_count += 1
+
     if num_finds == 0:
-        ship.fuel -= EXPLORE_FUEL_COST
-        body.exploration_count += 1
         state.add_log("exploration", f"Explored {body.name}. Found nothing of interest.", category="exploration", title="Surface Exploration", system=system.name, body=body.name, fuel_change=-EXPLORE_FUEL_COST)
         return True, f"Explored {body.name}. Found nothing of interest.", []
 
@@ -462,15 +465,10 @@ def explore_surface(state: GameState) -> tuple[bool, str, list[Discovery]]:
             lore_frag.discovery_timestamp = datetime.now(timezone.utc).isoformat()
             state.add_log("lore", f"Discovered lore fragment: {lore_frag.title} ({lore_frag.id}).", category="discovery", title="Lore Fragment Discovered", system=system.name, body=body.name)
 
-    if accepted:
-        ship.fuel -= EXPLORE_FUEL_COST
-
-        state.add_log("exploration", f"Explored {body.name}. Found {len(accepted)} points of interest.", category="exploration", title="Surface Exploration", system=system.name, body=body.name, fuel_change=-EXPLORE_FUEL_COST)
-        body.poi_count = max(0, body.poi_count - len(accepted))
-        body.exploration_count += 1
-        if body.biome:
-            state.record_biome_visit(body.biome)
-
+    state.add_log("exploration", f"Explored {body.name}. Found {len(accepted)} points of interest.", category="exploration", title="Surface Exploration", system=system.name, body=body.name, fuel_change=-EXPLORE_FUEL_COST)
+    body.poi_count = max(0, body.poi_count - len(accepted))
+    if body.biome:
+        state.record_biome_visit(body.biome)
 
     return True, f"Explored {body.name}. Found {len(accepted)} points of interest.", accepted
 
