@@ -555,8 +555,8 @@ def api_atmospheric_scan(game_id: str, x_game_token: str | None = Header(default
         state = _get_state(game_id)
         if not state:
             raise HTTPException(status_code=404, detail="Game not found")
-        discoveries = perform_atmospheric_scan(state)
-        if not discoveries:
+        ok, discoveries = perform_atmospheric_scan(state)
+        if not ok:
             raise HTTPException(status_code=400, detail="Atmospheric scan not possible here.")
         game_save(state)
         return {
@@ -590,8 +590,8 @@ def api_sub_surface_explore(game_id: str, x_game_token: str | None = Header(defa
         state = _get_state(game_id)
         if not state:
             raise HTTPException(status_code=404, detail="Game not found")
-        discoveries = perform_sub_surface_exploration(state)
-        if not discoveries:
+        ok, discoveries = perform_sub_surface_exploration(state)
+        if not ok:
             raise HTTPException(status_code=400, detail="Sub-surface exploration not possible here.")
         game_save(state)
         return {

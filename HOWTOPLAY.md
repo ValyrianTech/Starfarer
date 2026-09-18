@@ -159,7 +159,7 @@ The response also includes a `lore_fragments_discovered` field listing any lore 
 POST /api/game/{game_id}/atmospheric-scan
 ```
 
-Costs 1 fuel. No landing required. Available on `gas_giant`, `volcanic`, and `ocean` biomes. If you are not landed on a body, the scan auto-selects the first eligible body in the system that has not yet been scanned 3 times. Yields 1–2 `atmospheric_phenomena` discoveries (20–60 cr each) — lower value, but cheap and repeatable. Capped at 3 scans per body. Returns HTTP 400 if no atmospheric scan is possible here.
+Costs 1 fuel. No landing required. Available on `gas_giant`, `volcanic`, and `ocean` biomes. If you are not landed on a body, the scan auto-selects the first eligible body in the system that has not yet been scanned 3 times. Yields 1–2 `atmospheric_phenomena` discoveries (20–60 cr each) — lower value, but cheap and repeatable. Capped at 3 scans per body. Returns HTTP 400 only when an atmospheric scan is genuinely not possible here (no current system, not landed on an eligible body, not enough fuel, or the body already at the 3-scan cap); a scan that is possible but whose cargo hold is full returns HTTP 200 with an empty discoveries list. The 1 fuel and the scan-attempt counter are charged up front, before discoveries are generated or cargo capacity is checked, so scanning with a full cargo hold still costs 1 fuel and counts toward the 3-scan cap on that body.
 
 ### 3.9 Sub-Surface Exploration
 
@@ -171,7 +171,7 @@ Costs 3 fuel + 1 crew. Requires being landed on a body. Works on:
 - `volcanic`, `desert`, `tundra` — explores cave systems, yielding `geological_formation` discoveries (50–120 cr)
 - `ocean` — explores the ocean depths, yielding `biological_specimen` discoveries (80–200 cr)
 
-Yields 1–2 high-value discoveries. Can only be done **once per body** (`sub_surface_explored`). Returns HTTP 400 if sub-surface exploration is not possible here.
+Yields 1–2 high-value discoveries. Can only be done **once per body** (`sub_surface_explored`). The 3 fuel + 1 crew and the one-time `sub_surface_explored` flag are charged up front, before discoveries are generated or cargo capacity is checked, so sub-surface exploration with a full cargo hold still costs 3 fuel + 1 crew and marks the body as explored (no free re-rolls). Returns HTTP 400 only when sub-surface exploration is genuinely not possible here (no current system, not enough fuel/crew, not landed, unsupported biome, or the body was already explored) — never a silent charge.
 
 ### 3.10 Handle Events
 
@@ -791,7 +791,7 @@ All endpoints that access a specific game (mutating and read-only GET) accept th
 | POST | `/api/game/{id}/scan` | Scan current system (response includes `scanner_tier_data` at scanner L3+; returns HTTP 400 if scan is not possible) |
 | POST | `/api/game/{id}/land/{bid}` | Land on body |
 | POST | `/api/game/{id}/explore` | Explore surface |
-| POST | `/api/game/{id}/atmospheric-scan` | Atmospheric scan (1 fuel, gas giants/volcanic/ocean) |
+| POST | `/api/game/{id}/atmospheric-scan` | Atmospheric scan (1 fuel, gas giants/volcanic/ocean; returns HTTP 400 only if genuinely not possible, HTTP 200 with empty discoveries on a full hold) |
 | POST | `/api/game/{id}/sub-surface-explore` | Sub-surface exploration (3 fuel + 1 crew, cave systems/ocean depths) |
 | POST | `/api/game/{id}/event/{eid}/resolve` | Resolve event |
 | POST | `/api/game/{id}/distress` | Activate distress beacon |

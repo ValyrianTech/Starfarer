@@ -4960,7 +4960,8 @@ class TestAtmosphericScan:
 
     def test_atmospheric_scan_gas_giant(self):
         state, _body = self._make_state("gas_giant")
-        discoveries = perform_atmospheric_scan(state)
+        ok, discoveries = perform_atmospheric_scan(state)
+        assert ok is True
         assert len(discoveries) > 0
         for d in discoveries:
             assert d.category == "atmospheric_phenomena"
@@ -4968,29 +4969,34 @@ class TestAtmosphericScan:
 
     def test_atmospheric_scan_volcanic(self):
         state, _body = self._make_state("volcanic")
-        discoveries = perform_atmospheric_scan(state)
+        ok, discoveries = perform_atmospheric_scan(state)
+        assert ok is True
         assert len(discoveries) > 0
 
     def test_atmospheric_scan_ocean(self):
         state, _body = self._make_state("ocean")
-        discoveries = perform_atmospheric_scan(state)
+        ok, discoveries = perform_atmospheric_scan(state)
+        assert ok is True
         assert len(discoveries) > 0
 
     def test_atmospheric_scan_wrong_biome(self):
         state, _body = self._make_state("desert")
-        discoveries = perform_atmospheric_scan(state)
+        ok, discoveries = perform_atmospheric_scan(state)
+        assert ok is False
         assert discoveries == []
 
     def test_atmospheric_scan_no_fuel(self):
         state, _body = self._make_state("gas_giant")
         state.ship.fuel = 0
-        discoveries = perform_atmospheric_scan(state)
+        ok, discoveries = perform_atmospheric_scan(state)
+        assert ok is False
         assert discoveries == []
 
     def test_atmospheric_scan_no_system(self):
         state, _body = self._make_state("gas_giant")
         state.ship.current_system_id = "nonexistent"
-        discoveries = perform_atmospheric_scan(state)
+        ok, discoveries = perform_atmospheric_scan(state)
+        assert ok is False
         assert discoveries == []
 
     def test_atmospheric_scan_deducts_fuel(self):
@@ -5009,10 +5015,12 @@ class TestAtmosphericScan:
         state, body = self._make_state("gas_giant")
         for i in range(3):
             state.ship.fuel = 100
-            discoveries = perform_atmospheric_scan(state)
+            ok, discoveries = perform_atmospheric_scan(state)
+            assert ok is True, f"Scan {i+1} should succeed"
             assert len(discoveries) > 0, f"Scan {i+1} should succeed"
         state.ship.fuel = 100
-        discoveries = perform_atmospheric_scan(state)
+        ok, discoveries = perform_atmospheric_scan(state)
+        assert ok is False
         assert discoveries == []
         assert body.atmospheric_scan_count == 3
 
@@ -5022,6 +5030,31 @@ class TestAtmosphericScan:
         d = body.to_dict()
         restored = Body.from_dict(d)
         assert restored.atmospheric_scan_count == 1
+
+    def test_atmospheric_scan_cargo_full_charges_cost_and_counts_attempt(self) -> None:
+        """A full cargo hold still charges fuel and counts the scan attempt."""
+        state, body = self._make_state("gas_giant")
+        # Fill the cargo hold completely so _add_discoveries stores nothing.
+        state.ship.max_cargo = 1
+        state.discoveries.clear()
+        state.ship.cargo = 0
+        filler = Discovery(id="full_1", category="mineral", name="Filler", description="f", value=1)
+        state.discoveries.append(filler)
+        state.sync_cargo()
+        assert state.ship.cargo == 1
+
+        fuel_before = state.ship.fuel
+        count_before = body.atmospheric_scan_count
+
+        ok, discoveries = perform_atmospheric_scan(state)
+
+        assert ok is True
+        assert discoveries == []
+        assert state.ship.fuel == fuel_before - ATMOSPHERIC_SCAN_FUEL_COST
+        assert body.atmospheric_scan_count == count_before + 1
+        # The filler remains the only discovery and cargo stays in sync.
+        assert len(state.discoveries) == 1
+        assert state.ship.cargo == 1
 
 
 class TestSubSurfaceExploration:
@@ -5038,67 +5071,77 @@ class TestSubSurfaceExploration:
 
     def test_sub_surface_volcanic(self):
         state, _body = self._make_state("volcanic")
-        discoveries = perform_sub_surface_exploration(state)
+        ok, discoveries = perform_sub_surface_exploration(state)
+        assert ok is True
         assert len(discoveries) > 0
         for d in discoveries:
             assert d.category == "geological_formation"
 
     def test_sub_surface_desert(self):
         state, _body = self._make_state("desert")
-        discoveries = perform_sub_surface_exploration(state)
+        ok, discoveries = perform_sub_surface_exploration(state)
+        assert ok is True
         assert len(discoveries) > 0
         for d in discoveries:
             assert d.category == "geological_formation"
 
     def test_sub_surface_tundra(self):
         state, _body = self._make_state("tundra")
-        discoveries = perform_sub_surface_exploration(state)
+        ok, discoveries = perform_sub_surface_exploration(state)
+        assert ok is True
         assert len(discoveries) > 0
         for d in discoveries:
             assert d.category == "geological_formation"
 
     def test_sub_surface_ocean(self):
         state, _body = self._make_state("ocean")
-        discoveries = perform_sub_surface_exploration(state)
+        ok, discoveries = perform_sub_surface_exploration(state)
+        assert ok is True
         assert len(discoveries) > 0
         for d in discoveries:
             assert d.category == "biological_specimen"
 
     def test_sub_surface_wrong_biome(self):
         state, _body = self._make_state("jungle")
-        discoveries = perform_sub_surface_exploration(state)
+        ok, discoveries = perform_sub_surface_exploration(state)
+        assert ok is False
         assert discoveries == []
 
     def test_sub_surface_no_fuel(self):
         state, _body = self._make_state("volcanic")
         state.ship.fuel = 0
-        discoveries = perform_sub_surface_exploration(state)
+        ok, discoveries = perform_sub_surface_exploration(state)
+        assert ok is False
         assert discoveries == []
 
     def test_sub_surface_no_crew(self):
         state, _body = self._make_state("volcanic")
         state.ship.crew = 0
-        discoveries = perform_sub_surface_exploration(state)
+        ok, discoveries = perform_sub_surface_exploration(state)
+        assert ok is False
         assert discoveries == []
 
     def test_sub_surface_already_explored(self):
         state, body = self._make_state("volcanic")
         body.sub_surface_explored = True
-        discoveries = perform_sub_surface_exploration(state)
+        ok, discoveries = perform_sub_surface_exploration(state)
+        assert ok is False
         assert discoveries == []
 
     def test_sub_surface_deducts_fuel_and_crew(self):
         state, _body = self._make_state("volcanic")
         fuel_before = state.ship.fuel
         crew_before = state.ship.crew
-        perform_sub_surface_exploration(state)
+        ok, _discoveries = perform_sub_surface_exploration(state)
+        assert ok is True
         assert state.ship.fuel == fuel_before - SUB_SURFACE_FUEL_COST
         assert state.ship.crew == crew_before - SUB_SURFACE_CREW_COST
 
     def test_sub_surface_sets_explored_flag(self):
         state, body = self._make_state("volcanic")
         assert body.sub_surface_explored is False
-        perform_sub_surface_exploration(state)
+        ok, _discoveries = perform_sub_surface_exploration(state)
+        assert ok is True
         assert body.sub_surface_explored is True
 
 
@@ -5291,7 +5334,8 @@ class TestAtmosphericScanAdditional:
         assert system is not None
         system.bodies = [Body(id="b_barren", name="Barren", body_type="planet", biome="barren", size=3, distance_from_star=0.5, poi_count=1)]
         state.ship.current_body_id = None
-        discoveries = perform_atmospheric_scan(state)
+        ok, discoveries = perform_atmospheric_scan(state)
+        assert ok is False
         assert discoveries == []
 
     def test_atmospheric_scan_landed_wrong_biome(self):
@@ -5301,7 +5345,8 @@ class TestAtmosphericScanAdditional:
         body = Body(id="b_jungle", name="Jungle", body_type="planet", biome="jungle", size=3, distance_from_star=0.5, poi_count=1)
         system.bodies = [body]
         state.ship.current_body_id = body.id
-        discoveries = perform_atmospheric_scan(state)
+        ok, discoveries = perform_atmospheric_scan(state)
+        assert ok is False
         assert discoveries == []
 
     def test_atmospheric_scan_not_landed_finds_eligible(self):
@@ -5311,7 +5356,8 @@ class TestAtmosphericScanAdditional:
         body = Body(id="b_ocean", name="Ocean", body_type="planet", biome="ocean", size=3, distance_from_star=0.5, poi_count=1)
         system.bodies = [body]
         state.ship.current_body_id = None
-        discoveries = perform_atmospheric_scan(state)
+        ok, discoveries = perform_atmospheric_scan(state)
+        assert ok is True
         assert len(discoveries) > 0
 
     def test_atmospheric_scan_skips_exhausted_body(self):
@@ -5325,7 +5371,8 @@ class TestAtmosphericScanAdditional:
         body2 = Body(id="b_fresh", name="Fresh Giant", body_type="planet", biome="gas_giant", size=5, distance_from_star=2.0, poi_count=1, atmospheric_scan_count=0)
         system.bodies = [body1, body2]
         state.ship.current_body_id = None
-        discoveries = perform_atmospheric_scan(state)
+        ok, discoveries = perform_atmospheric_scan(state)
+        assert ok is True
         assert len(discoveries) > 0, "Should find discoveries on the second eligible body"
         # The scan should have been performed on body2
         assert body1.atmospheric_scan_count == 3, "First body should remain exhausted"
@@ -5342,8 +5389,9 @@ class TestAtmosphericScanAdditional:
         state.ship.fuel = 100
 
         log_count_before = len(state.log_entries)
-        discoveries = perform_atmospheric_scan(state)
+        ok, discoveries = perform_atmospheric_scan(state)
 
+        assert ok is False
         assert discoveries == []
         assert len(state.log_entries) == log_count_before + 1
         log_entry = state.log_entries[-1]
@@ -5362,15 +5410,45 @@ class TestSubSurfaceAdditional:
         assert system is not None
         state.ship.current_body_id = "nonexistent"
         state.ship.crew = 5
-        discoveries = perform_sub_surface_exploration(state)
+        ok, discoveries = perform_sub_surface_exploration(state)
+        assert ok is False
         assert discoveries == []
 
     def test_sub_surface_no_current_body(self):
         state = new_game(seed=42)
         state.ship.current_body_id = None
         state.ship.crew = 5
-        discoveries = perform_sub_surface_exploration(state)
+        ok, discoveries = perform_sub_surface_exploration(state)
+        assert ok is False
         assert discoveries == []
+
+    def test_sub_surface_full_cargo_still_charges_fuel_crew_and_sets_flag(self):
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        body = Body(id="b_sub_fullcargo", name="SubWorld", body_type="planet", biome="volcanic", size=5, distance_from_star=0.5, poi_count=3)
+        system.bodies = [body]
+        state.ship.current_body_id = body.id
+        state.ship.crew = 5
+        state.ship.max_cargo = 0
+        state.discoveries.clear()
+        state.sync_cargo()
+        fuel_before = state.ship.fuel
+        crew_before = state.ship.crew
+        ok, discoveries = perform_sub_surface_exploration(state)
+        assert ok is True
+        assert discoveries == []
+        assert state.ship.fuel == fuel_before - SUB_SURFACE_FUEL_COST
+        assert state.ship.crew == crew_before - SUB_SURFACE_CREW_COST
+        assert body.sub_surface_explored is True
+        assert state.ship.cargo == len(state.discoveries)
+        fuel_before = state.ship.fuel
+        crew_before = state.ship.crew
+        ok, discoveries = perform_sub_surface_exploration(state)
+        assert ok is False
+        assert discoveries == []
+        assert state.ship.fuel == fuel_before
+        assert state.ship.crew == crew_before
 
 
 class TestApiEndpoints:
@@ -5398,7 +5476,8 @@ class TestSubSurfaceNoSystem:
         state = new_game(seed=42)
         state.ship.current_system_id = "nonexistent"
         state.ship.crew = 5
-        discoveries = perform_sub_surface_exploration(state)
+        ok, discoveries = perform_sub_surface_exploration(state)
+        assert ok is False
         assert discoveries == []
 
 
@@ -5434,7 +5513,8 @@ class TestSyncCargoInvariant:
         )
         system.bodies = [body]
         state.ship.current_body_id = body.id
-        discoveries = perform_atmospheric_scan(state)
+        ok, discoveries = perform_atmospheric_scan(state)
+        assert ok is True
         assert len(discoveries) > 0
         assert state.ship.cargo == len(state.discoveries)
 
@@ -5450,7 +5530,8 @@ class TestSyncCargoInvariant:
         system.bodies = [body]
         state.ship.current_body_id = body.id
         state.ship.crew = 5
-        discoveries = perform_sub_surface_exploration(state)
+        ok, discoveries = perform_sub_surface_exploration(state)
+        assert ok is True
         assert len(discoveries) > 0
         assert state.ship.cargo == len(state.discoveries)
 
@@ -5645,7 +5726,8 @@ class TestCargoCapacityEnforcement:
         state.ship.max_cargo = 1
         state.discoveries.clear()
         state.sync_cargo()
-        discoveries = perform_atmospheric_scan(state)
+        ok, discoveries = perform_atmospheric_scan(state)
+        assert ok is True
         assert len(state.discoveries) <= 1
         assert state.ship.cargo == len(state.discoveries)
         if discoveries:
@@ -5666,7 +5748,8 @@ class TestCargoCapacityEnforcement:
         state.ship.max_cargo = 1
         state.discoveries.clear()
         state.sync_cargo()
-        perform_sub_surface_exploration(state)
+        ok, _discoveries = perform_sub_surface_exploration(state)
+        assert ok is True
         assert len(state.discoveries) <= 1
         assert state.ship.cargo == len(state.discoveries)
 
