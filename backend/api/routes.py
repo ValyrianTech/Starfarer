@@ -70,6 +70,7 @@ from backend.missions import (
     FactionMission,
     complete_mission,
     generate_missions,
+    get_faction_completed_count,
     get_missions_summary,
 )
 from backend.models.faction import FACTION_DEFINITIONS, get_faction
@@ -1466,7 +1467,8 @@ def api_missions(
         faction_idx = deterministic_hash(state.seed, current_system.id, "primary_faction") % len(faction_ids)
         primary_faction_id = faction_ids[faction_idx]
 
-        missions = generate_missions(state, current_system, primary_faction_id)
+        completed_count = get_faction_completed_count(state, primary_faction_id)
+        missions = generate_missions(state, current_system, primary_faction_id, completed_count)
 
         faction = get_faction(primary_faction_id)
 
@@ -1543,7 +1545,8 @@ def api_accept_mission(game_id: str, mission_id: str, req: AcceptMissionRequest,
 
         mission_found = None
         for fid in factions_to_check:
-            missions = generate_missions(state, current_system, fid)
+            completed_count = get_faction_completed_count(state, fid)
+            missions = generate_missions(state, current_system, fid, completed_count)
             for m in missions:
                 if m.id == mission_id:
                     mission_found = m

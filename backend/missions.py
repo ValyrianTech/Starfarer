@@ -427,6 +427,23 @@ def get_primary_faction_id(state: GameState, system: StarSystem) -> str:
     return faction_ids[faction_idx]
 
 
+def get_faction_completed_count(state: GameState, faction_id: str) -> int:
+    """Return the number of completed missions for a given faction.
+
+    The count is used to seed mission generation consistently, ensuring
+    that mission pool composition and mission ids match across every
+    call site that generates or accepts missions for the same faction.
+
+    :param state: The current game state.
+    :type state: GameState
+    :param faction_id: The identifier of the faction to count.
+    :type faction_id: str
+    :returns: The number of completed missions for the faction.
+    :rtype: int
+    """
+    return sum(1 for m in state.completed_missions if m.get("faction_id") == faction_id)
+
+
 def get_missions_summary(state: GameState, system: StarSystem | None) -> dict:
     """Summarize the missions available at a system for quick surfacing.
 
@@ -462,9 +479,7 @@ def get_missions_summary(state: GameState, system: StarSystem | None) -> dict:
     faction_id = get_primary_faction_id(state, system)
     faction = get_faction(faction_id)
 
-    faction_completed_count = sum(
-        1 for m in state.completed_missions if m.get("faction_id") == faction_id
-    )
+    faction_completed_count = get_faction_completed_count(state, faction_id)
     missions = generate_missions(state, system, faction_id, faction_completed_count)
 
     standard = [m for m in missions if m.objective_type != "daily"]

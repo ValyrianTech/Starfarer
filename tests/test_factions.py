@@ -2941,3 +2941,128 @@ class TestMissionSummary:
         assert summary["daily_available"] is True, "daily_available should still be True"
         assert summary["highest_tier"] == 0, "highest_tier should be 0 when no standard missions"
         assert summary["tiers"] == [], "tiers should be empty when no standard missions"
+
+
+class TestMissionSeedConsistency:
+    """Regression tests for the mission-seed mismatch bug.
+
+    The mission pool and per-mission ids are derived from an RNG seeded by
+    the completed-mission count for the offering faction. Every call site
+    that generates or accepts missions must therefore pass the *same*
+    completed count, or a mission id advertised by the listing endpoint
+    will not be found when the player tries to accept it after their first
+    completion.
+    """
+
+    def test_accept_mission_after_completion_matches_listing(self) -> None:
+        resp = client.post(
+            "/api/game/new",
+            json={"seed": 42, "game_id": "seed-consistency-e2e"},
+        )
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        state.ship.fuel = 100
+        state.ship.credits = 500
+        current_system = state.get_current_system()
+        assert current_system is not None
+        current_system.has_trading_station = True
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        # First mission: accept then complete so completed_missions is non-empty.
+        listing = client.get(f"/api/game/{game_id}/missions").json()
+        faction_id = listing["faction_id"]
+        first_id = listing["missions"][0]["id"]
+        resp = client.post(
+            f"/api/game/{game_id}/missions/{first_id}/accept",
+            json={"mission_id": first_id},
+        )
+        assert resp.status_code == 200
+        resp = client.post(
+            f"/api/game/{game_id}/missions/{first_id}/complete",
+            json={"mission_id": first_id},
+        )
+        assert resp.status_code == 200
+
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        assert any(
+            c.get("mission_id") == first_id for c in state.completed_missions
+        )
+        # Keep enough resources to accept the next mission.
+        state.ship.fuel = 100
+        state.ship.credits = 500
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        # The listing must still line up with accept after the completion.
+        listing = client.get(f"/api/game/{game_id}/missions").json()
+        assert listing["faction_id"] == faction_id
+        assert len(listing["missions"]) > 0
+        next_id = listing["missions"][0]["id"]
+        resp = client.post(
+            f"/api/game/{game_id}/missions/{next_id}/accept",
+            json={"mission_id": next_id},
+        )
+        assert resp.status_code == 200, resp.json()
+        assert resp.json()["mission"]["id"] == next_id
+
+    def test_api_missions_seed_matches_summary_after_completion(self) -> None:
+        """GET /missions must advertise the same ids as direct generation.
+
+        The listing endpoint must seed generation with the faction completed
+        count so mission ids stay consistent across call sites.
+        """
+        from backend.missions import (
+            generate_missions,
+            get_faction_completed_count,
+            get_primary_faction_id,
+        )
+
+        resp = client.post(
+            "/api/game/new",
+            json={"seed": 42, "game_id": "seed-consistency-listing"},
+        )
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        current_system = state.get_current_system()
+        assert current_system is not None
+        current_system.has_trading_station = True
+
+        # Record a completion for the listing's dominant faction.
+        primary_faction_id = get_primary_faction_id(state, current_system)
+        state.completed_missions.append({
+            "mission_id": "prior_mission",
+            "faction_id": primary_faction_id,
+            "title": "Prior",
+            "tier": 1,
+        })
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        listing = client.get(f"/api/game/{game_id}/missions").json()
+        expected = generate_missions(
+            state,
+            current_system,
+            primary_faction_id,
+            get_faction_completed_count(state, primary_faction_id),
+        )
+        expected_ids = {m.id for m in expected if m.objective_type != "daily"}
+        listed_ids = {m["id"] for m in listing["missions"]}
+        assert listed_ids == expected_ids
+
+    def test_get_faction_completed_count(self) -> None:
+        from backend.missions import get_faction_completed_count
+        state = new_game(seed=42)
+        assert get_faction_completed_count(state, "stellar_cartographers") == 0
+        state.completed_missions.append(
+            {"mission_id": "m1", "faction_id": "stellar_cartographers", "title": "A", "tier": 1}
+        )
+        state.completed_missions.append(
+            {"mission_id": "m2", "faction_id": "void_traders", "title": "B", "tier": 1}
+        )
+        assert get_faction_completed_count(state, "stellar_cartographers") == 1
+        assert get_faction_completed_count(state, "void_traders") == 1
+        assert get_faction_completed_count(state, "free_pilots") == 0
