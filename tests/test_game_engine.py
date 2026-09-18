@@ -5410,6 +5410,32 @@ class TestSubSurfaceAdditional:
         discoveries = perform_sub_surface_exploration(state)
         assert discoveries == []
 
+    def test_sub_surface_full_cargo_still_charges_fuel_crew_and_sets_flag(self):
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        body = Body(id="b_sub_fullcargo", name="SubWorld", body_type="planet", biome="volcanic", size=5, distance_from_star=0.5, poi_count=3)
+        system.bodies = [body]
+        state.ship.current_body_id = body.id
+        state.ship.crew = 5
+        state.ship.max_cargo = 0
+        state.discoveries.clear()
+        state.sync_cargo()
+        fuel_before = state.ship.fuel
+        crew_before = state.ship.crew
+        discoveries = perform_sub_surface_exploration(state)
+        assert discoveries == []
+        assert state.ship.fuel == fuel_before - SUB_SURFACE_FUEL_COST
+        assert state.ship.crew == crew_before - SUB_SURFACE_CREW_COST
+        assert body.sub_surface_explored is True
+        assert state.ship.cargo == len(state.discoveries)
+        fuel_before = state.ship.fuel
+        crew_before = state.ship.crew
+        discoveries = perform_sub_surface_exploration(state)
+        assert discoveries == []
+        assert state.ship.fuel == fuel_before
+        assert state.ship.crew == crew_before
+
 
 class TestApiEndpoints:
     """Tests for the new API endpoints via test client."""
