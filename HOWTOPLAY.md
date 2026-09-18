@@ -666,7 +666,7 @@ Content-Type: application/json
 { "mission_id": "mission_sys_0000_12345" }
 ```
 
-Missions cannot be accepted twice and must be accepted before completing. Completed missions are tracked and cannot be repeated.
+Missions cannot be accepted twice and must be accepted before completing. Completed missions are tracked and cannot be repeated. Mission ids are stable: the id returned by the listing endpoint can be used directly with the accept and complete endpoints, and listings stay consistent even after you complete a mission for the same faction.
 
 ##### Faction Mission Accept Endpoint
 
