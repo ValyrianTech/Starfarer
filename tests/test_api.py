@@ -4416,6 +4416,7 @@ class TestApiNewEndpoints:
         from backend.models.discovery import Discovery
         from backend.models.system import Body
 
+        # Create a fresh game and force a volcanic body into the current system.
         resp = client.post("/api/game/new", json={"seed": 42, "game_id": "atmo-full-hold"})
         game_id = resp.json()["game_id"]
         state = GAME_STORE[game_id]
@@ -4425,7 +4426,7 @@ class TestApiNewEndpoints:
         GAME_STORE[game_id] = state
         client.post(f"/api/game/{game_id}/land/volc_full")
 
-        # Fill the cargo hold completely so _add_discoveries stores nothing.
+        # Fill the cargo hold completely so the scan stores nothing.
         state = GAME_STORE[game_id]
         state.ship.max_cargo = 1
         state.discoveries.clear()
@@ -4433,25 +4434,32 @@ class TestApiNewEndpoints:
         state.sync_cargo()
         GAME_STORE[game_id] = state
 
-        fuel_before = state.ship.fuel
-        count_before = volc_body.atmospheric_scan_count
+        # Persist this baseline, drop the in-memory cache, then reload from the
+        # DB so fuel_before / count_before are read from persisted state (not
+        # from the in-memory object mutated above).
+        game_save(state)
+        GAME_STORE.pop(game_id, None)
+        reloaded_baseline = client.get(f"/api/game/{game_id}").json()
+        fuel_before = reloaded_baseline["ship"]["fuel"]
+        count_before = next(
+            b["atmospheric_scan_count"]
+            for b in reloaded_baseline["current_system"]["bodies"]
+            if b["id"] == "volc_full"
+        )
 
+        # Perform the scan: a full hold stores nothing but still charges fuel.
         resp = client.post(f"/api/game/{game_id}/atmospheric-scan")
         assert resp.status_code == 200
         data = resp.json()
         assert data["discoveries"] == []
         assert data["ship"]["fuel"] == fuel_before - ATMOSPHERIC_SCAN_FUEL_COST
 
-        # In-memory state reflects the charge even with a full hold.
-        state = GAME_STORE[game_id]
-        assert state.ship.fuel == fuel_before - ATMOSPHERIC_SCAN_FUEL_COST
-        assert volc_body.atmospheric_scan_count == count_before + 1
-
-        # Clear the in-memory cache and reload from the DB to confirm persistence.
+        # Drop the cache again and reload from the DB. These reloaded, DB-sourced
+        # values are the core regression assertion: an engine-only in-memory
+        # charge (never persisted) would leave fuel and atmospheric_scan_count
+        # unchanged after reload, equal to fuel_before / count_before.
         GAME_STORE.pop(game_id, None)
-        resp = client.get(f"/api/game/{game_id}")
-        assert resp.status_code == 200
-        reloaded = resp.json()
+        reloaded = client.get(f"/api/game/{game_id}").json()
         assert reloaded["ship"]["fuel"] == fuel_before - ATMOSPHERIC_SCAN_FUEL_COST
         reloaded_body = next(b for b in reloaded["current_system"]["bodies"] if b["id"] == "volc_full")
         assert reloaded_body["atmospheric_scan_count"] == count_before + 1
