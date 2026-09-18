@@ -4411,6 +4411,65 @@ class TestApiNewEndpoints:
         assert "discoveries" in data
         assert len(data["discoveries"]) > 0
 
+    def test_atmospheric_scan_full_hold_persists_charge(self):
+        from backend.config import ATMOSPHERIC_SCAN_FUEL_COST
+        from backend.models.discovery import Discovery
+        from backend.models.system import Body
+
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "atmo-full-hold"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        system = state.get_current_system()
+        volc_body = Body(id="volc_full", name="VolcFull", body_type="planet", biome="volcanic", size=5, distance_from_star=0.5, poi_count=3)
+        system.bodies.append(volc_body)
+        GAME_STORE[game_id] = state
+        client.post(f"/api/game/{game_id}/land/volc_full")
+
+        # Fill the cargo hold completely so _add_discoveries stores nothing.
+        state = GAME_STORE[game_id]
+        state.ship.max_cargo = 1
+        state.discoveries.clear()
+        state.discoveries.append(Discovery(id="full_filler", category="mineral", name="Filler", description="f", value=1))
+        state.sync_cargo()
+        GAME_STORE[game_id] = state
+
+        fuel_before = state.ship.fuel
+        count_before = volc_body.atmospheric_scan_count
+
+        resp = client.post(f"/api/game/{game_id}/atmospheric-scan")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["discoveries"] == []
+        assert data["ship"]["fuel"] == fuel_before - ATMOSPHERIC_SCAN_FUEL_COST
+
+        # In-memory state reflects the charge even with a full hold.
+        state = GAME_STORE[game_id]
+        assert state.ship.fuel == fuel_before - ATMOSPHERIC_SCAN_FUEL_COST
+        assert volc_body.atmospheric_scan_count == count_before + 1
+
+        # Clear the in-memory cache and reload from the DB to confirm persistence.
+        GAME_STORE.pop(game_id, None)
+        resp = client.get(f"/api/game/{game_id}")
+        assert resp.status_code == 200
+        reloaded = resp.json()
+        assert reloaded["ship"]["fuel"] == fuel_before - ATMOSPHERIC_SCAN_FUEL_COST
+        reloaded_body = next(b for b in reloaded["current_system"]["bodies"] if b["id"] == "volc_full")
+        assert reloaded_body["atmospheric_scan_count"] == count_before + 1
+
+    def test_atmospheric_scan_wrong_biome_returns_400(self):
+        from backend.models.system import Body
+
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "atmo-wrong-biome"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        system = state.get_current_system()
+        barren = Body(id="b_barren", name="Barren", body_type="planet", biome="barren", size=3, distance_from_star=0.5, poi_count=1)
+        system.bodies.append(barren)
+        GAME_STORE[game_id] = state
+        client.post(f"/api/game/{game_id}/land/b_barren")
+        resp = client.post(f"/api/game/{game_id}/atmospheric-scan")
+        assert resp.status_code == 400
+
     def test_sub_surface_success(self):
         resp = client.post("/api/game/new", json={"seed": 42})
         game_id = resp.json()["game_id"]

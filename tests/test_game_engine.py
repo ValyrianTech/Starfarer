@@ -4960,7 +4960,8 @@ class TestAtmosphericScan:
 
     def test_atmospheric_scan_gas_giant(self):
         state, _body = self._make_state("gas_giant")
-        discoveries = perform_atmospheric_scan(state)
+        ok, discoveries = perform_atmospheric_scan(state)
+        assert ok is True
         assert len(discoveries) > 0
         for d in discoveries:
             assert d.category == "atmospheric_phenomena"
@@ -4968,29 +4969,34 @@ class TestAtmosphericScan:
 
     def test_atmospheric_scan_volcanic(self):
         state, _body = self._make_state("volcanic")
-        discoveries = perform_atmospheric_scan(state)
+        ok, discoveries = perform_atmospheric_scan(state)
+        assert ok is True
         assert len(discoveries) > 0
 
     def test_atmospheric_scan_ocean(self):
         state, _body = self._make_state("ocean")
-        discoveries = perform_atmospheric_scan(state)
+        ok, discoveries = perform_atmospheric_scan(state)
+        assert ok is True
         assert len(discoveries) > 0
 
     def test_atmospheric_scan_wrong_biome(self):
         state, _body = self._make_state("desert")
-        discoveries = perform_atmospheric_scan(state)
+        ok, discoveries = perform_atmospheric_scan(state)
+        assert ok is False
         assert discoveries == []
 
     def test_atmospheric_scan_no_fuel(self):
         state, _body = self._make_state("gas_giant")
         state.ship.fuel = 0
-        discoveries = perform_atmospheric_scan(state)
+        ok, discoveries = perform_atmospheric_scan(state)
+        assert ok is False
         assert discoveries == []
 
     def test_atmospheric_scan_no_system(self):
         state, _body = self._make_state("gas_giant")
         state.ship.current_system_id = "nonexistent"
-        discoveries = perform_atmospheric_scan(state)
+        ok, discoveries = perform_atmospheric_scan(state)
+        assert ok is False
         assert discoveries == []
 
     def test_atmospheric_scan_deducts_fuel(self):
@@ -5009,10 +5015,12 @@ class TestAtmosphericScan:
         state, body = self._make_state("gas_giant")
         for i in range(3):
             state.ship.fuel = 100
-            discoveries = perform_atmospheric_scan(state)
+            ok, discoveries = perform_atmospheric_scan(state)
+            assert ok is True, f"Scan {i+1} should succeed"
             assert len(discoveries) > 0, f"Scan {i+1} should succeed"
         state.ship.fuel = 100
-        discoveries = perform_atmospheric_scan(state)
+        ok, discoveries = perform_atmospheric_scan(state)
+        assert ok is False
         assert discoveries == []
         assert body.atmospheric_scan_count == 3
 
@@ -5038,8 +5046,9 @@ class TestAtmosphericScan:
         fuel_before = state.ship.fuel
         count_before = body.atmospheric_scan_count
 
-        discoveries = perform_atmospheric_scan(state)
+        ok, discoveries = perform_atmospheric_scan(state)
 
+        assert ok is True
         assert discoveries == []
         assert state.ship.fuel == fuel_before - ATMOSPHERIC_SCAN_FUEL_COST
         assert body.atmospheric_scan_count == count_before + 1
@@ -5315,7 +5324,8 @@ class TestAtmosphericScanAdditional:
         assert system is not None
         system.bodies = [Body(id="b_barren", name="Barren", body_type="planet", biome="barren", size=3, distance_from_star=0.5, poi_count=1)]
         state.ship.current_body_id = None
-        discoveries = perform_atmospheric_scan(state)
+        ok, discoveries = perform_atmospheric_scan(state)
+        assert ok is False
         assert discoveries == []
 
     def test_atmospheric_scan_landed_wrong_biome(self):
@@ -5325,7 +5335,8 @@ class TestAtmosphericScanAdditional:
         body = Body(id="b_jungle", name="Jungle", body_type="planet", biome="jungle", size=3, distance_from_star=0.5, poi_count=1)
         system.bodies = [body]
         state.ship.current_body_id = body.id
-        discoveries = perform_atmospheric_scan(state)
+        ok, discoveries = perform_atmospheric_scan(state)
+        assert ok is False
         assert discoveries == []
 
     def test_atmospheric_scan_not_landed_finds_eligible(self):
@@ -5335,7 +5346,8 @@ class TestAtmosphericScanAdditional:
         body = Body(id="b_ocean", name="Ocean", body_type="planet", biome="ocean", size=3, distance_from_star=0.5, poi_count=1)
         system.bodies = [body]
         state.ship.current_body_id = None
-        discoveries = perform_atmospheric_scan(state)
+        ok, discoveries = perform_atmospheric_scan(state)
+        assert ok is True
         assert len(discoveries) > 0
 
     def test_atmospheric_scan_skips_exhausted_body(self):
@@ -5349,7 +5361,8 @@ class TestAtmosphericScanAdditional:
         body2 = Body(id="b_fresh", name="Fresh Giant", body_type="planet", biome="gas_giant", size=5, distance_from_star=2.0, poi_count=1, atmospheric_scan_count=0)
         system.bodies = [body1, body2]
         state.ship.current_body_id = None
-        discoveries = perform_atmospheric_scan(state)
+        ok, discoveries = perform_atmospheric_scan(state)
+        assert ok is True
         assert len(discoveries) > 0, "Should find discoveries on the second eligible body"
         # The scan should have been performed on body2
         assert body1.atmospheric_scan_count == 3, "First body should remain exhausted"
@@ -5366,8 +5379,9 @@ class TestAtmosphericScanAdditional:
         state.ship.fuel = 100
 
         log_count_before = len(state.log_entries)
-        discoveries = perform_atmospheric_scan(state)
+        ok, discoveries = perform_atmospheric_scan(state)
 
+        assert ok is False
         assert discoveries == []
         assert len(state.log_entries) == log_count_before + 1
         log_entry = state.log_entries[-1]
@@ -5458,7 +5472,8 @@ class TestSyncCargoInvariant:
         )
         system.bodies = [body]
         state.ship.current_body_id = body.id
-        discoveries = perform_atmospheric_scan(state)
+        ok, discoveries = perform_atmospheric_scan(state)
+        assert ok is True
         assert len(discoveries) > 0
         assert state.ship.cargo == len(state.discoveries)
 
@@ -5669,7 +5684,8 @@ class TestCargoCapacityEnforcement:
         state.ship.max_cargo = 1
         state.discoveries.clear()
         state.sync_cargo()
-        discoveries = perform_atmospheric_scan(state)
+        ok, discoveries = perform_atmospheric_scan(state)
+        assert ok is True
         assert len(state.discoveries) <= 1
         assert state.ship.cargo == len(state.discoveries)
         if discoveries:

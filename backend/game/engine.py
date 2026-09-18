@@ -473,7 +473,7 @@ def explore_surface(state: GameState) -> tuple[bool, str, list[Discovery]]:
     return True, f"Explored {body.name}. Found {len(accepted)} points of interest.", accepted
 
 
-def perform_atmospheric_scan(state: GameState) -> list[Discovery]:
+def perform_atmospheric_scan(state: GameState) -> tuple[bool, list[Discovery]]:
     """Perform an atmospheric scan of the current body.
 
     Only works on gas_giant, volcanic, and ocean biomes.
@@ -486,15 +486,21 @@ def perform_atmospheric_scan(state: GameState) -> list[Discovery]:
 
     :param state: The current game state.
     :type state: GameState
-    :returns: A list of newly generated Discovery objects.
-    :rtype: list[Discovery]
+    :returns: A tuple of ``(ok, discoveries)`` where ``ok`` is ``True`` when
+        the scan was actually performed (fuel charged and scan count
+        incremented up front) and ``False`` when the scan was not possible
+        (no current system, not enough fuel, no eligible body, wrong biome,
+        or the body is already fully scanned). ``discoveries`` is the list of
+        newly stored :class:`Discovery` objects and may be empty when the
+        cargo hold is full (or nothing was stored).
+    :rtype: tuple[bool, list[Discovery]]
     """
     system = state.get_current_system()
     if not system:
-        return []
+        return False, []
     ship = state.ship
     if ship.fuel < ATMOSPHERIC_SCAN_FUEL_COST:
-        return []
+        return False, []
 
     body = None
     if ship.current_body_id:
@@ -508,14 +514,14 @@ def perform_atmospheric_scan(state: GameState) -> list[Discovery]:
                 body = b
                 break
     if not body:
-        return []
+        return False, []
 
     if body.biome not in ("gas_giant", "volcanic", "ocean"):
-        return []
+        return False, []
 
     if body.atmospheric_scan_count >= 3:
         state.add_log("exploration", f"Atmospheric scan not possible on {body.name} — this body has already been fully scanned (3/3 scans completed).", category="exploration", title="Atmospheric Scan Exhausted", system=system.name, body=body.name)
-        return []
+        return False, []
 
     # Charge the fuel cost and count the attempt up front so a full cargo
     # hold cannot grant free, repeated scans (mirrors perform_scan and
@@ -537,7 +543,7 @@ def perform_atmospheric_scan(state: GameState) -> list[Discovery]:
     if discoveries:
         state.add_log("exploration", f"Atmospheric scan of {body.name} complete. Found {len(discoveries)} atmospheric phenomena.", category="exploration", title="Atmospheric Scan", system=system.name, body=body.name, fuel_change=-ATMOSPHERIC_SCAN_FUEL_COST)
 
-    return discoveries
+    return True, discoveries
 
 
 def perform_sub_surface_exploration(state: GameState) -> list[Discovery]:
