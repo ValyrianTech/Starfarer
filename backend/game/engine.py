@@ -542,6 +542,8 @@ def perform_atmospheric_scan(state: GameState) -> tuple[bool, list[Discovery]]:
 
     if discoveries:
         state.add_log("exploration", f"Atmospheric scan of {body.name} complete. Found {len(discoveries)} atmospheric phenomena.", category="exploration", title="Atmospheric Scan", system=system.name, body=body.name, fuel_change=-ATMOSPHERIC_SCAN_FUEL_COST)
+    else:
+        state.add_log("exploration", f"Atmospheric scan of {body.name} complete. Found nothing of interest — cargo hold is full.", category="exploration", title="Atmospheric Scan", system=system.name, body=body.name, fuel_change=-ATMOSPHERIC_SCAN_FUEL_COST)
 
     return True, discoveries
 
