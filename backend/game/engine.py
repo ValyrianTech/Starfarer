@@ -592,6 +592,13 @@ def perform_sub_surface_exploration(state: GameState) -> list[Discovery]:
     if body.sub_surface_explored:
         return []
 
+    # Charge the fuel and crew costs and mark the body explored up front so a
+    # full cargo hold cannot grant free, repeated exploration (mirrors
+    # perform_atmospheric_scan).
+    ship.fuel -= SUB_SURFACE_FUEL_COST
+    ship.crew -= SUB_SURFACE_CREW_COST
+    body.sub_surface_explored = True
+
     discoveries = []
     # Include len(state.discoveries) in the seed so that repeated calls produce different results (the discovery count changes between calls).
     item_rng = random.Random(state.seed + len(state.discoveries) + deterministic_hash(body.id) + 777)  # nosec B311 - game RNG, not crypto
@@ -604,10 +611,6 @@ def perform_sub_surface_exploration(state: GameState) -> list[Discovery]:
     discoveries = _add_discoveries(state, discoveries)
 
     if discoveries:
-        ship.fuel -= SUB_SURFACE_FUEL_COST
-        ship.crew -= SUB_SURFACE_CREW_COST
-        body.sub_surface_explored = True
-
         biome_label = "cave systems" if body.biome in cave_biomes else "ocean depths"
         state.add_log("exploration", f"Sub-surface exploration of {body.name} complete. Explored {biome_label} and found {len(discoveries)} discoveries.", category="exploration", title="Sub-Surface Exploration", system=system.name, body=body.name, fuel_change=-SUB_SURFACE_FUEL_COST)
 
