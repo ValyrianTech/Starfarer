@@ -4496,6 +4496,11 @@ class TestApiNewEndpoints:
         reloaded_baseline = client.get(f"/api/game/{game_id}").json()
         fuel_before = reloaded_baseline["ship"]["fuel"]
         crew_before = reloaded_baseline["ship"]["crew"]
+        flag_before = next(
+            b["sub_surface_explored"]
+            for b in reloaded_baseline["current_system"]["bodies"]
+            if b["id"] == "sub_full"
+        )
 
         # Perform the sub-surface exploration: a full hold stores nothing but
         # still charges fuel and crew.
@@ -4516,6 +4521,15 @@ class TestApiNewEndpoints:
         assert reloaded["ship"]["crew"] == crew_before - SUB_SURFACE_CREW_COST
         reloaded_body = next(b for b in reloaded["current_system"]["bodies"] if b["id"] == "sub_full")
         assert reloaded_body["sub_surface_explored"] is True
+        assert flag_before is False
+
+        # A second exploration of the same body must be rejected at the route
+        # level (no free re-roll): the one-time exploration cannot be repeated,
+        # and the rejected call must not change fuel or crew.
+        resp = client.post(f"/api/game/{game_id}/sub-surface-explore")
+        assert resp.status_code == 400
+        assert reloaded["ship"]["fuel"] == fuel_before - SUB_SURFACE_FUEL_COST
+        assert reloaded["ship"]["crew"] == crew_before - SUB_SURFACE_CREW_COST
 
     def test_atmospheric_scan_wrong_biome_returns_400(self):
         from backend.models.system import Body
