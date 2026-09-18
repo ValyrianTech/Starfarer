@@ -1029,6 +1029,60 @@ class TestMultiplayerCrossroads:
         assert result["donation"]["message"] == "Handle with care"
         GAME_STORE.pop(state.id, None)
 
+    def test_donate_item_refuses_lore_linked_discovery(self) -> None:
+        state = new_game(42, "DonorShip", shared_universe=True)
+        GAME_STORE[state.id] = state
+        try:
+            disc = _make_discovery(name="Lore Ore")
+            disc.lore_fragment_id = "lore_frag_1"
+            state.discoveries.append(disc)
+
+            result = donate_item(state, "Lore Ore", 1)
+
+            assert result["success"] is False
+            assert "No discovery named 'Lore Ore' in cargo." in result["detail"]
+            assert any(d.name == "Lore Ore" and d.lore_fragment_id == "lore_frag_1" for d in state.discoveries)
+            assert not any(i["item_name"] == "Lore Ore" for i in get_available_items_list())
+        finally:
+            GAME_STORE.pop(state.id, None)
+
+    def test_donate_item_mixed_cargo_removes_only_non_lore(self) -> None:
+        state = new_game(42, "DonorShip", shared_universe=True)
+        GAME_STORE[state.id] = state
+        try:
+            lore_disc = _make_discovery(name="Mixed Ore")
+            lore_disc.lore_fragment_id = "lore_frag_2"
+            plain_disc = _make_discovery(name="Mixed Ore")
+            state.discoveries.append(lore_disc)
+            state.discoveries.append(plain_disc)
+
+            result = donate_item(state, "Mixed Ore", 2)
+
+            assert result["success"] is True
+            assert result["donation"]["quantity"] == 1
+            remaining = [d for d in state.discoveries if d.name == "Mixed Ore"]
+            assert len(remaining) == 1
+            assert remaining[0].lore_fragment_id == "lore_frag_2"
+        finally:
+            GAME_STORE.pop(state.id, None)
+
+    def test_donate_item_all_matches_lore_linked_refused(self) -> None:
+        state = new_game(42, "DonorShip", shared_universe=True)
+        GAME_STORE[state.id] = state
+        try:
+            disc = _make_discovery(name="AllLore Ore")
+            disc.lore_fragment_id = "lore_frag_3"
+            state.discoveries.append(disc)
+
+            result = donate_item(state, "AllLore Ore", 1)
+
+            assert result["success"] is False
+            assert "No discovery named 'AllLore Ore' in cargo." in result["detail"]
+            assert len(state.discoveries) == 1
+            assert not any(i["item_name"] == "AllLore Ore" for i in get_available_items_list())
+        finally:
+            GAME_STORE.pop(state.id, None)
+
     def test_claim_item_success(self) -> None:
         # Donate from one game, claim from another
         donor = new_game(42, "DonorShip", shared_universe=True)
