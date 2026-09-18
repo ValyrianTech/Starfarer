@@ -4464,6 +4464,59 @@ class TestApiNewEndpoints:
         reloaded_body = next(b for b in reloaded["current_system"]["bodies"] if b["id"] == "volc_full")
         assert reloaded_body["atmospheric_scan_count"] == count_before + 1
 
+    def test_sub_surface_full_hold_persists_charge(self):
+        from backend.config import SUB_SURFACE_CREW_COST, SUB_SURFACE_FUEL_COST
+        from backend.models.discovery import Discovery
+        from backend.models.system import Body
+
+        # Create a fresh game and force a volcanic body into the current system.
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "sub-full-hold"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        system = state.get_current_system()
+        volc_body = Body(id="sub_full", name="SubFull", body_type="planet", biome="volcanic", size=5, distance_from_star=0.5, poi_count=3)
+        system.bodies.append(volc_body)
+        GAME_STORE[game_id] = state
+        client.post(f"/api/game/{game_id}/land/sub_full")
+
+        # Fill the cargo hold completely so the exploration stores nothing.
+        state = GAME_STORE[game_id]
+        state.ship.max_cargo = 1
+        state.discoveries.clear()
+        state.discoveries.append(Discovery(id="sub_full_filler", category="mineral", name="Filler", description="f", value=1))
+        state.sync_cargo()
+        assert state.ship.crew >= 2
+        GAME_STORE[game_id] = state
+
+        # Persist this baseline, drop the in-memory cache, then reload from the
+        # DB so fuel_before / crew_before are read from persisted state (not
+        # from the in-memory object mutated above).
+        game_save(state)
+        GAME_STORE.pop(game_id, None)
+        reloaded_baseline = client.get(f"/api/game/{game_id}").json()
+        fuel_before = reloaded_baseline["ship"]["fuel"]
+        crew_before = reloaded_baseline["ship"]["crew"]
+
+        # Perform the sub-surface exploration: a full hold stores nothing but
+        # still charges fuel and crew.
+        resp = client.post(f"/api/game/{game_id}/sub-surface-explore")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["discoveries"] == []
+        assert data["ship"]["fuel"] == fuel_before - SUB_SURFACE_FUEL_COST
+        assert data["ship"]["crew"] == crew_before - SUB_SURFACE_CREW_COST
+
+        # Drop the cache again and reload from the DB. These reloaded, DB-sourced
+        # values are the core regression assertion: an engine-only in-memory
+        # charge (never persisted) would leave fuel, crew, and the explored flag
+        # unchanged after reload.
+        GAME_STORE.pop(game_id, None)
+        reloaded = client.get(f"/api/game/{game_id}").json()
+        assert reloaded["ship"]["fuel"] == fuel_before - SUB_SURFACE_FUEL_COST
+        assert reloaded["ship"]["crew"] == crew_before - SUB_SURFACE_CREW_COST
+        reloaded_body = next(b for b in reloaded["current_system"]["bodies"] if b["id"] == "sub_full")
+        assert reloaded_body["sub_surface_explored"] is True
+
     def test_atmospheric_scan_wrong_biome_returns_400(self):
         from backend.models.system import Body
 

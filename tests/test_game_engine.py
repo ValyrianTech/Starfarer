@@ -5071,67 +5071,77 @@ class TestSubSurfaceExploration:
 
     def test_sub_surface_volcanic(self):
         state, _body = self._make_state("volcanic")
-        discoveries = perform_sub_surface_exploration(state)
+        ok, discoveries = perform_sub_surface_exploration(state)
+        assert ok is True
         assert len(discoveries) > 0
         for d in discoveries:
             assert d.category == "geological_formation"
 
     def test_sub_surface_desert(self):
         state, _body = self._make_state("desert")
-        discoveries = perform_sub_surface_exploration(state)
+        ok, discoveries = perform_sub_surface_exploration(state)
+        assert ok is True
         assert len(discoveries) > 0
         for d in discoveries:
             assert d.category == "geological_formation"
 
     def test_sub_surface_tundra(self):
         state, _body = self._make_state("tundra")
-        discoveries = perform_sub_surface_exploration(state)
+        ok, discoveries = perform_sub_surface_exploration(state)
+        assert ok is True
         assert len(discoveries) > 0
         for d in discoveries:
             assert d.category == "geological_formation"
 
     def test_sub_surface_ocean(self):
         state, _body = self._make_state("ocean")
-        discoveries = perform_sub_surface_exploration(state)
+        ok, discoveries = perform_sub_surface_exploration(state)
+        assert ok is True
         assert len(discoveries) > 0
         for d in discoveries:
             assert d.category == "biological_specimen"
 
     def test_sub_surface_wrong_biome(self):
         state, _body = self._make_state("jungle")
-        discoveries = perform_sub_surface_exploration(state)
+        ok, discoveries = perform_sub_surface_exploration(state)
+        assert ok is False
         assert discoveries == []
 
     def test_sub_surface_no_fuel(self):
         state, _body = self._make_state("volcanic")
         state.ship.fuel = 0
-        discoveries = perform_sub_surface_exploration(state)
+        ok, discoveries = perform_sub_surface_exploration(state)
+        assert ok is False
         assert discoveries == []
 
     def test_sub_surface_no_crew(self):
         state, _body = self._make_state("volcanic")
         state.ship.crew = 0
-        discoveries = perform_sub_surface_exploration(state)
+        ok, discoveries = perform_sub_surface_exploration(state)
+        assert ok is False
         assert discoveries == []
 
     def test_sub_surface_already_explored(self):
         state, body = self._make_state("volcanic")
         body.sub_surface_explored = True
-        discoveries = perform_sub_surface_exploration(state)
+        ok, discoveries = perform_sub_surface_exploration(state)
+        assert ok is False
         assert discoveries == []
 
     def test_sub_surface_deducts_fuel_and_crew(self):
         state, _body = self._make_state("volcanic")
         fuel_before = state.ship.fuel
         crew_before = state.ship.crew
-        perform_sub_surface_exploration(state)
+        ok, _discoveries = perform_sub_surface_exploration(state)
+        assert ok is True
         assert state.ship.fuel == fuel_before - SUB_SURFACE_FUEL_COST
         assert state.ship.crew == crew_before - SUB_SURFACE_CREW_COST
 
     def test_sub_surface_sets_explored_flag(self):
         state, body = self._make_state("volcanic")
         assert body.sub_surface_explored is False
-        perform_sub_surface_exploration(state)
+        ok, _discoveries = perform_sub_surface_exploration(state)
+        assert ok is True
         assert body.sub_surface_explored is True
 
 
@@ -5400,14 +5410,16 @@ class TestSubSurfaceAdditional:
         assert system is not None
         state.ship.current_body_id = "nonexistent"
         state.ship.crew = 5
-        discoveries = perform_sub_surface_exploration(state)
+        ok, discoveries = perform_sub_surface_exploration(state)
+        assert ok is False
         assert discoveries == []
 
     def test_sub_surface_no_current_body(self):
         state = new_game(seed=42)
         state.ship.current_body_id = None
         state.ship.crew = 5
-        discoveries = perform_sub_surface_exploration(state)
+        ok, discoveries = perform_sub_surface_exploration(state)
+        assert ok is False
         assert discoveries == []
 
     def test_sub_surface_full_cargo_still_charges_fuel_crew_and_sets_flag(self):
@@ -5423,7 +5435,8 @@ class TestSubSurfaceAdditional:
         state.sync_cargo()
         fuel_before = state.ship.fuel
         crew_before = state.ship.crew
-        discoveries = perform_sub_surface_exploration(state)
+        ok, discoveries = perform_sub_surface_exploration(state)
+        assert ok is True
         assert discoveries == []
         assert state.ship.fuel == fuel_before - SUB_SURFACE_FUEL_COST
         assert state.ship.crew == crew_before - SUB_SURFACE_CREW_COST
@@ -5431,7 +5444,8 @@ class TestSubSurfaceAdditional:
         assert state.ship.cargo == len(state.discoveries)
         fuel_before = state.ship.fuel
         crew_before = state.ship.crew
-        discoveries = perform_sub_surface_exploration(state)
+        ok, discoveries = perform_sub_surface_exploration(state)
+        assert ok is False
         assert discoveries == []
         assert state.ship.fuel == fuel_before
         assert state.ship.crew == crew_before
@@ -5462,7 +5476,8 @@ class TestSubSurfaceNoSystem:
         state = new_game(seed=42)
         state.ship.current_system_id = "nonexistent"
         state.ship.crew = 5
-        discoveries = perform_sub_surface_exploration(state)
+        ok, discoveries = perform_sub_surface_exploration(state)
+        assert ok is False
         assert discoveries == []
 
 
@@ -5515,7 +5530,8 @@ class TestSyncCargoInvariant:
         system.bodies = [body]
         state.ship.current_body_id = body.id
         state.ship.crew = 5
-        discoveries = perform_sub_surface_exploration(state)
+        ok, discoveries = perform_sub_surface_exploration(state)
+        assert ok is True
         assert len(discoveries) > 0
         assert state.ship.cargo == len(state.discoveries)
 
@@ -5732,7 +5748,8 @@ class TestCargoCapacityEnforcement:
         state.ship.max_cargo = 1
         state.discoveries.clear()
         state.sync_cargo()
-        perform_sub_surface_exploration(state)
+        ok, _discoveries = perform_sub_surface_exploration(state)
+        assert ok is True
         assert len(state.discoveries) <= 1
         assert state.ship.cargo == len(state.discoveries)
 

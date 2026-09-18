@@ -131,6 +131,8 @@ Each step has a corresponding API endpoint for AI play.
 - Costs 3 fuel + 1 crew (configurable via `SUB_SURFACE_FUEL_COST` and `SUB_SURFACE_CREW_COST`)
 - Requires landing first; one-time only per body (tracked by `sub_surface_explored`)
 - Crew cost is non-refundable — the crew member joins the expedition and remains on the body
+- The 3 fuel + 1 crew cost and the one-time `sub_surface_explored` flag are applied up front (before discovery generation and cargo-capacity filtering), so a full cargo hold still consumes the resources and marks the body explored — no free re-rolls
+- The endpoint returns HTTP 400 only when sub-surface exploration is genuinely not possible (no current system, insufficient fuel/crew, not landed, unsupported biome, or already explored); a successful exploration with a full cargo hold returns HTTP 200 with an empty `discoveries` list
 
 **Motherlode Finds:**
 - Bodies with `initial_poi_count >= 4` have an 8% chance per discovery to generate a motherlode
