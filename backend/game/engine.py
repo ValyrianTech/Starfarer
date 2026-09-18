@@ -480,6 +480,10 @@ def perform_atmospheric_scan(state: GameState) -> list[Discovery]:
     Costs 1 fuel, no landing required. Yields 1-2 atmospheric_phenomena discoveries.
     Lower credit value (20-60cr) but very common.
 
+    The fuel cost and scan attempt are charged even when the cargo hold is
+    full (i.e. when nothing can be stored), so a full hold cannot be used to
+    re-roll a scan for free.
+
     :param state: The current game state.
     :type state: GameState
     :returns: A list of newly generated Discovery objects.
@@ -513,6 +517,12 @@ def perform_atmospheric_scan(state: GameState) -> list[Discovery]:
         state.add_log("exploration", f"Atmospheric scan not possible on {body.name} — this body has already been fully scanned (3/3 scans completed).", category="exploration", title="Atmospheric Scan Exhausted", system=system.name, body=body.name)
         return []
 
+    # Charge the fuel cost and count the attempt up front so a full cargo
+    # hold cannot grant free, repeated scans (mirrors perform_scan and
+    # explore_surface).
+    ship.fuel -= ATMOSPHERIC_SCAN_FUEL_COST
+    body.atmospheric_scan_count += 1
+
     discoveries = []
     # Include len(state.discoveries) in the seed so that repeated calls produce different results (the discovery count changes between calls).
     item_rng = random.Random(state.seed + len(state.discoveries) + deterministic_hash(body.id) + 999)  # nosec B311 - game RNG, not crypto
@@ -525,10 +535,6 @@ def perform_atmospheric_scan(state: GameState) -> list[Discovery]:
     discoveries = _add_discoveries(state, discoveries)
 
     if discoveries:
-        ship.fuel -= ATMOSPHERIC_SCAN_FUEL_COST
-
-        body.atmospheric_scan_count += 1
-
         state.add_log("exploration", f"Atmospheric scan of {body.name} complete. Found {len(discoveries)} atmospheric phenomena.", category="exploration", title="Atmospheric Scan", system=system.name, body=body.name, fuel_change=-ATMOSPHERIC_SCAN_FUEL_COST)
 
     return discoveries

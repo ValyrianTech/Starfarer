@@ -5023,6 +5023,30 @@ class TestAtmosphericScan:
         restored = Body.from_dict(d)
         assert restored.atmospheric_scan_count == 1
 
+    def test_atmospheric_scan_cargo_full_charges_cost_and_counts_attempt(self) -> None:
+        """A full cargo hold still charges fuel and counts the scan attempt."""
+        state, body = self._make_state("gas_giant")
+        # Fill the cargo hold completely so _add_discoveries stores nothing.
+        state.ship.max_cargo = 1
+        state.discoveries.clear()
+        state.ship.cargo = 0
+        filler = Discovery(id="full_1", category="mineral", name="Filler", description="f", value=1)
+        state.discoveries.append(filler)
+        state.sync_cargo()
+        assert state.ship.cargo == 1
+
+        fuel_before = state.ship.fuel
+        count_before = body.atmospheric_scan_count
+
+        discoveries = perform_atmospheric_scan(state)
+
+        assert discoveries == []
+        assert state.ship.fuel == fuel_before - ATMOSPHERIC_SCAN_FUEL_COST
+        assert body.atmospheric_scan_count == count_before + 1
+        # The filler remains the only discovery and cargo stays in sync.
+        assert len(state.discoveries) == 1
+        assert state.ship.cargo == 1
+
 
 class TestSubSurfaceExploration:
     """Tests for perform_sub_surface_exploration."""
