@@ -171,7 +171,7 @@ Costs 3 fuel + 1 crew. Requires being landed on a body. Works on:
 - `volcanic`, `desert`, `tundra` — explores cave systems, yielding `geological_formation` discoveries (50–120 cr)
 - `ocean` — explores the ocean depths, yielding `biological_specimen` discoveries (80–200 cr)
 
-Yields 1–2 high-value discoveries. Can only be done **once per body** (`sub_surface_explored`). Returns HTTP 400 if sub-surface exploration is not possible here.
+Yields 1–2 high-value discoveries. Can only be done **once per body** (`sub_surface_explored`). The 3 fuel + 1 crew and the one-time `sub_surface_explored` flag are charged up front, before discoveries are generated or cargo capacity is checked, so sub-surface exploration with a full cargo hold still costs 3 fuel + 1 crew and marks the body as explored (no free re-rolls). Returns HTTP 400 only when sub-surface exploration is genuinely not possible here (no current system, not enough fuel/crew, not landed, unsupported biome, or the body was already explored) — never a silent charge.
 
 ### 3.10 Handle Events
 

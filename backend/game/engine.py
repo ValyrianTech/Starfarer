@@ -548,7 +548,7 @@ def perform_atmospheric_scan(state: GameState) -> tuple[bool, list[Discovery]]:
     return True, discoveries
 
 
-def perform_sub_surface_exploration(state: GameState) -> list[Discovery]:
+def perform_sub_surface_exploration(state: GameState) -> tuple[bool, list[Discovery]]:
     """Perform a sub-surface exploration of the current body.
 
     Only works on volcanic, desert, tundra (cave systems -> geological_formation)
@@ -556,19 +556,31 @@ def perform_sub_surface_exploration(state: GameState) -> list[Discovery]:
     Costs 3 fuel + 1 crew. Yields 1-2 unique discoveries.
     Cannot be repeated on the same body.
 
+    The fuel and crew costs and the one-time ``sub_surface_explored`` flag
+    are charged even when the cargo hold is full (i.e. when nothing can be
+    stored), so a full hold cannot be used to re-roll an exploration for
+    free.
+
     :param state: The current game state.
     :type state: GameState
-    :returns: A list of newly generated Discovery objects.
-    :rtype: list[Discovery]
+    :returns: A tuple of ``(ok, discoveries)`` where ``ok`` is ``True`` when
+        the exploration was actually performed (fuel and crew charged and the
+        body's ``sub_surface_explored`` flag set up front) and ``False`` when
+        the exploration was not possible (no current system, not enough fuel,
+        not enough crew, no eligible body, unsupported biome, or the body has
+        already been explored). ``discoveries`` is the list of newly stored
+        :class:`Discovery` objects and may be empty when the cargo hold is
+        full (or nothing was stored).
+    :rtype: tuple[bool, list[Discovery]]
     """
     system = state.get_current_system()
     if not system:
-        return []
+        return False, []
     ship = state.ship
     if ship.fuel < SUB_SURFACE_FUEL_COST:
-        return []
+        return False, []
     if ship.crew < SUB_SURFACE_CREW_COST:
-        return []
+        return False, []
 
     body = None
     for b in system.bodies:
@@ -576,7 +588,7 @@ def perform_sub_surface_exploration(state: GameState) -> list[Discovery]:
             body = b
             break
     if not body:
-        return []
+        return False, []
 
     # Determine which biomes support sub-surface exploration
     cave_biomes = {"volcanic", "desert", "tundra"}
@@ -589,10 +601,10 @@ def perform_sub_surface_exploration(state: GameState) -> list[Discovery]:
         category = "biological_specimen"
 
     if category is None:
-        return []
+        return False, []
 
     if body.sub_surface_explored:
-        return []
+        return False, []
 
     # Charge the fuel and crew costs and mark the body explored up front so a
     # full cargo hold cannot grant free, repeated exploration (mirrors
@@ -615,8 +627,10 @@ def perform_sub_surface_exploration(state: GameState) -> list[Discovery]:
     if discoveries:
         biome_label = "cave systems" if body.biome in cave_biomes else "ocean depths"
         state.add_log("exploration", f"Sub-surface exploration of {body.name} complete. Explored {biome_label} and found {len(discoveries)} discoveries.", category="exploration", title="Sub-Surface Exploration", system=system.name, body=body.name, fuel_change=-SUB_SURFACE_FUEL_COST)
+    else:
+        state.add_log("exploration", f"Sub-surface exploration of {body.name} complete. Found nothing of interest — cargo hold is full.", category="exploration", title="Sub-Surface Exploration", system=system.name, body=body.name, fuel_change=-SUB_SURFACE_FUEL_COST)
 
-    return discoveries
+    return True, discoveries
 
 
 def _generate_discovery(rng: random.Random, category: str, body: Body, system: StarSystem) -> Discovery:
