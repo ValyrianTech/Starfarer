@@ -46,7 +46,9 @@ def donate_item(
 
     The item must exist in the player's discoveries. It is removed
     from the player's inventory and made available for other players
-    to claim.
+    to claim. Lore-linked discoveries (those with a ``lore_fragment_id``)
+    are excluded from donation and should be exchanged via ``donate_lore``
+    instead.
 
     :param game_state: The current game state.
     :type game_state: GameState
@@ -62,14 +64,14 @@ def donate_item(
     if isinstance(quantity, bool) or not isinstance(quantity, int) or quantity <= 0:
         return {"success": False, "detail": "Quantity must be a positive integer."}
 
-    matching = [d for d in game_state.discoveries if d.name == item_name]
+    matching = [d for d in game_state.discoveries if d.name == item_name and d.lore_fragment_id is None]
     if not matching:
         return {"success": False, "detail": f"No discovery named '{item_name}' in cargo."}
 
     actual_quantity = min(quantity, len(matching))
     indices_to_remove: list[int] = []
     for i, d in enumerate(game_state.discoveries):
-        if d.name == item_name and len(indices_to_remove) < actual_quantity:
+        if d.name == item_name and d.lore_fragment_id is None and len(indices_to_remove) < actual_quantity:
             indices_to_remove.append(i)
     for i in sorted(indices_to_remove, reverse=True):
         game_state.discoveries.pop(i)
