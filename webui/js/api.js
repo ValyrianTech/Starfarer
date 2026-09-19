@@ -98,50 +98,114 @@ async function fetchStreamTicket(gameId) {
 
 /**
  * Connect to the SSE spectator stream for a game.
- * EventSource reconnects automatically; onReconnect fires when the
- * connection is re-established so the caller can refresh galaxy data.
  *
  * EventSource cannot set request headers, so a short-lived, single-use ticket
  * (minted with the `X-Game-Token` header) is passed as the `ticket` query
  * parameter instead of the long-lived game token. When no token is available
  * the stream is opened without a query parameter, which is correct while token
  * enforcement is disabled.
+ *
+ * The ticket is single-use (consumed by the server on first connect), so the
+ * browser's built-in EventSource reconnect cannot be used for the
+ * authenticated path: it would retry the same URL with the already-consumed
+ * ticket and get a 403. Instead, on any disconnect (network error or the
+ * server's `end` event) we close the current source, mint a fresh ticket and
+ * open a new EventSource ourselves, after a short backoff.
+ *
+ * The returned handle has a `close()` method that stops reconnection.
  */
 export async function connectStream(gameId, { onState, onStatus }) {
-  const url = new URL(`${BASE}/spectate/${gameId}/stream`, window.location.origin);
-  const ticket = await fetchStreamTicket(gameId);
-  if (ticket) {
-    url.searchParams.set("ticket", ticket);
+  const baseUrl = new URL(
+    `${BASE}/spectate/${gameId}/stream`,
+    window.location.origin,
+  );
+  const RECONNECT_DELAY_MS = 1000;
+
+  let source = null;
+  let reconnectTimer = null;
+  let hasConnected = false;
+  let closed = false;
+
+  function buildUrl(ticket) {
+    const url = new URL(baseUrl.toString());
+    if (ticket) {
+      url.searchParams.set("ticket", ticket);
+    }
+    return url.toString();
   }
-  const source = new EventSource(url.toString());
-  let hadError = false;
 
-  source.addEventListener("open", () => {
-    if (hadError) {
-      hadError = false;
-      onStatus("reconnected");
-    } else {
-      onStatus("connected");
+  function attach(nextSource) {
+    nextSource.addEventListener("open", () => {
+      if (hasConnected) {
+        onStatus("reconnected");
+      } else {
+        hasConnected = true;
+        onStatus("connected");
+      }
+    });
+
+    nextSource.addEventListener("state", (evt) => {
+      try {
+        onState(JSON.parse(evt.data));
+      } catch (err) {
+        console.error("Bad state payload", err);
+      }
+    });
+
+    nextSource.addEventListener("end", () => {
+      onStatus("lost");
+      scheduleReconnect();
+    });
+
+    nextSource.addEventListener("error", () => {
+      onStatus("lost");
+      scheduleReconnect();
+    });
+  }
+
+  function scheduleReconnect() {
+    if (closed || reconnectTimer !== null) {
+      return;
     }
-  });
-
-  source.addEventListener("state", (evt) => {
-    try {
-      onState(JSON.parse(evt.data));
-    } catch (err) {
-      console.error("Bad state payload", err);
+    // Close the current source so the browser's native retry is bypassed and
+    // it does not re-attempt the stale (consumed-ticket) URL.
+    if (source) {
+      source.close();
+      source = null;
     }
-  });
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      reconnect();
+    }, RECONNECT_DELAY_MS);
+  }
 
-  source.addEventListener("end", () => {
-    // Server ended the stream; EventSource will reconnect on its own.
-    onStatus("lost");
-  });
+  async function reconnect() {
+    if (closed) {
+      return;
+    }
+    const ticket = await fetchStreamTicket(gameId);
+    source = new EventSource(buildUrl(ticket));
+    attach(source);
+  }
 
-  source.addEventListener("error", () => {
-    hadError = true;
-    onStatus("lost");
-  });
+  const ticket = await fetchStreamTicket(gameId);
+  source = new EventSource(buildUrl(ticket));
+  attach(source);
 
-  return source;
+  return {
+    close() {
+      closed = true;
+      if (reconnectTimer !== null) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+      if (source) {
+        source.close();
+        source = null;
+      }
+    },
+    get source() {
+      return source;
+    },
+  };
 }
