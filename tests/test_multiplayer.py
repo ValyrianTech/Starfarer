@@ -26,9 +26,11 @@ from backend.multiplayer.api import (
     _check_game,
     _game_exists,
     _opaque_donor_id,
+    _public_ghost_view,
     _public_item_view,
     _public_lore_view,
     _public_message_view,
+    _public_ripple_view,
     _safe_text,
 )
 from backend.multiplayer.crossroads import (
@@ -1863,6 +1865,131 @@ class TestCrossroadsPublicViews:
         view = _public_message_view(msg)
         assert len(view["player_name"]) == 100
         assert len(view["text"]) == 500
+
+
+# ---------------------------------------------------------------------------
+# TestGhostRipplePublicViews
+# ---------------------------------------------------------------------------
+
+class TestGhostRipplePublicViews:
+    def test_public_ghost_view_removes_game_id(self) -> None:
+        ghost = GhostSignature(
+            id="ghost-pv-1",
+            game_id="other-player-game",
+            player_name="Pilot",
+            system_id="sys-1",
+            timestamp="2025-01-01T00:00:00Z",
+            discoveries=["A"],
+            message="hi",
+            body_visits=["b1"],
+        )
+        d = ghost.to_dict()
+        view = _public_ghost_view(d)
+        assert "game_id" not in view
+        assert view["player_name"] == "Pilot"
+        assert view["message"] == "hi"
+        assert view["id"] == "ghost-pv-1"
+        assert view["system_id"] == "sys-1"
+        assert view["discoveries"] == ["A"]
+        assert view["body_visits"] == ["b1"]
+        assert "game_id" in d
+
+    def test_public_ghost_view_truncates_fields(self) -> None:
+        ghost = GhostSignature(
+            id="ghost-pv-2",
+            game_id="g",
+            player_name="x" * 200,
+            system_id="s",
+            timestamp="t",
+            message="y" * 600,
+        )
+        view = _public_ghost_view(ghost.to_dict())
+        assert len(view["player_name"]) == 100
+        assert len(view["message"]) == 500
+
+    def test_public_ripple_view_removes_game_ids_and_acknowledged_by(self) -> None:
+        ripple = RippleEvent(
+            id="ripple-pv-1",
+            source_game_id="other-player-game",
+            source_player_name="OtherPilot",
+            source_system_id="a",
+            target_system_id="b",
+            discovery_type="artifact",
+            discovery_name="Relic",
+            created_at="2025-01-01T00:00:00Z",
+            acknowledged_by=["game-x", "game-y"],
+        )
+        d = ripple.to_dict()
+        view = _public_ripple_view(d)
+        assert "source_game_id" not in view
+        assert "acknowledged_by" not in view
+        assert view["source_player_name"] == "OtherPilot"
+        assert view["discovery_name"] == "Relic"
+        assert view["id"] == "ripple-pv-1"
+        assert view["target_system_id"] == "b"
+        assert "source_game_id" in d
+        assert "acknowledged_by" in d
+
+    def test_public_ripple_view_truncates_fields(self) -> None:
+        ripple = RippleEvent(
+            id="ripple-pv-2",
+            source_game_id="g",
+            source_player_name="x" * 200,
+            source_system_id="a",
+            target_system_id="b",
+            discovery_type="artifact",
+            discovery_name="y" * 600,
+            created_at="t",
+        )
+        view = _public_ripple_view(ripple.to_dict())
+        assert len(view["source_player_name"]) == 100
+        assert len(view["discovery_name"]) == 500
+
+    def test_api_system_ghosts_does_not_leak_game_id(self) -> None:
+        resp = client.post("/api/game/new", json={"shared_universe": True})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        sys_id = resp.json()["state"]["ship"]["current_system_id"]
+
+        resp = client.post(
+            f"/api/game/{game_id}/leave-ghost",
+            json={"message": "no leak"},
+        )
+        assert resp.status_code == 200
+        assert "game_id" not in resp.json()["ghost"]
+
+        resp = client.get(f"/api/game/{game_id}/system/{sys_id}/ghosts")
+        assert resp.status_code == 200
+        data = resp.json()
+        for ghost in data["ghosts"]:
+            assert "game_id" not in ghost
+
+    def test_api_ripples_does_not_leak_source_game_id(self) -> None:
+        from backend.multiplayer.database import save_ripple_event
+
+        resp = client.post("/api/game/new", json={"shared_universe": True})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        current_sys = state.get_current_system()
+
+        ripple = RippleEvent(
+            id="ripple-leak-test",
+            source_game_id="other-secret-game",
+            source_player_name="OtherPilot",
+            source_system_id="other-sys",
+            target_system_id=current_sys.id,
+            discovery_type="artifact",
+            discovery_name="Leak Ripple",
+            created_at=datetime.now(timezone.utc).isoformat(),
+        )
+        save_ripple_event(ripple)
+
+        resp = client.get(f"/api/game/{game_id}/ripples")
+        assert resp.status_code == 200
+        for ripple in resp.json()["ripples"]:
+            assert "source_game_id" not in ripple
+            assert "acknowledged_by" not in ripple
 
 
 # ---------------------------------------------------------------------------
