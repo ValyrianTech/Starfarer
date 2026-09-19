@@ -2147,6 +2147,10 @@ class TestMultiplayerAPI:
         )
         assert resp.status_code == 200
         assert resp.json()["success"] is True
+        item = resp.json()["item"]
+        assert "donor_game_id" not in item
+        assert "claimer_game_id" not in item
+        assert item["donor_id"] == _opaque_donor_id(donor_id)
 
     def test_api_claim_item_not_found(self) -> None:
         resp = client.post("/api/game/new", json={"shared_universe": True})
@@ -2236,6 +2240,10 @@ class TestMultiplayerAPI:
         )
         assert resp.status_code == 200
         assert resp.json()["success"] is True
+        lore = resp.json()["lore"]
+        assert "donor_game_id" not in lore
+        assert "claimer_game_id" not in lore
+        assert lore["donor_id"] == _opaque_donor_id(donor_id)
 
     def test_api_claim_lore_not_found(self) -> None:
         resp = client.post("/api/game/new", json={"shared_universe": True})

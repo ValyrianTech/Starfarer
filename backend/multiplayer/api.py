@@ -344,7 +344,9 @@ def api_claim_item(
     :type req: ClaimItemRequest
     :param x_game_token: The caller-supplied per-game token (X-Game-Token header).
     :type x_game_token: str | None
-    :returns: A dictionary with ``success`` flag and item data or error.
+    :returns: A dictionary with ``success`` flag and a sanitized public view
+        of the claimed item (raw donor/claimer game ids removed, opaque
+        ``donor_id`` added).
     :rtype: dict
     :raises HTTPException: 404 if the game is not found; 400 if claim fails.
     """
@@ -354,6 +356,7 @@ def api_claim_item(
         result = claim_item(item_id, state)
         if not result.get("success"):
             raise HTTPException(status_code=400, detail=result.get("detail", "Claim failed"))
+        result["item"] = _public_item_view(result["item"])
         _save_state(req.game_id)
     return result
 
@@ -453,7 +456,9 @@ def api_claim_lore(
     :type req: ClaimLoreRequest
     :param x_game_token: The caller-supplied per-game token (X-Game-Token header).
     :type x_game_token: str | None
-    :returns: A dictionary with ``success`` flag and lore data or error.
+    :returns: A dictionary with ``success`` flag and a sanitized public view
+        of the claimed lore (raw donor/claimer game ids removed, opaque
+        ``donor_id`` added).
     :rtype: dict
     :raises HTTPException: 404 if the game is not found; 400 if claim fails.
     """
@@ -463,6 +468,7 @@ def api_claim_lore(
         result = claim_lore(donation_id, state)
         if not result.get("success"):
             raise HTTPException(status_code=400, detail=result.get("detail", "Claim failed"))
+        result["lore"] = _public_lore_view(result["lore"])
         _save_state(req.game_id)
     return result
 
