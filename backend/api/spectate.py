@@ -18,6 +18,7 @@ from collections.abc import AsyncGenerator
 from fastapi import APIRouter, Header, HTTPException
 from fastapi.responses import StreamingResponse
 
+from backend.api import stream_tickets
 from backend.api.routes import _authorize_game
 from backend.config import get_require_game_token
 from backend.database import _safe_ship_credits, get_db_ctx
@@ -177,11 +178,46 @@ def _state_signature(state: GameState) -> tuple:
     )
 
 
+@router.post("/{game_id}/stream-ticket")
+def api_create_stream_ticket(
+    game_id: str,
+    x_game_token: str | None = Header(default=None),
+) -> dict:
+    """Mint a short-lived, single-use ticket for the spectator SSE stream.
+
+    Browsers cannot attach custom headers to ``EventSource`` connections,
+    so a spectator cannot authenticate the stream with the ``X-Game-Token``
+    header. To avoid placing the long-lived per-game token in a URL (where
+    it would leak into logs, browser history and ``Referer`` headers), a
+    client first calls this endpoint with the header token and receives a
+    short-lived, single-use ticket that it then passes as the ``ticket``
+    query parameter of ``GET /api/spectate/{game_id}/stream``.
+
+    :param game_id: The unique identifier of the game to spectate.
+    :type game_id: str
+    :param x_game_token: Optional game token supplied via the
+        ``X-Game-Token`` header. Required when token enforcement is on.
+    :type x_game_token: str | None
+    :returns: A dictionary with the opaque ``ticket`` string and the
+        ``expires_in`` lifetime in seconds.
+    :rtype: dict
+    :raises HTTPException: 403 if token enforcement is enabled and the
+        header token is missing or invalid; 404 if the game does not exist.
+    """
+    _authorize_game(game_id, x_game_token)
+    if _get_state(game_id) is None:
+        raise HTTPException(status_code=404, detail="Game not found")
+    return {
+        "ticket": stream_tickets.issue_stream_ticket(game_id),
+        "expires_in": stream_tickets.STREAM_TICKET_TTL_SECONDS,
+    }
+
+
 @router.get("/{game_id}/stream")
 async def api_spectate_stream(
     game_id: str,
     x_game_token: str | None = Header(default=None),
-    token: str | None = None,
+    ticket: str | None = None,
 ) -> StreamingResponse:
     """Stream game state changes to a spectator via Server-Sent Events.
 
@@ -192,23 +228,37 @@ async def api_spectate_stream(
     while idle so proxies keep the connection open.
 
     When STARFARER_REQUIRE_GAME_TOKEN enforcement is enabled, the caller
-    must present the game's token via the ``X-Game-Token`` header or the
-    ``token`` query parameter.
+    must authenticate either with the game's token via the
+    ``X-Game-Token`` header, or with a short-lived, single-use ticket
+    obtained from ``POST /api/spectate/{game_id}/stream-ticket`` and
+    supplied via the ``ticket`` query parameter. The ticket exists solely
+    because browsers cannot set headers on ``EventSource`` connections;
+    the long-lived game token is deliberately never accepted in the URL so
+    it cannot leak through logs, proxy caches, browser history or
+    ``Referer`` headers.
 
     :param game_id: The unique identifier of the game to spectate.
     :type game_id: str
     :param x_game_token: Optional game token supplied via the
         ``X-Game-Token`` header.
     :type x_game_token: str | None
-    :param token: Optional game token supplied via the ``token`` query
-        parameter.
-    :type token: str | None
+    :param ticket: Optional short-lived, single-use stream ticket supplied
+        via the ``ticket`` query parameter.
+    :type ticket: str | None
     :returns: A ``text/event-stream`` response.
     :rtype: StreamingResponse
     :raises HTTPException: 404 if the game does not exist; 403 if token
-        enforcement is enabled and the token is missing or invalid.
+        enforcement is enabled and neither the header token nor a valid
+        ticket authorizes the request.
     """
-    _authorize_game(game_id, x_game_token or token)
+    if x_game_token is not None:
+        _authorize_game(game_id, x_game_token)
+    elif ticket is not None and stream_tickets.consume_stream_ticket(
+        ticket, game_id
+    ):
+        pass
+    else:
+        _authorize_game(game_id, None)
     if _get_state(game_id) is None:
         raise HTTPException(status_code=404, detail="Game not found")
 

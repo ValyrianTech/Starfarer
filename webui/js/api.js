@@ -67,20 +67,51 @@ export function fetchSystemDetail(gameId, sysId) {
 }
 
 /**
+ * Mint a short-lived, single-use stream ticket for the spectator stream.
+ *
+ * The long-lived game token is sent via the `X-Game-Token` header so it is
+ * never placed in a URL (where it would leak into logs, browser history and
+ * `Referer` headers). Only the returned short-lived ticket is passed to the
+ * EventSource URL. Returns `null` when no token is available or the ticket
+ * request fails, so the caller can still open an unauthenticated stream (which
+ * succeeds while token enforcement is disabled).
+ */
+async function fetchStreamTicket(gameId) {
+  const token = getToken();
+  if (!token) {
+    return null;
+  }
+  try {
+    const res = await fetch(`${BASE}/spectate/${gameId}/stream-ticket`, {
+      method: "POST",
+      headers: { "X-Game-Token": token },
+    });
+    if (!res.ok) {
+      return null;
+    }
+    const body = await res.json();
+    return body.ticket || null;
+  } catch (err) {
+    return null;
+  }
+}
+
+/**
  * Connect to the SSE spectator stream for a game.
  * EventSource reconnects automatically; onReconnect fires when the
  * connection is re-established so the caller can refresh galaxy data.
  *
- * EventSource cannot set request headers, so the game token (when present) is
- * passed as the `token` query parameter, which the spectator stream accepts as a
- * supported alternative to the `X-Game-Token` header. The URL is left unchanged
- * when no token is available.
+ * EventSource cannot set request headers, so a short-lived, single-use ticket
+ * (minted with the `X-Game-Token` header) is passed as the `ticket` query
+ * parameter instead of the long-lived game token. When no token is available
+ * the stream is opened without a query parameter, which is correct while token
+ * enforcement is disabled.
  */
-export function connectStream(gameId, { onState, onStatus }) {
+export async function connectStream(gameId, { onState, onStatus }) {
   const url = new URL(`${BASE}/spectate/${gameId}/stream`, window.location.origin);
-  const token = getToken();
-  if (token) {
-    url.searchParams.set("token", token);
+  const ticket = await fetchStreamTicket(gameId);
+  if (ticket) {
+    url.searchParams.set("ticket", ticket);
   }
   const source = new EventSource(url.toString());
   let hadError = false;

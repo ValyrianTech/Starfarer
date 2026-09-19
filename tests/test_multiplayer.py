@@ -3713,11 +3713,21 @@ class TestCrossroadsReadTokenEnforcement:
         finally:
             GAME_STORE.pop(game_id, None)
 
-    def test_crossroads_items_token_via_query_param(self, monkeypatch) -> None:
+    def test_crossroads_items_query_token_no_longer_authorizes(
+        self, monkeypatch
+    ) -> None:
+        """A token passed as a URL query parameter must be rejected."""
         monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
         game_id, token = self._new_game()
         try:
             resp = client.get(f"/api/crossroads/items?game_id={game_id}&token={token}")
+            assert resp.status_code == 403
+
+            # The header form still works.
+            resp = client.get(
+                f"/api/crossroads/items?game_id={game_id}",
+                headers={"X-Game-Token": token},
+            )
             assert resp.status_code == 200
         finally:
             GAME_STORE.pop(game_id, None)
