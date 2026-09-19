@@ -180,7 +180,6 @@ def api_system_ghosts(
     page: int = 1,
     per_page: int = 10,
     x_game_token: str | None = Header(default=None),
-    token: str | None = None,
 ) -> dict:
     """Retrieve ghost signatures left by other players in a star system.
 
@@ -198,8 +197,6 @@ def api_system_ghosts(
     :type per_page: int
     :param x_game_token: The caller-supplied per-game token (X-Game-Token header).
     :type x_game_token: str | None
-    :param token: The caller-supplied per-game token (query parameter).
-    :type token: str | None
     :returns: A dictionary with ``ghosts``, ``page``, ``per_page``,
         ``total_ghosts``, and ``total_pages``.
     :rtype: dict
@@ -209,7 +206,7 @@ def api_system_ghosts(
         token is missing or invalid.
     """
     with _get_lock(game_id):
-        _authorize_game(game_id, x_game_token or token)
+        _authorize_game(game_id, x_game_token)
         if not _game_exists(game_id):
             raise HTTPException(status_code=404, detail="Game not found")
         result = get_system_ghosts(sys_id, page=page, per_page=per_page)
@@ -223,7 +220,6 @@ def api_leave_ghost(
     game_id: str,
     req: LeaveGhostRequest,
     x_game_token: str | None = Header(default=None),
-    token: str | None = None,
 ) -> dict:
     """Leave a ghost signature in the player's current star system.
 
@@ -236,14 +232,12 @@ def api_leave_ghost(
     :type req: LeaveGhostRequest
     :param x_game_token: The caller-supplied per-game token (X-Game-Token header).
     :type x_game_token: str | None
-    :param token: The caller-supplied per-game token (query parameter).
-    :type token: str | None
     :returns: A dictionary with ``ghost`` data.
     :rtype: dict
     :raises HTTPException: 404 if the game is not found.
     """
     with _get_lock(game_id):
-        _authorize_game(game_id, x_game_token or token)
+        _authorize_game(game_id, x_game_token)
         state = _check_game(game_id)
         current_system = state.get_current_system()
         if not current_system:
@@ -265,7 +259,6 @@ def api_crossroads_items(
     page: int = 1,
     per_page: int = 25,
     x_game_token: str | None = Header(default=None),
-    token: str | None = None,
 ) -> dict:
     """Retrieve all unclaimed items available at the Crossroads.
 
@@ -281,15 +274,13 @@ def api_crossroads_items(
     :type per_page: int
     :param x_game_token: The caller-supplied per-game token (X-Game-Token header).
     :type x_game_token: str | None
-    :param token: The caller-supplied per-game token (query parameter).
-    :type token: str | None
     :returns: A dictionary with ``items``, ``page``, ``per_page``,
         ``total_items``, and ``total_pages``.
     :rtype: dict
     :raises HTTPException: 403/404 when token enforcement is enabled and the
         token is missing/invalid or the game cannot be resolved.
     """
-    _authorize_game(game_id, x_game_token or token)
+    _authorize_game(game_id, x_game_token)
     page = max(1, page)
     per_page = max(1, min(per_page, 50))
     all_items = get_available_items_list()
@@ -310,7 +301,6 @@ def api_crossroads_items(
 def api_donate_item(
     req: DonateItemRequest,
     x_game_token: str | None = Header(default=None),
-    token: str | None = None,
 ) -> dict:
     """Donate an item from a player's cargo to the Crossroads.
 
@@ -322,8 +312,6 @@ def api_donate_item(
     :type req: DonateItemRequest
     :param x_game_token: The caller-supplied per-game token (X-Game-Token header).
     :type x_game_token: str | None
-    :param token: The caller-supplied per-game token (query parameter).
-    :type token: str | None
     :returns: A dictionary with ``success`` flag and donation data,
         or an error.
     :rtype: dict
@@ -331,7 +319,7 @@ def api_donate_item(
         donation fails.
     """
     with _get_lock(req.game_id):
-        _authorize_game(req.game_id, x_game_token or token)
+        _authorize_game(req.game_id, x_game_token)
         state = _check_game(req.game_id)
         result = donate_item(state, req.item_name, req.quantity, message=req.message)
         if not result.get("success"):
@@ -345,7 +333,6 @@ def api_claim_item(
     item_id: str,
     req: ClaimItemRequest,
     x_game_token: str | None = Header(default=None),
-    token: str | None = None,
 ) -> dict:
     """Claim an item from the Crossroads for a player's game.
 
@@ -357,14 +344,12 @@ def api_claim_item(
     :type req: ClaimItemRequest
     :param x_game_token: The caller-supplied per-game token (X-Game-Token header).
     :type x_game_token: str | None
-    :param token: The caller-supplied per-game token (query parameter).
-    :type token: str | None
     :returns: A dictionary with ``success`` flag and item data or error.
     :rtype: dict
     :raises HTTPException: 404 if the game is not found; 400 if claim fails.
     """
     with _get_lock(req.game_id):
-        _authorize_game(req.game_id, x_game_token or token)
+        _authorize_game(req.game_id, x_game_token)
         state = _check_game(req.game_id)
         result = claim_item(item_id, state)
         if not result.get("success"):
@@ -384,7 +369,6 @@ def api_crossroads_lore(
     page: int = 1,
     per_page: int = 25,
     x_game_token: str | None = Header(default=None),
-    token: str | None = None,
 ) -> dict:
     """Retrieve all unclaimed lore donations available at the Crossroads.
 
@@ -400,15 +384,13 @@ def api_crossroads_lore(
     :type per_page: int
     :param x_game_token: The caller-supplied per-game token (X-Game-Token header).
     :type x_game_token: str | None
-    :param token: The caller-supplied per-game token (query parameter).
-    :type token: str | None
     :returns: A dictionary with ``lore``, ``page``, ``per_page``,
         ``total_lore``, and ``total_pages``.
     :rtype: dict
     :raises HTTPException: 403/404 when token enforcement is enabled and the
         token is missing/invalid or the game cannot be resolved.
     """
-    _authorize_game(game_id, x_game_token or token)
+    _authorize_game(game_id, x_game_token)
     page = max(1, page)
     per_page = max(1, min(per_page, 50))
     all_lore = get_available_lore_list()
@@ -429,7 +411,6 @@ def api_crossroads_lore(
 def api_donate_lore(
     req: DonateLoreRequest,
     x_game_token: str | None = Header(default=None),
-    token: str | None = None,
 ) -> dict:
     """Donate a discovered lore fragment to the Crossroads.
 
@@ -440,8 +421,6 @@ def api_donate_lore(
     :type req: DonateLoreRequest
     :param x_game_token: The caller-supplied per-game token (X-Game-Token header).
     :type x_game_token: str | None
-    :param token: The caller-supplied per-game token (query parameter).
-    :type token: str | None
     :returns: A dictionary with ``success`` flag and donation data,
         or an error.
     :rtype: dict
@@ -449,7 +428,7 @@ def api_donate_lore(
         donation fails.
     """
     with _get_lock(req.game_id):
-        _authorize_game(req.game_id, x_game_token or token)
+        _authorize_game(req.game_id, x_game_token)
         state = _check_game(req.game_id)
         result = donate_lore(state, req.fragment_id, message=req.message)
         if not result.get("success"):
@@ -463,7 +442,6 @@ def api_claim_lore(
     donation_id: str,
     req: ClaimLoreRequest,
     x_game_token: str | None = Header(default=None),
-    token: str | None = None,
 ) -> dict:
     """Claim a lore fragment from the Crossroads for a player's game.
 
@@ -475,14 +453,12 @@ def api_claim_lore(
     :type req: ClaimLoreRequest
     :param x_game_token: The caller-supplied per-game token (X-Game-Token header).
     :type x_game_token: str | None
-    :param token: The caller-supplied per-game token (query parameter).
-    :type token: str | None
     :returns: A dictionary with ``success`` flag and lore data or error.
     :rtype: dict
     :raises HTTPException: 404 if the game is not found; 400 if claim fails.
     """
     with _get_lock(req.game_id):
-        _authorize_game(req.game_id, x_game_token or token)
+        _authorize_game(req.game_id, x_game_token)
         state = _check_game(req.game_id)
         result = claim_lore(donation_id, state)
         if not result.get("success"):
@@ -502,7 +478,6 @@ def api_crossroads_messages(
     page: int = 1,
     per_page: int = 10,
     x_game_token: str | None = Header(default=None),
-    token: str | None = None,
 ) -> dict:
     """Retrieve recent messages posted at the Crossroads.
 
@@ -517,8 +492,6 @@ def api_crossroads_messages(
     :type per_page: int
     :param x_game_token: The caller-supplied per-game token (X-Game-Token header).
     :type x_game_token: str | None
-    :param token: The caller-supplied per-game token (query parameter).
-    :type token: str | None
     :returns: A dictionary with ``messages`` list, ``page``, ``per_page``,
         ``total_messages``, and ``total_pages``.
     :rtype: dict
@@ -526,7 +499,7 @@ def api_crossroads_messages(
     :raises HTTPException: 403/404 when token enforcement is enabled and the
         token is missing/invalid or the game cannot be resolved.
     """
-    _authorize_game(game_id, x_game_token or token)
+    _authorize_game(game_id, x_game_token)
     result = get_messages(page=page, per_page=per_page)
     if page > result["total_pages"] and result["total_messages"] > 0:
         raise HTTPException(status_code=404, detail="Page out of range")
@@ -538,7 +511,6 @@ def api_crossroads_messages(
 def api_post_message(
     req: PostMessageRequest,
     x_game_token: str | None = Header(default=None),
-    token: str | None = None,
 ) -> dict:
     """Post a message visible to all players at the Crossroads.
 
@@ -549,14 +521,12 @@ def api_post_message(
     :type req: PostMessageRequest
     :param x_game_token: The caller-supplied per-game token (X-Game-Token header).
     :type x_game_token: str | None
-    :param token: The caller-supplied per-game token (query parameter).
-    :type token: str | None
     :returns: A dictionary with the posted message data.
     :rtype: dict
     :raises HTTPException: 404 if the game is not found.
     """
     with _get_lock(req.game_id):
-        _authorize_game(req.game_id, x_game_token or token)
+        _authorize_game(req.game_id, x_game_token)
         state = _check_game(req.game_id)
         msg = post_message(state, req.text)
         if isinstance(msg, dict) and not msg.get("success"):
@@ -574,7 +544,6 @@ def api_post_message(
 def api_ripples(
     game_id: str,
     x_game_token: str | None = Header(default=None),
-    token: str | None = None,
 ) -> dict:
     """Retrieve pending discovery ripple events for a game.
 
@@ -585,8 +554,6 @@ def api_ripples(
     :type game_id: str
     :param x_game_token: The caller-supplied per-game token (X-Game-Token header).
     :type x_game_token: str | None
-    :param token: The caller-supplied per-game token (query parameter).
-    :type token: str | None
     :returns: A dictionary with ``ripples`` list of pending ripple dicts.
     :rtype: dict
     :raises HTTPException: 404 if the game is not found.
@@ -594,7 +561,7 @@ def api_ripples(
         token is missing or invalid.
     """
     with _get_lock(game_id):
-        _authorize_game(game_id, x_game_token or token)
+        _authorize_game(game_id, x_game_token)
         state = _check_game(game_id)
     # Ripple data is read from the database, not from in-memory game state.
     # The game state is only used to determine the player's current system for filtering.
@@ -607,7 +574,6 @@ def api_acknowledge_ripple(
     game_id: str,
     ripple_id: str,
     x_game_token: str | None = Header(default=None),
-    token: str | None = None,
 ) -> dict:
     """Acknowledge a discovery ripple event.
 
@@ -620,15 +586,13 @@ def api_acknowledge_ripple(
     :type ripple_id: str
     :param x_game_token: The caller-supplied per-game token (X-Game-Token header).
     :type x_game_token: str | None
-    :param token: The caller-supplied per-game token (query parameter).
-    :type token: str | None
     :returns: A dictionary with ``success`` flag.
     :rtype: dict
     :raises HTTPException: 404 if the game is not found;
         400 if the ripple cannot be acknowledged.
     """
     with _get_lock(game_id):
-        _authorize_game(game_id, x_game_token or token)
+        _authorize_game(game_id, x_game_token)
         state = _check_game(game_id)
         result = acknowledge_ripple(ripple_id, state)
         if not result.get("success"):

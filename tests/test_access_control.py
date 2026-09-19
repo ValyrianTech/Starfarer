@@ -8,6 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend import config
+from backend.api import stream_tickets
 from backend.config import (
     ALLOW_CREDENTIALS,
     get_require_game_token,
@@ -145,7 +146,7 @@ class TestEndpointEnforcement:
             assert resp.status_code == 200
 
             resp = client.get(f"/api/game/{gid}", params={"token": token})
-            assert resp.status_code == 200
+            assert resp.status_code == 403
         finally:
             GAME_STORE.pop(gid, None)
 
@@ -330,7 +331,7 @@ class TestMutatingEndpointEnforcement:
                 assert resp.status_code != 403, f"{name}: header token should pass auth, got {resp.status_code}"
 
                 resp = client.post(url, json=body, params={"token": token})
-                assert resp.status_code != 403, f"{name}: query token should pass auth, got {resp.status_code}"
+                assert resp.status_code == 403, f"{name}: query token must no longer authorize, got {resp.status_code}"
         finally:
             GAME_STORE.pop(gid, None)
 
@@ -358,7 +359,7 @@ class TestMultiplayerReadEndpointEnforcement:
             assert "ripples" in resp.json()
 
             resp = client.get(f"/api/game/{gid}/ripples", params={"token": token})
-            assert resp.status_code == 200
+            assert resp.status_code == 403
         finally:
             GAME_STORE.pop(gid, None)
 
@@ -383,7 +384,7 @@ class TestMultiplayerReadEndpointEnforcement:
             resp = client.get(
                 f"/api/game/{gid}/system/{sys_id}/ghosts", params={"token": token}
             )
-            assert resp.status_code == 200
+            assert resp.status_code == 403
         finally:
             GAME_STORE.pop(gid, None)
 
@@ -442,15 +443,17 @@ class TestSpectateEnforcement:
                     await agen.aclose()
                 return chunk if isinstance(chunk, str) else chunk.decode()
 
-            chunk = asyncio.run(run_and_close(token=token, x_game_token=None))
+            chunk = asyncio.run(run_and_close(x_game_token=token))
             assert "event: state" in chunk
 
-            chunk = asyncio.run(run_and_close(x_game_token=token))
+            # A freshly minted ticket authorizes the stream without a header.
+            ticket = stream_tickets.issue_stream_ticket(gid)
+            chunk = asyncio.run(run_and_close(ticket=ticket, x_game_token=None))
             assert "event: state" in chunk
         finally:
             GAME_STORE.pop(gid, None)
 
-    def test_stream_rejects_invalid_token_via_query_param(self, monkeypatch) -> None:
+    def test_stream_rejects_invalid_ticket(self, monkeypatch) -> None:
         import asyncio
 
         from fastapi import HTTPException
@@ -465,15 +468,208 @@ class TestSpectateEnforcement:
                 asyncio.run(
                     api_spectate_stream(
                         gid,
-                        token="definitely-not-the-right-token",
+                        ticket="definitely-not-the-right-ticket",
                         x_game_token=None,
                     )
                 )
             assert exc.value.status_code == 403
-            assert exc.value.status_code != 404
-            assert exc.value.status_code != 500
         finally:
             GAME_STORE.pop(gid, None)
+
+    def test_stream_ticket_is_single_use(self, monkeypatch) -> None:
+        import asyncio
+
+        from fastapi import HTTPException
+
+        from backend.api.spectate import api_spectate_stream
+
+        monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        data = _new_game_via_api()
+        gid = data["game_id"]
+        try:
+            ticket = stream_tickets.issue_stream_ticket(gid)
+            asyncio.run(api_spectate_stream(gid, ticket=ticket, x_game_token=None))
+
+            # The same ticket cannot be redeemed a second time.
+            with pytest.raises(HTTPException) as exc:
+                asyncio.run(
+                    api_spectate_stream(gid, ticket=ticket, x_game_token=None)
+                )
+            assert exc.value.status_code == 403
+        finally:
+            GAME_STORE.pop(gid, None)
+
+    def test_stream_ticket_bound_to_other_game_rejected(self, monkeypatch) -> None:
+        import asyncio
+
+        from fastapi import HTTPException
+
+        from backend.api.spectate import api_spectate_stream
+
+        monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        data = _new_game_via_api()
+        gid = data["game_id"]
+        other = _new_game_via_api()
+        other_gid = other["game_id"]
+        try:
+            # Ticket minted for a DIFFERENT game must not authorize gid.
+            ticket = stream_tickets.issue_stream_ticket(other_gid)
+            with pytest.raises(HTTPException) as exc:
+                asyncio.run(
+                    api_spectate_stream(gid, ticket=ticket, x_game_token=None)
+                )
+            assert exc.value.status_code == 403
+        finally:
+            GAME_STORE.pop(gid, None)
+            GAME_STORE.pop(other_gid, None)
+
+    def test_stream_ticket_creation_endpoint(self, monkeypatch) -> None:
+        monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        data = _new_game_via_api()
+        gid = data["game_id"]
+        token = data["token"]
+        try:
+            # Missing header token -> 403.
+            resp = client.post(f"/api/spectate/{gid}/stream-ticket")
+            assert resp.status_code == 403
+
+            # Wrong header token -> 403.
+            resp = client.post(
+                f"/api/spectate/{gid}/stream-ticket",
+                headers={"X-Game-Token": "wrong"},
+            )
+            assert resp.status_code == 403
+
+            # Valid header token -> ticket + lifetime.
+            resp = client.post(
+                f"/api/spectate/{gid}/stream-ticket",
+                headers={"X-Game-Token": token},
+            )
+            assert resp.status_code == 200
+            body = resp.json()
+            assert isinstance(body["ticket"], str) and body["ticket"]
+            assert body["expires_in"] == stream_tickets.STREAM_TICKET_TTL_SECONDS
+        finally:
+            GAME_STORE.pop(gid, None)
+
+    def test_stream_ticket_creation_unknown_game_404(self, monkeypatch) -> None:
+        monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        GAME_STORE.pop("no-such-game-xyz", None)
+        # With enforcement on and an unknown game, auth fails closed with 404.
+        resp = client.post(
+            "/api/spectate/no-such-game-xyz/stream-ticket",
+            headers={"X-Game-Token": "irrelevant"},
+        )
+        assert resp.status_code == 404
+
+    def test_stream_ticket_creation_enforcement_disabled(self, monkeypatch) -> None:
+        monkeypatch.delenv("STARFARER_REQUIRE_GAME_TOKEN", raising=False)
+        data = _new_game_via_api()
+        gid = data["game_id"]
+        try:
+            resp = client.post(f"/api/spectate/{gid}/stream-ticket")
+            assert resp.status_code == 200
+            assert isinstance(resp.json()["ticket"], str)
+
+            # Unknown game still returns 404 even with enforcement disabled.
+            resp = client.post("/api/spectate/no-such-game-zzz/stream-ticket")
+            assert resp.status_code == 404
+        finally:
+            GAME_STORE.pop(gid, None)
+
+    def test_stream_idle_then_evicted_sends_end_event(self, monkeypatch) -> None:
+        """A stream whose game is evicted emits an ``end`` event."""
+        import asyncio
+
+        from backend.api.spectate import api_spectate_stream
+
+        monkeypatch.delenv("STARFARER_REQUIRE_GAME_TOKEN", raising=False)
+        data = _new_game_via_api()
+        gid = data["game_id"]
+
+        async def drain() -> list:
+            response = await api_spectate_stream(gid, x_game_token=None)
+            agen = response.body_iterator
+            chunks = []
+            try:
+                async for chunk in agen:
+                    chunks.append(chunk if isinstance(chunk, str) else chunk.decode())
+                    if len(chunks) == 1:
+                        # Simulate the game being evicted right after the
+                        # initial snapshot so the next poll yields ``end``.
+                        GAME_STORE.pop(gid, None)
+                    if "event: end" in chunks[-1]:
+                        break
+            finally:
+                await agen.aclose()
+            return chunks
+
+        chunks = asyncio.run(drain())
+        assert any("event: state" in c for c in chunks)
+        assert any("event: end" in c for c in chunks)
+        GAME_STORE.pop(gid, None)
+
+    def test_stream_ticket_rejected_then_consumed_when_bound(self, monkeypatch) -> None:
+        """A mismatched ticket is consumed (single-use) on failed redemption."""
+        import asyncio
+
+        from fastapi import HTTPException
+
+        from backend.api.spectate import api_spectate_stream
+
+        monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        data = _new_game_via_api()
+        gid = data["game_id"]
+        other = _new_game_via_api()
+        other_gid = other["game_id"]
+        try:
+            ticket = stream_tickets.issue_stream_ticket(other_gid)
+            with pytest.raises(HTTPException):
+                asyncio.run(
+                    api_spectate_stream(gid, ticket=ticket, x_game_token=None)
+                )
+            # Now that ticket (for other_gid) is gone and cannot authorize
+            # other_gid via the header-less path either.
+            assert (
+                stream_tickets.consume_stream_ticket(ticket, other_gid) is False
+            )
+        finally:
+            GAME_STORE.pop(gid, None)
+            GAME_STORE.pop(other_gid, None)
+
+
+class TestStreamTicketStore:
+    """Unit tests for the short-lived, single-use stream-ticket store."""
+
+    def test_consume_rejects_non_string_and_empty(self) -> None:
+        assert stream_tickets.consume_stream_ticket(None, "g") is False
+        assert stream_tickets.consume_stream_ticket("", "g") is False
+
+    def test_issue_prunes_expired_tickets(self, monkeypatch) -> None:
+        import backend.api.stream_tickets as st
+
+        monkeypatch.setattr(st.time, "monotonic", lambda: 1000.0)
+        stale = st.issue_stream_ticket("g")
+        assert stale in st._STREAM_TICKETS
+
+        # Advance well beyond the TTL, then issue another ticket; the stale
+        # entry must be pruned by the opportunistic cleanup.
+        monkeypatch.setattr(st.time, "monotonic", lambda: 1000.0 + st.STREAM_TICKET_TTL_SECONDS + 1)
+        st.issue_stream_ticket("g")
+        assert stale not in st._STREAM_TICKETS
+
+    def test_consume_expired_ticket_returns_false(self, monkeypatch) -> None:
+        import backend.api.stream_tickets as st
+
+        monkeypatch.setattr(st.time, "monotonic", lambda: 500.0)
+        ticket = st.issue_stream_ticket("g")
+
+        monkeypatch.setattr(st.time, "monotonic", lambda: 500.0 + st.STREAM_TICKET_TTL_SECONDS + 1)
+        assert st.consume_stream_ticket(ticket, "g") is False
+
+    def test_consume_ticket_bound_to_other_game_false(self) -> None:
+        ticket = stream_tickets.issue_stream_ticket("game-a")
+        assert stream_tickets.consume_stream_ticket(ticket, "game-b") is False
 
 
 class TestTokenNotInStateJson:
