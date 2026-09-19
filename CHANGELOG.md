@@ -103,7 +103,6 @@
 
 ### Changed
 - The per-game token is now accepted only via the `X-Game-Token` header on all game-scoped endpoints (previously also via the `token` query parameter).
-- State-mutating endpoints now accept the per-game token via either the `X-Game-Token` header or the `token` query parameter (previously header-only), making their token handling consistent with read-only endpoints.
 - Ion Storm event rebalanced: choices changed and it is now phenomenon-specific to nebula systems
 - `get_missions_summary()` now separates standard missions from daily missions — `available` and `count` reflect only standard (non-daily) missions, while `daily_available` reports daily mission availability
 - `_RESOURCE_LABELS` dict in `backend/game/engine.py` moved to module level instead of being recreated inside the scan loop
