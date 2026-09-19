@@ -778,7 +778,7 @@ The game persists all state to SQLite. Save frequently — especially before ris
 
 ## 10. API Reference (Quick)
 
-All endpoints that access a specific game (mutating and read-only GET) accept the token via the `X-Game-Token` header only (the `token` query parameter is no longer accepted), enforced when `STARFARER_REQUIRE_GAME_TOKEN` is enabled; see Section 2.1. The Crossroads read endpoints (`/api/crossroads/items`, `/api/crossroads/lore`, `/api/crossroads/messages`) are authenticated the same way (they require a `game_id` and pass the token like the other game-scoped endpoints) and return sanitized public views: raw donor/claimer game IDs are omitted (a stable opaque `donor_id` is provided instead), and free text is truncated (`donor_name`/`player_name` to 100 chars, `message`/`text` to 500 chars).
+All endpoints that access a specific game (mutating and read-only GET) accept the token via the `X-Game-Token` header only (the `token` query parameter is no longer accepted), enforced when `STARFARER_REQUIRE_GAME_TOKEN` is enabled; see Section 2.1. The Crossroads read endpoints (`/api/crossroads/items`, `/api/crossroads/lore`, `/api/crossroads/messages`) are authenticated the same way (they require a `game_id` and pass the token like the other game-scoped endpoints) and return sanitized public views: raw donor/claimer game IDs are omitted (a stable opaque `donor_id` is provided instead), and free text is truncated (`donor_name`/`player_name` to 100 chars, `message`/`text` to 500 chars). The ghost signature endpoints (`GET /api/game/{id}/system/{sys_id}/ghosts`, `POST /api/game/{id}/leave-ghost`) and the ripples endpoint (`GET /api/game/{id}/ripples`) also return sanitized public views: raw `game_id`/`source_game_id` and the `acknowledged_by` list are omitted, and free text is truncated (`player_name`/`source_player_name` to 100 chars, `message`/`discovery_name` to 500 chars).
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -818,8 +818,8 @@ All endpoints that access a specific game (mutating and read-only GET) accept th
 | POST | `/api/game/{id}/save` | Save game |
 | POST | `/api/game/{id}/load` | Load game |
 | GET | `/api/leaderboard` | Top players |
-| GET | `/api/game/{id}/system/{sys_id}/ghosts?page={n}&per_page={n}` | Get ghost signatures in a system (paginated, returns total_ghosts, total_pages) |
-| POST | `/api/game/{id}/leave-ghost` | Leave a ghost signature |
+| GET | `/api/game/{id}/system/{sys_id}/ghosts?page={n}&per_page={n}` | Get ghost signatures in a system (paginated, returns total_ghosts, total_pages; sanitized public view (raw game id removed)) |
+| POST | `/api/game/{id}/leave-ghost` | Leave a ghost signature; response is a sanitized public view (raw game id removed) |
 | GET | `/api/crossroads/items?game_id={id}&page={n}&per_page={n}` | List available items at the Crossroads (requires `game_id`; paginated, default 25/max 50, returns `total_items`/`total_pages`; sanitized public view) |
 | POST | `/api/crossroads/donate-item` | Donate an item to the Crossroads (`quantity` must be a positive integer, default 1; non-positive or non-integer values are rejected with 422; lore-linked discoveries are excluded — use `donate-lore` for those) |
 | POST | `/api/crossroads/claim-item/{item_id}` | Claim an item from the Crossroads (claims are capped at remaining cargo capacity; the response's `item.stored` reports how many were actually stored, and a partial claim logs a "cargo hold full" message; sanitized public view — raw donor/claimer game IDs omitted, opaque `donor_id` included) |
@@ -828,7 +828,7 @@ All endpoints that access a specific game (mutating and read-only GET) accept th
 | POST | `/api/crossroads/claim-lore/{donation_id}` | Claim a lore fragment from the Crossroads (sanitized public view — raw donor/claimer game IDs omitted, opaque `donor_id` included) |
 | GET | `/api/crossroads/messages?game_id={id}&page={n}&per_page={n}` | Get recent Crossroads messages (requires `game_id`; paginated, returns `total_messages`/`total_pages`) |
 | POST | `/api/crossroads/post-message` | Post a message to the Crossroads |
-| GET | `/api/game/{id}/ripples` | Get pending discovery ripples |
+| GET | `/api/game/{id}/ripples` | Get pending discovery ripples; sanitized public views (raw source game id and acknowledged-by game ids removed) |
 | POST | `/api/game/{id}/ripple/{ripple_id}/acknowledge` | Acknowledge a discovery ripple |
 
 
