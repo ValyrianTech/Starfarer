@@ -67,50 +67,145 @@ export function fetchSystemDetail(gameId, sysId) {
 }
 
 /**
- * Connect to the SSE spectator stream for a game.
- * EventSource reconnects automatically; onReconnect fires when the
- * connection is re-established so the caller can refresh galaxy data.
+ * Mint a short-lived, single-use stream ticket for the spectator stream.
  *
- * EventSource cannot set request headers, so the game token (when present) is
- * passed as the `token` query parameter, which the spectator stream accepts as a
- * supported alternative to the `X-Game-Token` header. The URL is left unchanged
- * when no token is available.
+ * The long-lived game token is sent via the `X-Game-Token` header so it is
+ * never placed in a URL (where it would leak into logs, browser history and
+ * `Referer` headers). Only the returned short-lived ticket is passed to the
+ * EventSource URL. Returns `null` when no token is available or the ticket
+ * request fails, so the caller can still open an unauthenticated stream (which
+ * succeeds while token enforcement is disabled).
  */
-export function connectStream(gameId, { onState, onStatus }) {
-  const url = new URL(`${BASE}/spectate/${gameId}/stream`, window.location.origin);
+async function fetchStreamTicket(gameId) {
   const token = getToken();
-  if (token) {
-    url.searchParams.set("token", token);
+  if (!token) {
+    return null;
   }
-  const source = new EventSource(url.toString());
-  let hadError = false;
-
-  source.addEventListener("open", () => {
-    if (hadError) {
-      hadError = false;
-      onStatus("reconnected");
-    } else {
-      onStatus("connected");
+  try {
+    const res = await fetch(`${BASE}/spectate/${gameId}/stream-ticket`, {
+      method: "POST",
+      headers: { "X-Game-Token": token },
+    });
+    if (!res.ok) {
+      return null;
     }
-  });
+    const body = await res.json();
+    return body.ticket || null;
+  } catch (err) {
+    return null;
+  }
+}
 
-  source.addEventListener("state", (evt) => {
-    try {
-      onState(JSON.parse(evt.data));
-    } catch (err) {
-      console.error("Bad state payload", err);
+/**
+ * Connect to the SSE spectator stream for a game.
+ *
+ * EventSource cannot set request headers, so a short-lived, single-use ticket
+ * (minted with the `X-Game-Token` header) is passed as the `ticket` query
+ * parameter instead of the long-lived game token. When no token is available
+ * the stream is opened without a query parameter, which is correct while token
+ * enforcement is disabled.
+ *
+ * The ticket is single-use (consumed by the server on first connect), so the
+ * browser's built-in EventSource reconnect cannot be used for the
+ * authenticated path: it would retry the same URL with the already-consumed
+ * ticket and get a 403. Instead, on any disconnect (network error or the
+ * server's `end` event) we close the current source, mint a fresh ticket and
+ * open a new EventSource ourselves, after a short backoff.
+ *
+ * The returned handle has a `close()` method that stops reconnection.
+ */
+export async function connectStream(gameId, { onState, onStatus }) {
+  const baseUrl = new URL(
+    `${BASE}/spectate/${gameId}/stream`,
+    window.location.origin,
+  );
+  const RECONNECT_DELAY_MS = 1000;
+
+  let source = null;
+  let reconnectTimer = null;
+  let hasConnected = false;
+  let closed = false;
+
+  function buildUrl(ticket) {
+    const url = new URL(baseUrl.toString());
+    if (ticket) {
+      url.searchParams.set("ticket", ticket);
     }
-  });
+    return url.toString();
+  }
 
-  source.addEventListener("end", () => {
-    // Server ended the stream; EventSource will reconnect on its own.
-    onStatus("lost");
-  });
+  function attach(nextSource) {
+    nextSource.addEventListener("open", () => {
+      if (hasConnected) {
+        onStatus("reconnected");
+      } else {
+        hasConnected = true;
+        onStatus("connected");
+      }
+    });
 
-  source.addEventListener("error", () => {
-    hadError = true;
-    onStatus("lost");
-  });
+    nextSource.addEventListener("state", (evt) => {
+      try {
+        onState(JSON.parse(evt.data));
+      } catch (err) {
+        console.error("Bad state payload", err);
+      }
+    });
 
-  return source;
+    nextSource.addEventListener("end", () => {
+      onStatus("lost");
+      scheduleReconnect();
+    });
+
+    nextSource.addEventListener("error", () => {
+      onStatus("lost");
+      scheduleReconnect();
+    });
+  }
+
+  function scheduleReconnect() {
+    if (closed || reconnectTimer !== null) {
+      return;
+    }
+    // Close the current source so the browser's native retry is bypassed and
+    // it does not re-attempt the stale (consumed-ticket) URL.
+    if (source) {
+      source.close();
+      source = null;
+    }
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      reconnect();
+    }, RECONNECT_DELAY_MS);
+  }
+
+  async function reconnect() {
+    if (closed) {
+      return;
+    }
+    const ticket = await fetchStreamTicket(gameId);
+    source = new EventSource(buildUrl(ticket));
+    attach(source);
+  }
+
+  const ticket = await fetchStreamTicket(gameId);
+  source = new EventSource(buildUrl(ticket));
+  attach(source);
+
+  return {
+    close() {
+      closed = true;
+      if (reconnectTimer !== null) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+      if (source) {
+        source.close();
+        source = null;
+      }
+    },
+    get source() {
+      return source;
+    },
+  };
 }

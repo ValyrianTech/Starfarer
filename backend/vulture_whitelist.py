@@ -72,6 +72,7 @@ whitelist.api_dismiss_hint  # noqa: B018
 whitelist.api_leaderboard  # noqa: B018
 whitelist.api_spectate_games  # noqa: B018
 whitelist.api_spectate_stream  # noqa: B018
+whitelist.api_create_stream_ticket  # noqa: B018
 whitelist.api_system_ghosts  # noqa: B018
 whitelist.api_leave_ghost  # noqa: B018
 whitelist.api_crossroads_items  # noqa: B018

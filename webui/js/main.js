@@ -248,7 +248,7 @@ async function startSpectating(gameId) {
   hud.show();
   hud.setConnection("connecting");
 
-  spectator = connectStream(gameId, {
+  spectator = await connectStream(gameId, {
     onState(payload) {
       hud.setConnection("connected");
       hud.update(payload);
