@@ -168,6 +168,45 @@ def _public_message_view(msg: dict) -> dict:
     return view
 
 
+def _public_ghost_view(ghost: dict) -> dict:
+    """Return a sanitized public view of a ghost signature.
+
+    Removes the ghost's raw game id and truncates free-text fields so
+    raw game ids and oversized text are never exposed to other players.
+
+    :param ghost: The ghost dict produced by ``GhostSignature.to_dict()``.
+    :type ghost: dict
+    :returns: A copy with sanitized fields.
+    :rtype: dict
+    """
+    view = dict(ghost)
+    view.pop("game_id", None)
+    view["player_name"] = _safe_text(view.get("player_name"), 100)
+    view["message"] = _safe_text(view.get("message"), 500)
+    return view
+
+
+def _public_ripple_view(ripple: dict) -> dict:
+    """Return a sanitized public view of a discovery ripple event.
+
+    Removes the ripple's raw source game id and the list of other
+    players' raw game ids that have acknowledged it, and truncates
+    free-text fields so raw game ids and oversized text are never
+    exposed to other players.
+
+    :param ripple: The ripple dict produced by ``RippleEvent.to_dict()``.
+    :type ripple: dict
+    :returns: A copy with sanitized fields.
+    :rtype: dict
+    """
+    view = dict(ripple)
+    view.pop("source_game_id", None)
+    view.pop("acknowledged_by", None)
+    view["source_player_name"] = _safe_text(view.get("source_player_name"), 100)
+    view["discovery_name"] = _safe_text(view.get("discovery_name"), 500)
+    return view
+
+
 # ---------------------------------------------------------------------------
 # Ghost Signatures
 # ---------------------------------------------------------------------------
@@ -186,6 +225,9 @@ def api_system_ghosts(
     Ghost signatures provide a trace of other travellers who
     have passed through the system. Supports pagination via optional
     ``page`` and ``per_page`` query parameters.
+
+    The returned ghost entries are sanitized public views with raw
+    game ids removed.
 
     :param game_id: The unique identifier of the game.
     :type game_id: str
@@ -210,6 +252,7 @@ def api_system_ghosts(
         if not _game_exists(game_id):
             raise HTTPException(status_code=404, detail="Game not found")
         result = get_system_ghosts(sys_id, page=page, per_page=per_page)
+        result["ghosts"] = [_public_ghost_view(g) for g in result["ghosts"]]
         if page > result["total_pages"] and result["total_ghosts"] > 0:
             raise HTTPException(status_code=404, detail="Page out of range")
     return result
@@ -225,6 +268,9 @@ def api_leave_ghost(
 
     The ghost captures the player's discoveries and optional message
     for other players to discover.
+
+    The returned ghost data is a sanitized public view with the raw
+    game id removed.
 
     :param game_id: The unique identifier of the game.
     :type game_id: str
@@ -245,7 +291,7 @@ def api_leave_ghost(
 
         ghost = record_ghost(state, current_system.id, message=req.message)
         _save_state(game_id)
-    return {"ghost": ghost}
+    return {"ghost": _public_ghost_view(ghost)}
 
 
 # ---------------------------------------------------------------------------
@@ -556,6 +602,9 @@ def api_ripples(
     Ripples are generated when other players make discoveries in
     nearby systems (within 5 LY). Ripples expire after 7 days.
 
+    The returned ripple entries are sanitized public views with raw
+    game ids (source and acknowledged-by) removed.
+
     :param game_id: The unique identifier of the game.
     :type game_id: str
     :param x_game_token: The caller-supplied per-game token (X-Game-Token header).
@@ -572,7 +621,7 @@ def api_ripples(
     # Ripple data is read from the database, not from in-memory game state.
     # The game state is only used to determine the player's current system for filtering.
     ripples = get_pending_ripples(state)
-    return {"ripples": ripples}
+    return {"ripples": [_public_ripple_view(r) for r in ripples]}
 
 
 @router.post("/game/{game_id}/ripple/{ripple_id}/acknowledge")
