@@ -4319,6 +4319,41 @@ class TestSpectateStreamEndpoint:
             spectate.HEARTBEAT_INTERVAL_SECONDS = old_hb
             GAME_STORE.pop("spectate-stream-heartbeat", None)
 
+    def test_stream_poll_refreshes_lru_position(self) -> None:
+        import asyncio
+
+        from backend.api import spectate
+        from backend.api.spectate import api_spectate_stream
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "spectate-stream-lru"})
+        assert resp.status_code == 200
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "spectate-stream-lru-other"})
+        assert resp.status_code == 200
+        old_poll = spectate.POLL_INTERVAL_SECONDS
+        old_hb = spectate.HEARTBEAT_INTERVAL_SECONDS
+        spectate.POLL_INTERVAL_SECONDS = 0.01
+        spectate.HEARTBEAT_INTERVAL_SECONDS = 100.0
+        try:
+            async def run() -> None:
+                response = await api_spectate_stream("spectate-stream-lru")
+                agen = response.body_iterator
+                try:
+                    await agen.__anext__()
+                    GAME_STORE.move_to_end("spectate-stream-lru", last=False)
+                    assert next(iter(GAME_STORE)) == "spectate-stream-lru"
+                    with pytest.raises(asyncio.TimeoutError):
+                        await asyncio.wait_for(agen.__anext__(), timeout=0.1)
+                finally:
+                    await agen.aclose()
+
+            asyncio.run(run())
+            assert "spectate-stream-lru" in GAME_STORE
+            assert list(GAME_STORE.keys())[-1] == "spectate-stream-lru"
+        finally:
+            spectate.POLL_INTERVAL_SECONDS = old_poll
+            spectate.HEARTBEAT_INTERVAL_SECONDS = old_hb
+            GAME_STORE.pop("spectate-stream-lru", None)
+            GAME_STORE.pop("spectate-stream-lru-other", None)
+
     def test_games_skips_invalid_state_json(self) -> None:
         from datetime import datetime, timezone
 
