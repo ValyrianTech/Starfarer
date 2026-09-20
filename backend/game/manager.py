@@ -115,7 +115,9 @@ def load_or_create(game_id: str, seed: int | None = None, ship_name: str | None 
     """
     data = load_game(game_id)
     if data:
-        return _state_from_dict(data)
+        loaded = _state_from_dict(data)
+        if loaded is not None:
+            return loaded
     state = new_game(seed, ship_name)
     state.id = game_id
     return state
