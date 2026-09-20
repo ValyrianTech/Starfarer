@@ -115,7 +115,9 @@ def load_or_create(game_id: str, seed: int | None = None, ship_name: str | None 
     """
     data = load_game(game_id)
     if data:
-        return _state_from_dict(data)
+        loaded = _state_from_dict(data)
+        if loaded is not None:
+            return loaded
     state = new_game(seed, ship_name)
     state.id = game_id
     return state
@@ -271,18 +273,35 @@ def _state_to_dict(state: GameState) -> dict:
     }
 
 
-def _state_from_dict(d: dict) -> GameState:
+def _state_from_dict(d: dict) -> GameState | None:
     """Deserialize a dictionary back into a :class:`GameState`.
 
     Reconstructs a full :class:`GameState` object from a dictionary,
     including all nested objects such as :class:`StarSystem`,
     :class:`Event`, :class:`Discovery`, and :class:`LoreFragment`.
 
+    Returns ``None`` if ``d`` is not a dict, or if any of the required
+    top-level keys (``id``, ``seed``, ``ship``) is missing, or if
+    ``ship`` is present but not a dict. These corrupt-save conditions are
+    logged as warnings so callers can map ``None`` to a clean 404.
+
     :param d: The dictionary representation of a game state.
     :type d: dict
-    :returns: A fully reconstructed :class:`GameState`.
-    :rtype: GameState
+    :returns: A fully reconstructed :class:`GameState`, or ``None`` if the
+        data is corrupt or missing required top-level keys.
+    :rtype: GameState | None
     """
+    if not isinstance(d, dict):
+        logger.warning("Corrupt save: expected dict, got %r", type(d).__name__)
+        return None
+    for key in ("id", "seed", "ship"):
+        if key not in d:
+            logger.warning("Corrupt save for %r: missing %r", d.get("id"), key)
+            return None
+    if not isinstance(d["ship"], dict):
+        logger.warning("Corrupt save for %r: 'ship' is not a dict", d.get("id"))
+        return None
+
     from backend.models.discovery import Discovery, LoreFragment
     from backend.models.event import Event
     from backend.models.system import StarSystem
