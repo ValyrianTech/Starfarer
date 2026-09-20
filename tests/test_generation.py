@@ -1795,6 +1795,83 @@ class TestLoreFragmentNumberFixup:
         assert frags_by_id["lore_void_signal_5"].fragment_number == 5
 
 
+class TestStateFromDictCorruptSave:
+    """Tests for _state_from_dict returning None on corrupt/missing required keys."""
+
+    def test_missing_ship_returns_none(self) -> None:
+        """A dict missing 'ship' should return None (no exception)."""
+        d = {"id": "corrupt-ship", "seed": 42}
+        assert _state_from_dict(d) is None
+
+    def test_missing_seed_returns_none(self) -> None:
+        """A dict missing 'seed' should return None (no exception)."""
+        d = {"id": "corrupt-seed", "ship": {"name": "X"}}
+        assert _state_from_dict(d) is None
+
+    def test_missing_id_returns_none(self) -> None:
+        """A dict missing 'id' should return None (no exception)."""
+        d = {"seed": 42, "ship": {"name": "X"}}
+        assert _state_from_dict(d) is None
+
+    def test_ship_not_a_dict_returns_none(self) -> None:
+        """A dict whose 'ship' is a string should return None (no exception)."""
+        d = {"id": "corrupt-ship-str", "seed": 42, "ship": "oops"}
+        assert _state_from_dict(d) is None
+
+    def test_ship_none_returns_none(self) -> None:
+        """A dict whose 'ship' is None should return None (no exception)."""
+        d = {"id": "corrupt-ship-none", "seed": 42, "ship": None}
+        assert _state_from_dict(d) is None
+
+    def test_non_dict_returns_none(self) -> None:
+        """A non-dict input should return None (no exception)."""
+        assert _state_from_dict("not-a-dict") is None
+
+    def test_missing_ship_logs_warning(self, caplog) -> None:
+        """A missing 'ship' key should log a warning."""
+        import logging
+        d = {"id": "corrupt-ship-warn", "seed": 42}
+        with caplog.at_level(logging.WARNING):
+            assert _state_from_dict(d) is None
+        warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("missing 'ship'" in msg for msg in warning_messages)
+
+    def test_missing_seed_logs_warning(self, caplog) -> None:
+        """A missing 'seed' key should log a warning."""
+        import logging
+        d = {"id": "corrupt-seed-warn", "ship": {"name": "X"}}
+        with caplog.at_level(logging.WARNING):
+            assert _state_from_dict(d) is None
+        warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("missing 'seed'" in msg for msg in warning_messages)
+
+    def test_missing_id_logs_warning(self, caplog) -> None:
+        """A missing 'id' key should log a warning."""
+        import logging
+        d = {"seed": 42, "ship": {"name": "X"}}
+        with caplog.at_level(logging.WARNING):
+            assert _state_from_dict(d) is None
+        warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("missing 'id'" in msg for msg in warning_messages)
+
+    def test_ship_not_a_dict_logs_warning(self, caplog) -> None:
+        """A non-dict 'ship' should log a warning."""
+        import logging
+        d = {"id": "corrupt-ship-str-warn", "seed": 42, "ship": "oops"}
+        with caplog.at_level(logging.WARNING):
+            assert _state_from_dict(d) is None
+        warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("'ship' is not a dict" in msg for msg in warning_messages)
+
+    def test_non_dict_logs_warning(self, caplog) -> None:
+        """A non-dict input should log a warning."""
+        import logging
+        with caplog.at_level(logging.WARNING):
+            assert _state_from_dict("not-a-dict") is None
+        warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("expected dict" in msg for msg in warning_messages)
+
+
 class TestOldSaveLogEntryIdCollision:
     """Tests for _next_log_id computation when loading old saves without _next_log_id."""
 

@@ -324,6 +324,34 @@ class TestAPIDBFallback:
             assert resp.status_code == 404
 
 
+class TestCorruptSaveReturns404:
+    """A stored save missing required top-level keys must yield 404, not 500."""
+
+    def test_load_missing_ship_returns_404(self) -> None:
+        """POST /game/{id}/load returns 404 when the stored state is missing 'ship'."""
+        from backend.database import create_game
+        game_id = "corrupt-save-missing-ship"
+        create_game(game_id, 42, "Corrupt", {"id": game_id, "seed": 42})
+        resp = client.post(f"/api/game/{game_id}/load")
+        assert resp.status_code == 404
+
+    def test_get_missing_seed_returns_404(self) -> None:
+        """GET /game/{id} returns 404 when the stored state is missing 'seed'."""
+        from backend.database import create_game
+        game_id = "corrupt-save-missing-seed"
+        create_game(game_id, 42, "Corrupt", {"id": game_id, "ship": {"name": "X"}})
+        resp = client.get(f"/api/game/{game_id}")
+        assert resp.status_code == 404
+
+    def test_load_missing_id_returns_404(self) -> None:
+        """POST /game/{id}/load returns 404 when the stored state is missing 'id'."""
+        from backend.database import create_game
+        game_id = "corrupt-save-missing-id"
+        create_game(game_id, 42, "Corrupt", {"seed": 42, "ship": {"name": "X"}})
+        resp = client.post(f"/api/game/{game_id}/load")
+        assert resp.status_code == 404
+
+
 class TestAPILeaderboardMalformedState:
     """Tests the leaderboard endpoint's handling of malformed state_json in the database."""
 
