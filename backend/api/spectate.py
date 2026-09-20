@@ -295,6 +295,8 @@ async def api_spectate_stream(
         idle_time = 0.0
         while True:
             await asyncio.sleep(POLL_INTERVAL_SECONDS)
+            # keep the watched game hot so LRU eviction cannot drop it mid-stream
+            touch_game(game_id)
             state = GAME_STORE.get(game_id)
             if state is None:
                 # Game evicted from memory (due to the LRU cap or an explicit
