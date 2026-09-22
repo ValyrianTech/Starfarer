@@ -350,8 +350,48 @@ def _opaque_entry_id(game_id: str) -> str:
     return hashlib.sha256(game_id.encode()).hexdigest()[:12]
 
 
+def _count_by_game_id(
+    conn: sqlite3.Connection,
+    table: str,
+    column: str,
+    game_ids: list[str],
+) -> dict[str, int]:
+    """Count rows per game id in ``table`` grouped by ``column``.
+
+    Returns an empty dict when ``game_ids`` is empty or when the table does
+    not exist (``sqlite3.OperationalError``), so callers can treat a missing
+    count as 0.
+
+    :param conn: An open SQLite connection.
+    :type conn: sqlite3.Connection
+    :param table: The table name (hard-coded internal literal, never input).
+    :type table: str
+    :param column: The game-id column name (hard-coded internal literal).
+    :type column: str
+    :param game_ids: The game ids to count rows for.
+    :type game_ids: list[str]
+    :returns: A mapping of game id to row count.
+    :rtype: dict[str, int]
+    """
+    if not game_ids:
+        return {}
+    placeholders = ",".join("?" for _ in game_ids)
+    try:
+        rows = conn.execute(
+            f"SELECT {column}, COUNT(*) FROM {table} WHERE {column} IN ({placeholders}) GROUP BY {column}",
+            tuple(game_ids),
+        ).fetchall()
+    except sqlite3.OperationalError:
+        return {}
+    return {row[0]: row[1] for row in rows}
+
+
 def get_leaderboard(limit: int = 10) -> list[dict]:
     """Retrieve the top players from the leaderboard.
+
+    Uses grouped COUNT queries to gather the multiplayer metrics for all
+    candidate games in a constant number of SQL statements rather than one
+    query per game.
 
     :param limit: Maximum number of leaderboard entries to return.
     :type limit: int
@@ -367,6 +407,7 @@ def get_leaderboard(limit: int = 10) -> list[dict]:
             (limit,),
         ).fetchall()
         results = []
+        game_ids: list[str] = []
         for row in rows:
             try:
                 state = json.loads(row["state_json"])
@@ -376,31 +417,7 @@ def get_leaderboard(limit: int = 10) -> list[dict]:
                 continue  # Skip malformed entries
 
             game_id = row["id"]
-
-            try:
-                ghost_count = conn.execute(
-                    "SELECT COUNT(*) FROM ghost_signatures WHERE game_id = ?",
-                    (game_id,),
-                ).fetchone()[0]
-            except sqlite3.OperationalError:
-                ghost_count = 0
-
-            try:
-                items_donated = conn.execute(
-                    "SELECT COUNT(*) FROM crossroads_items WHERE donor_game_id = ?",
-                    (game_id,),
-                ).fetchone()[0]
-            except sqlite3.OperationalError:
-                items_donated = 0
-
-            try:
-                lore_donated = conn.execute(
-                    "SELECT COUNT(*) FROM crossroads_lore WHERE donor_game_id = ?",
-                    (game_id,),
-                ).fetchone()[0]
-            except sqlite3.OperationalError:
-                lore_donated = 0
-
+            game_ids.append(game_id)
             results.append({
                 "entry_id": _opaque_entry_id(game_id),
                 "ship_name": row["ship_name"],
@@ -408,10 +425,19 @@ def get_leaderboard(limit: int = 10) -> list[dict]:
                 "discoveries": len(state.get("discoveries", [])),
                 "systems_visited": state.get("systems_visited", 0),
                 "credits": _safe_ship_credits(state),
-                "ghost_signatures_left": ghost_count,
-                "items_donated": items_donated,
-                "lore_donated": lore_donated,
+                "ghost_signatures_left": 0,
+                "items_donated": 0,
+                "lore_donated": 0,
             })
+
+        ghost_counts = _count_by_game_id(conn, "ghost_signatures", "game_id", game_ids)
+        items_counts = _count_by_game_id(conn, "crossroads_items", "donor_game_id", game_ids)
+        lore_counts = _count_by_game_id(conn, "crossroads_lore", "donor_game_id", game_ids)
+
+        for i, game_id in enumerate(game_ids):
+            results[i]["ghost_signatures_left"] = ghost_counts.get(game_id, 0)
+            results[i]["items_donated"] = items_counts.get(game_id, 0)
+            results[i]["lore_donated"] = lore_counts.get(game_id, 0)
     return results
 
 

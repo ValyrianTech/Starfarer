@@ -3166,6 +3166,80 @@ class TestLeaderboardMultiplayer:
                 assert entry["lore_donated"] == 0
                 break
 
+    def test_leaderboard_grouped_counts_nonzero(self) -> None:
+        """Grouped COUNT queries report correct non-zero multiplayer metrics."""
+        from backend.database import get_leaderboard
+        from backend.multiplayer.database import (
+            save_crossroads_item,
+            save_crossroads_lore,
+            save_ghost_signature,
+        )
+
+        state = new_game(42, "GroupedCounts", shared_universe=True)
+        GAME_STORE[state.id] = state
+        game_id = state.id
+
+        for i in range(3):
+            save_ghost_signature(GhostSignature(
+                id=f"ghost-gc-{game_id}-{i}",
+                game_id=game_id,
+                player_name="Pilot",
+                system_id=f"sys-gc-{i}",
+                timestamp=datetime.now(timezone.utc).isoformat(),
+            ))
+        for i in range(2):
+            save_crossroads_item(CrossroadsItem(
+                id=f"item-gc-{game_id}-{i}",
+                donor_game_id=game_id,
+                donor_name="Pilot",
+                item_name="Artifact",
+                quantity=1,
+                claimed=False,
+                created_at=datetime.now(timezone.utc).isoformat(),
+            ))
+        for i in range(4):
+            save_crossroads_lore(CrossroadsLore(
+                id=f"lore-gc-{game_id}-{i}",
+                donor_game_id=game_id,
+                donor_name="Pilot",
+                fragment_id=f"frag-gc-{i}",
+                created_at=datetime.now(timezone.utc).isoformat(),
+            ))
+
+        game_save(state)
+
+        result = get_leaderboard(limit=100)
+        entry = next(e for e in result if e["entry_id"] == _opaque_entry_id(game_id))
+        assert entry["ghost_signatures_left"] == 3
+        assert entry["items_donated"] == 2
+        assert entry["lore_donated"] == 4
+
+        GAME_STORE.pop(game_id, None)
+
+    def test_count_by_game_id_empty_input(self) -> None:
+        """_count_by_game_id should return an empty dict for empty input."""
+        from backend.database import _count_by_game_id, get_db_ctx
+        with get_db_ctx() as conn:
+            assert _count_by_game_id(conn, "ghost_signatures", "game_id", []) == {}
+
+    def test_count_by_game_id_missing_table(self) -> None:
+        """_count_by_game_id should return an empty dict for a missing table."""
+        from backend.database import _count_by_game_id, get_db_ctx
+        with get_db_ctx() as conn:
+            result = _count_by_game_id(conn, "table_does_not_exist", "game_id", ["g1"])
+        assert result == {}
+
+    def test_leaderboard_grouped_queries_constant(self) -> None:
+        """get_leaderboard must use a constant number of grouped COUNT queries."""
+        from backend.database import get_leaderboard, save_game
+        for i in range(5):
+            save_game(f"lb-constant-{i}", {"seed": 42, "ship": {"name": f"S{i}"}})
+
+        with patch("backend.database._count_by_game_id") as mock_count:
+            mock_count.return_value = {}
+            get_leaderboard(limit=10)
+        assert mock_count.call_count == 3
+
 
 # ---------------------------------------------------------------------------
 # TestSyncCargoCrossroads
