@@ -5,7 +5,9 @@ Defines the data models used for validating API request bodies
 and structuring API responses.
 """
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+
+from backend.models.faction import FACTION_DEFINITIONS
 
 
 class NewGameRequest(BaseModel):
@@ -77,6 +79,29 @@ class AcceptMissionRequest(BaseModel):
 
     mission_id: str
     faction_id: str | None = None
+
+    @field_validator("faction_id")
+    @classmethod
+    def validate_faction_id(cls, value: str | None) -> str | None:
+        """Ensure an optional faction_id is a known faction, if provided.
+
+        Rejects arbitrary, unknown, or whitespace-only faction ids at
+        validation time so the API never accepts missions for factions
+        that do not exist.
+
+        :param value: The faction id supplied in the request body.
+        :type value: str | None
+        :returns: The validated faction id, or ``None`` if omitted.
+        :rtype: str | None
+        :raises ValueError: If a non-empty value is not a known faction.
+        """
+        if value is None:
+            return None
+        if not value.strip():
+            raise ValueError("faction_id must not be whitespace-only")
+        if value not in FACTION_DEFINITIONS:
+            raise ValueError(f"Unknown faction_id: {value}")
+        return value
 
 
 class CompleteMissionRequest(BaseModel):

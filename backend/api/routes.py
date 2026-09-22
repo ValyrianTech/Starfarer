@@ -72,8 +72,9 @@ from backend.missions import (
     generate_missions,
     get_faction_completed_count,
     get_missions_summary,
+    get_primary_faction_id,
 )
-from backend.models.faction import FACTION_DEFINITIONS, get_faction
+from backend.models.faction import get_faction
 from backend.models.game_state import GameState, is_lore_fragment_collected
 from backend.utils import deterministic_hash, seeded_random
 
@@ -1423,13 +1424,10 @@ def api_missions(
         if not current_system.has_trading_station:
             raise HTTPException(status_code=400, detail="No trading station in this system")
 
-        faction_ids = list(FACTION_DEFINITIONS.keys())
-        faction_idx = deterministic_hash(state.seed, current_system.id, "primary_faction") % len(faction_ids)
-        primary_faction_id = faction_ids[faction_idx]
+        primary_faction_id = get_primary_faction_id(state, current_system)
 
         completed_count = get_faction_completed_count(state, primary_faction_id)
         missions = generate_missions(state, current_system, primary_faction_id, completed_count)
-
         faction = get_faction(primary_faction_id)
 
         daily_available = any(m.objective_type == "daily" for m in missions)
@@ -1492,14 +1490,14 @@ def api_accept_mission(game_id: str, mission_id: str, req: AcceptMissionRequest,
         if mission_id in state.accepted_missions:
             raise HTTPException(status_code=400, detail="Mission already accepted")
 
-        if req.faction_id:
-            factions_to_check = [req.faction_id]
-        else:
-            # Restrict to the system's dominant faction to match GET /missions behavior
-            faction_ids = list(FACTION_DEFINITIONS.keys())
-            faction_idx = deterministic_hash(state.seed, current_system.id, "primary_faction") % len(faction_ids)
-            primary_faction_id = faction_ids[faction_idx]
-            factions_to_check = [primary_faction_id]
+        primary_faction_id = get_primary_faction_id(state, current_system)
+        if req.faction_id and req.faction_id != primary_faction_id:
+            raise HTTPException(
+                status_code=400,
+                detail="Mission faction is not present in this system",
+            )
+
+        factions_to_check = [primary_faction_id]
 
         mission_found = None
         for fid in factions_to_check:
