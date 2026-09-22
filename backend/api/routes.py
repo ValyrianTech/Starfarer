@@ -208,13 +208,15 @@ def _save_state(game_id: str) -> None:
 def _authorize_game(game_id: str, token: str | None) -> None:
     """Enforce per-game token access control on endpoints that access a specific game.
 
-    When token enforcement is disabled (the default), this is a no-op so
-    single-player/local usage keeps working. When enabled via the
-    STARFARER_REQUIRE_GAME_TOKEN env var, a caller must present the token
-    issued by POST /api/game/new. Raises HTTP 403 for missing/invalid tokens.
-    When enforcement is enabled and the game cannot be resolved, raises
-    HTTP 404 (fail-closed) rather than silently allowing the request to
-    proceed.
+    Enforcement is ON by default (secure baseline) so multi-user deployments
+    are not vulnerable to IDOR. It can be disabled only by setting
+    STARFARER_ALLOW_NO_AUTH to a truthy value (1/true/yes/on) for purely
+    local, single-user play, or explicitly with STARFARER_REQUIRE_GAME_TOKEN
+    set to a falsy value (0/no/false/off). When enforcement is enabled, a
+    caller must present the token issued by POST /api/game/new. Raises HTTP
+    403 for missing/invalid tokens. When enforcement is enabled and the game
+    cannot be resolved, raises HTTP 404 (fail-closed) rather than silently
+    allowing the request to proceed.
 
     :param game_id: The game being accessed.
     :type game_id: str

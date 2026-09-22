@@ -28,3 +28,17 @@ def _isolate_test_db():
 
     patcher_db.stop()
     patcher_dir.stop()
+
+
+@pytest.fixture(autouse=True)
+def _opt_out_auth_by_default(monkeypatch):
+    """Default the test suite to no per-game token enforcement.
+
+    The application now enforces per-game tokens by default (secure
+    baseline). The bulk of the test suite was written against the old
+    default-off behavior, so we opt out via STARFARER_ALLOW_NO_AUTH for
+    every test; tests that exercise enforcement explicitly delete this
+    opt-out and set STARFARER_REQUIRE_GAME_TOKEN.
+    """
+    monkeypatch.setenv("STARFARER_ALLOW_NO_AUTH", "1")
+    yield
