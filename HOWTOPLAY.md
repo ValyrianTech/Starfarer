@@ -706,6 +706,8 @@ Top players ranked by discoveries and systems visited. Each entry exposes an opa
 | `items_donated` | integer | Number of items donated to the Crossroads |
 | `lore_donated` | integer | Number of lore fragments donated to the Crossroads |
 
+The three multiplayer metrics (`ghost_signatures_left`, `items_donated`, `lore_donated`) are computed in a constant number of grouped database queries rather than one query per leaderboard entry.
+
 Example response:
 
 ```json
