@@ -90,6 +90,7 @@ whitelist.index  # noqa: B018
 # Pydantic model fields/validators
 whitelist.status  # noqa: B018
 whitelist.text_not_blank  # noqa: B018
+whitelist.validate_faction_id  # noqa: B018
 
 # Config constants
 whitelist.GAME_NAME  # noqa: B018
