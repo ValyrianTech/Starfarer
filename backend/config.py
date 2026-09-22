@@ -51,13 +51,26 @@ def resolve_allow_credentials(origins: list[str]) -> bool:
 ALLOW_CREDENTIALS = resolve_allow_credentials(ALLOWED_ORIGINS)
 
 
-def get_require_game_token() -> bool:
-    """Return whether per-game token enforcement is enabled.
+def get_allow_no_auth() -> bool:
+    """Return whether the operator has explicitly opted out of per-game
+    token enforcement for purely local play.
 
-    Reads STARFARER_REQUIRE_GAME_TOKEN. Truthy values ('1','true','yes','on', case-insensitive) enable enforcement. Default is False so local single-player usage is unaffected.
+    Reads STARFARER_ALLOW_NO_AUTH. Truthy values ('1','true','yes','on',
+    case-insensitive) disable enforcement. Default is False (enforcement on).
     """
-    raw = os.environ.get("STARFARER_REQUIRE_GAME_TOKEN", "")
+    raw = os.environ.get("STARFARER_ALLOW_NO_AUTH", "")
     return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
+def get_require_game_token() -> bool:
+    """Return whether per-game token enforcement is enabled. Enforcement is ON by default (secure baseline) so multi-user deployments are not vulnerable to IDOR. It can be disabled only by setting STARFARER_ALLOW_NO_AUTH to a truthy value (1/true/yes/on) for purely local, single-user play, or explicitly with STARFARER_REQUIRE_GAME_TOKEN set to a falsy value (0/no/false/off).
+    """
+    if get_allow_no_auth():
+        return False
+    raw = os.environ.get("STARFARER_REQUIRE_GAME_TOKEN")
+    if raw is not None:
+        return raw.strip().lower() in ("1", "true", "yes", "on")
+    return True
 
 
 GAME_NAME = "Starfarer: Echoes of the Void"

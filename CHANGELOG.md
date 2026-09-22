@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Security
+- **Default-on per-game token enforcement (IDOR fix)**: Per-game token access control is now **ON by default** (secure baseline), so multi-user deployments are no longer vulnerable to IDOR on game-scoped endpoints. Previously `get_require_game_token()` returned `False` by default, which allowed any caller to act on a victim's game (e.g. `POST /api/crossroads/donate-item` with `{"game_id": "<victim>"}`) when `STARFARER_REQUIRE_GAME_TOKEN` was unset. New precedence in `backend/config.py::get_require_game_token()`: (1) a truthy `STARFARER_ALLOW_NO_AUTH` disables enforcement (the ONLY safe way to run without auth, for purely local single-user play — never set it in a shared/networked deployment); (2) otherwise an explicitly-set `STARFARER_REQUIRE_GAME_TOKEN` is honored (truthy = on, falsy = off, preserving backwards compatibility); (3) otherwise enforcement defaults to ON. Adds `get_allow_no_auth()` in `backend/config.py`, updates the `_authorize_game()` docstring in `backend/api/routes.py`, and adds a `TestIdorRegression` regression test asserting that `POST /api/crossroads/donate-item` without a valid `X-Game-Token` is rejected with HTTP 403 while the correct token succeeds.
+
 ### Added
 - Root-level `conftest.py` providing an autouse, session-scoped test fixture that isolates the test database in a temporary directory (overriding `STARFARER_DATA_DIR` and patching `backend.database.DATA_DIR`/`DB_PATH`, then calling `init_db()`/`run_migrations()`).
 - **Exploration Depth & Variety**: Three new discovery categories (`atmospheric_phenomena`, `geological_formation`, `biological_specimen`) with names, descriptions, and value ranges — atmospheric phenomena (20–60 cr), geological formations (50–120 cr), biological specimens (80–200 cr). Added to `BIOME_DISCOVERY_CATEGORIES`, `ALL_DISCOVERY_CATEGORIES`, and `_RESOURCE_LABELS` in `backend/game/engine.py`.

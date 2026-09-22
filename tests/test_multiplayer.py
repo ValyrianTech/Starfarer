@@ -3568,6 +3568,7 @@ class TestMultiplayerTokenEnforcement:
 
     def test_leave_ghost_token_enforcement(self, monkeypatch) -> None:
         monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        monkeypatch.delenv("STARFARER_ALLOW_NO_AUTH", raising=False)
         game_id, token = self._new_game()
         try:
             resp = client.post(
@@ -3593,6 +3594,7 @@ class TestMultiplayerTokenEnforcement:
 
     def test_donate_item_token_enforcement(self, monkeypatch) -> None:
         monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        monkeypatch.delenv("STARFARER_ALLOW_NO_AUTH", raising=False)
         game_id, token = self._new_game()
         try:
             state = GAME_STORE[game_id]
@@ -3622,6 +3624,7 @@ class TestMultiplayerTokenEnforcement:
 
     def test_claim_item_token_enforcement(self, monkeypatch) -> None:
         monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        monkeypatch.delenv("STARFARER_ALLOW_NO_AUTH", raising=False)
         donor_id, donor_token = self._new_game()
         claimer_id, claimer_token = self._new_game()
         try:
@@ -3662,6 +3665,7 @@ class TestMultiplayerTokenEnforcement:
 
     def test_donate_lore_token_enforcement(self, monkeypatch) -> None:
         monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        monkeypatch.delenv("STARFARER_ALLOW_NO_AUTH", raising=False)
         game_id, token = self._new_game()
         try:
             state = GAME_STORE[game_id]
@@ -3691,6 +3695,7 @@ class TestMultiplayerTokenEnforcement:
 
     def test_claim_lore_token_enforcement(self, monkeypatch) -> None:
         monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        monkeypatch.delenv("STARFARER_ALLOW_NO_AUTH", raising=False)
         donor_id, donor_token = self._new_game()
         claimer_id, claimer_token = self._new_game()
         try:
@@ -3737,6 +3742,7 @@ class TestMultiplayerTokenEnforcement:
 
     def test_post_message_token_enforcement(self, monkeypatch) -> None:
         monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        monkeypatch.delenv("STARFARER_ALLOW_NO_AUTH", raising=False)
         game_id, token = self._new_game()
         try:
             payload = {"game_id": game_id, "text": "Token test message"}
@@ -3761,6 +3767,7 @@ class TestMultiplayerTokenEnforcement:
 
     def test_acknowledge_ripple_token_enforcement(self, monkeypatch) -> None:
         monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        monkeypatch.delenv("STARFARER_ALLOW_NO_AUTH", raising=False)
         game_id, token = self._new_game()
         try:
             import uuid
@@ -3802,6 +3809,7 @@ class TestMultiplayerTokenEnforcement:
             GAME_STORE.pop(game_id, None)
 
     def test_enforcement_disabled_allows_no_token(self, monkeypatch) -> None:
+        monkeypatch.setenv("STARFARER_ALLOW_NO_AUTH", "1")
         monkeypatch.delenv("STARFARER_REQUIRE_GAME_TOKEN", raising=False)
         game_id, _ = self._new_game()
         try:
@@ -3829,6 +3837,7 @@ class TestCrossroadsReadTokenEnforcement:
 
     def test_crossroads_items_token_enforcement(self, monkeypatch) -> None:
         monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        monkeypatch.delenv("STARFARER_ALLOW_NO_AUTH", raising=False)
         game_id, token = self._new_game()
         try:
             resp = client.get(f"/api/crossroads/items?game_id={game_id}")
@@ -3853,6 +3862,7 @@ class TestCrossroadsReadTokenEnforcement:
     ) -> None:
         """A token passed as a URL query parameter must be rejected."""
         monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        monkeypatch.delenv("STARFARER_ALLOW_NO_AUTH", raising=False)
         game_id, token = self._new_game()
         try:
             resp = client.get(f"/api/crossroads/items?game_id={game_id}&token={token}")
@@ -3869,6 +3879,7 @@ class TestCrossroadsReadTokenEnforcement:
 
     def test_crossroads_lore_token_enforcement(self, monkeypatch) -> None:
         monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        monkeypatch.delenv("STARFARER_ALLOW_NO_AUTH", raising=False)
         game_id, token = self._new_game()
         try:
             resp = client.get(f"/api/crossroads/lore?game_id={game_id}")
@@ -3890,6 +3901,7 @@ class TestCrossroadsReadTokenEnforcement:
 
     def test_crossroads_messages_token_enforcement(self, monkeypatch) -> None:
         monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        monkeypatch.delenv("STARFARER_ALLOW_NO_AUTH", raising=False)
         game_id, token = self._new_game()
         try:
             resp = client.get(f"/api/crossroads/messages?game_id={game_id}")
@@ -3911,11 +3923,13 @@ class TestCrossroadsReadTokenEnforcement:
 
     def test_crossroads_items_token_enforcement_game_not_found(self, monkeypatch) -> None:
         monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        monkeypatch.delenv("STARFARER_ALLOW_NO_AUTH", raising=False)
         assert client.get("/api/crossroads/items?game_id=nonexistent-game-xyz").status_code == 404
         assert client.get("/api/crossroads/lore?game_id=nonexistent-game-xyz").status_code == 404
         assert client.get("/api/crossroads/messages?game_id=nonexistent-game-xyz").status_code == 404
 
     def test_crossroads_read_enforcement_disabled_allows_any_game(self, monkeypatch) -> None:
+        monkeypatch.setenv("STARFARER_ALLOW_NO_AUTH", "1")
         monkeypatch.delenv("STARFARER_REQUIRE_GAME_TOKEN", raising=False)
         assert client.get("/api/crossroads/items?game_id=anything").status_code == 200
         assert client.get("/api/crossroads/lore?game_id=anything").status_code == 200

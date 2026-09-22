@@ -11,12 +11,14 @@ from backend import config
 from backend.api import stream_tickets
 from backend.config import (
     ALLOW_CREDENTIALS,
+    get_allow_no_auth,
     get_require_game_token,
     resolve_allow_credentials,
 )
 from backend.database import init_db
 from backend.game.manager import GAME_STORE, new_game
 from backend.main import app
+from backend.models.discovery import Discovery
 from backend.models.game_state import GameState
 from backend.multiplayer.database import init_multiplayer_db
 
@@ -37,17 +39,145 @@ def _new_game_via_api(**payload) -> dict:
 class TestGetRequireGameToken:
     @pytest.mark.parametrize("value", ["1", "true", "yes", "on", "TRUE"])
     def test_truthy_values(self, monkeypatch, value: str) -> None:
+        monkeypatch.delenv("STARFARER_ALLOW_NO_AUTH", raising=False)
         monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", value)
         assert get_require_game_token() is True
 
     @pytest.mark.parametrize("value", ["0", "no", "false", "off", ""])
     def test_falsy_values(self, monkeypatch, value: str) -> None:
+        monkeypatch.delenv("STARFARER_ALLOW_NO_AUTH", raising=False)
         monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", value)
         assert get_require_game_token() is False
 
-    def test_unset_is_false(self, monkeypatch) -> None:
+    def test_unset_is_true_secure_default(self, monkeypatch) -> None:
         monkeypatch.delenv("STARFARER_REQUIRE_GAME_TOKEN", raising=False)
+        monkeypatch.delenv("STARFARER_ALLOW_NO_AUTH", raising=False)
+        assert get_require_game_token() is True
+
+    def test_allow_no_auth_wins_over_explicit_require(self, monkeypatch) -> None:
+        monkeypatch.setenv("STARFARER_ALLOW_NO_AUTH", "1")
+        monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
         assert get_require_game_token() is False
+
+
+class TestGetAllowNoAuth:
+    @pytest.mark.parametrize("value", ["1", "true", "yes", "on", "TRUE"])
+    def test_truthy_values(self, monkeypatch, value: str) -> None:
+        monkeypatch.setenv("STARFARER_ALLOW_NO_AUTH", value)
+        assert get_allow_no_auth() is True
+
+    @pytest.mark.parametrize("value", ["0", "no", "false", "off", ""])
+    def test_falsy_values(self, monkeypatch, value: str) -> None:
+        monkeypatch.setenv("STARFARER_ALLOW_NO_AUTH", value)
+        assert get_allow_no_auth() is False
+
+    def test_unset_is_false(self, monkeypatch) -> None:
+        monkeypatch.delenv("STARFARER_ALLOW_NO_AUTH", raising=False)
+        assert get_allow_no_auth() is False
+
+
+class TestIdorRegression:
+    def test_donate_item_rejects_caller_without_valid_token(self, monkeypatch) -> None:
+        monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        monkeypatch.delenv("STARFARER_ALLOW_NO_AUTH", raising=False)
+        init_multiplayer_db()
+        data = _new_game_via_api(shared_universe=True)
+        gid = data["game_id"]
+        token = data["token"]
+        try:
+            state = GAME_STORE[gid]
+            state.discoveries.append(
+                Discovery(
+                    id="idor-artifact",
+                    category="artifact",
+                    name="Idor Artifact",
+                    description="An artifact used by the IDOR regression test.",
+                    value=100,
+                    system_id="sys-1",
+                )
+            )
+            payload = {"game_id": gid, "item_name": "Idor Artifact", "quantity": 1}
+
+            resp = client.post("/api/crossroads/donate-item", json=payload)
+            assert resp.status_code == 403
+
+            resp = client.post(
+                "/api/crossroads/donate-item",
+                json=payload,
+                headers={"X-Game-Token": "wrong"},
+            )
+            assert resp.status_code == 403
+
+            resp = client.post(
+                "/api/crossroads/donate-item",
+                json=payload,
+                headers={"X-Game-Token": token},
+            )
+            assert resp.status_code == 200
+        finally:
+            GAME_STORE.pop(gid, None)
+
+
+class TestSecureDefaultEndToEnd:
+    def test_mutating_request_rejected_with_no_env_vars_set(self, monkeypatch) -> None:
+        """With NEITHER STARFARER_REQUIRE_GAME_TOKEN nor STARFARER_ALLOW_NO_AUTH set,
+        enforcement is ON by default (secure baseline): an unauthenticated mutating
+        request must be rejected, and the correct token must be accepted."""
+        monkeypatch.delenv("STARFARER_REQUIRE_GAME_TOKEN", raising=False)
+        monkeypatch.delenv("STARFARER_ALLOW_NO_AUTH", raising=False)
+        init_multiplayer_db()
+        data = _new_game_via_api(shared_universe=True)
+        gid = data["game_id"]
+        token = data["token"]
+        try:
+            state = GAME_STORE[gid]
+            state.discoveries.append(
+                Discovery(
+                    id="secure-default-artifact",
+                    category="artifact",
+                    name="Secure Default Artifact",
+                    description="An artifact used for the secure-default end-to-end test.",
+                    value=100,
+                    system_id="sys-1",
+                )
+            )
+            payload = {"game_id": gid, "item_name": "Secure Default Artifact", "quantity": 1}
+
+            resp = client.post("/api/crossroads/donate-item", json=payload)
+            assert resp.status_code == 403
+
+            resp = client.post(
+                "/api/crossroads/donate-item",
+                json=payload,
+                headers={"X-Game-Token": token},
+            )
+            assert resp.status_code == 200
+        finally:
+            GAME_STORE.pop(gid, None)
+
+    def test_mutating_request_allowed_with_explicit_opt_out(self, monkeypatch) -> None:
+        monkeypatch.delenv("STARFARER_REQUIRE_GAME_TOKEN", raising=False)
+        monkeypatch.setenv("STARFARER_ALLOW_NO_AUTH", "1")
+        init_multiplayer_db()
+        data = _new_game_via_api(shared_universe=True)
+        gid = data["game_id"]
+        try:
+            state = GAME_STORE[gid]
+            state.discoveries.append(
+                Discovery(
+                    id="opt-out-artifact",
+                    category="artifact",
+                    name="Opt Out Artifact",
+                    description="An artifact used for the opt-out end-to-end test.",
+                    value=100,
+                    system_id="sys-1",
+                )
+            )
+            payload = {"game_id": gid, "item_name": "Opt Out Artifact", "quantity": 1}
+            resp = client.post("/api/crossroads/donate-item", json=payload)
+            assert resp.status_code == 200
+        finally:
+            GAME_STORE.pop(gid, None)
 
 
 class TestResolveAllowCredentials:
@@ -111,6 +241,7 @@ class TestNewGameToken:
 class TestEndpointEnforcement:
     def test_scan_requires_token_when_enabled(self, monkeypatch) -> None:
         monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        monkeypatch.delenv("STARFARER_ALLOW_NO_AUTH", raising=False)
         data = _new_game_via_api()
         gid = data["game_id"]
         token = data["token"]
@@ -132,6 +263,7 @@ class TestEndpointEnforcement:
 
     def test_get_endpoints_require_token_when_enabled(self, monkeypatch) -> None:
         monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        monkeypatch.delenv("STARFARER_ALLOW_NO_AUTH", raising=False)
         data = _new_game_via_api()
         gid = data["game_id"]
         token = data["token"]
@@ -152,6 +284,7 @@ class TestEndpointEnforcement:
 
     def test_empty_token_game_requires_token(self, monkeypatch) -> None:
         monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        monkeypatch.delenv("STARFARER_ALLOW_NO_AUTH", raising=False)
         state: GameState = new_game()
         state.token = ""
         GAME_STORE[state.id] = state
@@ -167,6 +300,7 @@ class TestEndpointEnforcement:
 
     def test_enforcement_loads_state_from_db(self, monkeypatch) -> None:
         monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        monkeypatch.delenv("STARFARER_ALLOW_NO_AUTH", raising=False)
         data = _new_game_via_api()
         gid = data["game_id"]
         token = data["token"]
@@ -186,6 +320,7 @@ class TestEndpointEnforcement:
 
     def test_unknown_game_id_returns_404(self, monkeypatch) -> None:
         monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        monkeypatch.delenv("STARFARER_ALLOW_NO_AUTH", raising=False)
         resp = client.post("/api/game/nonexistent-xyz/scan")
         assert resp.status_code == 404
 
@@ -195,12 +330,14 @@ class TestEndpointEnforcement:
         from backend.api.routes import _authorize_game
 
         monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        monkeypatch.delenv("STARFARER_ALLOW_NO_AUTH", raising=False)
         assert "nonexistent-xyz" not in GAME_STORE
         with pytest.raises(HTTPException) as exc_info:
             _authorize_game("nonexistent-xyz", None)
         assert exc_info.value.status_code == 404
 
     def test_enforcement_disabled_allows_no_token(self, monkeypatch) -> None:
+        monkeypatch.setenv("STARFARER_ALLOW_NO_AUTH", "1")
         monkeypatch.delenv("STARFARER_REQUIRE_GAME_TOKEN", raising=False)
         data = _new_game_via_api()
         gid = data["game_id"]
@@ -231,6 +368,7 @@ class TestReadEndpointEnforcement:
     )
     def test_read_endpoints_require_token(self, monkeypatch, path) -> None:
         monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        monkeypatch.delenv("STARFARER_ALLOW_NO_AUTH", raising=False)
         data = _new_game_via_api()
         gid = data["game_id"]
         token = data["token"]
@@ -250,6 +388,7 @@ class TestReadEndpointEnforcement:
 
     def test_system_detail_requires_token(self, monkeypatch) -> None:
         monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        monkeypatch.delenv("STARFARER_ALLOW_NO_AUTH", raising=False)
         data = _new_game_via_api()
         gid = data["game_id"]
         token = data["token"]
@@ -270,6 +409,7 @@ class TestReadEndpointEnforcement:
         from backend.models.faction import FACTION_DEFINITIONS
 
         monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        monkeypatch.delenv("STARFARER_ALLOW_NO_AUTH", raising=False)
         data = _new_game_via_api()
         gid = data["game_id"]
         token = data["token"]
@@ -290,6 +430,7 @@ class TestReadEndpointEnforcement:
 class TestMutatingEndpointEnforcement:
     def test_mutating_endpoints_enforce_token(self, monkeypatch) -> None:
         monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        monkeypatch.delenv("STARFARER_ALLOW_NO_AUTH", raising=False)
         init_multiplayer_db()
         data = _new_game_via_api()
         gid = data["game_id"]
@@ -339,6 +480,7 @@ class TestMutatingEndpointEnforcement:
 class TestMultiplayerReadEndpointEnforcement:
     def test_ripples_requires_token(self, monkeypatch) -> None:
         monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        monkeypatch.delenv("STARFARER_ALLOW_NO_AUTH", raising=False)
         init_multiplayer_db()
         data = _new_game_via_api()
         gid = data["game_id"]
@@ -365,6 +507,7 @@ class TestMultiplayerReadEndpointEnforcement:
 
     def test_system_ghosts_requires_token(self, monkeypatch) -> None:
         monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        monkeypatch.delenv("STARFARER_ALLOW_NO_AUTH", raising=False)
         init_multiplayer_db()
         data = _new_game_via_api()
         gid = data["game_id"]
@@ -391,6 +534,7 @@ class TestMultiplayerReadEndpointEnforcement:
     def test_multiplayer_read_endpoints_disabled_allows_no_token(
         self, monkeypatch
     ) -> None:
+        monkeypatch.setenv("STARFARER_ALLOW_NO_AUTH", "1")
         monkeypatch.delenv("STARFARER_REQUIRE_GAME_TOKEN", raising=False)
         init_multiplayer_db()
         data = _new_game_via_api()
@@ -409,10 +553,12 @@ class TestMultiplayerReadEndpointEnforcement:
 class TestSpectateEnforcement:
     def test_games_listing_disabled_when_enabled(self, monkeypatch) -> None:
         monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        monkeypatch.delenv("STARFARER_ALLOW_NO_AUTH", raising=False)
         resp = client.get("/api/spectate/games")
         assert resp.status_code == 403
 
     def test_games_listing_allowed_when_disabled(self, monkeypatch) -> None:
+        monkeypatch.setenv("STARFARER_ALLOW_NO_AUTH", "1")
         monkeypatch.delenv("STARFARER_REQUIRE_GAME_TOKEN", raising=False)
         resp = client.get("/api/spectate/games")
         assert resp.status_code == 200
@@ -425,6 +571,7 @@ class TestSpectateEnforcement:
         from backend.api.spectate import api_spectate_stream
 
         monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        monkeypatch.delenv("STARFARER_ALLOW_NO_AUTH", raising=False)
         data = _new_game_via_api()
         gid = data["game_id"]
         token = data["token"]
@@ -461,6 +608,7 @@ class TestSpectateEnforcement:
         from backend.api.spectate import api_spectate_stream
 
         monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        monkeypatch.delenv("STARFARER_ALLOW_NO_AUTH", raising=False)
         data = _new_game_via_api()
         gid = data["game_id"]
         try:
@@ -484,6 +632,7 @@ class TestSpectateEnforcement:
         from backend.api.spectate import api_spectate_stream
 
         monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        monkeypatch.delenv("STARFARER_ALLOW_NO_AUTH", raising=False)
         data = _new_game_via_api()
         gid = data["game_id"]
         try:
@@ -507,6 +656,7 @@ class TestSpectateEnforcement:
         from backend.api.spectate import api_spectate_stream
 
         monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        monkeypatch.delenv("STARFARER_ALLOW_NO_AUTH", raising=False)
         data = _new_game_via_api()
         gid = data["game_id"]
         other = _new_game_via_api()
@@ -525,6 +675,7 @@ class TestSpectateEnforcement:
 
     def test_stream_ticket_creation_endpoint(self, monkeypatch) -> None:
         monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        monkeypatch.delenv("STARFARER_ALLOW_NO_AUTH", raising=False)
         data = _new_game_via_api()
         gid = data["game_id"]
         token = data["token"]
@@ -554,6 +705,7 @@ class TestSpectateEnforcement:
 
     def test_stream_ticket_creation_unknown_game_404(self, monkeypatch) -> None:
         monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        monkeypatch.delenv("STARFARER_ALLOW_NO_AUTH", raising=False)
         GAME_STORE.pop("no-such-game-xyz", None)
         # With enforcement on and an unknown game, auth fails closed with 404.
         resp = client.post(
@@ -563,6 +715,7 @@ class TestSpectateEnforcement:
         assert resp.status_code == 404
 
     def test_stream_ticket_creation_enforcement_disabled(self, monkeypatch) -> None:
+        monkeypatch.setenv("STARFARER_ALLOW_NO_AUTH", "1")
         monkeypatch.delenv("STARFARER_REQUIRE_GAME_TOKEN", raising=False)
         data = _new_game_via_api()
         gid = data["game_id"]
@@ -583,6 +736,7 @@ class TestSpectateEnforcement:
 
         from backend.api.spectate import api_spectate_stream
 
+        monkeypatch.setenv("STARFARER_ALLOW_NO_AUTH", "1")
         monkeypatch.delenv("STARFARER_REQUIRE_GAME_TOKEN", raising=False)
         data = _new_game_via_api()
         gid = data["game_id"]
@@ -618,6 +772,7 @@ class TestSpectateEnforcement:
         from backend.api.spectate import api_spectate_stream
 
         monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        monkeypatch.delenv("STARFARER_ALLOW_NO_AUTH", raising=False)
         data = _new_game_via_api()
         gid = data["game_id"]
         other = _new_game_via_api()
