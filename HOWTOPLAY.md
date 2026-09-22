@@ -656,7 +656,7 @@ Content-Type: application/json
 
 { "mission_id": "mission_sys_0000_12345" }
 ```
-Optional: add `"faction_id"` to scope lookup to a specific faction.
+Optional: add `"faction_id"`, which must be a known faction AND must match the current system's dominant faction. Supplying a different faction id returns HTTP 400 ("Mission faction is not present in this system"); an unknown or whitespace-only faction id is rejected with HTTP 422. Omit `faction_id` to use the system's dominant faction.
 
 3. **Complete a mission** (rewards are applied):
 ```http
