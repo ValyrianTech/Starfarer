@@ -77,10 +77,16 @@ _MULTIPLAYER_MIGRATIONS = """
 
     CREATE INDEX IF NOT EXISTS idx_ghost_signatures_system
         ON ghost_signatures(system_id);
+    CREATE INDEX IF NOT EXISTS idx_ghost_signatures_game
+        ON ghost_signatures(game_id);
     CREATE INDEX IF NOT EXISTS idx_crossroads_items_claimed
         ON crossroads_items(claimed);
+    CREATE INDEX IF NOT EXISTS idx_crossroads_items_donor
+        ON crossroads_items(donor_game_id);
     CREATE INDEX IF NOT EXISTS idx_crossroads_lore_claimed
         ON crossroads_lore(claimed);
+    CREATE INDEX IF NOT EXISTS idx_crossroads_lore_donor
+        ON crossroads_lore(donor_game_id);
     CREATE INDEX IF NOT EXISTS idx_crossroads_messages_expires
         ON crossroads_messages(expires_at);
     CREATE INDEX IF NOT EXISTS idx_ripple_events_target
