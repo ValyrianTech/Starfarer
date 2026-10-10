@@ -9,7 +9,7 @@ and log entries.
 import logging
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from backend.models.discovery import Discovery, LoreFragment
 from backend.models.event import Event
@@ -102,7 +102,7 @@ class GameState:
         when the game state is first created.
         """
         if not self.game_started:
-            self.game_started = datetime.now(timezone.utc).isoformat()
+            self.game_started = datetime.now(UTC).isoformat()
 
     def get_current_system(self) -> StarSystem | None:
         """Retrieve the star system the ship is currently in.
@@ -139,7 +139,7 @@ class GameState:
             "id": entry_id,
             "type": entry_type,
             "message": message,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "category": kwargs.get("category", entry_type),
             "title": title,
             "description": kwargs.get("description", message),

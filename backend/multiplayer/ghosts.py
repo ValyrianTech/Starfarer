@@ -8,7 +8,7 @@ discover.
 
 import math
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from backend.models.game_state import GameState
 from backend.multiplayer.database import (
@@ -43,7 +43,7 @@ def record_ghost(
         game_id=game_state.id,
         player_name=game_state.ship.name,
         system_id=system_id,
-        timestamp=datetime.now(timezone.utc).isoformat(),
+        timestamp=datetime.now(UTC).isoformat(),
         discoveries=[d.name for d in system_discoveries],
         message=message,
         body_visits=list({d.body_id for d in system_discoveries if d.body_id is not None}),

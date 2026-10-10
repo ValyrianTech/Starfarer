@@ -7,7 +7,7 @@ significant discovery, alerting other travellers in those systems.
 """
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from backend.generation.universe import distance_between
 from backend.models.discovery import Discovery
@@ -75,7 +75,7 @@ def create_ripple(
             target_system_id=sys_id,
             discovery_type=discovery.category,
             discovery_name=discovery.name,
-            created_at=datetime.now(timezone.utc).isoformat(),
+            created_at=datetime.now(UTC).isoformat(),
         )
         save_ripple_event(ripple)
         ripples.append(ripple.to_dict())

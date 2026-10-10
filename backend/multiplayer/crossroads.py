@@ -8,7 +8,7 @@ shared gathering point for travellers across all game sessions.
 
 import math
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from backend.models.discovery import Discovery
 from backend.models.game_state import GameState
@@ -85,7 +85,7 @@ def donate_item(
         item_name=item_name,
         quantity=actual_quantity,
         message=message,
-        created_at=datetime.now(timezone.utc).isoformat(),
+        created_at=datetime.now(UTC).isoformat(),
     )
     save_crossroads_item(item)
     game_state.add_log(
@@ -202,7 +202,7 @@ def donate_lore(
         donor_name=game_state.ship.name,
         fragment_id=fragment_id,
         message=message,
-        created_at=datetime.now(timezone.utc).isoformat(),
+        created_at=datetime.now(UTC).isoformat(),
     )
     save_crossroads_lore(lore)
     fragment.donated = True
@@ -250,7 +250,7 @@ def claim_lore(donation_id: str, game_state: GameState) -> dict:
         if lf.id == claimed_data["fragment_id"]:
             lf.discovered = True
             lf.donated = False
-            lf.discovery_timestamp = datetime.now(timezone.utc).isoformat()
+            lf.discovery_timestamp = datetime.now(UTC).isoformat()
             break
 
     game_state.add_log(
@@ -293,8 +293,8 @@ def post_message(game_state: GameState, text: str) -> dict:
         game_id=game_state.id,
         player_name=game_state.ship.name,
         text=text,
-        created_at=datetime.now(timezone.utc).isoformat(),
-        expires_at=(datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
+        created_at=datetime.now(UTC).isoformat(),
+        expires_at=(datetime.now(UTC) + timedelta(days=7)).isoformat(),
     )
     save_crossroads_message(msg)
     game_state.add_log(

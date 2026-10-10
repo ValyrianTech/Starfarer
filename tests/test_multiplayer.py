@@ -4,7 +4,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 import tempfile
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -264,7 +264,7 @@ class TestMultiplayerDatabase:
             game_id="game-db-1",
             player_name="DBTester",
             system_id="sys-db-1",
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
             discoveries=["Crystal", "Relic"],
             message="DB test ghost",
             body_visits=["body-a"],
@@ -292,7 +292,7 @@ class TestMultiplayerDatabase:
             quantity=2,
             message="A gift",
             claimed=False,
-            created_at=datetime.now(timezone.utc).isoformat(),
+            created_at=datetime.now(UTC).isoformat(),
         )
         save_crossroads_item(ci)
         items = get_available_items()
@@ -311,7 +311,7 @@ class TestMultiplayerDatabase:
             item_name="Nebula Dust",
             quantity=1,
             claimed=False,
-            created_at=datetime.now(timezone.utc).isoformat(),
+            created_at=datetime.now(UTC).isoformat(),
         )
         save_crossroads_item(ci)
         result = db_claim_item("item-claim-1", "claimer-game-1")
@@ -332,7 +332,7 @@ class TestMultiplayerDatabase:
             item_name="Stardust",
             quantity=1,
             claimed=False,
-            created_at=datetime.now(timezone.utc).isoformat(),
+            created_at=datetime.now(UTC).isoformat(),
         )
         save_crossroads_item(ci)
         db_claim_item("item-claim-2", "claimer-a")
@@ -373,7 +373,7 @@ class TestMultiplayerDatabase:
             fragment_id="lore_architects_1",
             message="Ancient text",
             claimed=False,
-            created_at=datetime.now(timezone.utc).isoformat(),
+            created_at=datetime.now(UTC).isoformat(),
         )
         save_crossroads_lore(cl)
         lore_list = get_available_lore()
@@ -390,7 +390,7 @@ class TestMultiplayerDatabase:
             donor_name="DBTester",
             fragment_id="lore_wanderer_1",
             claimed=False,
-            created_at=datetime.now(timezone.utc).isoformat(),
+            created_at=datetime.now(UTC).isoformat(),
         )
         save_crossroads_lore(cl)
         result = db_claim_lore("lore-claim-1", "claimer-game-1")
@@ -409,7 +409,7 @@ class TestMultiplayerDatabase:
             donor_name="DBTester",
             fragment_id="lore_signal_1",
             claimed=False,
-            created_at=datetime.now(timezone.utc).isoformat(),
+            created_at=datetime.now(UTC).isoformat(),
         )
         save_crossroads_lore(cl)
         db_claim_lore("lore-claim-2", "claimer-a")
@@ -445,7 +445,7 @@ class TestMultiplayerDatabase:
             fragment_id="lore_architects_1",
             message="Ancient text",
             claimed=False,
-            created_at=datetime.now(timezone.utc).isoformat(),
+            created_at=datetime.now(UTC).isoformat(),
         )
         save_crossroads_lore(cl)
         result = get_lore_donation("lore-donation-get-1")
@@ -473,7 +473,7 @@ class TestMultiplayerDatabase:
             donor_name="DBTester",
             fragment_id="lore_signal_1",
             claimed=False,
-            created_at=datetime.now(timezone.utc).isoformat(),
+            created_at=datetime.now(UTC).isoformat(),
         )
         save_crossroads_lore(cl)
         db_claim_lore("lore-donation-get-2", "claimer-x")
@@ -495,8 +495,8 @@ class TestMultiplayerDatabase:
             game_id="game-db-1",
             player_name="DBTester",
             text="First post!",
-            created_at=datetime.now(timezone.utc).isoformat(),
-            expires_at=(datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
+            created_at=datetime.now(UTC).isoformat(),
+            expires_at=(datetime.now(UTC) + timedelta(days=7)).isoformat(),
         )
         save_crossroads_message(cm)
         msgs = get_recent_messages(limit=10)
@@ -514,8 +514,8 @@ class TestMultiplayerDatabase:
             game_id="game-db-1",
             player_name="DBTester",
             text="Old message",
-            created_at=(datetime.now(timezone.utc) - timedelta(days=10)).isoformat(),
-            expires_at=(datetime.now(timezone.utc) - timedelta(days=3)).isoformat(),
+            created_at=(datetime.now(UTC) - timedelta(days=10)).isoformat(),
+            expires_at=(datetime.now(UTC) - timedelta(days=3)).isoformat(),
         )
         save_crossroads_message(cm)
         msgs = get_recent_messages(limit=50)
@@ -529,8 +529,8 @@ class TestMultiplayerDatabase:
             game_id="game-db-1",
             player_name="DBTester",
             text="To be deleted",
-            created_at=(datetime.now(timezone.utc) - timedelta(days=10)).isoformat(),
-            expires_at=(datetime.now(timezone.utc) - timedelta(days=3)).isoformat(),
+            created_at=(datetime.now(UTC) - timedelta(days=10)).isoformat(),
+            expires_at=(datetime.now(UTC) - timedelta(days=3)).isoformat(),
         )
         save_crossroads_message(cm)
         deleted = cleanup_expired_messages()
@@ -547,7 +547,7 @@ class TestMultiplayerDatabase:
             target_system_id="sys-rp-1",
             discovery_type="artifact",
             discovery_name="Void Gem",
-            created_at=datetime.now(timezone.utc).isoformat(),
+            created_at=datetime.now(UTC).isoformat(),
         )
         save_ripple_event(re)
         # get_pending_ripples filters by target_system_id matching a game's current system,
@@ -577,7 +577,7 @@ class TestMultiplayerDatabase:
             target_system_id="sys-b",
             discovery_type="lore",
             discovery_name="Echo Fragment",
-            created_at=datetime.now(timezone.utc).isoformat(),
+            created_at=datetime.now(UTC).isoformat(),
         )
         save_ripple_event(re)
         ok = db_ack_ripple("ripple-ack-1", "game-ack-1")
@@ -594,7 +594,7 @@ class TestMultiplayerDatabase:
             target_system_id="sys-b",
             discovery_type="lore",
             discovery_name="Already Acked",
-            created_at=datetime.now(timezone.utc).isoformat(),
+            created_at=datetime.now(UTC).isoformat(),
         )
         save_ripple_event(re)
         db_ack_ripple("ripple-ack-2", "game-ack-2")
@@ -624,8 +624,8 @@ class TestMultiplayerDatabase:
                 game_id="game-pag",
                 player_name="PaginationTester",
                 text=f"Paginated message {i}",
-                created_at=(datetime.now(timezone.utc) - timedelta(minutes=10 - i)).isoformat(),
-                expires_at=(datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
+                created_at=(datetime.now(UTC) - timedelta(minutes=10 - i)).isoformat(),
+                expires_at=(datetime.now(UTC) + timedelta(days=7)).isoformat(),
             )
             save_crossroads_message(cm)
         msgs, total, _, _ = get_recent_messages_paginated(page=1, per_page=5)
@@ -643,8 +643,8 @@ class TestMultiplayerDatabase:
                 game_id="game-pag2",
                 player_name="PaginationTester",
                 text=f"Page 2 message {i}",
-                created_at=(datetime.now(timezone.utc) - timedelta(minutes=10 - i)).isoformat(),
-                expires_at=(datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
+                created_at=(datetime.now(UTC) - timedelta(minutes=10 - i)).isoformat(),
+                expires_at=(datetime.now(UTC) + timedelta(days=7)).isoformat(),
             )
             save_crossroads_message(cm)
         page1_msgs, _, _, _ = get_recent_messages_paginated(page=1, per_page=5)
@@ -666,8 +666,8 @@ class TestMultiplayerDatabase:
                 game_id="game-empty",
                 player_name="EmptyTester",
                 text=f"Empty page message {i}",
-                created_at=(datetime.now(timezone.utc) - timedelta(minutes=3 - i)).isoformat(),
-                expires_at=(datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
+                created_at=(datetime.now(UTC) - timedelta(minutes=3 - i)).isoformat(),
+                expires_at=(datetime.now(UTC) + timedelta(days=7)).isoformat(),
             )
             save_crossroads_message(cm)
         msgs, total, _, _ = get_recent_messages_paginated(page=10, per_page=5)
@@ -684,16 +684,16 @@ class TestMultiplayerDatabase:
             game_id="game-x",
             player_name="Tester",
             text="I am active",
-            created_at=datetime.now(timezone.utc).isoformat(),
-            expires_at=(datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
+            created_at=datetime.now(UTC).isoformat(),
+            expires_at=(datetime.now(UTC) + timedelta(days=7)).isoformat(),
         )
         expired = CrossroadsMessage(
             id="msg-dead",
             game_id="game-x",
             player_name="Tester",
             text="I am expired",
-            created_at=(datetime.now(timezone.utc) - timedelta(days=10)).isoformat(),
-            expires_at=(datetime.now(timezone.utc) - timedelta(days=3)).isoformat(),
+            created_at=(datetime.now(UTC) - timedelta(days=10)).isoformat(),
+            expires_at=(datetime.now(UTC) - timedelta(days=3)).isoformat(),
         )
         save_crossroads_message(active)
         save_crossroads_message(expired)
@@ -716,8 +716,8 @@ class TestMultiplayerDatabase:
                 game_id="game-count",
                 player_name="CountTester",
                 text=f"Count message {i}",
-                created_at=datetime.now(timezone.utc).isoformat(),
-                expires_at=(datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
+                created_at=datetime.now(UTC).isoformat(),
+                expires_at=(datetime.now(UTC) + timedelta(days=7)).isoformat(),
             )
             save_crossroads_message(cm)
         _, total, _, _ = get_recent_messages_paginated(page=1, per_page=3)
@@ -733,8 +733,8 @@ class TestMultiplayerDatabase:
                 game_id="game-cap",
                 player_name="CapTester",
                 text=f"Cap test message {i}",
-                created_at=datetime.now(timezone.utc).isoformat(),
-                expires_at=(datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
+                created_at=datetime.now(UTC).isoformat(),
+                expires_at=(datetime.now(UTC) + timedelta(days=7)).isoformat(),
             )
             save_crossroads_message(cm)
         result = get_messages(page=1, per_page=100)
@@ -751,8 +751,8 @@ class TestMultiplayerDatabase:
                 game_id="game-clamp",
                 player_name="ClampTester",
                 text=f"Clamp test message {i}",
-                created_at=(datetime.now(timezone.utc) - timedelta(minutes=10 - i)).isoformat(),
-                expires_at=(datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
+                created_at=(datetime.now(UTC) - timedelta(minutes=10 - i)).isoformat(),
+                expires_at=(datetime.now(UTC) + timedelta(days=7)).isoformat(),
             )
             save_crossroads_message(cm)
         result = get_messages(page=0, per_page=10)
@@ -1981,7 +1981,7 @@ class TestGhostRipplePublicViews:
             target_system_id=current_sys.id,
             discovery_type="artifact",
             discovery_name="Leak Ripple",
-            created_at=datetime.now(timezone.utc).isoformat(),
+            created_at=datetime.now(UTC).isoformat(),
         )
         save_ripple_event(ripple)
 
@@ -2681,7 +2681,7 @@ class TestMultiplayerAPI:
             target_system_id=current_sys.id,
             discovery_type="artifact",
             discovery_name="API Ripple Test",
-            created_at=datetime.now(timezone.utc).isoformat(),
+            created_at=datetime.now(UTC).isoformat(),
         )
         save_ripple_event(ripple)
 
@@ -2714,7 +2714,7 @@ class TestMultiplayerAPI:
             target_system_id=current_sys.id,
             discovery_type="lore",
             discovery_name="API Ack Ripple",
-            created_at=datetime.now(timezone.utc).isoformat(),
+            created_at=datetime.now(UTC).isoformat(),
         )
         save_ripple_event(ripple)
 
@@ -3185,7 +3185,7 @@ class TestLeaderboardMultiplayer:
                 game_id=game_id,
                 player_name="Pilot",
                 system_id=f"sys-gc-{i}",
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                timestamp=datetime.now(UTC).isoformat(),
             ))
         for i in range(2):
             save_crossroads_item(CrossroadsItem(
@@ -3195,7 +3195,7 @@ class TestLeaderboardMultiplayer:
                 item_name="Artifact",
                 quantity=1,
                 claimed=False,
-                created_at=datetime.now(timezone.utc).isoformat(),
+                created_at=datetime.now(UTC).isoformat(),
             ))
         for i in range(4):
             save_crossroads_lore(CrossroadsLore(
@@ -3203,7 +3203,7 @@ class TestLeaderboardMultiplayer:
                 donor_game_id=game_id,
                 donor_name="Pilot",
                 fragment_id=f"frag-gc-{i}",
-                created_at=datetime.now(timezone.utc).isoformat(),
+                created_at=datetime.now(UTC).isoformat(),
             ))
 
         game_save(state)
@@ -3422,7 +3422,7 @@ class TestSyncCargoCrossroads:
             item_name="Partial Gem",
             quantity=3,
             claimed=False,
-            created_at=datetime.now(timezone.utc).isoformat(),
+            created_at=datetime.now(UTC).isoformat(),
         )
         save_crossroads_item(ci)
         result = claim_item_partial("item-partial-1", "claimer", 1)
@@ -3458,7 +3458,7 @@ class TestSyncCargoCrossroads:
             item_name="Zero Gem",
             quantity=2,
             claimed=False,
-            created_at=datetime.now(timezone.utc).isoformat(),
+            created_at=datetime.now(UTC).isoformat(),
         )
         save_crossroads_item(ci)
         assert claim_item_partial("item-partial-2", "c", 0) is None
@@ -3482,7 +3482,7 @@ class TestSyncCargoCrossroads:
             item_name="Exact Gem",
             quantity=2,
             claimed=False,
-            created_at=datetime.now(timezone.utc).isoformat(),
+            created_at=datetime.now(UTC).isoformat(),
         )
         save_crossroads_item(ci)
         result = claim_item_partial("item-partial-3", "c", 2)
@@ -3498,7 +3498,7 @@ class TestSyncCargoCrossroads:
             item_name="Overflow Gem",
             quantity=1,
             claimed=False,
-            created_at=datetime.now(timezone.utc).isoformat(),
+            created_at=datetime.now(UTC).isoformat(),
         )
         save_crossroads_item(ci2)
         result2 = claim_item_partial("item-partial-4", "c", 99)
@@ -3566,7 +3566,7 @@ class TestSyncCargoCrossroads:
             item_name="Concurrent Gem",
             quantity=DONATED,
             claimed=False,
-            created_at=datetime.now(timezone.utc).isoformat(),
+            created_at=datetime.now(UTC).isoformat(),
         )
         save_crossroads_item(ci)
 
@@ -3859,7 +3859,7 @@ class TestMultiplayerTokenEnforcement:
                 target_system_id=current_sys.id,
                 discovery_type="lore",
                 discovery_name="Token Ack Ripple",
-                created_at=datetime.now(timezone.utc).isoformat(),
+                created_at=datetime.now(UTC).isoformat(),
             )
             save_ripple_event(ripple)
 
