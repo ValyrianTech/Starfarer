@@ -1711,47 +1711,53 @@ class TestMultiplayerRipples:
         assert result["success"] is False
         GAME_STORE.pop(state.id, None)
 
-    def test_create_ripple_with_all_systems(self) -> None:
+    def test_create_ripple_propagates_to_all_in_range_systems(self) -> None:
         from backend.generation.universe import distance_between
         state = new_game(42, "RippleShip", shared_universe=True)
         GAME_STORE[state.id] = state
         system = state.get_current_system()
         assert system is not None
 
-        full_systems = dict(state.systems)
         systems_within_5ly = {
-            sid: s for sid, s in full_systems.items()
+            sid for sid, s in state.systems.items()
             if sid != system.id and distance_between(system, s) / 10.0 <= 5
         }
 
-        kept_ids = set()
-        for sid, value in full_systems.items():
-            if sid == system.id or distance_between(system, value) / 10.0 > 5:
-                kept_ids.add(sid)
-        state.systems = {sid: s for sid, s in full_systems.items() if sid in kept_ids}
-
         disc = _make_discovery(name="AllSystems Relic", system_id=system.id)
-        result = create_ripple(state, disc, all_systems=full_systems)
+        result = create_ripple(state, disc)
 
         assert result["ripples_created"] == len(systems_within_5ly)
 
         ripple_target_ids = {r["target_system_id"] for r in result["ripples"]}
+        assert ripple_target_ids == systems_within_5ly
+
         for sid in systems_within_5ly:
             assert sid in ripple_target_ids, f"Missing ripple for system {sid}"
 
         GAME_STORE.pop(state.id, None)
 
-    def test_create_ripple_all_systems_fallback(self) -> None:
+    def test_create_ripple_uses_full_universe_systems(self) -> None:
+        from backend.generation.universe import distance_between
         state = new_game(42, "RippleShip", shared_universe=True)
         GAME_STORE[state.id] = state
         system = state.get_current_system()
         assert system is not None
 
-        disc = _make_discovery(name="Fallback Relic", system_id=system.id)
-        result_all = create_ripple(state, disc, all_systems=state.systems)
-        result_fallback = create_ripple(state, disc)
+        systems_within_5ly = {
+            sid for sid, s in state.systems.items()
+            if sid != system.id and distance_between(system, s) / 10.0 <= 5
+        }
 
-        assert result_fallback["ripples_created"] == result_all["ripples_created"]
+        for sid, s in state.systems.items():
+            s.visited = sid in systems_within_5ly
+
+        disc = _make_discovery(name="FullUniverse Relic", system_id=system.id)
+        result = create_ripple(state, disc)
+
+        assert result["ripples_created"] == len(systems_within_5ly)
+
+        ripple_target_ids = {r["target_system_id"] for r in result["ripples"]}
+        assert ripple_target_ids == systems_within_5ly
 
         GAME_STORE.pop(state.id, None)
 
