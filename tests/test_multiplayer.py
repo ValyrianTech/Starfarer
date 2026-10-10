@@ -1922,6 +1922,88 @@ class TestRippleRouteIntegration:
 
         GAME_STORE.pop(game_id, None)
 
+    def _two_discoveries(self, state):
+        from backend.models.discovery import Discovery
+        sys_id = state.get_current_system().id
+        d1 = Discovery(id="multi-disc-1", category="artifact", name="Multi Disc One", description="first", value=10, system_id=sys_id)
+        d2 = Discovery(id="multi-disc-2", category="artifact", name="Multi Disc Two", description="second", value=20, system_id=sys_id)
+        return [d1, d2]
+
+    def test_atmospheric_scan_creates_one_ripple_per_discovery(self) -> None:
+        from unittest.mock import patch
+
+        from backend.multiplayer.database import get_db_ctx
+
+        resp = client.post("/api/game/new", json={"shared_universe": True})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        discoveries = self._two_discoveries(state)
+
+        with patch("backend.api.routes.perform_atmospheric_scan", return_value=(True, discoveries)):
+            resp = client.post(f"/api/game/{game_id}/atmospheric-scan")
+        assert resp.status_code == 200
+
+        with get_db_ctx() as conn:
+            rows = conn.execute(
+                "SELECT discovery_name FROM ripple_events WHERE source_game_id = ?",
+                (game_id,),
+            ).fetchall()
+        names = {r["discovery_name"] for r in rows}
+        assert "Multi Disc One" in names
+        assert "Multi Disc Two" in names
+        GAME_STORE.pop(game_id, None)
+
+    def test_sub_surface_explore_creates_one_ripple_per_discovery(self) -> None:
+        from unittest.mock import patch
+
+        from backend.multiplayer.database import get_db_ctx
+
+        resp = client.post("/api/game/new", json={"shared_universe": True})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        discoveries = self._two_discoveries(state)
+
+        with patch("backend.api.routes.perform_sub_surface_exploration", return_value=(True, discoveries)):
+            resp = client.post(f"/api/game/{game_id}/sub-surface-explore")
+        assert resp.status_code == 200
+
+        with get_db_ctx() as conn:
+            rows = conn.execute(
+                "SELECT discovery_name FROM ripple_events WHERE source_game_id = ?",
+                (game_id,),
+            ).fetchall()
+        names = {r["discovery_name"] for r in rows}
+        assert "Multi Disc One" in names
+        assert "Multi Disc Two" in names
+        GAME_STORE.pop(game_id, None)
+
+    def test_explore_creates_one_ripple_per_discovery(self) -> None:
+        from unittest.mock import patch
+
+        from backend.multiplayer.database import get_db_ctx
+
+        resp = client.post("/api/game/new", json={"shared_universe": True})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        discoveries = self._two_discoveries(state)
+
+        with patch("backend.api.routes.explore_surface", return_value=(True, "Explored. Found 2 points of interest.", discoveries)):
+            resp = client.post(f"/api/game/{game_id}/explore")
+        assert resp.status_code == 200
+
+        with get_db_ctx() as conn:
+            rows = conn.execute(
+                "SELECT discovery_name FROM ripple_events WHERE source_game_id = ?",
+                (game_id,),
+            ).fetchall()
+        names = {r["discovery_name"] for r in rows}
+        assert "Multi Disc One" in names
+        assert "Multi Disc Two" in names
+        GAME_STORE.pop(game_id, None)
+
 
 # ---------------------------------------------------------------------------
 # TestCrossroadsPublicViews
