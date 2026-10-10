@@ -1757,6 +1757,171 @@ class TestMultiplayerRipples:
 
 
 # ---------------------------------------------------------------------------
+# TestRippleRouteIntegration
+# ---------------------------------------------------------------------------
+
+class TestRippleRouteIntegration:
+    def test_explore_creates_ripples_and_lists_and_acknowledges(self) -> None:
+        from backend.multiplayer.database import get_db_ctx
+
+        resp = client.post("/api/game/new", json={"shared_universe": True})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+
+        source = state.get_current_system()
+        source_sys_id = source.id
+
+        body = state.get_current_system().bodies[0]
+        body.poi_count = 3
+        state.ship.current_body_id = body.id
+        game_save(state)
+
+        resp = client.post(f"/api/game/{game_id}/explore")
+        assert resp.status_code == 200
+        assert len(resp.json()["discoveries"]) >= 1
+
+        with get_db_ctx() as conn:
+            rows = conn.execute(
+                "SELECT source_game_id, source_system_id, target_system_id, id FROM ripple_events"
+            ).fetchall()
+        source_rows = [
+            r for r in rows
+            if r["source_game_id"] == game_id and r["source_system_id"] == source_sys_id
+        ]
+        assert len(source_rows) >= 1
+
+        target_sys_id = source_rows[0]["target_system_id"]
+
+        resp = client.post("/api/game/new", json={"shared_universe": True})
+        assert resp.status_code == 200
+        second_id = resp.json()["game_id"]
+        second_state = GAME_STORE[second_id]
+        second_state.ship.current_system_id = target_sys_id
+        game_save(second_state)
+
+        resp = client.get(f"/api/game/{second_id}/ripples")
+        assert resp.status_code == 200
+        ripples = resp.json()["ripples"]
+        assert ripples
+        for ripple in ripples:
+            assert "source_game_id" not in ripple
+            assert "acknowledged_by" not in ripple
+        ripple_id = ripples[0]["id"]
+
+        resp = client.post(f"/api/game/{second_id}/ripple/{ripple_id}/acknowledge")
+        assert resp.status_code == 200
+        assert resp.json() == {"success": True}
+
+        resp = client.get(f"/api/game/{second_id}/ripples")
+        assert resp.status_code == 200
+        assert all(r["id"] != ripple_id for r in resp.json()["ripples"])
+
+        GAME_STORE.pop(game_id, None)
+        GAME_STORE.pop(second_id, None)
+
+    def test_atmospheric_scan_creates_ripples_in_shared_universe(self) -> None:
+        from backend.models.system import Body
+        from backend.multiplayer.database import get_db_ctx
+
+        resp = client.post("/api/game/new", json={"shared_universe": True})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+
+        source = state.get_current_system()
+
+        body = Body(
+            id="ripple_atmo_body",
+            name="RippleAtmo",
+            body_type="planet",
+            size=5,
+            distance_from_star=0.5,
+            biome="volcanic",
+            poi_count=3,
+        )
+        state.get_current_system().bodies.append(body)
+        game_save(state)
+
+        resp = client.post(f"/api/game/{game_id}/land/ripple_atmo_body")
+        assert resp.status_code == 200
+
+        resp = client.post(f"/api/game/{game_id}/atmospheric-scan")
+        assert resp.status_code == 200
+
+        with get_db_ctx() as conn:
+            rows = conn.execute(
+                "SELECT source_game_id, source_system_id, target_system_id, id FROM ripple_events"
+            ).fetchall()
+        assert any(r["source_game_id"] == game_id for r in rows)
+
+        GAME_STORE.pop(game_id, None)
+
+    def test_sub_surface_explore_creates_ripples_in_shared_universe(self) -> None:
+        from backend.models.system import Body
+        from backend.multiplayer.database import get_db_ctx
+
+        resp = client.post("/api/game/new", json={"shared_universe": True})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+
+        source = state.get_current_system()
+
+        body = Body(
+            id="ripple_sub_body",
+            name="RippleSub",
+            body_type="planet",
+            size=5,
+            distance_from_star=0.5,
+            biome="volcanic",
+            poi_count=3,
+        )
+        state.get_current_system().bodies.append(body)
+        game_save(state)
+
+        resp = client.post(f"/api/game/{game_id}/land/ripple_sub_body")
+        assert resp.status_code == 200
+
+        resp = client.post(f"/api/game/{game_id}/sub-surface-explore")
+        assert resp.status_code == 200
+
+        with get_db_ctx() as conn:
+            rows = conn.execute(
+                "SELECT source_game_id, source_system_id, target_system_id, id FROM ripple_events"
+            ).fetchall()
+        assert any(r["source_game_id"] == game_id for r in rows)
+
+        GAME_STORE.pop(game_id, None)
+
+    def test_explore_does_not_create_ripples_in_single_player(self) -> None:
+        from backend.multiplayer.database import get_db_ctx
+
+        resp = client.post("/api/game/new", json={"shared_universe": False, "seed": 7})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        assert state.shared_universe is False
+
+        body = state.get_current_system().bodies[0]
+        body.poi_count = 3
+        state.ship.current_body_id = body.id
+        game_save(state)
+
+        resp = client.post(f"/api/game/{game_id}/explore")
+        assert resp.status_code == 200
+        assert len(resp.json()["discoveries"]) >= 1
+
+        with get_db_ctx() as conn:
+            rows = conn.execute(
+                "SELECT source_game_id, source_system_id, target_system_id, id FROM ripple_events"
+            ).fetchall()
+        assert not any(r["source_game_id"] == game_id for r in rows)
+
+        GAME_STORE.pop(game_id, None)
+
+
+# ---------------------------------------------------------------------------
 # TestCrossroadsPublicViews
 # ---------------------------------------------------------------------------
 
