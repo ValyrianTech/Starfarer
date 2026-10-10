@@ -11,7 +11,7 @@ import json
 import sqlite3
 from collections.abc import Generator
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from backend.config import DATA_DIR, DB_PATH
 
@@ -125,7 +125,7 @@ def create_game(game_id: str, seed: int, ship_name: str, state: dict) -> None:
     state_data = dict(state) if isinstance(state, dict) else {}
     state_data.pop("token", None)
     with get_db_ctx() as conn:
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         existing = conn.execute(
             "SELECT created_at FROM games WHERE id = ?",
             (game_id,),
@@ -254,7 +254,7 @@ def save_game(game_id: str, state: dict) -> None:
     state_data = dict(state) if isinstance(state, dict) else {}
     state_data.pop("token", None)
     with get_db_ctx() as conn:
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         existing = conn.execute(
             "SELECT created_at, seed, ship_name FROM games WHERE id = ?",
             (game_id,),

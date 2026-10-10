@@ -76,6 +76,7 @@ from backend.missions import (
 )
 from backend.models.faction import get_faction
 from backend.models.game_state import GameState, is_lore_fragment_collected
+from backend.multiplayer.ripples import create_ripple
 from backend.utils import deterministic_hash, seeded_random
 
 logger = logging.getLogger(__name__)
@@ -550,6 +551,9 @@ def api_atmospheric_scan(game_id: str, x_game_token: str | None = Header(default
         ok, discoveries = perform_atmospheric_scan(state)
         if not ok:
             raise HTTPException(status_code=400, detail="Atmospheric scan not possible here.")
+        if state.shared_universe and discoveries:
+            for disc in discoveries:
+                create_ripple(state, disc)
         game_save(state)
         return {
             "result": f"Atmospheric scan complete. Found {len(discoveries)} phenomena.",
@@ -583,6 +587,9 @@ def api_sub_surface_explore(game_id: str, x_game_token: str | None = Header(defa
         ok, discoveries = perform_sub_surface_exploration(state)
         if not ok:
             raise HTTPException(status_code=400, detail="Sub-surface exploration not possible here.")
+        if state.shared_universe and discoveries:
+            for disc in discoveries:
+                create_ripple(state, disc)
         game_save(state)
         return {
             "result": f"Sub-surface exploration complete. Found {len(discoveries)} discoveries.",
@@ -617,6 +624,9 @@ def api_explore(game_id: str, x_game_token: str | None = Header(default=None)) -
         ok, msg, discoveries = explore_surface(state)
         if not ok:
             raise HTTPException(status_code=400, detail=msg)
+        if state.shared_universe and discoveries:
+            for disc in discoveries:
+                create_ripple(state, disc)
 
         lore_fragment_map = {lf.id: lf for lf in state.lore_fragments}
         lore_fragments_found = []

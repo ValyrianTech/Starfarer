@@ -8,7 +8,7 @@ Uses the same database file as the main application via
 """
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from backend.database import get_db_ctx
 from backend.multiplayer.models import (
@@ -560,7 +560,7 @@ def get_recent_messages(limit: int = 50) -> list[CrossroadsMessage]:
         by creation time descending.
     :rtype: list[CrossroadsMessage]
     """
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     with get_db_ctx() as conn:
         rows = conn.execute(
             "SELECT * FROM crossroads_messages WHERE expires_at > ? "
@@ -597,7 +597,7 @@ def get_recent_messages_paginated(page: int = 1, per_page: int = 10) -> tuple[li
     per_page = min(max(1, per_page), 50)
     page = max(1, page)
     offset = (page - 1) * per_page
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     with get_db_ctx() as conn:
         total = conn.execute(
             "SELECT COUNT(*) FROM crossroads_messages WHERE expires_at > ?",
@@ -626,7 +626,7 @@ def cleanup_expired_messages() -> int:
     :returns: The number of rows deleted.
     :rtype: int
     """
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     with get_db_ctx() as conn:
         cursor = conn.execute(
             "DELETE FROM crossroads_messages WHERE expires_at <= ?",
@@ -681,7 +681,7 @@ def get_pending_ripples(game_id: str) -> list[RippleEvent]:
     :returns: A list of pending :class:`RippleEvent` instances.
     :rtype: list[RippleEvent]
     """
-    cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    cutoff = (datetime.now(UTC) - timedelta(days=7)).isoformat()
     with get_db_ctx() as conn:
         rows = conn.execute(
             "SELECT * FROM ripple_events WHERE created_at > ? ORDER BY created_at DESC",
@@ -719,7 +719,7 @@ def get_pending_ripples_for_system(game_id: str, system_id: str) -> list[RippleE
     :returns: A list of pending :class:`RippleEvent` instances.
     :rtype: list[RippleEvent]
     """
-    cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    cutoff = (datetime.now(UTC) - timedelta(days=7)).isoformat()
     with get_db_ctx() as conn:
         rows = conn.execute(
             "SELECT * FROM ripple_events WHERE created_at > ? AND target_system_id = ? ORDER BY created_at DESC",

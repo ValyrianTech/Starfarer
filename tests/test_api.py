@@ -4,7 +4,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import patch
 
 import pytest
@@ -358,7 +358,7 @@ class TestAPILeaderboardMalformedState:
     def test_leaderboard_skips_malformed_json(self) -> None:
         """Insert a game with invalid JSON in state_json; leaderboard should skip it."""
         from backend.database import _opaque_entry_id, get_db
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         conn = get_db()
         try:
             conn.execute(
@@ -377,7 +377,7 @@ class TestAPILeaderboardMalformedState:
     def test_leaderboard_skips_empty_state_json(self) -> None:
         """Insert a game with an empty string in state_json; leaderboard should skip it."""
         from backend.database import _opaque_entry_id, get_db
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         conn = get_db()
         try:
             conn.execute(
@@ -396,7 +396,7 @@ class TestAPILeaderboardMalformedState:
     def test_leaderboard_skips_null_state_json(self) -> None:
         """Insert a game with a non-string state_json value (causes TypeError); leaderboard should skip it."""
         from backend.database import _opaque_entry_id, get_db
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         conn = get_db()
         try:
             conn.execute(
@@ -415,7 +415,7 @@ class TestAPILeaderboardMalformedState:
     def test_leaderboard_mixed_valid_and_malformed(self) -> None:
         """Insert mixed valid and malformed entries; only valid ones should appear in the leaderboard."""
         from backend.database import _opaque_entry_id, get_db
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         resp = client.post("/api/game/new", json={"seed": 42, "game_id": "mixed-valid-1"})
         assert resp.status_code == 200
         conn = get_db()
@@ -442,7 +442,7 @@ class TestAPILeaderboardMalformedState:
     def test_get_leaderboard_direct_malformed(self) -> None:
         """Directly call get_leaderboard with malformed state_json to ensure coverage of except block."""
         from backend.database import _opaque_entry_id, get_db, get_leaderboard
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         conn = get_db()
         try:
             conn.execute(
@@ -459,7 +459,7 @@ class TestAPILeaderboardMalformedState:
     def test_leaderboard_non_dict_ship_null_returns_200(self) -> None:
         """Insert a game with ship=null; the leaderboard should return 200 with credits 0."""
         from backend.database import _opaque_entry_id, get_db
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         conn = get_db()
         try:
             conn.execute(
@@ -4355,10 +4355,10 @@ class TestSpectateStreamEndpoint:
             GAME_STORE.pop("spectate-stream-lru-other", None)
 
     def test_games_skips_invalid_state_json(self) -> None:
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         from backend.database import get_db
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         conn = get_db()
         try:
             conn.execute(
@@ -4380,10 +4380,10 @@ class TestSpectateStreamEndpoint:
 
     def test_games_non_dict_ship_state_json(self) -> None:
         """A persisted state_json with ship=null should not crash the games listing."""
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         from backend.database import get_db
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         conn = get_db()
         try:
             conn.execute(
@@ -4403,10 +4403,10 @@ class TestSpectateStreamEndpoint:
 
     def test_games_non_dict_ship_list_state_json(self) -> None:
         """A persisted state_json with ship as a list should not crash the games listing."""
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         from backend.database import get_db
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         conn = get_db()
         try:
             conn.execute(

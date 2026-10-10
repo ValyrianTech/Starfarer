@@ -8,7 +8,7 @@ landing, surface exploration, and nearby system discovery.
 import logging
 import random
 from collections.abc import Callable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, NamedTuple
 
 from backend.config import (
@@ -462,7 +462,7 @@ def explore_surface(state: GameState) -> tuple[bool, str, list[Discovery]]:
             # stored, so a dropped discovery cannot orphan the lore fragment.
             accepted[0].lore_fragment_id = lore_frag.id
             lore_frag.discovered = True
-            lore_frag.discovery_timestamp = datetime.now(timezone.utc).isoformat()
+            lore_frag.discovery_timestamp = datetime.now(UTC).isoformat()
             state.add_log("lore", f"Discovered lore fragment: {lore_frag.title} ({lore_frag.id}).", category="discovery", title="Lore Fragment Discovered", system=system.name, body=body.name)
 
     state.add_log("exploration", f"Explored {body.name}. Found {len(accepted)} points of interest.", category="exploration", title="Surface Exploration", system=system.name, body=body.name, fuel_change=-EXPLORE_FUEL_COST)

@@ -7,6 +7,8 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
+from datetime import UTC
+
 from backend.config import (
     ATMOSPHERIC_SCAN_FUEL_COST,
     EXPLORE_FUEL_COST,
@@ -2063,11 +2065,11 @@ class TestDatabaseGetLeaderboard:
 
     def test_leaderboard_malformed_non_dict(self) -> None:
         """json.loads returns a non-dict; leaderboard should skip it."""
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         from backend.database import _opaque_entry_id, get_db, get_leaderboard, init_db
         init_db()
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         conn = get_db()
         try:
             conn.execute(
@@ -2083,11 +2085,11 @@ class TestDatabaseGetLeaderboard:
 
     def test_leaderboard_skips_bad_json(self) -> None:
         """get_leaderboard should skip entries that can't be JSON parsed."""
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         from backend.database import _opaque_entry_id, get_db, get_leaderboard, init_db
         init_db()
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         conn = get_db()
         try:
             conn.execute(
@@ -2103,11 +2105,11 @@ class TestDatabaseGetLeaderboard:
 
     def test_leaderboard_non_dict_ship_null(self) -> None:
         """A ship value of null should not crash the leaderboard."""
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         from backend.database import _opaque_entry_id, get_db, get_leaderboard, init_db
         init_db()
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         conn = get_db()
         try:
             conn.execute(
@@ -2123,11 +2125,11 @@ class TestDatabaseGetLeaderboard:
 
     def test_leaderboard_non_dict_ship_list(self) -> None:
         """A ship value that is a list should not crash the leaderboard."""
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         from backend.database import _opaque_entry_id, get_db, get_leaderboard, init_db
         init_db()
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         conn = get_db()
         try:
             conn.execute(
@@ -2143,11 +2145,11 @@ class TestDatabaseGetLeaderboard:
 
     def test_leaderboard_non_dict_ship_string(self) -> None:
         """A ship value that is a string should not crash the leaderboard."""
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         from backend.database import _opaque_entry_id, get_db, get_leaderboard, init_db
         init_db()
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         conn = get_db()
         try:
             conn.execute(
@@ -2163,11 +2165,11 @@ class TestDatabaseGetLeaderboard:
 
     def test_leaderboard_ship_credits_non_int(self) -> None:
         """A non-integer credits value should default to 0."""
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         from backend.database import _opaque_entry_id, get_db, get_leaderboard, init_db
         init_db()
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         conn = get_db()
         try:
             conn.execute(
@@ -2183,11 +2185,11 @@ class TestDatabaseGetLeaderboard:
 
     def test_leaderboard_ship_credits_valid_int(self) -> None:
         """A valid integer credits value should be reported as-is."""
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         from backend.database import _opaque_entry_id, get_db, get_leaderboard, init_db
         init_db()
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         conn = get_db()
         try:
             conn.execute(

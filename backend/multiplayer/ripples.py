@@ -7,12 +7,11 @@ significant discovery, alerting other travellers in those systems.
 """
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from backend.generation.universe import distance_between
 from backend.models.discovery import Discovery
 from backend.models.game_state import GameState
-from backend.models.system import StarSystem
 from backend.multiplayer.database import (
     acknowledge_ripple as db_acknowledge_ripple,
 )
@@ -30,7 +29,6 @@ _RIPPLE_RADIUS_LY = 5
 def create_ripple(
     source_game_state: GameState,
     discovery: Discovery,
-    all_systems: dict[str, StarSystem] | None = None,
 ) -> dict:
     """Create ripple events for nearby systems when a discovery is made.
 
@@ -38,16 +36,19 @@ def create_ripple(
     source system that are not the source itself. Each ripple is
     persisted for other players to discover within a 7-day lifetime.
 
+    ``source_game_state.systems`` is the full universe-wide system
+    dictionary (every system in the generated shared universe), so
+    ripples are propagated to ALL systems within the 5 LY radius
+    regardless of whether the discovering player has visited them. This
+    ensures cross-player ripple delivery in a shared universe, since all
+    shared-universe games are generated from the same canonical seed and
+    therefore share an identical ``systems`` dict. Per-player visitation
+    is intentionally NOT a filter here.
+
     :param source_game_state: The game state of the discovering player.
     :type source_game_state: GameState
     :param discovery: The discovery that triggered the ripple.
     :type discovery: Discovery
-    :param all_systems: Optional full universe systems dictionary.
-        When provided, ripples are propagated to all systems in this
-        dict within range, rather than only those the source player
-        has visited. Falls back to ``source_game_state.systems`` if
-        ``None``.
-    :type all_systems: Optional[dict[str, StarSystem]]
     :returns: A dictionary with ``ripples_created`` count and the list
         of created ripple event data.
     :rtype: dict
@@ -56,7 +57,7 @@ def create_ripple(
     if not source_system:
         return {"ripples_created": 0, "ripples": []}
 
-    systems_to_check = all_systems if all_systems is not None else source_game_state.systems
+    systems_to_check = source_game_state.systems
 
     ripples: list[dict] = []
     for sys_id, sys_data in systems_to_check.items():
@@ -75,7 +76,7 @@ def create_ripple(
             target_system_id=sys_id,
             discovery_type=discovery.category,
             discovery_name=discovery.name,
-            created_at=datetime.now(timezone.utc).isoformat(),
+            created_at=datetime.now(UTC).isoformat(),
         )
         save_ripple_event(ripple)
         ripples.append(ripple.to_dict())
