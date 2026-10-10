@@ -1829,8 +1829,6 @@ class TestRippleRouteIntegration:
         game_id = resp.json()["game_id"]
         state = GAME_STORE[game_id]
 
-        source = state.get_current_system()
-
         body = Body(
             id="ripple_atmo_body",
             name="RippleAtmo",
@@ -1865,8 +1863,6 @@ class TestRippleRouteIntegration:
         assert resp.status_code == 200
         game_id = resp.json()["game_id"]
         state = GAME_STORE[game_id]
-
-        source = state.get_current_system()
 
         body = Body(
             id="ripple_sub_body",
