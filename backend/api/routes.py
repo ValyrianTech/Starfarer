@@ -552,7 +552,8 @@ def api_atmospheric_scan(game_id: str, x_game_token: str | None = Header(default
         if not ok:
             raise HTTPException(status_code=400, detail="Atmospheric scan not possible here.")
         if state.shared_universe and discoveries:
-            create_ripple(state, discoveries[-1])
+            for disc in discoveries:
+                create_ripple(state, disc)
         game_save(state)
         return {
             "result": f"Atmospheric scan complete. Found {len(discoveries)} phenomena.",
@@ -587,7 +588,8 @@ def api_sub_surface_explore(game_id: str, x_game_token: str | None = Header(defa
         if not ok:
             raise HTTPException(status_code=400, detail="Sub-surface exploration not possible here.")
         if state.shared_universe and discoveries:
-            create_ripple(state, discoveries[-1])
+            for disc in discoveries:
+                create_ripple(state, disc)
         game_save(state)
         return {
             "result": f"Sub-surface exploration complete. Found {len(discoveries)} discoveries.",
@@ -623,7 +625,8 @@ def api_explore(game_id: str, x_game_token: str | None = Header(default=None)) -
         if not ok:
             raise HTTPException(status_code=400, detail=msg)
         if state.shared_universe and discoveries:
-            create_ripple(state, discoveries[-1])
+            for disc in discoveries:
+                create_ripple(state, disc)
 
         lore_fragment_map = {lf.id: lf for lf in state.lore_fragments}
         lore_fragments_found = []
