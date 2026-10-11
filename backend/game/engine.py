@@ -1063,15 +1063,15 @@ def emergency_craft(state: GameState, discovery_id: str, output: str) -> dict:
         ``crafted``, and ``effects`` on success.
     :rtype: dict
     """
-    matching_disc = None
-    matching_idx = None
+    matching_disc: Discovery | None = None
+    matching_idx: int | None = None
     for idx, disc in enumerate(state.discoveries):
         if disc.id == discovery_id:
             matching_disc = disc
             matching_idx = idx
             break
 
-    if matching_disc is None:
+    if matching_disc is None or matching_idx is None:
         return {"error": f"Discovery {discovery_id} not found."}
 
     category = matching_disc.category
