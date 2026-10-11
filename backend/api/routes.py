@@ -1719,10 +1719,25 @@ def api_dismiss_hint(game_id: str, req: DismissHintRequest, x_game_token: str | 
 def api_leaderboard() -> dict:
     """Retrieve the top 10 players from the leaderboard.
 
+    The leaderboard exposes player-chosen ship names and in-game wealth,
+    which is cross-tenant identity-ish data. It is therefore disabled
+    whenever per-game token enforcement is enabled (the secure default),
+    mirroring the guard used by the spectator game listing. Operators who
+    run a purely local, single-user deployment can opt back in via
+    STARFARER_ALLOW_NO_AUTH.
+
     :returns: A dictionary with ``leaderboard`` (list of leaderboard
         entry dicts).
     :rtype: dict
+    :raises HTTPException: 403 if STARFARER_REQUIRE_GAME_TOKEN enforcement
+        is enabled (the leaderboard cannot be authoritatively scoped to a
+        single caller, so it is disabled while enforcement is on).
     """
+    if get_require_game_token():
+        raise HTTPException(
+            status_code=403,
+            detail="Leaderboard disabled while game token enforcement is enabled",
+        )
     return {
         "leaderboard": get_leaderboard(limit=10),
     }

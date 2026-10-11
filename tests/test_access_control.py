@@ -793,6 +793,22 @@ class TestSpectateEnforcement:
             GAME_STORE.pop(other_gid, None)
 
 
+class TestLeaderboardEnforcement:
+    def test_leaderboard_disabled_when_enforcement_enabled(self, monkeypatch) -> None:
+        monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        monkeypatch.delenv("STARFARER_ALLOW_NO_AUTH", raising=False)
+        resp = client.get("/api/leaderboard")
+        assert resp.status_code == 403
+        assert resp.json()["detail"] == "Leaderboard disabled while game token enforcement is enabled"
+
+    def test_leaderboard_allowed_when_enforcement_disabled(self, monkeypatch) -> None:
+        monkeypatch.setenv("STARFARER_ALLOW_NO_AUTH", "1")
+        monkeypatch.delenv("STARFARER_REQUIRE_GAME_TOKEN", raising=False)
+        resp = client.get("/api/leaderboard")
+        assert resp.status_code == 200
+        assert "leaderboard" in resp.json()
+
+
 class TestStreamTicketStore:
     """Unit tests for the short-lived, single-use stream-ticket store."""
 
