@@ -1064,12 +1064,14 @@ def emergency_craft(state: GameState, discovery_id: str, output: str) -> dict:
     :rtype: dict
     """
     matching_disc = None
-    for disc in state.discoveries:
+    matching_idx = None
+    for idx, disc in enumerate(state.discoveries):
         if disc.id == discovery_id:
             matching_disc = disc
+            matching_idx = idx
             break
 
-    if not matching_disc:
+    if matching_disc is None:
         return {"error": f"Discovery {discovery_id} not found."}
 
     category = matching_disc.category
@@ -1082,7 +1084,7 @@ def emergency_craft(state: GameState, discovery_id: str, output: str) -> dict:
     if output != expected_output:
         return {"error": f"Discovery type '{category}' can only be crafted into '{expected_output}', not '{output}'."}
 
-    state.discoveries.remove(matching_disc)
+    state.discoveries.pop(matching_idx)
     state.sync_cargo()
 
     ship = state.ship
