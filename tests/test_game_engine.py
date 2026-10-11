@@ -3020,6 +3020,29 @@ class TestEmergencyCraft:
         assert "error" not in result
         assert len(state.discoveries) == 0
 
+    # Characterization test of the observable contract: emergency_craft
+    # selects the discovery by its unique ``id`` and removes exactly that
+    # element, leaving value-identical siblings (differing only by id) untouched.
+    def test_emergency_craft_removes_discovery_matching_id_and_keeps_others(self) -> None:
+        state = new_game(seed=42)
+        first = Discovery(
+            id="collide_first", category="artifact", name="Duplicate Relic",
+            description="Same", value=50, system_id="sys1", body_id="body1",
+        )
+        second = Discovery(
+            id="collide_second", category="artifact", name="Duplicate Relic",
+            description="Same", value=50, system_id="sys1", body_id="body1",
+        )
+        state.discoveries.append(first)
+        state.discoveries.append(second)
+        result = emergency_craft(state, "collide_second", "fuel")
+        assert "error" not in result
+        assert result["crafted"] == "fuel"
+        assert first in state.discoveries
+        assert second not in state.discoveries
+        assert len(state.discoveries) == 1
+        assert state.ship.cargo == 1
+
     def test_emergency_craft_unknown_output_fallback(self) -> None:
         from unittest.mock import patch
         state = new_game(seed=42)
