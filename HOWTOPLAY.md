@@ -690,6 +690,8 @@ GET /api/leaderboard
 
 Top players ranked by discoveries and systems visited. Each entry exposes an opaque `entry_id` (a 12-character SHA-256 hex digest prefix of the raw game id) rather than the raw `game_id`, and omits the `seed` — the raw game id and seed are intentionally not exposed.
 
+> **Note:** `GET /api/leaderboard` returns HTTP 403 with detail `"Leaderboard disabled while game token enforcement is enabled"` while per-game token enforcement is enabled (the secure default). The response fields below apply only when the endpoint is enabled. For purely local, single-user play you can re-enable the endpoint by setting `STARFARER_ALLOW_NO_AUTH=1`.
+
 > **Breaking change:** This is a **deliberate breaking API change**. The original leaderboard response exposed each game's raw `game_id` and `seed`, which let an unauthenticated caller harvest game ids and read any game's full state by default. The new response does **not** contain `game_id` or `seed`; it returns a stable, non-reversible opaque `entry_id` instead.
 
 **Response fields** (one object per leaderboard entry):
