@@ -3020,6 +3020,24 @@ class TestEmergencyCraft:
         assert "error" not in result
         assert len(state.discoveries) == 0
 
+    def test_emergency_craft_removes_exact_discovery_when_values_collide(self) -> None:
+        state = new_game(seed=42)
+        first = Discovery(
+            id="collide_first", category="artifact", name="Duplicate Relic",
+            description="Same", value=50, system_id="sys1", body_id="body1",
+        )
+        second = Discovery(
+            id="collide_second", category="artifact", name="Duplicate Relic",
+            description="Same", value=50, system_id="sys1", body_id="body1",
+        )
+        state.discoveries.append(first)
+        state.discoveries.append(second)
+        result = emergency_craft(state, "collide_second", "fuel")
+        assert "error" not in result
+        assert first in state.discoveries
+        assert second not in state.discoveries
+        assert state.ship.cargo == len(state.discoveries)
+
     def test_emergency_craft_unknown_output_fallback(self) -> None:
         from unittest.mock import patch
         state = new_game(seed=42)
