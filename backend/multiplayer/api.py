@@ -326,14 +326,15 @@ def api_crossroads_items(
     :raises HTTPException: 403/404 when token enforcement is enabled and the
         token is missing/invalid or the game cannot be resolved.
     """
-    _authorize_game(game_id, x_game_token)
-    page = max(1, page)
-    per_page = max(1, min(per_page, 50))
-    all_items = get_available_items_list()
-    total = len(all_items)
-    start = (page - 1) * per_page
-    items = [_public_item_view(i) for i in all_items[start : start + per_page]]
-    total_pages = math.ceil(total / per_page)
+    with _get_lock(game_id):
+        _authorize_game(game_id, x_game_token)
+        page = max(1, page)
+        per_page = max(1, min(per_page, 50))
+        all_items = get_available_items_list()
+        total = len(all_items)
+        start = (page - 1) * per_page
+        items = [_public_item_view(i) for i in all_items[start : start + per_page]]
+        total_pages = math.ceil(total / per_page)
     return {
         "items": items,
         "page": page,
@@ -439,14 +440,15 @@ def api_crossroads_lore(
     :raises HTTPException: 403/404 when token enforcement is enabled and the
         token is missing/invalid or the game cannot be resolved.
     """
-    _authorize_game(game_id, x_game_token)
-    page = max(1, page)
-    per_page = max(1, min(per_page, 50))
-    all_lore = get_available_lore_list()
-    total = len(all_lore)
-    start = (page - 1) * per_page
-    lore = [_public_lore_view(l) for l in all_lore[start : start + per_page]]
-    total_pages = math.ceil(total / per_page)
+    with _get_lock(game_id):
+        _authorize_game(game_id, x_game_token)
+        page = max(1, page)
+        per_page = max(1, min(per_page, 50))
+        all_lore = get_available_lore_list()
+        total = len(all_lore)
+        start = (page - 1) * per_page
+        lore = [_public_lore_view(l) for l in all_lore[start : start + per_page]]
+        total_pages = math.ceil(total / per_page)
     return {
         "lore": lore,
         "page": page,
@@ -551,11 +553,12 @@ def api_crossroads_messages(
     :raises HTTPException: 403/404 when token enforcement is enabled and the
         token is missing/invalid or the game cannot be resolved.
     """
-    _authorize_game(game_id, x_game_token)
-    result = get_messages(page=page, per_page=per_page)
-    if page > result["total_pages"] and result["total_messages"] > 0:
-        raise HTTPException(status_code=404, detail="Page out of range")
-    result["messages"] = [_public_message_view(m) for m in result["messages"]]
+    with _get_lock(game_id):
+        _authorize_game(game_id, x_game_token)
+        result = get_messages(page=page, per_page=per_page)
+        if page > result["total_pages"] and result["total_messages"] > 0:
+            raise HTTPException(status_code=404, detail="Page out of range")
+        result["messages"] = [_public_message_view(m) for m in result["messages"]]
     return result
 
 
