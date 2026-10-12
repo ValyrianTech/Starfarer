@@ -231,11 +231,14 @@ async def api_spectate_stream(
     must authenticate either with the game's token via the
     ``X-Game-Token`` header, or with a short-lived, single-use ticket
     obtained from ``POST /api/spectate/{game_id}/stream-ticket`` and
-    supplied via the ``ticket`` query parameter. The ticket exists solely
-    because browsers cannot set headers on ``EventSource`` connections;
-    the long-lived game token is deliberately never accepted in the URL so
-    it cannot leak through logs, proxy caches, browser history or
-    ``Referer`` headers.
+    supplied via the ``ticket`` query parameter. The ticket is tried
+    first (browser clients cannot set headers on ``EventSource``), so a
+    valid ticket authorizes the request even when a stray/bogus header is
+    present; the header is only checked when the ticket did not authorize.
+    The ticket exists solely because browsers cannot set headers on
+    ``EventSource`` connections; the long-lived game token is deliberately
+    never accepted in the URL so it cannot leak through logs, proxy
+    caches, browser history or ``Referer`` headers.
 
     :param game_id: The unique identifier of the game to spectate.
     :type game_id: str
@@ -251,13 +254,15 @@ async def api_spectate_stream(
         enforcement is enabled and neither the header token nor a valid
         ticket authorizes the request.
     """
-    if x_game_token is not None:
-        _authorize_game(game_id, x_game_token)
-    elif ticket is not None and stream_tickets.consume_stream_ticket(
-        ticket, game_id
-    ):
-        pass
-    else:
+    # Try the ticket first (browser path), then fall back to the header.
+    authorized = False
+    if ticket is not None and stream_tickets.consume_stream_ticket(ticket, game_id):
+        authorized = True
+    if not authorized and x_game_token is not None:
+        _authorize_game(game_id, x_game_token)  # raises 403/404 on failure
+        authorized = True
+    if not authorized:
+        # Enforcement may be disabled; this raises only when enforcement is on.
         _authorize_game(game_id, None)
     if _get_state(game_id) is None:
         raise HTTPException(status_code=404, detail="Game not found")

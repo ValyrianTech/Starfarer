@@ -673,6 +673,27 @@ class TestSpectateEnforcement:
             GAME_STORE.pop(gid, None)
             GAME_STORE.pop(other_gid, None)
 
+    def test_stream_valid_ticket_wins_over_bogus_header(self, monkeypatch) -> None:
+        import asyncio
+
+        from backend.api.spectate import api_spectate_stream
+
+        monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
+        monkeypatch.delenv("STARFARER_ALLOW_NO_AUTH", raising=False)
+        data = _new_game_via_api()
+        gid = data["game_id"]
+        try:
+            ticket = stream_tickets.issue_stream_ticket(gid)
+            # A stray/bogus X-Game-Token header must not shadow the valid ticket.
+            response = asyncio.run(
+                api_spectate_stream(gid, ticket=ticket, x_game_token="not-a-real-token")
+            )
+            assert response.media_type == "text/event-stream"
+            # The single-use ticket was consumed by the successful request.
+            assert stream_tickets.consume_stream_ticket(ticket, gid) is False
+        finally:
+            GAME_STORE.pop(gid, None)
+
     def test_stream_ticket_creation_endpoint(self, monkeypatch) -> None:
         monkeypatch.setenv("STARFARER_REQUIRE_GAME_TOKEN", "1")
         monkeypatch.delenv("STARFARER_ALLOW_NO_AUTH", raising=False)
