@@ -7,6 +7,7 @@ landing, surface exploration, and nearby system discovery.
 
 import logging
 import random
+import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any, NamedTuple
@@ -712,7 +713,7 @@ def _generate_discovery(rng: random.Random, category: str, body: Body, system: S
             "A lichen that emits a harmonic resonance when touched.",
         ],
     }
-    d_id = f"{rng.getrandbits(48):012x}"
+    d_id = uuid.uuid4().hex[:12]
     name = rng.choice(names[category])
     desc = rng.choice(descs[category])
     # Value ranges by category
@@ -1015,7 +1016,7 @@ def perform_salvage(state: GameState) -> dict:
         }
     elif roll < 0.9:
         spare_value = rng.randint(10, 50)
-        d_id = f"{rng.getrandbits(48):012x}"
+        d_id = uuid.uuid4().hex[:12]
         disc = Discovery(
             id=d_id, category="artifact", name="Salvaged Spare Parts",
             description="Recovered spare parts from a wreckage in the area.",
