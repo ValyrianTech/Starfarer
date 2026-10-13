@@ -784,8 +784,8 @@ class TestSpectateEnforcement:
         assert any("event: end" in c for c in chunks)
         GAME_STORE.pop(gid, None)
 
-    def test_stream_ticket_rejected_then_consumed_when_bound(self, monkeypatch) -> None:
-        """A mismatched ticket is consumed (single-use) on failed redemption."""
+    def test_stream_mismatched_ticket_not_consumed(self, monkeypatch) -> None:
+        """A ticket bound to another game is rejected but NOT burned."""
         import asyncio
 
         from fastapi import HTTPException
@@ -800,14 +800,15 @@ class TestSpectateEnforcement:
         other_gid = other["game_id"]
         try:
             ticket = stream_tickets.issue_stream_ticket(other_gid)
-            with pytest.raises(HTTPException):
+            with pytest.raises(HTTPException) as exc:
                 asyncio.run(
                     api_spectate_stream(gid, ticket=ticket, x_game_token=None)
                 )
-            # Now that ticket (for other_gid) is gone and cannot authorize
-            # other_gid via the header-less path either.
+            assert exc.value.status_code == 403
+            # The mismatched ticket was NOT consumed and can still be
+            # redeemed for the game it was bound to.
             assert (
-                stream_tickets.consume_stream_ticket(ticket, other_gid) is False
+                stream_tickets.consume_stream_ticket(ticket, other_gid) is True
             )
         finally:
             GAME_STORE.pop(gid, None)
