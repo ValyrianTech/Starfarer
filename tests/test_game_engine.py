@@ -440,6 +440,40 @@ class TestExploreEdgeCases:
             assert state.ship.fuel == fuel_before  # fuel should NOT be deducted
 
 
+class TestDiscoveryIdUniqueness:
+    """Tests that generated discovery IDs are unique and independent of inventory size."""
+
+    def test_explore_surface_ids_unique_across_sells(self) -> None:
+        """Re-exploring with the same inventory size must not reuse discovery IDs."""
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
+        if not planet:
+            return  # pragma: no cover  # no planet in starting system
+        land_on_body(state, planet.id)
+        planet.poi_count = 100
+        planet.exploration_count = 0
+        state.discoveries.clear()
+        state.sync_cargo()
+
+        ok1, _msg1, discoveries1 = explore_surface(state)
+        assert ok1 is True
+        assert len(discoveries1) > 0
+
+        state.discoveries.clear()
+        state.sync_cargo()
+        planet.exploration_count = 0
+
+        ok2, _msg2, discoveries2 = explore_surface(state)
+        assert ok2 is True
+        assert len(discoveries2) > 0
+
+        all_discs = discoveries1 + discoveries2
+        assert len({d.id for d in all_discs}) == len(all_discs)
+        assert {d.id for d in discoveries1}.isdisjoint({d.id for d in discoveries2})
+
+
 class TestTradingAdvanced:
     """Tests for trading functions covering sell, repair, and edge cases."""
 
@@ -2794,6 +2828,22 @@ class TestSalvage:
         assert result["find"] == "nothing"
         assert "Nothing useful" in result["result"]
         assert "error" not in result
+
+    def test_perform_salvage_spare_parts_ids_unique(self) -> None:
+        """Two spare-parts salvages must produce distinct discovery IDs."""
+        from unittest.mock import MagicMock, patch
+        state = self._make_salvage_state()
+        mock_rng = MagicMock()
+        mock_rng.random.side_effect = [0.8, 0.8]
+        mock_rng.randint.side_effect = [30, 40]
+        with patch("backend.game.engine.seeded_random", return_value=mock_rng):
+            result1 = perform_salvage(state)
+            result2 = perform_salvage(state)
+        assert result1["find"] == "spare_parts"
+        assert result2["find"] == "spare_parts"
+        spare_ids = [d.id for d in state.discoveries if d.name == "Salvaged Spare Parts"]
+        assert len(spare_ids) == 2
+        assert len(set(spare_ids)) == 2
 
     def test_perform_salvage_spare_parts_full_hold_does_not_consume_costs(self) -> None:
         from unittest.mock import MagicMock, patch
