@@ -50,10 +50,13 @@ def issue_stream_ticket(game_id: str) -> str:
 def consume_stream_ticket(ticket: str, game_id: str) -> bool:
     """Redeem a stream ticket exactly once for the matching game.
 
-    The ticket is always removed from the store when present (single-use),
-    regardless of whether it is still valid, so a ticket can never be
-    replayed. Returns ``True`` only when the ticket existed, was bound to
-    the same ``game_id``, and had not yet expired.
+    The ticket is removed from the store ONLY when it exists AND is bound
+    to the requested ``game_id``. A ticket bound to a different game is
+    left untouched (peek-then-pop under the lock) so it cannot be burned
+    by an attacker presenting it to a different game's stream. A matching
+    ticket is always popped (single-use), even when expired. Returns
+    ``True`` only when the ticket existed, matched ``game_id``, and had not
+    yet expired.
 
     :param ticket: The ticket string supplied by the caller, or ``None``.
     :type ticket: str
@@ -65,10 +68,11 @@ def consume_stream_ticket(ticket: str, game_id: str) -> bool:
     if not isinstance(ticket, str) or not ticket:
         return False
     with _STREAM_TICKETS_LOCK:
-        entry = _STREAM_TICKETS.pop(ticket, None)
-    if entry is None:
-        return False
-    bound_game_id, expiry = entry
-    if bound_game_id != game_id:
-        return False
+        entry = _STREAM_TICKETS.get(ticket)
+        if entry is None:
+            return False
+        bound_game_id, expiry = entry
+        if bound_game_id != game_id:
+            return False          # do NOT pop a ticket bound to another game
+        _STREAM_TICKETS.pop(ticket, None)
     return expiry > time.monotonic()
