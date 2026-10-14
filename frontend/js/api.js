@@ -1,10 +1,12 @@
 const API_BASE = '/api';
 
 async function apiCall(method, path, body = null) {
-  const opts = {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-  };
+  const headers = { 'Content-Type': 'application/json' };
+  const token = typeof getGameToken === 'function' ? getGameToken() : null;
+  if (token) {
+    headers['X-Game-Token'] = token;
+  }
+  const opts = { method, headers };
   if (body) {
     opts.body = JSON.stringify(body);
   }
