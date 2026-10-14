@@ -86,6 +86,7 @@ async function handleAction(action, target) {
         const data = await API.newGame(seed, name, GAME_ID || undefined);
         GAME_ID = data.game_id;
         setGameId(GAME_ID);
+        if (data.token) setGameToken(data.token);
         updateGameState(data.state);
 
         const sysId = data.state.ship?.current_system_id || data.state.current_system?.id;
