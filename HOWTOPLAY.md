@@ -56,7 +56,9 @@ POST /api/game/{game_id}/load
 
 ### 2.3 Start the Game (Browser)
 
-Navigate to the frontend URL. The game state is available as JSON-LD:
+Navigate to the frontend URL. The reference browser client automatically stores the per-game `token` returned by `POST /api/game/new` in localStorage under `starfarer_game_token` and sends it as the `X-Game-Token` header on every API call, so the reference UI works out of the box under the default-on token enforcement (no manual token handling needed).
+
+The game state is available as JSON-LD:
 
 ```javascript
 JSON.parse(document.getElementById('game-state').textContent)
