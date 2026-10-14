@@ -53,6 +53,17 @@ function getSavedGameId() {
   try { return localStorage.getItem('starfarer_game_id'); } catch (e) { return null; }
 }
 
+function getGameToken() {
+  try { return localStorage.getItem('starfarer_game_token'); } catch (e) { return null; }
+}
+
+function setGameToken(token) {
+  try {
+    if (token) localStorage.setItem('starfarer_game_token', token);
+    else localStorage.removeItem('starfarer_game_token');
+  } catch (e) {}
+}
+
 function escapeHtml(str) {
   if (typeof str !== 'string') return str;
   const div = document.createElement('div');
