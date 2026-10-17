@@ -92,7 +92,7 @@ _new_game_lock = Lock()
 _LOCK_STALE_THRESHOLD_SECONDS = 60.0
 _MAX_TRACKED_LOCKS = 1024
 _SWEEP_INTERVAL_SECONDS = 5.0
-_last_sweep: list[float] = [0.0]
+_last_sweep: float = 0.0
 
 
 def _get_lock(game_id: str) -> Lock:
@@ -111,13 +111,14 @@ def _get_lock(game_id: str) -> Lock:
     :returns: The per-game lock for ``game_id``.
     :rtype: Lock
     """
+    global _last_sweep
     with _lock_for_locks:
         now = time.time()
 
-        if (now - _last_sweep[0] > _SWEEP_INTERVAL_SECONDS) or (
+        if (now - _last_sweep > _SWEEP_INTERVAL_SECONDS) or (
             len(_game_locks) > _MAX_TRACKED_LOCKS
         ):
-            _last_sweep[0] = now
+            _last_sweep = now
             for gid in list(_game_locks.keys()):
                 if gid not in GAME_STORE and (
                     now - _lock_last_access.get(gid, 0) > _LOCK_STALE_THRESHOLD_SECONDS

@@ -4943,13 +4943,13 @@ class TestRoutesLocks:
         import backend.api.routes as routes_mod
 
         try:
-            routes_mod._last_sweep[0] = 0.0
+            routes_mod._last_sweep = 0.0
             with patch("backend.api.routes.time.time", return_value=1000.0):
                 routes_mod._get_lock("time-sweep-trigger-game")
-            assert routes_mod._last_sweep[0] == 1000.0
+            assert routes_mod._last_sweep == 1000.0
         finally:
             routes_mod._cleanup_game_lock("time-sweep-trigger-game")
-            routes_mod._last_sweep[0] = 0.0
+            routes_mod._last_sweep = 0.0
 
     def test_get_lock_time_sweep_preserves_recently_accessed(self) -> None:
         """A time-triggered sweep does NOT remove recently accessed locks."""
@@ -4966,14 +4966,14 @@ class TestRoutesLocks:
                 routes_mod._get_lock(game_id)
                 assert game_id in routes_mod._game_locks
 
-                routes_mod._last_sweep[0] = 0.0
+                routes_mod._last_sweep = 0.0
                 routes_mod._get_lock("time-sweep-recent-other")
 
             assert game_id in routes_mod._game_locks
         finally:
             routes_mod._cleanup_game_lock(game_id)
             routes_mod._cleanup_game_lock("time-sweep-recent-other")
-            routes_mod._last_sweep[0] = 0.0
+            routes_mod._last_sweep = 0.0
 
     def test_get_lock_time_sweep_removes_old_stale(self) -> None:
         """A time-triggered sweep removes locks not accessed past the stale threshold."""
@@ -4990,7 +4990,7 @@ class TestRoutesLocks:
                 routes_mod._get_lock(stale_id)
             assert stale_id in routes_mod._game_locks
 
-            routes_mod._last_sweep[0] = 0.0
+            routes_mod._last_sweep = 0.0
             with patch("backend.api.routes.time.time", return_value=1000.0):
                 routes_mod._get_lock("time-sweep-old-stale-other")
 
@@ -4998,7 +4998,7 @@ class TestRoutesLocks:
         finally:
             routes_mod._cleanup_game_lock(stale_id)
             routes_mod._cleanup_game_lock("time-sweep-old-stale-other")
-            routes_mod._last_sweep[0] = 0.0
+            routes_mod._last_sweep = 0.0
 
     def test_get_lock_time_sweep_preserves_held_lock(self) -> None:
         """A time-triggered sweep does NOT remove a lock that is currently held."""
@@ -5017,7 +5017,7 @@ class TestRoutesLocks:
 
             lock.acquire()
             try:
-                routes_mod._last_sweep[0] = 0.0
+                routes_mod._last_sweep = 0.0
                 with patch("backend.api.routes.time.time", return_value=1000.0):
                     routes_mod._get_lock("time-sweep-held-other")
             finally:
@@ -5027,7 +5027,7 @@ class TestRoutesLocks:
         finally:
             routes_mod._cleanup_game_lock(game_id)
             routes_mod._cleanup_game_lock("time-sweep-held-other")
-            routes_mod._last_sweep[0] = 0.0
+            routes_mod._last_sweep = 0.0
 
     def test_get_lock_time_sweep_removes_unheld_lock(self) -> None:
         """A time-triggered sweep removes a stale lock that is NOT currently held."""
@@ -5044,7 +5044,7 @@ class TestRoutesLocks:
                 routes_mod._get_lock(game_id)
             assert game_id in routes_mod._game_locks
 
-            routes_mod._last_sweep[0] = 0.0
+            routes_mod._last_sweep = 0.0
             with patch("backend.api.routes.time.time", return_value=1000.0):
                 routes_mod._get_lock("time-sweep-unheld-other")
 
@@ -5052,7 +5052,7 @@ class TestRoutesLocks:
         finally:
             routes_mod._cleanup_game_lock(game_id)
             routes_mod._cleanup_game_lock("time-sweep-unheld-other")
-            routes_mod._last_sweep[0] = 0.0
+            routes_mod._last_sweep = 0.0
 
     def test_cleanup_stale_locks_preserves_held_lock(self) -> None:
         """_cleanup_stale_locks should NOT remove a lock that is currently held."""
@@ -5231,14 +5231,14 @@ class TestRoutesLockRegistryBounded:
                     routes_mod._game_locks[gid] = threading.Lock()
                     routes_mod._lock_last_access[gid] = 1000.0
                     extra.append(gid)
-                routes_mod._last_sweep[0] = 1000.0
+                routes_mod._last_sweep = 1000.0
                 with patch("backend.api.routes.time.time", return_value=1000.0):
                     routes_mod._get_lock("size-sweep-new")
                 assert stale_id not in routes_mod._game_locks
         finally:
             for gid in [stale_id] + extra + ["size-sweep-new"]:
                 routes_mod._cleanup_game_lock(gid)
-            routes_mod._last_sweep[0] = 0.0
+            routes_mod._last_sweep = 0.0
 
     def test_time_triggered_sweep_removes_stale(self) -> None:
         """A time-triggered sweep removes stale locks when the interval elapsed."""
@@ -5250,14 +5250,14 @@ class TestRoutesLockRegistryBounded:
         try:
             with patch("backend.api.routes.time.time", return_value=0.0):
                 routes_mod._get_lock(stale_id)
-            routes_mod._last_sweep[0] = 0.0
+            routes_mod._last_sweep = 0.0
             with patch("backend.api.routes.time.time", return_value=1000.0):
                 routes_mod._get_lock("bounded-time-sweep-other")
             assert stale_id not in routes_mod._game_locks
         finally:
             routes_mod._cleanup_game_lock(stale_id)
             routes_mod._cleanup_game_lock("bounded-time-sweep-other")
-            routes_mod._last_sweep[0] = 0.0
+            routes_mod._last_sweep = 0.0
 
     def test_ensure_game_exists_unknown_raises_404(self) -> None:
         from fastapi import HTTPException
@@ -5325,12 +5325,12 @@ class TestRoutesLockRegistryBounded:
                 routes_mod._lock_last_access[target] = 0.0
                 routes_mod._lock_last_access[other] = 1.0
                 with patch("backend.api.routes.time.time", return_value=1000.0):
-                    routes_mod._last_sweep[0] = 1000.0
+                    routes_mod._last_sweep = 1000.0
                     with patch.object(routes_mod, "_game_locks", d):
                         lock = routes_mod._get_lock(target)
             assert lock is d[target]
         finally:
-            routes_mod._last_sweep[0] = 0.0
+            routes_mod._last_sweep = 0.0
             for gid in [target, other]:
                 routes_mod._lock_last_access.pop(gid, None)
                 routes_mod._cleanup_game_lock(gid)
@@ -5352,7 +5352,7 @@ class TestRoutesLockRegistryBounded:
         try:
             with patch.object(routes_mod, "_MAX_TRACKED_LOCKS", 2):
                 with patch("backend.api.routes.time.time", return_value=1000.0):
-                    routes_mod._last_sweep[0] = 1000.0
+                    routes_mod._last_sweep = 1000.0
                     for gid in held_ids:
                         lock = routes_mod._get_lock(gid)
                         lock.acquire()
@@ -5365,7 +5365,7 @@ class TestRoutesLockRegistryBounded:
                 lock.release()
             for gid in held_ids + [new_id]:
                 routes_mod._cleanup_game_lock(gid)
-            routes_mod._last_sweep[0] = 0.0
+            routes_mod._last_sweep = 0.0
 
 
 _INNER_404_CASES = [

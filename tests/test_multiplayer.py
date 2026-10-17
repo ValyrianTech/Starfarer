@@ -3113,16 +3113,16 @@ class TestMultiplayerAPI:
         import backend.api.routes as api_routes
 
         try:
-            api_routes._last_sweep[0] = 0.0
+            api_routes._last_sweep = 0.0
             with patch("backend.api.routes.time.time", return_value=1000.0):
                 for i in range(105):
                     lock = api_routes._get_lock(f"dummy-time-sweep-{i}")
                     assert lock is not None
-            assert api_routes._last_sweep[0] == 1000.0
+            assert api_routes._last_sweep == 1000.0
         finally:
             for i in range(105):
                 api_routes._cleanup_game_lock(f"dummy-time-sweep-{i}")
-            api_routes._last_sweep[0] = 0.0
+            api_routes._last_sweep = 0.0
 
     def test_get_lock_time_sweep_preserves_recently_accessed(self) -> None:
         """A time-triggered sweep does NOT remove recently accessed locks."""
@@ -3137,14 +3137,14 @@ class TestMultiplayerAPI:
                 _get_lock(game_id)
                 assert game_id in _game_locks
 
-                api_routes._last_sweep[0] = 0.0
+                api_routes._last_sweep = 0.0
                 _get_lock("recently-accessed-other")
 
             assert game_id in _game_locks
         finally:
             _cleanup_game_lock(game_id)
             _cleanup_game_lock("recently-accessed-other")
-            api_routes._last_sweep[0] = 0.0
+            api_routes._last_sweep = 0.0
 
     def test_get_lock_time_sweep_removes_old_stale(self) -> None:
         """A time-triggered sweep removes locks not accessed past the stale threshold."""
@@ -3159,7 +3159,7 @@ class TestMultiplayerAPI:
                 _get_lock(stale_id)
             assert stale_id in _game_locks
 
-            api_routes._last_sweep[0] = 0.0
+            api_routes._last_sweep = 0.0
             with patch("backend.api.routes.time.time", return_value=1000.0):
                 _get_lock("old-stale-time-sweep-other")
 
@@ -3167,7 +3167,7 @@ class TestMultiplayerAPI:
         finally:
             _cleanup_game_lock(stale_id)
             _cleanup_game_lock("old-stale-time-sweep-other")
-            api_routes._last_sweep[0] = 0.0
+            api_routes._last_sweep = 0.0
 
     def test_cleanup_game_lock_no_keyerror_with_time_sweep(self) -> None:
         """_cleanup_game_lock must not cause KeyError in _get_lock's sweep."""
@@ -3186,7 +3186,7 @@ class TestMultiplayerAPI:
                 # _get_lock's sweep is about to process it. Both now acquire
                 # _lock_for_locks, so this must not raise KeyError.
                 _cleanup_game_lock(stale_id)
-                api_routes._last_sweep[0] = 0.0
+                api_routes._last_sweep = 0.0
 
             with patch("backend.api.routes.time.time", return_value=1000.0):
                 _get_lock("race-condition-other")
@@ -3195,7 +3195,7 @@ class TestMultiplayerAPI:
         finally:
             _cleanup_game_lock(stale_id)
             _cleanup_game_lock("race-condition-other")
-            api_routes._last_sweep[0] = 0.0
+            api_routes._last_sweep = 0.0
 
     def test_cleanup_stale_locks_concurrent_safety(self) -> None:
         """Verify _cleanup_stale_locks is safe when called concurrently with _get_lock."""
