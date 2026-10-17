@@ -6,7 +6,6 @@ navigation, exploration, events, trading, upgrades, saving/loading,
 and the leaderboard.
 """
 
-import itertools
 import logging
 import secrets
 import time
@@ -88,19 +87,37 @@ router = APIRouter(prefix="/api")
 _game_locks: dict[str, Lock] = {}
 _lock_last_access: dict[str, float] = {}
 _lock_for_locks: Lock = Lock()
-_lock_access_count = itertools.count(1)
 _new_game_lock = Lock()
 
 _LOCK_STALE_THRESHOLD_SECONDS = 60.0
+_MAX_TRACKED_LOCKS = 1024
+_SWEEP_INTERVAL_SECONDS = 5.0
+_last_sweep: list[float] = [0.0]
 
 
 def _get_lock(game_id: str) -> Lock:
-    """Return a thread lock for the given game_id, creating one if needed."""
-    count = next(_lock_access_count)
+    """Return a thread lock for the given game_id, creating one if needed.
+
+    The lock registry is bounded so that unbounded distinct ``game_id``
+    values cannot exhaust memory. A sweep (removing stale, unlocked entries
+    for games no longer in ``GAME_STORE``) runs when either the sweep
+    interval has elapsed or the registry has grown past the hard cap. When
+    creating a new lock would exceed ``_MAX_TRACKED_LOCKS``, the
+    least-recently-accessed entry that is not currently held is evicted
+    (preferring entries that are not in ``GAME_STORE``) to make room.
+
+    :param game_id: The unique identifier of the game.
+    :type game_id: str
+    :returns: The per-game lock for ``game_id``.
+    :rtype: Lock
+    """
     with _lock_for_locks:
         now = time.time()
-        # Periodic cleanup of stale locks every 100 accesses
-        if count % 100 == 0:
+
+        if (now - _last_sweep[0] > _SWEEP_INTERVAL_SECONDS) or (
+            len(_game_locks) > _MAX_TRACKED_LOCKS
+        ):
+            _last_sweep[0] = now
             for gid in list(_game_locks.keys()):
                 if gid not in GAME_STORE and (
                     now - _lock_last_access.get(gid, 0) > _LOCK_STALE_THRESHOLD_SECONDS
@@ -114,10 +131,66 @@ def _get_lock(game_id: str) -> Lock:
                         _game_locks.pop(gid, None)
                         _lock_last_access.pop(gid, None)
                         lock.release()
-        if game_id not in _game_locks:
-            _game_locks[game_id] = Lock()
+
+        if game_id in _game_locks:
+            lock = _game_locks.pop(game_id)
+            _game_locks[game_id] = lock
+            _lock_last_access[game_id] = now
+            return lock
+
+        while len(_game_locks) >= _MAX_TRACKED_LOCKS:
+            candidates = sorted(
+                _game_locks.keys(),
+                key=lambda gid: (gid in GAME_STORE, _lock_last_access.get(gid, 0.0)),
+            )
+            evicted = False
+            for gid in candidates:
+                if gid == game_id:
+                    continue
+                lock = _game_locks.get(gid)
+                if lock is not None and lock.acquire(blocking=False):
+                    _game_locks.pop(gid, None)
+                    _lock_last_access.pop(gid, None)
+                    lock.release()
+                    evicted = True
+                    break
+            if not evicted:
+                break
+
+        _game_locks[game_id] = Lock()
         _lock_last_access[game_id] = now
         return _game_locks[game_id]
+
+
+def _game_id_is_known(game_id: str) -> bool:
+    """Return True if the given game_id resolves to a known game.
+
+    A game is known if it is present in the in-memory ``GAME_STORE`` or
+    has a row in the ``games`` table. Any database error is treated as
+    "unknown" (fail closed).
+
+    :param game_id: The unique identifier of the game.
+    :type game_id: str
+    :returns: True if the game is known, False otherwise.
+    :rtype: bool
+    """
+    if game_id in GAME_STORE:
+        return True
+    try:
+        return game_exists(game_id)
+    except Exception:
+        return False
+
+
+def _ensure_game_exists(game_id: str) -> None:
+    """Raise a 404 for a game_id that cannot be resolved to a known game.
+
+    :param game_id: The unique identifier of the game.
+    :type game_id: str
+    :raises HTTPException: 404 if the game is not found.
+    """
+    if not _game_id_is_known(game_id):
+        raise HTTPException(status_code=404, detail="Game not found")
 
 
 def _cleanup_game_lock(game_id: str) -> None:
@@ -317,6 +390,7 @@ def api_get_game(
     :raises HTTPException: 404 if the game is not found; 422 if
         ``sort`` or ``order`` is invalid.
     """
+    _ensure_game_exists(game_id)
     with _get_lock(game_id):
         _authorize_game(game_id, x_game_token)
         state = _get_state(game_id)
@@ -339,6 +413,7 @@ def api_galaxy(
     :rtype: dict
     :raises HTTPException: 404 if the game is not found.
     """
+    _ensure_game_exists(game_id)
     with _get_lock(game_id):
         _authorize_game(game_id, x_game_token)
         state = _get_state(game_id)
@@ -364,6 +439,7 @@ def api_system_detail(
     :rtype: dict
     :raises HTTPException: 404 if the game or system is not found.
     """
+    _ensure_game_exists(game_id)
     with _get_lock(game_id):
         _authorize_game(game_id, x_game_token)
         state = _get_state(game_id)
@@ -394,6 +470,7 @@ def api_jump(game_id: str, sys_id: str, x_game_token: str | None = Header(defaul
     :raises HTTPException: 404 if the game or target system is not
         found; 400 if the jump is not possible.
     """
+    _ensure_game_exists(game_id)
     with _get_lock(game_id):
         _authorize_game(game_id, x_game_token)
         state = _get_state(game_id)
@@ -469,6 +546,7 @@ def api_scan(game_id: str, x_game_token: str | None = Header(default=None)) -> d
     :raises HTTPException: 404 if the game is not found; 400 if the
         scan is not possible (insufficient fuel or no current system).
     """
+    _ensure_game_exists(game_id)
     with _get_lock(game_id):
         _authorize_game(game_id, x_game_token)
         state = _get_state(game_id)
@@ -510,6 +588,7 @@ def api_land(game_id: str, body_id: str, x_game_token: str | None = Header(defau
     :raises HTTPException: 404 if the game is not found; 400 if
         landing is not possible.
     """
+    _ensure_game_exists(game_id)
     with _get_lock(game_id):
         _authorize_game(game_id, x_game_token)
         state = _get_state(game_id)
@@ -543,6 +622,7 @@ def api_atmospheric_scan(game_id: str, x_game_token: str | None = Header(default
     :raises HTTPException: 404 if the game is not found; 400 if
         atmospheric scan is not possible.
     """
+    _ensure_game_exists(game_id)
     with _get_lock(game_id):
         _authorize_game(game_id, x_game_token)
         state = _get_state(game_id)
@@ -579,6 +659,7 @@ def api_sub_surface_explore(game_id: str, x_game_token: str | None = Header(defa
     :raises HTTPException: 404 if the game is not found; 400 if
         sub-surface exploration is not possible.
     """
+    _ensure_game_exists(game_id)
     with _get_lock(game_id):
         _authorize_game(game_id, x_game_token)
         state = _get_state(game_id)
@@ -616,6 +697,7 @@ def api_explore(game_id: str, x_game_token: str | None = Header(default=None)) -
     :raises HTTPException: 404 if the game is not found; 400 if
         exploration is not possible.
     """
+    _ensure_game_exists(game_id)
     with _get_lock(game_id):
         _authorize_game(game_id, x_game_token)
         state = _get_state(game_id)
@@ -673,6 +755,7 @@ def api_resolve_event(game_id: str, event_id: str, req: ResolveEventRequest, x_g
         400 if the event is already resolved or the choice index is
         invalid.
     """
+    _ensure_game_exists(game_id)
     with _get_lock(game_id):
         _authorize_game(game_id, x_game_token)
         state = _get_state(game_id)
@@ -703,6 +786,7 @@ def api_log(
     :rtype: dict
     :raises HTTPException: 404 if the game is not found.
     """
+    _ensure_game_exists(game_id)
     with _get_lock(game_id):
         _authorize_game(game_id, x_game_token)
         state = _get_state(game_id)
@@ -742,6 +826,7 @@ def api_log_paginated(
     :rtype: dict
     :raises HTTPException: 404 if the game is not found.
     """
+    _ensure_game_exists(game_id)
     with _get_lock(game_id):
         _authorize_game(game_id, x_game_token)
         state = _get_state(game_id)
@@ -795,6 +880,7 @@ def api_discoveries(
     :rtype: dict
     :raises HTTPException: 404 if the game is not found.
     """
+    _ensure_game_exists(game_id)
     with _get_lock(game_id):
         _authorize_game(game_id, x_game_token)
         state = _get_state(game_id)
@@ -830,6 +916,7 @@ def api_cargo(
     :rtype: dict
     :raises HTTPException: 404 if the game is not found.
     """
+    _ensure_game_exists(game_id)
     with _get_lock(game_id):
         _authorize_game(game_id, x_game_token)
         state = _get_state(game_id)
@@ -890,6 +977,7 @@ def api_lore(
     :rtype: dict
     :raises HTTPException: 404 if the game is not found.
     """
+    _ensure_game_exists(game_id)
     with _get_lock(game_id):
         _authorize_game(game_id, x_game_token)
         state = _get_state(game_id)
@@ -970,6 +1058,7 @@ def api_codex(
     :rtype: dict
     :raises HTTPException: 404 if the game is not found.
     """
+    _ensure_game_exists(game_id)
     with _get_lock(game_id):
         _authorize_game(game_id, x_game_token)
         state = _get_state(game_id)
@@ -1001,6 +1090,7 @@ def api_trade(game_id: str, req: TradeRequest, x_game_token: str | None = Header
     :raises HTTPException: 404 if the game is not found; 400 if the
         trade is not possible.
     """
+    _ensure_game_exists(game_id)
     with _get_lock(game_id):
         _authorize_game(game_id, x_game_token)
         state = _get_state(game_id)
@@ -1036,6 +1126,7 @@ def api_bulk_sell(game_id: str, req: BulkSellRequest, x_game_token: str | None =
     :raises HTTPException: 404 if the game is not found; 400 if the
         sell is not possible.
     """
+    _ensure_game_exists(game_id)
     with _get_lock(game_id):
         _authorize_game(game_id, x_game_token)
         state = _get_state(game_id)
@@ -1076,6 +1167,7 @@ def api_upgrade(game_id: str, req: UpgradeRequest, x_game_token: str | None = He
     :raises HTTPException: 404 if the game is not found; 400 if the
         upgrade is not possible.
     """
+    _ensure_game_exists(game_id)
     with _get_lock(game_id):
         _authorize_game(game_id, x_game_token)
         state = _get_state(game_id)
@@ -1105,6 +1197,7 @@ def api_upgrades_info(
     :rtype: dict
     :raises HTTPException: 404 if the game is not found.
     """
+    _ensure_game_exists(game_id)
     with _get_lock(game_id):
         _authorize_game(game_id, x_game_token)
         state = _get_state(game_id)
@@ -1130,6 +1223,7 @@ def api_nearby(
     :rtype: dict
     :raises HTTPException: 404 if the game is not found.
     """
+    _ensure_game_exists(game_id)
     with _get_lock(game_id):
         _authorize_game(game_id, x_game_token)
         state = _get_state(game_id)
@@ -1157,6 +1251,7 @@ def api_distress(game_id: str, x_game_token: str | None = Header(default=None)) 
     :raises HTTPException: 404 if the game is not found; 400 if the
         beacon cannot be activated.
     """
+    _ensure_game_exists(game_id)
     with _get_lock(game_id):
         _authorize_game(game_id, x_game_token)
         state = _get_state(game_id)
@@ -1188,6 +1283,7 @@ def api_salvage(game_id: str, x_game_token: str | None = Header(default=None)) -
     :raises HTTPException: 404 if the game is not found; 400 if
         salvage is not possible.
     """
+    _ensure_game_exists(game_id)
     with _get_lock(game_id):
         _authorize_game(game_id, x_game_token)
         state = _get_state(game_id)
@@ -1221,6 +1317,7 @@ def api_salvage_craft(game_id: str, req: CraftRequest, x_game_token: str | None 
     :raises HTTPException: 404 if the game is not found; 400 if
         crafting is not possible.
     """
+    _ensure_game_exists(game_id)
     with _get_lock(game_id):
         _authorize_game(game_id, x_game_token)
         state = _get_state(game_id)
@@ -1251,6 +1348,7 @@ def api_factions(
     :rtype: dict
     :raises HTTPException: 404 if the game is not found.
     """
+    _ensure_game_exists(game_id)
     with _get_lock(game_id):
         _authorize_game(game_id, x_game_token)
         state = _get_state(game_id)
@@ -1275,6 +1373,7 @@ def api_faction_detail(
     :rtype: dict
     :raises HTTPException: 404 if the game or faction is not found.
     """
+    _ensure_game_exists(game_id)
     with _get_lock(game_id):
         _authorize_game(game_id, x_game_token)
         state = _get_state(game_id)
@@ -1319,6 +1418,7 @@ def api_faction_mission(game_id: str, faction_id: str, x_game_token: str | None 
     :raises HTTPException: 404 if the game or faction is not found; 400 if
         the mission cannot be accepted.
     """
+    _ensure_game_exists(game_id)
     with _get_lock(game_id):
         _authorize_game(game_id, x_game_token)
         state = _get_state(game_id)
@@ -1422,6 +1522,7 @@ def api_missions(
     :raises HTTPException: 404 if the game is not found; 400 if
         not in a system or no trading station.
     """
+    _ensure_game_exists(game_id)
     with _get_lock(game_id):
         _authorize_game(game_id, x_game_token)
         state = _get_state(game_id)
@@ -1478,6 +1579,7 @@ def api_accept_mission(game_id: str, mission_id: str, req: AcceptMissionRequest,
     :raises HTTPException: 404 if the game is not found; 400 if the
         mission cannot be accepted.
     """
+    _ensure_game_exists(game_id)
     with _get_lock(game_id):
         _authorize_game(game_id, x_game_token)
         state = _get_state(game_id)
@@ -1584,6 +1686,7 @@ def api_complete_mission(game_id: str, mission_id: str, req: CompleteMissionRequ
     :raises HTTPException: 404 if the game is not found; 400 if the
         mission cannot be completed.
     """
+    _ensure_game_exists(game_id)
     with _get_lock(game_id):
         _authorize_game(game_id, x_game_token)
         state = _get_state(game_id)
@@ -1649,6 +1752,7 @@ def api_save(game_id: str, x_game_token: str | None = Header(default=None)) -> d
     :rtype: dict
     :raises HTTPException: 404 if the game is not found.
     """
+    _ensure_game_exists(game_id)
     with _get_lock(game_id):
         _authorize_game(game_id, x_game_token)
         state = _get_state(game_id)
@@ -1674,6 +1778,7 @@ def api_load(game_id: str, x_game_token: str | None = Header(default=None)) -> d
     :rtype: dict
     :raises HTTPException: 404 if no save is found for the game.
     """
+    _ensure_game_exists(game_id)
     with _get_lock(game_id):
         _authorize_game(game_id, x_game_token)
         state = game_load_func(game_id)
@@ -1701,6 +1806,7 @@ def api_dismiss_hint(game_id: str, req: DismissHintRequest, x_game_token: str | 
     :rtype: dict
     :raises HTTPException: 404 if the game is not found; 400 if the hint is critical and cannot be dismissed.
     """
+    _ensure_game_exists(game_id)
     with _get_lock(game_id):
         _authorize_game(game_id, x_game_token)
         state = _get_state(game_id)
