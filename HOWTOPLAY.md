@@ -535,7 +535,7 @@ Everything you've found, organized by category with credit values.
 GET /api/game/{game_id}?sort=value&order=desc
 ```
 
-Complete state dump: ship, current system, pending events, discoveries, log entries, fuel status, active contextual hints, reputation summary, biomes visited, and cargo details. Accepts optional `sort` (`"value"` or `"name"`) and `order` (`"asc"` or `"desc"`) query parameters for sorting cargo items in the response. The response includes `total_value` (sum of all cargo credit values), `top3_ids` (the 3 most valuable cargo item IDs), `hints` (active contextual hint objects with `id`, `severity`, `message`, and optional `command`), `missions_available` (a summary of missions offered at the current station, with `available`, `count`, `tiers`, `highest_tier`, and `daily_available`), `biomes_visited` (list of biome type strings the player has visited), and `biomes_visited_count` (count of unique biomes visited) fields.
+Complete state dump: ship, current system, pending events, discoveries, log entries, fuel status, active contextual hints, reputation summary, biomes visited, and cargo details. Accepts optional `sort` (`"value"` or `"name"`) and `order` (`"asc"` or `"desc"`) query parameters for sorting cargo items in the response. Cargo is returned unsorted when neither parameter is supplied; supplying either one triggers sorting, with the missing parameter defaulting (a missing `sort` defaults to `"value"`, a missing `order` defaults to `"desc"`). An invalid `sort` or `order` value returns HTTP 422. The response includes `total_value` (sum of all cargo credit values), `top3_ids` (the 3 most valuable cargo item IDs), `hints` (active contextual hint objects with `id`, `severity`, `message`, and optional `command`), `missions_available` (a summary of missions offered at the current station, with `available`, `count`, `tiers`, `highest_tier`, and `daily_available`), `biomes_visited` (list of biome type strings the player has visited), and `biomes_visited_count` (count of unique biomes visited) fields.
 
 ### Cargo Hold
 
@@ -790,7 +790,7 @@ All endpoints that access a specific game (mutating and read-only GET) accept th
 |--------|----------|-------------|
 | GET | `/api/health` | Server health check |
 | POST | `/api/game/new` | Create new game (optional `game_id`; returns HTTP 409 Conflict if a caller-supplied `game_id` already exists) |
-| GET | `/api/game/{id}?sort={value\|name}&order={asc\|desc}` | Full game state (ship, system, events, log, fuel_status, hints, missions_available, reputation, shared_universe, total_value, top3_ids) |
+| GET | `/api/game/{id}?sort={value\|name}&order={asc\|desc}` | Full game state (ship, system, events, log, fuel_status, hints, missions_available, reputation, shared_universe, total_value, top3_ids; cargo sorted only when `sort` and/or `order` is supplied) |
 | GET | `/api/game/{id}/galaxy` | Galaxy map data |
 | GET | `/api/game/{id}/system/{sid}` | System details |
 | POST | `/api/game/{id}/jump/{sid}` | Jump to system |
