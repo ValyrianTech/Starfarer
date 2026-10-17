@@ -1680,7 +1680,7 @@ class TestRoutesFullStateResponse:
         assert "Invalid order 'ascending'" in exc_info.value.detail
 
     def test_full_state_response_sort_without_order_is_ok(self) -> None:
-        """_full_state_response with sort but no order should validate but not sort."""
+        """_full_state_response with sort but no order should default order=desc and sort."""
         from backend.api.routes import _full_state_response
         from backend.models.discovery import Discovery
         state = new_game(seed=42)
@@ -1694,10 +1694,11 @@ class TestRoutesFullStateResponse:
                       description="A", value=100, system_id=current_sys.id)
         )
         resp = _full_state_response(state, sort="value")
-        assert resp["cargo_items"] is not None
+        values = [item["value"] for item in resp["cargo_items"]]
+        assert values == [100, 50]
 
     def test_full_state_response_order_without_sort_is_ok(self) -> None:
-        """_full_state_response with order but no sort should validate but not sort."""
+        """_full_state_response with order but no sort should default sort=value and sort."""
         from backend.api.routes import _full_state_response
         from backend.models.discovery import Discovery
         state = new_game(seed=42)
@@ -1711,7 +1712,26 @@ class TestRoutesFullStateResponse:
                       description="A", value=100, system_id=current_sys.id)
         )
         resp = _full_state_response(state, order="asc")
-        assert resp["cargo_items"] is not None
+        values = [item["value"] for item in resp["cargo_items"]]
+        assert values == [50, 100]
+
+    def test_full_state_response_sort_name_without_order_is_ok(self) -> None:
+        """_full_state_response with sort=name but no order should default order=desc and sort."""
+        from backend.api.routes import _full_state_response
+        from backend.models.discovery import Discovery
+        state = new_game(seed=42)
+        current_sys = state.get_current_system()
+        state.discoveries.append(
+            Discovery(id="fsr-sn-1", category="mineral", name="Alpha",
+                      description="A", value=50, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="fsr-sn-2", category="artifact", name="Zeta",
+                      description="Z", value=100, system_id=current_sys.id)
+        )
+        resp = _full_state_response(state, sort="name")
+        names = [item["name"] for item in resp["cargo_items"]]
+        assert names == ["Zeta", "Alpha"]
 
     def test_full_state_response_sort_name_case_sensitive(self) -> None:
         """_full_state_response with sort=name&order=asc sorts case-sensitively."""
@@ -1790,6 +1810,50 @@ class TestRoutesGetFullStateSorting:
         assert resp.status_code == 200
         names = [item["name"] for item in resp.json()["cargo_items"]]
         assert names == ["Zeta Relic", "Alpha Ore"]
+
+    def test_get_game_sort_value_without_order(self) -> None:
+        """Full game state endpoint with sort=value (no order) sorts by value descending."""
+        from backend.models.discovery import Discovery
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "fs-api-svo"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        current_sys = state.get_current_system()
+        state.discoveries.append(
+            Discovery(id="api-svo-1", category="mineral", name="Beta",
+                      description="B", value=50, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="api-svo-2", category="artifact", name="Alpha",
+                      description="A", value=100, system_id=current_sys.id)
+        )
+        GAME_STORE[game_id] = state
+        game_save(state)
+        resp = client.get(f"/api/game/{game_id}?sort=value")
+        assert resp.status_code == 200
+        values = [item["value"] for item in resp.json()["cargo_items"]]
+        assert values == [100, 50]
+
+    def test_get_game_order_without_sort(self) -> None:
+        """Full game state endpoint with order=asc (no sort) sorts by value ascending."""
+        from backend.models.discovery import Discovery
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "fs-api-osv"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        current_sys = state.get_current_system()
+        state.discoveries.append(
+            Discovery(id="api-osv-1", category="mineral", name="Beta",
+                      description="B", value=50, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="api-osv-2", category="artifact", name="Alpha",
+                      description="A", value=100, system_id=current_sys.id)
+        )
+        GAME_STORE[game_id] = state
+        game_save(state)
+        resp = client.get(f"/api/game/{game_id}?order=asc")
+        assert resp.status_code == 200
+        values = [item["value"] for item in resp.json()["cargo_items"]]
+        assert values == [50, 100]
 
     def test_get_game_no_sort_is_backward_compat(self) -> None:
         """Full game state endpoint without sort/order should work as before."""
