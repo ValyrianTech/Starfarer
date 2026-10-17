@@ -5369,35 +5369,49 @@ class TestRoutesLockRegistryBounded:
 
 
 _INNER_404_CASES = [
-    ("post", "/api/game/{gid}/jump/sys-1", None),
-    ("post", "/api/game/{gid}/scan", None),
-    ("post", "/api/game/{gid}/land/body-1", None),
-    ("post", "/api/game/{gid}/atmospheric-scan", None),
-    ("post", "/api/game/{gid}/sub-surface-explore", None),
-    ("post", "/api/game/{gid}/explore", None),
-    ("post", "/api/game/{gid}/event/evt-1/resolve", {"choice_index": 0}),
-    ("get", "/api/game/{gid}/log/paginated", None),
-    ("get", "/api/game/{gid}/lore", None),
-    ("get", "/api/game/{gid}/codex", None),
-    ("post", "/api/game/{gid}/trade", {"action": "buy", "item": "fuel", "quantity": 1}),
-    ("post", "/api/game/{gid}/trade/bulk-sell", {"items": [{"item": "x", "quantity": 1}]}),
-    ("post", "/api/game/{gid}/upgrade", {"upgrade_id": "scanner"}),
-    ("get", "/api/game/{gid}/upgrades", None),
-    ("get", "/api/game/{gid}/nearby", None),
-    ("post", "/api/game/{gid}/distress", None),
-    ("post", "/api/game/{gid}/salvage", None),
-    ("post", "/api/game/{gid}/salvage/craft", {"discovery_id": "x", "output": "fuel"}),
-    ("get", "/api/game/{gid}/factions", None),
-    ("get", "/api/game/{gid}/faction/fac-1", None),
-    ("post", "/api/game/{gid}/faction/fac-1/mission", None),
-    ("get", "/api/game/{gid}/missions", None),
-    ("post", "/api/game/{gid}/missions/m1/accept", {"mission_id": "m1"}),
-    ("post", "/api/game/{gid}/missions/m1/complete", {"mission_id": "m1"}),
-    ("post", "/api/game/{gid}/save", None),
-    ("post", "/api/game/{gid}/hints/dismiss", {"hint_id": "x"}),
+    ("get", "/api/game/{gid}", None, None),
+    ("get", "/api/game/{gid}/galaxy", None, None),
+    ("get", "/api/game/{gid}/system/sys-1", None, None),
+    ("get", "/api/game/{gid}/log", None, None),
+    ("get", "/api/game/{gid}/discoveries", None, None),
+    ("get", "/api/game/{gid}/cargo", None, None),
+    ("post", "/api/game/{gid}/load", None, "Save not found for this game"),
+    ("post", "/api/game/{gid}/jump/sys-1", None, None),
+    ("post", "/api/game/{gid}/scan", None, None),
+    ("post", "/api/game/{gid}/land/body-1", None, None),
+    ("post", "/api/game/{gid}/atmospheric-scan", None, None),
+    ("post", "/api/game/{gid}/sub-surface-explore", None, None),
+    ("post", "/api/game/{gid}/explore", None, None),
+    ("post", "/api/game/{gid}/event/evt-1/resolve", {"choice_index": 0}, None),
+    ("get", "/api/game/{gid}/log/paginated", None, None),
+    ("get", "/api/game/{gid}/lore", None, None),
+    ("get", "/api/game/{gid}/codex", None, None),
+    ("post", "/api/game/{gid}/trade", {"action": "buy", "item": "fuel", "quantity": 1}, None),
+    ("post", "/api/game/{gid}/trade/bulk-sell", {"items": [{"item": "x", "quantity": 1}]}, None),
+    ("post", "/api/game/{gid}/upgrade", {"upgrade_id": "scanner"}, None),
+    ("get", "/api/game/{gid}/upgrades", None, None),
+    ("get", "/api/game/{gid}/nearby", None, None),
+    ("post", "/api/game/{gid}/distress", None, None),
+    ("post", "/api/game/{gid}/salvage", None, None),
+    ("post", "/api/game/{gid}/salvage/craft", {"discovery_id": "x", "output": "fuel"}, None),
+    ("get", "/api/game/{gid}/factions", None, None),
+    ("get", "/api/game/{gid}/faction/fac-1", None, None),
+    ("post", "/api/game/{gid}/faction/fac-1/mission", None, None),
+    ("get", "/api/game/{gid}/missions", None, None),
+    ("post", "/api/game/{gid}/missions/m1/accept", {"mission_id": "m1"}, None),
+    ("post", "/api/game/{gid}/missions/m1/complete", {"mission_id": "m1"}, None),
+    ("post", "/api/game/{gid}/save", None, None),
+    ("post", "/api/game/{gid}/hints/dismiss", {"hint_id": "x"}, None),
 ]
 
 _INNER_404_IDS = [
+    "get-game",
+    "galaxy",
+    "system-detail",
+    "log",
+    "discoveries",
+    "cargo",
+    "load",
     "jump",
     "scan",
     "land",
@@ -5437,11 +5451,11 @@ class TestRoutesInnerGameNotFound:
     """
 
     @pytest.mark.parametrize(
-        "method,path_template,body",
+        "method,path_template,body,expected_detail",
         _INNER_404_CASES,
         ids=_INNER_404_IDS,
     )
-    def test_inner_game_not_found(self, method, path_template, body) -> None:
+    def test_inner_game_not_found(self, method, path_template, body, expected_detail) -> None:
         import uuid
 
         import backend.api.routes as routes_mod
@@ -5450,6 +5464,7 @@ class TestRoutesInnerGameNotFound:
         resp = client.post("/api/game/new", json={"seed": 42, "game_id": game_id})
         assert resp.status_code == 200
 
+        expected = expected_detail or "Game not found"
         path = path_template.format(gid=game_id)
         try:
             GAME_STORE.pop(game_id, None)
@@ -5460,7 +5475,7 @@ class TestRoutesInnerGameNotFound:
                     else:
                         resp = client.post(path, json=body)
             assert resp.status_code == 404
-            assert resp.json()["detail"] == "Game not found"
+            assert resp.json()["detail"] == expected
         finally:
             GAME_STORE.pop(game_id, None)
             routes_mod._cleanup_game_lock(game_id)
