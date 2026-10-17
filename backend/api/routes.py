@@ -1752,16 +1752,21 @@ def _full_state_response(state: GameState, sort: str | None = None, order: str |
     most recent log entries, and visit statistics.
 
     Cargo items (``cargo_items``) are returned unsorted by default.
-    Pass ``sort`` and ``order`` to sort them by ``"value"`` or
-    ``"name"`` in ``"asc"`` or ``"desc"`` order.
+    Pass ``sort`` and/or ``order`` to sort them by ``"value"`` or
+    ``"name"`` in ``"asc"`` or ``"desc"`` order. If only one of
+    ``sort``/``order`` is supplied, the other defaults: a missing
+    ``sort`` defaults to ``"value"`` and a missing ``order`` defaults
+    to ``"desc"``. When either is supplied the cargo is sorted.
 
     :param state: The current game state.
     :type state: GameState
     :param sort: Optional sort key for cargo items — ``"value"``
-        or ``"name"``. Not applied when ``None``.
+        or ``"name"``. Defaults to ``"value"`` when ``order`` is
+        supplied without ``sort``.
     :type sort: str or None
     :param order: Optional sort order for cargo items — ``"asc"``
-        or ``"desc"``. Not applied when ``None``.
+        or ``"desc"``. Defaults to ``"desc"`` when ``sort`` is
+        supplied without ``order``.
     :type order: str or None
     :returns: A dictionary with all game state fields.
     :rtype: dict
@@ -1774,24 +1779,25 @@ def _full_state_response(state: GameState, sort: str | None = None, order: str |
         valid_sorts = {"value", "name"}
         valid_orders = {"asc", "desc"}
 
-        if sort is not None and sort not in valid_sorts:
+        if sort is None:
+            sort = "value"
+        if order is None:
+            order = "desc"
+
+        if sort not in valid_sorts:
             raise HTTPException(
                 status_code=422,
                 detail=f"Invalid sort key '{sort}'. Must be one of: {', '.join(sorted(valid_sorts))}"
             )
-        if order is not None and order not in valid_orders:
+        if order not in valid_orders:
             raise HTTPException(
                 status_code=422,
                 detail=f"Invalid order '{order}'. Must be one of: {', '.join(sorted(valid_orders))}"
             )
 
-        if sort is not None and order is not None:
-            if sort == "value":
-                reverse = order == "desc"
-                cargo_items.sort(key=lambda i: i.get("value", 0), reverse=reverse)
-            else:  # sort == "name"
-                reverse = order == "desc"
-                cargo_items.sort(key=lambda i: i.get("name", ""), reverse=reverse)
+        reverse = order == "desc"
+        key = (lambda i: i.get("value", 0)) if sort == "value" else (lambda i: i.get("name", ""))
+        cargo_items.sort(key=key, reverse=reverse)
 
     hints = get_contextual_hints(state, state.systems, state.dismissed_hints)
 
