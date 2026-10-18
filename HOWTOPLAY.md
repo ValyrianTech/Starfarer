@@ -712,6 +712,8 @@ Top players ranked by discoveries and systems visited. Each entry exposes an opa
 
 The three multiplayer metrics (`ghost_signatures_left`, `items_donated`, `lore_donated`) are computed in a constant number of grouped database queries rather than one query per leaderboard entry.
 
+Malformed persisted state never produces wrong-typed or crashing output: if a stored game has a non-list `discoveries` value or a non-integer `systems_visited` value, the leaderboard reports `0` for that field instead of failing or emitting a wrong type.
+
 Example response:
 
 ```json
