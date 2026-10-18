@@ -13,8 +13,8 @@ from fastapi import APIRouter, Header, HTTPException
 
 from backend.api.routes import (
     _authorize_game,
-    _get_lock,
     _get_state,
+    _locked,
     _save_state,
 )
 from backend.game.manager import GAME_STORE
@@ -247,7 +247,7 @@ def api_system_ghosts(
     :raises HTTPException: 403 if token enforcement is enabled and the
         token is missing or invalid.
     """
-    with _get_lock(game_id):
+    with _locked(game_id):
         _authorize_game(game_id, x_game_token)
         if not _game_exists(game_id):
             raise HTTPException(status_code=404, detail="Game not found")
@@ -282,7 +282,7 @@ def api_leave_ghost(
     :rtype: dict
     :raises HTTPException: 404 if the game is not found.
     """
-    with _get_lock(game_id):
+    with _locked(game_id):
         _authorize_game(game_id, x_game_token)
         state = _check_game(game_id)
         current_system = state.get_current_system()
@@ -326,7 +326,7 @@ def api_crossroads_items(
     :raises HTTPException: 403/404 when token enforcement is enabled and the
         token is missing/invalid or the game cannot be resolved.
     """
-    with _get_lock(game_id):
+    with _locked(game_id):
         _authorize_game(game_id, x_game_token)
         page = max(1, page)
         per_page = max(1, min(per_page, 50))
@@ -365,7 +365,7 @@ def api_donate_item(
     :raises HTTPException: 404 if the game is not found; 400 if the
         donation fails.
     """
-    with _get_lock(req.game_id):
+    with _locked(req.game_id):
         _authorize_game(req.game_id, x_game_token)
         state = _check_game(req.game_id)
         result = donate_item(state, req.item_name, req.quantity, message=req.message)
@@ -397,7 +397,7 @@ def api_claim_item(
     :rtype: dict
     :raises HTTPException: 404 if the game is not found; 400 if claim fails.
     """
-    with _get_lock(req.game_id):
+    with _locked(req.game_id):
         _authorize_game(req.game_id, x_game_token)
         state = _check_game(req.game_id)
         result = claim_item(item_id, state)
@@ -440,7 +440,7 @@ def api_crossroads_lore(
     :raises HTTPException: 403/404 when token enforcement is enabled and the
         token is missing/invalid or the game cannot be resolved.
     """
-    with _get_lock(game_id):
+    with _locked(game_id):
         _authorize_game(game_id, x_game_token)
         page = max(1, page)
         per_page = max(1, min(per_page, 50))
@@ -478,7 +478,7 @@ def api_donate_lore(
     :raises HTTPException: 404 if the game is not found; 400 if the
         donation fails.
     """
-    with _get_lock(req.game_id):
+    with _locked(req.game_id):
         _authorize_game(req.game_id, x_game_token)
         state = _check_game(req.game_id)
         result = donate_lore(state, req.fragment_id, message=req.message)
@@ -510,7 +510,7 @@ def api_claim_lore(
     :rtype: dict
     :raises HTTPException: 404 if the game is not found; 400 if claim fails.
     """
-    with _get_lock(req.game_id):
+    with _locked(req.game_id):
         _authorize_game(req.game_id, x_game_token)
         state = _check_game(req.game_id)
         result = claim_lore(donation_id, state)
@@ -553,7 +553,7 @@ def api_crossroads_messages(
     :raises HTTPException: 403/404 when token enforcement is enabled and the
         token is missing/invalid or the game cannot be resolved.
     """
-    with _get_lock(game_id):
+    with _locked(game_id):
         _authorize_game(game_id, x_game_token)
         result = get_messages(page=page, per_page=per_page)
         if page > result["total_pages"] and result["total_messages"] > 0:
@@ -580,7 +580,7 @@ def api_post_message(
     :rtype: dict
     :raises HTTPException: 404 if the game is not found.
     """
-    with _get_lock(req.game_id):
+    with _locked(req.game_id):
         _authorize_game(req.game_id, x_game_token)
         state = _check_game(req.game_id)
         msg = post_message(state, req.text)
@@ -618,7 +618,7 @@ def api_ripples(
     :raises HTTPException: 403 if token enforcement is enabled and the
         token is missing or invalid.
     """
-    with _get_lock(game_id):
+    with _locked(game_id):
         _authorize_game(game_id, x_game_token)
         state = _check_game(game_id)
     # Ripple data is read from the database, not from in-memory game state.
@@ -649,7 +649,7 @@ def api_acknowledge_ripple(
     :raises HTTPException: 404 if the game is not found;
         400 if the ripple cannot be acknowledged.
     """
-    with _get_lock(game_id):
+    with _locked(game_id):
         _authorize_game(game_id, x_game_token)
         state = _check_game(game_id)
         result = acknowledge_ripple(ripple_id, state)

@@ -5396,6 +5396,205 @@ class TestRoutesLockRegistryBounded:
             routes_mod._last_sweep = 0.0
 
 
+class TestRoutesLockLeases:
+    """Tests for the per-game lock lease (refcount) mechanism in routes.py."""
+
+    def test_locked_is_context_manager(self) -> None:
+        """_locked yields while holding the lock and releases on normal exit."""
+        import backend.api.routes as routes_mod
+
+        gid = "lease-cm-normal"
+        try:
+            with routes_mod._locked(gid):
+                assert routes_mod._lock_refcounts.get(gid, 0) >= 1
+                assert routes_mod._game_locks[gid].locked()
+            assert routes_mod._lock_refcounts.get(gid, 0) == 0
+            assert gid not in routes_mod._game_locks
+            assert gid not in routes_mod._lock_refcounts
+        finally:
+            routes_mod._game_locks.pop(gid, None)
+            routes_mod._lock_last_access.pop(gid, None)
+            routes_mod._lock_refcounts.pop(gid, None)
+
+    def test_locked_releases_on_exception(self) -> None:
+        """_locked releases the lease (no leak) when the body raises."""
+        import backend.api.routes as routes_mod
+
+        gid = "lease-cm-exception"
+        try:
+            with pytest.raises(RuntimeError), routes_mod._locked(gid):
+                assert routes_mod._lock_refcounts.get(gid, 0) >= 1
+                raise RuntimeError("boom")
+            assert routes_mod._lock_refcounts.get(gid, 0) == 0
+            assert gid not in routes_mod._game_locks
+            assert gid not in routes_mod._lock_refcounts
+        finally:
+            routes_mod._game_locks.pop(gid, None)
+            routes_mod._lock_last_access.pop(gid, None)
+            routes_mod._lock_refcounts.pop(gid, None)
+
+    def test_locked_prevents_stale_sweep_removal(self) -> None:
+        """A sweep cannot remove a leased (refcount > 0) lock entry."""
+        import backend.api.routes as routes_mod
+
+        gid = "lease-stale-sweep"
+        try:
+            with patch("backend.api.routes.time.time", return_value=0.0):
+                routes_mod._get_lock(gid)
+            assert gid in routes_mod._game_locks
+
+            routes_mod._last_sweep = 10**18
+            try:
+                with routes_mod._locked(gid):
+                    routes_mod._lock_last_access[gid] = 0.0
+                    routes_mod._last_sweep = 0.0
+                    with patch("backend.api.routes.time.time", return_value=1000.0):
+                        routes_mod._get_lock("lease-stale-sweep-other")
+                    assert gid in routes_mod._game_locks
+            finally:
+                routes_mod._last_sweep = 0.0
+        finally:
+            routes_mod._last_sweep = 0.0
+            for g in [gid, "lease-stale-sweep-other"]:
+                routes_mod._cleanup_game_lock(g)
+                routes_mod._lock_refcounts.pop(g, None)
+
+    def test_locked_prevents_hard_cap_eviction(self) -> None:
+        """The hard-cap loop cannot evict a leased lock entry."""
+        import backend.api.routes as routes_mod
+
+        gid = "lease-hard-cap"
+        try:
+            routes_mod._last_sweep = 10**18
+            with patch.object(routes_mod, "_MAX_TRACKED_LOCKS", 1), routes_mod._locked(gid):
+                lock = routes_mod._get_lock("lease-hard-cap-other")
+                assert gid in routes_mod._game_locks
+                assert lock is routes_mod._game_locks["lease-hard-cap-other"]
+        finally:
+            routes_mod._last_sweep = 0.0
+            for g in [gid, "lease-hard-cap-other"]:
+                routes_mod._cleanup_game_lock(g)
+                routes_mod._lock_refcounts.pop(g, None)
+
+    def test_hard_cap_refuses_to_evict_store_game(self) -> None:
+        """The hard-cap loop never evicts a game present in GAME_STORE."""
+        import backend.api.routes as routes_mod
+
+        state = new_game(seed=42)
+        store_gid = state.id
+        try:
+            GAME_STORE[store_gid] = state
+            with patch.object(routes_mod, "_MAX_TRACKED_LOCKS", 1):
+                routes_mod._get_lock(store_gid)
+                lock = routes_mod._get_lock("hard-cap-store-other")
+                assert store_gid in routes_mod._game_locks
+                assert lock is routes_mod._game_locks["hard-cap-store-other"]
+        finally:
+            GAME_STORE.pop(store_gid, None)
+            for g in [store_gid, "hard-cap-store-other"]:
+                routes_mod._cleanup_game_lock(g)
+                routes_mod._lock_refcounts.pop(g, None)
+
+    def test_locked_keeps_store_entry(self) -> None:
+        """A lease that reaches refcount 0 keeps the entry for a store game."""
+        import backend.api.routes as routes_mod
+
+        state = new_game(seed=42)
+        gid = state.id
+        try:
+            GAME_STORE[gid] = state
+            with routes_mod._locked(gid):
+                pass
+            assert gid in routes_mod._game_locks
+            assert routes_mod._lock_refcounts.get(gid, 0) == 0
+        finally:
+            GAME_STORE.pop(gid, None)
+            routes_mod._cleanup_game_lock(gid)
+            routes_mod._lock_refcounts.pop(gid, None)
+
+    def test_locked_refcount_positive_branch(self) -> None:
+        """Decrementing to a still-positive refcount keeps the lease intact."""
+        import threading
+
+        import backend.api.routes as routes_mod
+
+        gid = "lease-refcount-positive"
+        lock = threading.Lock()
+        routes_mod._game_locks[gid] = lock
+        routes_mod._lock_last_access[gid] = 0.0
+        routes_mod._lock_refcounts[gid] = 1
+        try:
+            with routes_mod._locked(gid):
+                pass
+            assert routes_mod._lock_refcounts.get(gid, 0) == 1
+            assert routes_mod._game_locks.get(gid) is lock
+        finally:
+            routes_mod._game_locks.pop(gid, None)
+            routes_mod._lock_last_access.pop(gid, None)
+            routes_mod._lock_refcounts.pop(gid, None)
+
+    def test_cleanup_game_lock_refuses_leased_entry(self) -> None:
+        """_cleanup_game_lock refuses to remove an entry with refcount > 0."""
+        import backend.api.routes as routes_mod
+
+        gid = "lease-cleanup-refuse"
+        try:
+            with routes_mod._locked(gid):
+                routes_mod._cleanup_game_lock(gid)
+                assert gid in routes_mod._game_locks
+        finally:
+            routes_mod._game_locks.pop(gid, None)
+            routes_mod._lock_last_access.pop(gid, None)
+            routes_mod._lock_refcounts.pop(gid, None)
+
+    def test_locked_game_ids_includes_leased_ids(self) -> None:
+        """_locked_game_ids reports a leased (refcount > 0) id."""
+        import backend.api.routes as routes_mod
+
+        gid = "lease-locked-ids"
+        try:
+            with routes_mod._locked(gid):
+                assert gid in routes_mod._locked_game_ids()
+        finally:
+            routes_mod._game_locks.pop(gid, None)
+            routes_mod._lock_last_access.pop(gid, None)
+            routes_mod._lock_refcounts.pop(gid, None)
+
+    def test_locked_blocks_are_mutually_exclusive(self) -> None:
+        """Concurrent _locked blocks on the same id are serialized."""
+        import concurrent.futures
+        import threading
+        import time
+
+        import backend.api.routes as routes_mod
+
+        gid = "lease-mutex"
+        active = 0
+        max_active = 0
+        counter_lock = threading.Lock()
+
+        def worker() -> None:
+            nonlocal active, max_active
+            with routes_mod._locked(gid):
+                with counter_lock:
+                    active += 1
+                    max_active = max(max_active, active)
+                time.sleep(0.05)
+                with counter_lock:
+                    active -= 1
+
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+                futures = [executor.submit(worker) for _ in range(8)]
+                for future in concurrent.futures.as_completed(futures):
+                    future.result()
+            assert max_active == 1
+        finally:
+            routes_mod._game_locks.pop(gid, None)
+            routes_mod._lock_last_access.pop(gid, None)
+            routes_mod._lock_refcounts.pop(gid, None)
+
+
 _INNER_404_CASES = [
     ("get", "/api/game/{gid}", None, None),
     ("get", "/api/game/{gid}/galaxy", None, None),
