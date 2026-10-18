@@ -3,18 +3,15 @@
 const BASE = "/api";
 
 /**
- * Resolve the current game token, in priority order:
- *   1. the `token` URL search parameter,
- *   2. `window.localStorage` under the key `starfarer_game_token`.
- * Returns `null` when no token is present. localStorage access is wrapped in a
- * try/catch so a disabled/blocked store never throws and falls through to null.
+ * Resolve the current game token from `window.localStorage` under the key
+ * `starfarer_game_token`. The token is never read from the URL: it must be
+ * provided via `setToken()` (e.g. localStorage / a login flow), keeping the
+ * long-lived token out of the address bar where it would leak into logs,
+ * browser history and `Referer` headers. Returns `null` when no token is
+ * present. localStorage access is wrapped in a try/catch so a
+ * disabled/blocked store never throws and falls through to null.
  */
 export function getToken() {
-  const params = new URLSearchParams(window.location.search);
-  const fromUrl = params.get("token");
-  if (fromUrl) {
-    return fromUrl;
-  }
   try {
     return window.localStorage.getItem("starfarer_game_token") || null;
   } catch (err) {
