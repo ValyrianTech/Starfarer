@@ -179,7 +179,7 @@ def _game_id_is_known(game_id: str) -> bool:
         return True
     try:
         return game_exists(game_id)
-    except Exception:
+    except Exception:  # noqa: BLE001
         return False
 
 

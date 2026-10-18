@@ -5316,9 +5316,8 @@ class TestRoutesLockRegistryBounded:
 
         from backend.api.routes import _ensure_game_exists
 
-        with patch("backend.api.routes.game_exists", side_effect=RuntimeError("db down")):
-            with pytest.raises(HTTPException) as exc_info:
-                _ensure_game_exists("db-error-game")
+        with patch("backend.api.routes.game_exists", side_effect=RuntimeError("db down")), pytest.raises(HTTPException) as exc_info:
+            _ensure_game_exists("db-error-game")
         assert exc_info.value.status_code == 404
 
     def test_hard_cap_eviction_skips_target_game_id(self) -> None:
@@ -5380,16 +5379,15 @@ class TestRoutesLockRegistryBounded:
         new_id = "hard-cap-break-new"
         acquired = []
         try:
-            with patch.object(routes_mod, "_MAX_TRACKED_LOCKS", 2):
-                with patch("backend.api.routes.time.time", return_value=1000.0):
-                    routes_mod._last_sweep = 1000.0
-                    for gid in held_ids:
-                        lock = routes_mod._get_lock(gid)
-                        lock.acquire()
-                        acquired.append(lock)
-                    lock = routes_mod._get_lock(new_id)
-                    assert lock is routes_mod._game_locks[new_id]
-                    assert len(routes_mod._game_locks) >= 3
+            with patch.object(routes_mod, "_MAX_TRACKED_LOCKS", 2), patch("backend.api.routes.time.time", return_value=1000.0):
+                routes_mod._last_sweep = 1000.0
+                for gid in held_ids:
+                    lock = routes_mod._get_lock(gid)
+                    lock.acquire()
+                    acquired.append(lock)
+                lock = routes_mod._get_lock(new_id)
+                assert lock is routes_mod._game_locks[new_id]
+                assert len(routes_mod._game_locks) >= 3
         finally:
             for lock in acquired:
                 lock.release()
@@ -5498,12 +5496,11 @@ class TestRoutesInnerGameNotFound:
         path = path_template.format(gid=game_id)
         try:
             GAME_STORE.pop(game_id, None)
-            with patch.object(routes_mod, "_game_id_is_known", return_value=True):
-                with patch.object(routes_mod, "game_load_func", return_value=None):
-                    if method == "get":
-                        resp = client.get(path)
-                    else:
-                        resp = client.post(path, json=body)
+            with patch.object(routes_mod, "_game_id_is_known", return_value=True), patch.object(routes_mod, "game_load_func", return_value=None):
+                if method == "get":
+                    resp = client.get(path)
+                else:
+                    resp = client.post(path, json=body)
             assert resp.status_code == 404
             assert resp.json()["detail"] == expected
         finally:
