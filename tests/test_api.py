@@ -478,6 +478,109 @@ class TestAPILeaderboardMalformedState:
         )
         assert entry["credits"] == 0
 
+    def _insert_leaderboard_state(self, game_id: str, state_json: str) -> None:
+        """Insert a raw game row with the given state_json for the leaderboard."""
+        from backend.database import get_db
+        now = datetime.now(UTC).isoformat()
+        conn = get_db()
+        try:
+            conn.execute(
+                "INSERT OR REPLACE INTO games (id, seed, ship_name, created_at, updated_at, state_json) VALUES (?, ?, ?, ?, ?, ?)",
+                (game_id, 1, "Test Ship", now, now, state_json)
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def test_leaderboard_discoveries_null_returns_zero(self) -> None:
+        """discoveries=null should serialize as 0 in the leaderboard."""
+        from backend.database import _opaque_entry_id
+        self._insert_leaderboard_state("lb-disc-null", '{"discoveries": null}')
+        resp = client.get("/api/leaderboard")
+        assert resp.status_code == 200
+        entry = next(
+            e for e in resp.json()["leaderboard"]
+            if e["entry_id"] == _opaque_entry_id("lb-disc-null")
+        )
+        assert entry["discoveries"] == 0
+
+    def test_leaderboard_discoveries_dict_returns_zero(self) -> None:
+        """discoveries={...} should serialize as 0 in the leaderboard."""
+        from backend.database import _opaque_entry_id
+        self._insert_leaderboard_state("lb-disc-dict", '{"discoveries": {"a": 1}}')
+        resp = client.get("/api/leaderboard")
+        assert resp.status_code == 200
+        entry = next(
+            e for e in resp.json()["leaderboard"]
+            if e["entry_id"] == _opaque_entry_id("lb-disc-dict")
+        )
+        assert entry["discoveries"] == 0
+
+    def test_leaderboard_discoveries_string_returns_zero(self) -> None:
+        """discoveries as a string should serialize as 0 in the leaderboard."""
+        from backend.database import _opaque_entry_id
+        self._insert_leaderboard_state("lb-disc-str", '{"discoveries": "notalist"}')
+        resp = client.get("/api/leaderboard")
+        assert resp.status_code == 200
+        entry = next(
+            e for e in resp.json()["leaderboard"]
+            if e["entry_id"] == _opaque_entry_id("lb-disc-str")
+        )
+        assert entry["discoveries"] == 0
+
+    def test_leaderboard_systems_visited_string_returns_zero_int(self) -> None:
+        """systems_visited as a string should serialize as the int 0."""
+        from backend.database import _opaque_entry_id
+        self._insert_leaderboard_state("lb-sys-str", '{"systems_visited": "seven"}')
+        resp = client.get("/api/leaderboard")
+        assert resp.status_code == 200
+        entry = next(
+            e for e in resp.json()["leaderboard"]
+            if e["entry_id"] == _opaque_entry_id("lb-sys-str")
+        )
+        assert entry["systems_visited"] == 0
+        assert isinstance(entry["systems_visited"], int)
+
+    def test_leaderboard_systems_visited_bool_returns_zero(self) -> None:
+        """systems_visited=true should serialize as 0 (bools are not ints)."""
+        from backend.database import _opaque_entry_id
+        self._insert_leaderboard_state("lb-sys-bool", '{"systems_visited": true}')
+        resp = client.get("/api/leaderboard")
+        assert resp.status_code == 200
+        entry = next(
+            e for e in resp.json()["leaderboard"]
+            if e["entry_id"] == _opaque_entry_id("lb-sys-bool")
+        )
+        assert entry["systems_visited"] == 0
+
+    def test_leaderboard_valid_state_extracts_counts(self) -> None:
+        """Valid discoveries and systems_visited should be extracted correctly."""
+        from backend.database import _opaque_entry_id
+        self._insert_leaderboard_state(
+            "lb-valid-counts", '{"discoveries": [{}, {}], "systems_visited": 5}'
+        )
+        resp = client.get("/api/leaderboard")
+        assert resp.status_code == 200
+        entry = next(
+            e for e in resp.json()["leaderboard"]
+            if e["entry_id"] == _opaque_entry_id("lb-valid-counts")
+        )
+        assert entry["discoveries"] == 2
+        assert entry["systems_visited"] == 5
+
+    def test_safe_list_len_helper(self) -> None:
+        """_safe_list_len defensively handles malformed values."""
+        from backend.database import _safe_list_len
+        assert _safe_list_len(None) == 0
+        assert _safe_list_len([1, 2]) == 2
+
+    def test_safe_int_helper(self) -> None:
+        """_safe_int defensively handles malformed and bool values."""
+        from backend.database import _safe_int
+        assert _safe_int(True) == 0
+        assert _safe_int(5) == 5
+        assert _safe_int("5") == 0
+
 
 class TestLeaderboardSecurity:
     """Tests that the leaderboard does not leak raw game ids or seeds."""
