@@ -1,5 +1,6 @@
 import os
 import random
+import re
 import sys
 from typing import ClassVar
 
@@ -2691,6 +2692,33 @@ class TestDistressBeacon:
         assert r1["outcome"] == r2["outcome"]
         assert r1["result"] == r2["result"]
 
+    def test_activate_distress_beacon_repeated_calls_yield_distinct_outcomes(self) -> None:
+        """Repeated real activations on one state must not produce identical outcomes.
+
+        The RNG seed mixes in the ship-log counter, which advances on every
+        activation, so two activations in the same system with the same ship
+        must roll independent values. Pre-fix this produced the same turn count
+        twice ("try again in 3 turns" both times).
+        """
+        state = self._make_stranded_state()
+        state.ship.credits = 10000
+
+        first = activate_distress_beacon(state)
+        state.ship.distress_cooldown = False
+        state.ship.fuel = 0
+        second = activate_distress_beacon(state)
+
+        assert "error" not in first
+        assert "error" not in second
+        # Both land on the same named branch, which pins observable behaviour...
+        assert first["outcome"] == "no_response"
+        assert second["outcome"] == "no_response"
+        # ...but the concrete roll differs, which is what the fix guarantees.
+        assert first["result"] != second["result"]
+        first_turns = int(re.search(r"try again in (\d+) turns", first["result"]).group(1))
+        second_turns = int(re.search(r"try again in (\d+) turns", second["result"]).group(1))
+        assert first_turns != second_turns
+
     def test_activate_distress_beacon_precondition_fail_continue(self) -> None:
         from unittest.mock import MagicMock, patch
         state = self._make_stranded_state()
@@ -2951,6 +2979,27 @@ class TestSalvage:
         assert r1["find"] == r2["find"]
         assert r1["result"] == r2["result"]
 
+    def test_perform_salvage_repeated_attempts_yield_distinct_outcomes(self) -> None:
+        """Repeated real salvage attempts at the same attempt index must differ.
+
+        The attempt index is reset between calls so the salvage nonce and the
+        ship-log counter mixed into the seed must decorrelate the two rolls.
+        Pre-fix both attempts returned the identical find and value.
+        """
+        state = self._make_salvage_state()
+        body_id = state.ship.current_body_id
+
+        first = perform_salvage(state)
+        state.ship.salvage_attempts[body_id] = 0
+        state.ship.fuel = 0
+        second = perform_salvage(state)
+
+        assert "error" not in first
+        assert "error" not in second
+        # The salvage nonce advances on the second call, decorrelating the
+        # roll from the first attempt even though the attempt index is reset.
+        assert first["result"] != second["result"]
+
     def test_perform_salvage_limited_attempts(self) -> None:
         from unittest.mock import MagicMock, patch
         state = self._make_salvage_state()
@@ -2965,6 +3014,103 @@ class TestSalvage:
             assert "error" in result
             assert "max" in result["error"].lower() or "fully" in result["error"].lower()
         assert state.ship.salvage_attempts[body_id] == 3
+
+    def test_perform_salvage_full_hold_spare_parts_advances_nonce(self) -> None:
+        """The full-hold rollback must still advance the salvage nonce.
+
+        The nonce advances on every attempt (including the full-hold path) so
+        a full cargo hold cannot trap the player in a deterministically
+        repeating spare-parts livelock.
+        """
+        from unittest.mock import MagicMock, patch
+        state = self._make_salvage_state()
+        body_id = state.ship.current_body_id
+
+        state.ship.max_cargo = 1
+        state.discoveries.clear()
+        state.discoveries.append(
+            Discovery(id="full_salvage_nonce", category="mineral", name="Filler", description="f", value=1)
+        )
+        state.sync_cargo()
+
+        morale_before = state.ship.morale
+        attempts_before = state.ship.salvage_attempts.get(body_id, 0)
+        nonce_before = state.ship.salvage_nonce.get(body_id, 0)
+
+        mock_rng = MagicMock()
+        mock_rng.random.side_effect = [0.8, 0.8]
+        mock_rng.randint.side_effect = [30, 30]
+        mock_rng.getrandbits.return_value = 0xABC123
+        with patch("backend.game.engine.seeded_random", return_value=mock_rng):
+            result = perform_salvage(state)
+
+        assert "error" in result
+        assert state.ship.salvage_nonce[body_id] == nonce_before + 1
+        assert state.ship.salvage_attempts.get(body_id, 0) == attempts_before
+        assert state.ship.morale == morale_before
+
+        with patch("backend.game.engine.seeded_random", return_value=mock_rng):
+            result2 = perform_salvage(state)
+
+        assert "error" in result2
+        assert state.ship.salvage_nonce[body_id] == nonce_before + 2
+
+    def test_perform_salvage_full_hold_spare_parts_no_longer_livelocks_with_real_rng(self) -> None:
+        """The nonce must advance on every attempt with the real seeded RNG.
+
+        Filling the cargo hold used to cause a deterministic spare-parts
+        livelock; the nonce must now strictly increase by 1 on every attempt
+        (and never stall), with the full-hold error observed along the way.
+        """
+        state = self._make_salvage_state()
+        body_id = state.ship.current_body_id
+
+        state.ship.max_cargo = 1
+        state.discoveries.clear()
+        state.discoveries.append(
+            Discovery(id="full_salvage_real", category="mineral", name="Filler", description="f", value=1)
+        )
+        state.sync_cargo()
+
+        prev_nonce = state.ship.salvage_nonce.get(body_id, 0)
+        saw_full_hold_error = False
+        for _ in range(6):
+            state.ship.fuel = 0
+            result = perform_salvage(state)
+            if "Cargo hold is full" in result.get("error", ""):
+                saw_full_hold_error = True
+            nonce = state.ship.salvage_nonce.get(body_id, 0)
+            if "fully salvaged" in result.get("error", ""):
+                assert nonce == prev_nonce
+                break
+            assert nonce == prev_nonce + 1
+            prev_nonce = nonce
+
+        assert saw_full_hold_error
+        assert prev_nonce >= 1
+
+    def test_ship_salvage_nonce_roundtrip(self) -> None:
+        """salvage_nonce must survive a Ship serialization roundtrip."""
+        from backend.models.ship import Ship
+        ship = new_game(seed=42).ship
+        ship.salvage_nonce = {"body_x": 3}
+        restored = Ship.from_dict(ship.to_dict())
+        assert restored.salvage_nonce == {"body_x": 3}
+
+    def test_ship_from_dict_salvage_nonce_non_dict_defaults(self) -> None:
+        """from_dict must defensively default salvage_nonce to {} when absent or malformed."""
+        from backend.models.ship import Ship
+        ship = new_game(seed=42).ship
+
+        d = ship.to_dict()
+        d["salvage_nonce"] = "garbage"
+        restored = Ship.from_dict(d)
+        assert restored.salvage_nonce == {}
+
+        d2 = ship.to_dict()
+        d2.pop("salvage_nonce", None)
+        restored2 = Ship.from_dict(d2)
+        assert restored2.salvage_nonce == {}
 
 
 class TestEmergencyCraft:
