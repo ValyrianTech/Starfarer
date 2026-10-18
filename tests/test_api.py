@@ -5373,7 +5373,6 @@ class TestRoutesLockRegistryBounded:
         equal to the target id), nothing can be evicted so the loop breaks and
         the new lock is added anyway, temporarily exceeding the cap.
         """
-        import threading
 
         import backend.api.routes as routes_mod
 
