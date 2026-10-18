@@ -101,7 +101,7 @@ def _get_lock(game_id: str) -> Lock:
     The lock registry is bounded so that unbounded distinct ``game_id``
     values cannot exhaust memory. A sweep (removing stale, unlocked entries
     for games no longer in ``GAME_STORE``) runs when either the sweep
-    interval has elapsed or the registry has grown past the hard cap. When
+    interval has elapsed or the registry is at or above the hard cap. When
     creating a new lock would exceed ``_MAX_TRACKED_LOCKS``, the
     least-recently-accessed entry that is not currently held is evicted
     (preferring entries that are not in ``GAME_STORE``) to make room.
@@ -116,7 +116,7 @@ def _get_lock(game_id: str) -> Lock:
         now = time.time()
 
         if (now - _last_sweep > _SWEEP_INTERVAL_SECONDS) or (
-            len(_game_locks) > _MAX_TRACKED_LOCKS
+            len(_game_locks) >= _MAX_TRACKED_LOCKS
         ):
             _last_sweep = now
             for gid in list(_game_locks.keys()):

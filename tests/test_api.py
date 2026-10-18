@@ -5240,6 +5240,31 @@ class TestRoutesLockRegistryBounded:
                 routes_mod._cleanup_game_lock(gid)
             routes_mod._last_sweep = 0.0
 
+    def test_size_triggered_sweep_runs_at_exact_cap(self) -> None:
+        """A size-triggered sweep fires when the registry is exactly at the cap."""
+        import threading
+
+        import backend.api.routes as routes_mod
+
+        stale_ids = ["at-cap-stale-0", "at-cap-stale-1"]
+        new_id = "at-cap-new"
+        try:
+            with patch.object(routes_mod, "_MAX_TRACKED_LOCKS", 2):
+                for gid in stale_ids:
+                    routes_mod._game_locks[gid] = threading.Lock()
+                    routes_mod._lock_last_access[gid] = 0.0
+                routes_mod._last_sweep = 1000.0
+                with patch("backend.api.routes.time.time", return_value=1000.0):
+                    routes_mod._get_lock(new_id)
+                assert stale_ids[0] not in routes_mod._game_locks
+                assert stale_ids[1] not in routes_mod._game_locks
+                assert new_id in routes_mod._game_locks
+        finally:
+            for gid in stale_ids + [new_id]:
+                routes_mod._game_locks.pop(gid, None)
+                routes_mod._lock_last_access.pop(gid, None)
+            routes_mod._last_sweep = 0.0
+
     def test_time_triggered_sweep_removes_stale(self) -> None:
         """A time-triggered sweep removes stale locks when the interval elapsed."""
         import backend.api.routes as routes_mod
@@ -5299,11 +5324,17 @@ class TestRoutesLockRegistryBounded:
     def test_hard_cap_eviction_skips_target_game_id(self) -> None:
         """Eviction loop hits the ``continue`` branch when a candidate is the target id.
 
-        The early-return ``if game_id in _game_locks`` guard means the target id
-        can never normally appear in the eviction candidates. To cover the
-        ``continue`` on line 149 we patch ``_game_locks`` with a dict subclass
-        whose ``__contains__`` reports False (so the early return is skipped)
-        while ``keys()`` still yields the target id, which is sorted first.
+        The size-triggered sweep now fires at ``>= cap`` (``len(_game_locks)
+        >= _MAX_TRACKED_LOCKS``), so the two entries must be kept non-stale
+        (``_lock_last_access`` values close to ``now``) so the sweep leaves them
+        in place and control reaches the eviction ``while`` loop with the full
+        dict intact. The early-return ``if game_id in _game_locks`` guard means
+        the target id can never normally appear in the eviction candidates. To
+        cover the ``continue`` for ``gid == game_id`` we patch ``_game_locks``
+        with a dict subclass whose ``__contains__`` reports False (so the early
+        return is skipped) while ``keys()`` still yields the target id, which is
+        sorted first (target's ``_lock_last_access`` of 1000.0 sorts before
+        other's 1001.0).
         """
         import threading
 
@@ -5322,8 +5353,8 @@ class TestRoutesLockRegistryBounded:
 
         try:
             with patch.object(routes_mod, "_MAX_TRACKED_LOCKS", 2):
-                routes_mod._lock_last_access[target] = 0.0
-                routes_mod._lock_last_access[other] = 1.0
+                routes_mod._lock_last_access[target] = 1000.0
+                routes_mod._lock_last_access[other] = 1001.0
                 with patch("backend.api.routes.time.time", return_value=1000.0):
                     routes_mod._last_sweep = 1000.0
                     with patch.object(routes_mod, "_game_locks", d):
