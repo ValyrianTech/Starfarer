@@ -339,6 +339,34 @@ def _safe_ship_credits(state: dict) -> int:
     return credits if isinstance(credits, int) else 0
 
 
+def _safe_list_len(value) -> int:
+    """Return the length of a value defensively.
+
+    Persisted state is not guaranteed to be well-formed, so this helper
+    never assumes the value is a list. Malformed values are treated as an
+    empty list and return 0.
+
+    :param value: The value to measure.
+    :returns: The length of ``value`` if it is a list, otherwise 0.
+    :rtype: int
+    """
+    return len(value) if isinstance(value, list) else 0
+
+
+def _safe_int(value) -> int:
+    """Coerce a value to an integer defensively.
+
+    Persisted state is not guaranteed to be well-formed, so this helper
+    never assumes the value is an integer. Malformed values (including
+    booleans) are treated as missing and return 0.
+
+    :param value: The value to coerce.
+    :returns: The value if it is a non-bool integer, otherwise 0.
+    :rtype: int
+    """
+    return value if isinstance(value, int) and not isinstance(value, bool) else 0
+
+
 def _opaque_entry_id(game_id: str) -> str:
     """Derive a short, stable, non-reversible opaque id from a game id.
 
@@ -413,22 +441,21 @@ def get_leaderboard(limit: int = 10) -> list[dict]:
                 state = json.loads(row["state_json"])
                 if not isinstance(state, dict):
                     continue  # Skip malformed entries
+                game_id = row["id"]
+                results.append({
+                    "entry_id": _opaque_entry_id(game_id),
+                    "ship_name": row["ship_name"],
+                    "last_played": row["updated_at"],
+                    "discoveries": _safe_list_len(state.get("discoveries")),
+                    "systems_visited": _safe_int(state.get("systems_visited")),
+                    "credits": _safe_ship_credits(state),
+                    "ghost_signatures_left": 0,
+                    "items_donated": 0,
+                    "lore_donated": 0,
+                })
+                game_ids.append(game_id)
             except (json.JSONDecodeError, TypeError):
                 continue  # Skip malformed entries
-
-            game_id = row["id"]
-            game_ids.append(game_id)
-            results.append({
-                "entry_id": _opaque_entry_id(game_id),
-                "ship_name": row["ship_name"],
-                "last_played": row["updated_at"],
-                "discoveries": len(state.get("discoveries", [])),
-                "systems_visited": state.get("systems_visited", 0),
-                "credits": _safe_ship_credits(state),
-                "ghost_signatures_left": 0,
-                "items_donated": 0,
-                "lore_donated": 0,
-            })
 
         ghost_counts = _count_by_game_id(conn, "ghost_signatures", "game_id", game_ids)
         items_counts = _count_by_game_id(conn, "crossroads_items", "donor_game_id", game_ids)
