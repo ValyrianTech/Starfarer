@@ -958,6 +958,12 @@ def perform_salvage(state: GameState) -> dict:
     Each body can be salvaged up to 3 times. Morale cost increases
     with each attempt.
 
+    The ``salvage_nonce[body_id]`` counter advances on every attempt
+    (including the full-hold rollback) precisely so a full cargo hold cannot
+    trap the player in a deterministically-repeating spare-parts livelock.
+    The attempts counter and morale are still refunded on the full-hold path
+    (so a rejected attempt costs nothing), but the nonce is never refunded.
+
     :param state: The current game state.
     :type state: GameState
     :returns: A dictionary with ``error`` on failure, or ``result``,
@@ -987,13 +993,16 @@ def perform_salvage(state: GameState) -> dict:
     ship.morale = max(0, ship.morale - morale_cost)
     ship.salvage_attempts[body_id] = current_attempts + 1
 
+    nonce = ship.salvage_nonce.get(body_id, 0)
+    ship.salvage_nonce[body_id] = nonce + 1
+
     body = None
     for b in system.bodies:
         if b.id == body_id:
             body = b
             break
 
-    rng = seeded_random(state.seed, "salvage", body_id, str(current_attempts), str(state._next_log_id))
+    rng = seeded_random(state.seed, "salvage", body_id, str(current_attempts), str(nonce), str(state._next_log_id))
     roll = rng.random()
 
     if roll < 0.4:

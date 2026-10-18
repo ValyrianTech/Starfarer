@@ -36,6 +36,7 @@ class Ship:
     stranded_turns: int = 0
     distress_cooldown: bool = False
     salvage_attempts: dict = field(default_factory=dict)
+    salvage_nonce: dict[str, int] = field(default_factory=dict)
     upgrades: dict = field(default_factory=lambda: {
         "hyperdrive": 0,
         "scanner": 0,
@@ -71,6 +72,7 @@ class Ship:
             "stranded_turns": self.stranded_turns,
             "distress_cooldown": self.distress_cooldown,
             "salvage_attempts": self.salvage_attempts,
+            "salvage_nonce": self.salvage_nonce,
             "upgrades": self.upgrades,
         }
 
@@ -83,6 +85,9 @@ class Ship:
         :returns: A new Ship instance.
         :rtype: Ship
         """
+        salvage_nonce = d.get("salvage_nonce", {})
+        if not isinstance(salvage_nonce, dict):
+            salvage_nonce = {}
         return cls(
             name=d.get("name", "Serendipity"),
             fuel=d.get("fuel", 80),
@@ -103,6 +108,7 @@ class Ship:
             stranded_turns=d.get("stranded_turns", 0),
             distress_cooldown=d.get("distress_cooldown", False),
             salvage_attempts=d.get("salvage_attempts", {}),
+            salvage_nonce=salvage_nonce,
             upgrades=d.get("upgrades", {
                 "hyperdrive": 0, "scanner": 0, "cargo_hold": 0,
                 "hull_plating": 0, "fuel_tanks": 0, "life_support": 0,
