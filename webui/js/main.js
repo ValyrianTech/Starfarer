@@ -1,7 +1,7 @@
 // Spectator entry point: game selection, scene boot, SSE wiring.
 
 import * as THREE from "three";
-import { fetchGames, fetchGalaxy, fetchSystemDetail, connectStream, setToken } from "./api.js";
+import { fetchGames, fetchGalaxy, fetchSystemDetail, connectStream } from "./api.js";
 import { SpectatorScene } from "./scene.js";
 import { Galaxy } from "./galaxy.js";
 import { SystemView } from "./system.js";
@@ -17,16 +17,26 @@ const hud = new Hud();
 let spectator = null;
 
 async function boot() {
+  stripUrlToken();
   const params = new URLSearchParams(window.location.search);
-  const token = params.get("token");
-  if (token) {
-    setToken(token);
-  }
   const gameId = params.get("game");
   if (gameId) {
     startSpectating(gameId);
   } else {
     showGamePicker();
+  }
+}
+
+// Strip a stray `token` query parameter from the address bar so the long-lived
+// game token never lingers in browser history or leaks when the link is shared.
+// The backend's short-lived single-use stream-ticket flow exists precisely so
+// the long-lived token stays out of URLs; it must be provided via setToken()
+// (e.g. localStorage / a login flow) instead.
+export function stripUrlToken() {
+  const url = new URL(window.location.href);
+  if (url.searchParams.has("token")) {
+    url.searchParams.delete("token");
+    window.history.replaceState(null, "", url);
   }
 }
 
