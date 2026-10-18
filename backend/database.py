@@ -12,6 +12,7 @@ import sqlite3
 from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import UTC, datetime
+from typing import Any
 
 from backend.config import DATA_DIR, DB_PATH
 
@@ -339,7 +340,7 @@ def _safe_ship_credits(state: dict) -> int:
     return credits if isinstance(credits, int) else 0
 
 
-def _safe_list_len(value) -> int:
+def _safe_list_len(value: Any) -> int:
     """Return the length of a value defensively.
 
     Persisted state is not guaranteed to be well-formed, so this helper
@@ -353,7 +354,7 @@ def _safe_list_len(value) -> int:
     return len(value) if isinstance(value, list) else 0
 
 
-def _safe_int(value) -> int:
+def _safe_int(value: Any) -> int:
     """Coerce a value to an integer defensively.
 
     Persisted state is not guaranteed to be well-formed, so this helper
