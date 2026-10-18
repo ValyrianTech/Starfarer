@@ -2691,6 +2691,29 @@ class TestDistressBeacon:
         assert r1["outcome"] == r2["outcome"]
         assert r1["result"] == r2["result"]
 
+    def test_activate_distress_beacon_nonce_changes_between_activations(self) -> None:
+        from unittest.mock import MagicMock, patch
+
+        state = self._make_stranded_state()
+        seen_args = []
+
+        def _capture(*args, **kwargs):
+            seen_args.append(args)
+            mock_rng = MagicMock()
+            mock_rng.random.side_effect = [0.61]
+            mock_rng.randint.side_effect = [3]
+            return mock_rng
+
+        with patch("backend.game.engine.seeded_random", side_effect=_capture):
+            activate_distress_beacon(state)
+            state.ship.distress_cooldown = False
+            state.ship.credits = 200
+            state.ship.fuel = 0
+            activate_distress_beacon(state)
+
+        assert len(seen_args) == 2
+        assert seen_args[0][-1] != seen_args[1][-1]
+
     def test_activate_distress_beacon_precondition_fail_continue(self) -> None:
         from unittest.mock import MagicMock, patch
         state = self._make_stranded_state()
@@ -2950,6 +2973,27 @@ class TestSalvage:
         r2 = perform_salvage(s2)
         assert r1["find"] == r2["find"]
         assert r1["result"] == r2["result"]
+
+    def test_perform_salvage_nonce_changes_between_attempts(self) -> None:
+        from unittest.mock import MagicMock, patch
+
+        state = self._make_salvage_state()
+        body_id = state.ship.current_body_id
+        seen_args = []
+
+        def _capture(*args, **kwargs):
+            seen_args.append(args)
+            mock_rng = MagicMock()
+            mock_rng.random.side_effect = [0.95]
+            return mock_rng
+
+        with patch("backend.game.engine.seeded_random", side_effect=_capture):
+            perform_salvage(state)
+            state.ship.salvage_attempts[body_id] = 0
+            perform_salvage(state)
+
+        assert len(seen_args) == 2
+        assert seen_args[0][-1] != seen_args[1][-1]
 
     def test_perform_salvage_limited_attempts(self) -> None:
         from unittest.mock import MagicMock, patch

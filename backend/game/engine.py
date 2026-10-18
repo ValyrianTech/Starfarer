@@ -917,7 +917,7 @@ def activate_distress_beacon(state: GameState) -> dict:
     ship.credits -= 50
     ship.distress_cooldown = True
 
-    rng = seeded_random(state.seed, "distress", system.id)
+    rng = seeded_random(state.seed, "distress", system.id, str(state._next_log_id))
 
     rescued = rng.random() < 0.6
     if not rescued:
@@ -993,7 +993,7 @@ def perform_salvage(state: GameState) -> dict:
             body = b
             break
 
-    rng = seeded_random(state.seed, "salvage", body_id, str(current_attempts))
+    rng = seeded_random(state.seed, "salvage", body_id, str(current_attempts), str(state._next_log_id))
     roll = rng.random()
 
     if roll < 0.4:
