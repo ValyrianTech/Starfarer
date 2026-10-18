@@ -9,6 +9,7 @@ and the leaderboard.
 import logging
 import secrets
 import time
+from collections.abc import Generator
 from contextlib import contextmanager
 from threading import Lock
 
@@ -188,7 +189,7 @@ def _get_lock(game_id: str) -> Lock:
 
 
 @contextmanager
-def _locked(game_id: str):
+def _locked(game_id: str) -> Generator[None, None, None]:
     """Context manager yielding while the per-game lock for ``game_id`` is held.
 
     Acquires ``_lock_for_locks``, fetch-or-creates the lock, increments its
