@@ -4837,13 +4837,6 @@ class TestApiScanValidation:
 class TestRoutesLocks:
     """Tests for the per-game lock infrastructure in routes.py."""
 
-    def _cleanup_dummy_locks(self) -> None:
-        """Remove all dummy locks left behind by lock tests."""
-        import backend.api.routes as routes_mod
-        for gid in list(routes_mod._game_locks.keys()):
-            if gid.startswith("dummy-"):
-                routes_mod._cleanup_game_lock(gid)
-
     def test_get_lock_returns_lock(self) -> None:
         """Verify that _get_lock returns a threading.Lock instance."""
         import threading
@@ -4943,135 +4936,123 @@ class TestRoutesLocks:
             GAME_STORE.pop(game_id, None)
             routes_mod._cleanup_game_lock(game_id)
 
-    def test_get_lock_periodic_cleanup_triggers(self) -> None:
-        """Periodic cleanup should run after 100 accesses and drop stale locks."""
+    def test_get_lock_time_sweep_triggers(self) -> None:
+        """A time-triggered sweep runs when the sweep interval has elapsed."""
         from unittest.mock import patch
 
         import backend.api.routes as routes_mod
-
-        stale_id = "stale-periodic-cleanup-game"
 
         try:
-            # First call at time 0.0, subsequent calls at time 61.0 (past the 60s threshold)
-            times = iter([0.0] + [61.0] * 300)
-            with patch("backend.api.routes.time.time", side_effect=lambda: next(times)):
-                routes_mod._get_lock(stale_id)
-                assert stale_id in routes_mod._game_locks
-
-                for i in range(200):
-                    routes_mod._get_lock(f"dummy-periodic-{i}")
-
-            assert stale_id not in routes_mod._game_locks
+            routes_mod._last_sweep = 0.0
+            with patch("backend.api.routes.time.time", return_value=1000.0):
+                routes_mod._get_lock("time-sweep-trigger-game")
+            assert routes_mod._last_sweep == 1000.0
         finally:
-            self._cleanup_dummy_locks()
+            routes_mod._cleanup_game_lock("time-sweep-trigger-game")
+            routes_mod._last_sweep = 0.0
 
-    def test_get_lock_periodic_cleanup_preserves_recently_accessed(self) -> None:
-        """Periodic cleanup should NOT remove locks for games accessed within the stale threshold."""
+    def test_get_lock_time_sweep_preserves_recently_accessed(self) -> None:
+        """A time-triggered sweep does NOT remove recently accessed locks."""
         from unittest.mock import patch
 
         import backend.api.routes as routes_mod
 
-        game_id = "recently-accessed-game"
-
-        try:
-            # All calls at the same time - the lock is always recently accessed
-            times = iter([100.0] * 300)
-            with patch("backend.api.routes.time.time", side_effect=lambda: next(times)):
-                routes_mod._get_lock(game_id)
-                assert game_id in routes_mod._game_locks
-
-                # Trigger periodic cleanup at count=100
-                for i in range(200):
-                    routes_mod._get_lock(f"dummy-recent-{i}")
-
-            # The lock should still be present because it was accessed at the same time
-            # as the cleanup (within the 60-second threshold)
-            assert game_id in routes_mod._game_locks
-        finally:
-            self._cleanup_dummy_locks()
-            routes_mod._cleanup_game_lock(game_id)
-
-    def test_get_lock_periodic_cleanup_removes_old_stale(self) -> None:
-        """Periodic cleanup should remove locks for games not accessed for over the stale threshold."""
-        from unittest.mock import patch
-
-        import backend.api.routes as routes_mod
-
-        stale_id = "old-stale-periodic-game"
-
-        try:
-            # First access at time 0.0, cleanup at time 61.0+ (past the 60s threshold)
-            times = iter([0.0] + [61.0] * 300)
-            with patch("backend.api.routes.time.time", side_effect=lambda: next(times)):
-                routes_mod._get_lock(stale_id)
-                assert stale_id in routes_mod._game_locks
-
-                for i in range(200):
-                    routes_mod._get_lock(f"dummy-old-stale-{i}")
-
-            assert stale_id not in routes_mod._game_locks
-        finally:
-            self._cleanup_dummy_locks()
-
-    def test_get_lock_periodic_cleanup_preserves_held_lock(self) -> None:
-        """Periodic cleanup should NOT remove a lock that is currently held."""
-        from unittest.mock import patch
-
-        import backend.api.routes as routes_mod
-
-        game_id = "held-lock-game"
-        # Game is NOT in GAME_STORE (simulating being loaded from DB)
+        game_id = "time-sweep-recent-game"
         routes_mod._game_locks.pop(game_id, None)
         routes_mod._lock_last_access.pop(game_id, None)
 
         try:
-            # First call at time 0.0 to create the lock
-            times = iter([0.0] + [61.0] * 300)
-            with patch("backend.api.routes.time.time", side_effect=lambda: next(times)):
+            with patch("backend.api.routes.time.time", return_value=1000.0):
+                routes_mod._get_lock(game_id)
+                assert game_id in routes_mod._game_locks
+
+                routes_mod._last_sweep = 0.0
+                routes_mod._get_lock("time-sweep-recent-other")
+
+            assert game_id in routes_mod._game_locks
+        finally:
+            routes_mod._cleanup_game_lock(game_id)
+            routes_mod._cleanup_game_lock("time-sweep-recent-other")
+            routes_mod._last_sweep = 0.0
+
+    def test_get_lock_time_sweep_removes_old_stale(self) -> None:
+        """A time-triggered sweep removes locks not accessed past the stale threshold."""
+        from unittest.mock import patch
+
+        import backend.api.routes as routes_mod
+
+        stale_id = "time-sweep-old-stale-game"
+        routes_mod._game_locks.pop(stale_id, None)
+        routes_mod._lock_last_access.pop(stale_id, None)
+
+        try:
+            with patch("backend.api.routes.time.time", return_value=0.0):
+                routes_mod._get_lock(stale_id)
+            assert stale_id in routes_mod._game_locks
+
+            routes_mod._last_sweep = 0.0
+            with patch("backend.api.routes.time.time", return_value=1000.0):
+                routes_mod._get_lock("time-sweep-old-stale-other")
+
+            assert stale_id not in routes_mod._game_locks
+        finally:
+            routes_mod._cleanup_game_lock(stale_id)
+            routes_mod._cleanup_game_lock("time-sweep-old-stale-other")
+            routes_mod._last_sweep = 0.0
+
+    def test_get_lock_time_sweep_preserves_held_lock(self) -> None:
+        """A time-triggered sweep does NOT remove a lock that is currently held."""
+        from unittest.mock import patch
+
+        import backend.api.routes as routes_mod
+
+        game_id = "time-sweep-held-game"
+        routes_mod._game_locks.pop(game_id, None)
+        routes_mod._lock_last_access.pop(game_id, None)
+
+        try:
+            with patch("backend.api.routes.time.time", return_value=0.0):
                 lock = routes_mod._get_lock(game_id)
-                assert game_id in routes_mod._game_locks
+            assert game_id in routes_mod._game_locks
 
-                # Acquire the lock (simulating being inside a `with` block)
-                lock.acquire()
-                try:
-                    # Trigger periodic cleanup at count=100 with time=61.0
-                    for i in range(200):
-                        routes_mod._get_lock(f"dummy-held-{i}")
-                finally:
-                    lock.release()
+            lock.acquire()
+            try:
+                routes_mod._last_sweep = 0.0
+                with patch("backend.api.routes.time.time", return_value=1000.0):
+                    routes_mod._get_lock("time-sweep-held-other")
+            finally:
+                lock.release()
 
-            # The lock should still be present because it was held during cleanup
             assert game_id in routes_mod._game_locks
         finally:
-            self._cleanup_dummy_locks()
             routes_mod._cleanup_game_lock(game_id)
+            routes_mod._cleanup_game_lock("time-sweep-held-other")
+            routes_mod._last_sweep = 0.0
 
-    def test_get_lock_periodic_cleanup_removes_unheld_lock(self) -> None:
-        """Periodic cleanup should remove a lock that is NOT currently held."""
+    def test_get_lock_time_sweep_removes_unheld_lock(self) -> None:
+        """A time-triggered sweep removes a stale lock that is NOT currently held."""
         from unittest.mock import patch
 
         import backend.api.routes as routes_mod
 
-        game_id = "unheld-lock-game"
-        # Game is NOT in GAME_STORE (simulating being loaded from DB)
+        game_id = "time-sweep-unheld-game"
         routes_mod._game_locks.pop(game_id, None)
         routes_mod._lock_last_access.pop(game_id, None)
 
         try:
-            # First call at time 0.0 to create the lock
-            times = iter([0.0] + [61.0] * 300)
-            with patch("backend.api.routes.time.time", side_effect=lambda: next(times)):
+            with patch("backend.api.routes.time.time", return_value=0.0):
                 routes_mod._get_lock(game_id)
-                assert game_id in routes_mod._game_locks
+            assert game_id in routes_mod._game_locks
 
-                # Trigger periodic cleanup at count=100 with time=61.0
-                for i in range(200):
-                    routes_mod._get_lock(f"dummy-unheld-{i}")
+            routes_mod._last_sweep = 0.0
+            with patch("backend.api.routes.time.time", return_value=1000.0):
+                routes_mod._get_lock("time-sweep-unheld-other")
 
-            # The lock should be removed because it was not held during cleanup
             assert game_id not in routes_mod._game_locks
         finally:
-            self._cleanup_dummy_locks()
+            routes_mod._cleanup_game_lock(game_id)
+            routes_mod._cleanup_game_lock("time-sweep-unheld-other")
+            routes_mod._last_sweep = 0.0
 
     def test_cleanup_stale_locks_preserves_held_lock(self) -> None:
         """_cleanup_stale_locks should NOT remove a lock that is currently held."""
@@ -5143,6 +5124,391 @@ class TestRoutesLocks:
 
             assert max_active == 1
         finally:
+            routes_mod._cleanup_game_lock(game_id)
+
+
+class TestRoutesLockRegistryBounded:
+    """Tests for the bounded per-game lock registry in routes.py."""
+
+    def test_lock_registry_constants_exist_and_positive(self) -> None:
+        import backend.api.routes as routes_mod
+
+        assert hasattr(routes_mod, "_MAX_TRACKED_LOCKS")
+        assert hasattr(routes_mod, "_SWEEP_INTERVAL_SECONDS")
+        assert routes_mod._MAX_TRACKED_LOCKS > 0
+        assert routes_mod._SWEEP_INTERVAL_SECONDS > 0.0
+
+    def test_registry_bounded_at_cap(self) -> None:
+        """Allocating more than _MAX_TRACKED_LOCKS distinct ids stays bounded."""
+        import backend.api.routes as routes_mod
+
+        created = []
+        try:
+            cap = routes_mod._MAX_TRACKED_LOCKS
+            for i in range(cap + 50):
+                gid = f"bounded-registry-{i}"
+                routes_mod._get_lock(gid)
+                created.append(gid)
+            assert len(routes_mod._game_locks) <= cap
+        finally:
+            for gid in created:
+                routes_mod._cleanup_game_lock(gid)
+
+    def test_unknown_http_ids_404_without_lock_growth(self) -> None:
+        """Unknown game ids return 404 without growing the lock registry."""
+        import uuid
+
+        import backend.api.routes as routes_mod
+
+        before = len(routes_mod._game_locks)
+        ids = [f"unknown-http-{uuid.uuid4().hex}" for _ in range(50)]
+        try:
+            for gid in ids:
+                resp = client.post(f"/api/game/{gid}/scan")
+                assert resp.status_code == 404
+            assert len(routes_mod._game_locks) == before
+        finally:
+            for gid in ids:
+                routes_mod._cleanup_game_lock(gid)
+
+    def test_hard_cap_prefers_evicting_non_store(self) -> None:
+        """Hard-cap eviction drops ids not in GAME_STORE before store ids."""
+        import backend.api.routes as routes_mod
+
+        state = new_game(seed=42)
+        store_gid = state.id
+        nonstore_gid = "hard-cap-nonstore"
+        try:
+            GAME_STORE[store_gid] = state
+            with patch.object(routes_mod, "_MAX_TRACKED_LOCKS", 2):
+                routes_mod._get_lock(store_gid)
+                routes_mod._get_lock(nonstore_gid)
+                routes_mod._lock_last_access[store_gid] = 0.0
+                routes_mod._lock_last_access[nonstore_gid] = 0.0
+                routes_mod._get_lock("hard-cap-new-1")
+                assert nonstore_gid not in routes_mod._game_locks
+                assert store_gid in routes_mod._game_locks
+        finally:
+            GAME_STORE.pop(store_gid, None)
+            for gid in [store_gid, nonstore_gid, "hard-cap-new-1"]:
+                routes_mod._cleanup_game_lock(gid)
+
+    def test_hard_cap_skips_held_locks(self) -> None:
+        """Hard-cap eviction skips locks that are currently held."""
+        import backend.api.routes as routes_mod
+
+        held_gid = "hard-cap-held"
+        routes_mod._game_locks.pop(held_gid, None)
+        routes_mod._lock_last_access.pop(held_gid, None)
+        try:
+            with patch.object(routes_mod, "_MAX_TRACKED_LOCKS", 2):
+                lock = routes_mod._get_lock(held_gid)
+                lock.acquire()
+                try:
+                    routes_mod._get_lock("hard-cap-other-1")
+                    routes_mod._get_lock("hard-cap-other-2")
+                finally:
+                    lock.release()
+                assert held_gid in routes_mod._game_locks
+        finally:
+            for gid in [held_gid, "hard-cap-other-1", "hard-cap-other-2"]:
+                routes_mod._cleanup_game_lock(gid)
+
+    def test_size_triggered_sweep_removes_stale(self) -> None:
+        """A size-triggered sweep runs when the registry exceeds the cap."""
+        import threading
+
+        import backend.api.routes as routes_mod
+
+        stale_id = "size-sweep-stale"
+        extra = []
+        try:
+            with patch.object(routes_mod, "_MAX_TRACKED_LOCKS", 2):
+                routes_mod._game_locks[stale_id] = threading.Lock()
+                routes_mod._lock_last_access[stale_id] = 0.0
+                for i in range(2):
+                    gid = f"size-sweep-extra-{i}"
+                    routes_mod._game_locks[gid] = threading.Lock()
+                    routes_mod._lock_last_access[gid] = 1000.0
+                    extra.append(gid)
+                routes_mod._last_sweep = 1000.0
+                with patch("backend.api.routes.time.time", return_value=1000.0):
+                    routes_mod._get_lock("size-sweep-new")
+                assert stale_id not in routes_mod._game_locks
+        finally:
+            for gid in [stale_id] + extra + ["size-sweep-new"]:
+                routes_mod._cleanup_game_lock(gid)
+            routes_mod._last_sweep = 0.0
+
+    def test_size_triggered_sweep_runs_at_exact_cap(self) -> None:
+        """A size-triggered sweep fires when the registry is exactly at the cap."""
+        import threading
+
+        import backend.api.routes as routes_mod
+
+        stale_ids = ["at-cap-stale-0", "at-cap-stale-1"]
+        new_id = "at-cap-new"
+        try:
+            with patch.object(routes_mod, "_MAX_TRACKED_LOCKS", 2):
+                for gid in stale_ids:
+                    routes_mod._game_locks[gid] = threading.Lock()
+                    routes_mod._lock_last_access[gid] = 0.0
+                routes_mod._last_sweep = 1000.0
+                with patch("backend.api.routes.time.time", return_value=1000.0):
+                    routes_mod._get_lock(new_id)
+                assert stale_ids[0] not in routes_mod._game_locks
+                assert stale_ids[1] not in routes_mod._game_locks
+                assert new_id in routes_mod._game_locks
+        finally:
+            for gid in stale_ids + [new_id]:
+                routes_mod._game_locks.pop(gid, None)
+                routes_mod._lock_last_access.pop(gid, None)
+            routes_mod._last_sweep = 0.0
+
+    def test_time_triggered_sweep_removes_stale(self) -> None:
+        """A time-triggered sweep removes stale locks when the interval elapsed."""
+        import backend.api.routes as routes_mod
+
+        stale_id = "bounded-time-sweep-stale"
+        routes_mod._game_locks.pop(stale_id, None)
+        routes_mod._lock_last_access.pop(stale_id, None)
+        try:
+            with patch("backend.api.routes.time.time", return_value=0.0):
+                routes_mod._get_lock(stale_id)
+            routes_mod._last_sweep = 0.0
+            with patch("backend.api.routes.time.time", return_value=1000.0):
+                routes_mod._get_lock("bounded-time-sweep-other")
+            assert stale_id not in routes_mod._game_locks
+        finally:
+            routes_mod._cleanup_game_lock(stale_id)
+            routes_mod._cleanup_game_lock("bounded-time-sweep-other")
+            routes_mod._last_sweep = 0.0
+
+    def test_ensure_game_exists_unknown_raises_404(self) -> None:
+        from fastapi import HTTPException
+
+        from backend.api.routes import _ensure_game_exists
+
+        with pytest.raises(HTTPException) as exc_info:
+            _ensure_game_exists("definitely-not-a-real-game")
+        assert exc_info.value.status_code == 404
+
+    def test_ensure_game_exists_known_in_store(self) -> None:
+        from backend.api.routes import _ensure_game_exists
+
+        state = new_game(seed=42)
+        try:
+            GAME_STORE[state.id] = state
+            assert _ensure_game_exists(state.id) is None
+        finally:
+            GAME_STORE.pop(state.id, None)
+
+    def test_ensure_game_exists_known_db_only(self) -> None:
+        from backend.api.routes import _ensure_game_exists
+        from backend.database import create_game
+
+        game_id = "ensure-known-db-only"
+        create_game(game_id, 42, "DbOnly", {"id": game_id, "seed": 42})
+        assert _ensure_game_exists(game_id) is None
+
+    def test_ensure_game_exists_db_error_fail_closed(self) -> None:
+        from fastapi import HTTPException
+
+        from backend.api.routes import _ensure_game_exists
+
+        with patch("backend.api.routes.game_exists", side_effect=RuntimeError("db down")):
+            with pytest.raises(HTTPException) as exc_info:
+                _ensure_game_exists("db-error-game")
+        assert exc_info.value.status_code == 404
+
+    def test_hard_cap_eviction_skips_target_game_id(self) -> None:
+        """Eviction loop hits the ``continue`` branch when a candidate is the target id.
+
+        The size-triggered sweep now fires at ``>= cap`` (``len(_game_locks)
+        >= _MAX_TRACKED_LOCKS``), so the two entries must be kept non-stale
+        (``_lock_last_access`` values close to ``now``) so the sweep leaves them
+        in place and control reaches the eviction ``while`` loop with the full
+        dict intact. The early-return ``if game_id in _game_locks`` guard means
+        the target id can never normally appear in the eviction candidates. To
+        cover the ``continue`` for ``gid == game_id`` we patch ``_game_locks``
+        with a dict subclass whose ``__contains__`` reports False (so the early
+        return is skipped) while ``keys()`` still yields the target id, which is
+        sorted first (target's ``_lock_last_access`` of 1000.0 sorts before
+        other's 1001.0).
+        """
+        import threading
+
+        import backend.api.routes as routes_mod
+
+        target = "hard-cap-continue-target"
+        other = "hard-cap-continue-other"
+
+        class _ContainsFalseDict(dict):
+            def __contains__(self, key):
+                return False
+
+        d = _ContainsFalseDict()
+        d[target] = threading.Lock()
+        d[other] = threading.Lock()
+
+        try:
+            with patch.object(routes_mod, "_MAX_TRACKED_LOCKS", 2):
+                routes_mod._lock_last_access[target] = 1000.0
+                routes_mod._lock_last_access[other] = 1001.0
+                with patch("backend.api.routes.time.time", return_value=1000.0):
+                    routes_mod._last_sweep = 1000.0
+                    with patch.object(routes_mod, "_game_locks", d):
+                        lock = routes_mod._get_lock(target)
+            assert lock is d[target]
+        finally:
+            routes_mod._last_sweep = 0.0
+            for gid in [target, other]:
+                routes_mod._lock_last_access.pop(gid, None)
+                routes_mod._cleanup_game_lock(gid)
+
+    def test_hard_cap_break_when_nothing_evictable(self) -> None:
+        """Eviction loop hits the ``break`` branch when every candidate is held.
+
+        With the registry at the cap and all candidate locks held (and none
+        equal to the target id), nothing can be evicted so the loop breaks and
+        the new lock is added anyway, temporarily exceeding the cap.
+        """
+        import threading
+
+        import backend.api.routes as routes_mod
+
+        held_ids = ["hard-cap-break-held-1", "hard-cap-break-held-2"]
+        new_id = "hard-cap-break-new"
+        acquired = []
+        try:
+            with patch.object(routes_mod, "_MAX_TRACKED_LOCKS", 2):
+                with patch("backend.api.routes.time.time", return_value=1000.0):
+                    routes_mod._last_sweep = 1000.0
+                    for gid in held_ids:
+                        lock = routes_mod._get_lock(gid)
+                        lock.acquire()
+                        acquired.append(lock)
+                    lock = routes_mod._get_lock(new_id)
+                    assert lock is routes_mod._game_locks[new_id]
+                    assert len(routes_mod._game_locks) >= 3
+        finally:
+            for lock in acquired:
+                lock.release()
+            for gid in held_ids + [new_id]:
+                routes_mod._cleanup_game_lock(gid)
+            routes_mod._last_sweep = 0.0
+
+
+_INNER_404_CASES = [
+    ("get", "/api/game/{gid}", None, None),
+    ("get", "/api/game/{gid}/galaxy", None, None),
+    ("get", "/api/game/{gid}/system/sys-1", None, None),
+    ("get", "/api/game/{gid}/log", None, None),
+    ("get", "/api/game/{gid}/discoveries", None, None),
+    ("get", "/api/game/{gid}/cargo", None, None),
+    ("post", "/api/game/{gid}/load", None, "Save not found for this game"),
+    ("post", "/api/game/{gid}/jump/sys-1", None, None),
+    ("post", "/api/game/{gid}/scan", None, None),
+    ("post", "/api/game/{gid}/land/body-1", None, None),
+    ("post", "/api/game/{gid}/atmospheric-scan", None, None),
+    ("post", "/api/game/{gid}/sub-surface-explore", None, None),
+    ("post", "/api/game/{gid}/explore", None, None),
+    ("post", "/api/game/{gid}/event/evt-1/resolve", {"choice_index": 0}, None),
+    ("get", "/api/game/{gid}/log/paginated", None, None),
+    ("get", "/api/game/{gid}/lore", None, None),
+    ("get", "/api/game/{gid}/codex", None, None),
+    ("post", "/api/game/{gid}/trade", {"action": "buy", "item": "fuel", "quantity": 1}, None),
+    ("post", "/api/game/{gid}/trade/bulk-sell", {"items": [{"item": "x", "quantity": 1}]}, None),
+    ("post", "/api/game/{gid}/upgrade", {"upgrade_id": "scanner"}, None),
+    ("get", "/api/game/{gid}/upgrades", None, None),
+    ("get", "/api/game/{gid}/nearby", None, None),
+    ("post", "/api/game/{gid}/distress", None, None),
+    ("post", "/api/game/{gid}/salvage", None, None),
+    ("post", "/api/game/{gid}/salvage/craft", {"discovery_id": "x", "output": "fuel"}, None),
+    ("get", "/api/game/{gid}/factions", None, None),
+    ("get", "/api/game/{gid}/faction/fac-1", None, None),
+    ("post", "/api/game/{gid}/faction/fac-1/mission", None, None),
+    ("get", "/api/game/{gid}/missions", None, None),
+    ("post", "/api/game/{gid}/missions/m1/accept", {"mission_id": "m1"}, None),
+    ("post", "/api/game/{gid}/missions/m1/complete", {"mission_id": "m1"}, None),
+    ("post", "/api/game/{gid}/save", None, None),
+    ("post", "/api/game/{gid}/hints/dismiss", {"hint_id": "x"}, None),
+]
+
+_INNER_404_IDS = [
+    "get-game",
+    "galaxy",
+    "system-detail",
+    "log",
+    "discoveries",
+    "cargo",
+    "load",
+    "jump",
+    "scan",
+    "land",
+    "atmospheric-scan",
+    "sub-surface-explore",
+    "explore",
+    "resolve-event",
+    "log-paginated",
+    "lore",
+    "codex",
+    "trade",
+    "bulk-sell",
+    "upgrade",
+    "upgrades-info",
+    "nearby",
+    "distress",
+    "salvage",
+    "salvage-craft",
+    "factions",
+    "faction-detail",
+    "faction-mission",
+    "missions",
+    "accept-mission",
+    "complete-mission",
+    "save",
+    "dismiss-hint",
+]
+
+
+class TestRoutesInnerGameNotFound:
+    """Inner ``if not state`` 404 guards for every per-game endpoint.
+
+    These guards are no longer reachable via the plain 'unknown game id'
+    path because ``_ensure_game_exists`` raises first. They are still
+    reachable when a game is known to ``_ensure_game_exists`` (a DB row
+    exists) but ``_get_state`` returns None (GAME_STORE miss + load failure).
+    """
+
+    @pytest.mark.parametrize(
+        "method,path_template,body,expected_detail",
+        _INNER_404_CASES,
+        ids=_INNER_404_IDS,
+    )
+    def test_inner_game_not_found(self, method, path_template, body, expected_detail) -> None:
+        import uuid
+
+        import backend.api.routes as routes_mod
+
+        game_id = f"inner-404-{uuid.uuid4().hex}"
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": game_id})
+        assert resp.status_code == 200
+
+        expected = expected_detail or "Game not found"
+        path = path_template.format(gid=game_id)
+        try:
+            GAME_STORE.pop(game_id, None)
+            with patch.object(routes_mod, "_game_id_is_known", return_value=True):
+                with patch.object(routes_mod, "game_load_func", return_value=None):
+                    if method == "get":
+                        resp = client.get(path)
+                    else:
+                        resp = client.post(path, json=body)
+            assert resp.status_code == 404
+            assert resp.json()["detail"] == expected
+        finally:
+            GAME_STORE.pop(game_id, None)
             routes_mod._cleanup_game_lock(game_id)
 
 

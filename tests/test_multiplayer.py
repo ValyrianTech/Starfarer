@@ -3108,70 +3108,94 @@ class TestMultiplayerAPI:
         ).json()["ghosts"])
         assert ghost_count_after == ghost_count_before + num_threads
 
-    def test_get_lock_periodic_cleanup_triggers(self) -> None:
-        """Verify that periodic stale lock cleanup triggers without deadlock after 100 calls."""
+    def test_get_lock_time_sweep_triggers(self) -> None:
+        """A time-triggered sweep runs without deadlock when the interval elapses."""
         import backend.api.routes as api_routes
-        
-        # Call _get_lock 100+ times to ensure periodic cleanup is triggered.
-        # _lock_access_count is now an itertools.count object; we verify
-        # that calling _get_lock does not raise any errors and that locks
-        # are properly created.
-        for i in range(105):
-            lock = api_routes._get_lock(f"dummy-periodic-{i}")
-            assert lock is not None
 
-    def test_get_lock_periodic_cleanup_preserves_recently_accessed(self) -> None:
-        """Periodic cleanup should NOT remove locks accessed within the stale threshold."""
+        try:
+            api_routes._last_sweep = 0.0
+            with patch("backend.api.routes.time.time", return_value=1000.0):
+                for i in range(105):
+                    lock = api_routes._get_lock(f"dummy-time-sweep-{i}")
+                    assert lock is not None
+            assert api_routes._last_sweep == 1000.0
+        finally:
+            for i in range(105):
+                api_routes._cleanup_game_lock(f"dummy-time-sweep-{i}")
+            api_routes._last_sweep = 0.0
+
+    def test_get_lock_time_sweep_preserves_recently_accessed(self) -> None:
+        """A time-triggered sweep does NOT remove recently accessed locks."""
+        import backend.api.routes as api_routes
+
         game_id = "recently-accessed-game"
+        api_routes._game_locks.pop(game_id, None)
+        api_routes._lock_last_access.pop(game_id, None)
 
-        times = iter([100.0] * 300)
-        with patch("backend.api.routes.time.time", side_effect=lambda: next(times)):
-            _get_lock(game_id)
+        try:
+            with patch("backend.api.routes.time.time", return_value=1000.0):
+                _get_lock(game_id)
+                assert game_id in _game_locks
+
+                api_routes._last_sweep = 0.0
+                _get_lock("recently-accessed-other")
+
             assert game_id in _game_locks
+        finally:
+            _cleanup_game_lock(game_id)
+            _cleanup_game_lock("recently-accessed-other")
+            api_routes._last_sweep = 0.0
 
-            for i in range(200):
-                _get_lock(f"dummy-recent-{i}")
+    def test_get_lock_time_sweep_removes_old_stale(self) -> None:
+        """A time-triggered sweep removes locks not accessed past the stale threshold."""
+        import backend.api.routes as api_routes
 
-        assert game_id in _game_locks
-        _cleanup_game_lock(game_id)
+        stale_id = "old-stale-time-sweep-game"
+        api_routes._game_locks.pop(stale_id, None)
+        api_routes._lock_last_access.pop(stale_id, None)
 
-    def test_get_lock_periodic_cleanup_removes_old_stale(self) -> None:
-        """Periodic cleanup should remove locks not accessed for over the stale threshold."""
-        stale_id = "old-stale-periodic-game"
-
-        times = iter([0.0] + [61.0] * 300)
-        with patch("backend.api.routes.time.time", side_effect=lambda: next(times)):
-            _get_lock(stale_id)
+        try:
+            with patch("backend.api.routes.time.time", return_value=0.0):
+                _get_lock(stale_id)
             assert stale_id in _game_locks
 
-            for i in range(200):
-                _get_lock(f"dummy-old-stale-{i}")
+            api_routes._last_sweep = 0.0
+            with patch("backend.api.routes.time.time", return_value=1000.0):
+                _get_lock("old-stale-time-sweep-other")
 
-        assert stale_id not in _game_locks
-
-    def test_cleanup_game_lock_no_keyerror_with_periodic_cleanup(self) -> None:
-        """_cleanup_game_lock must not cause KeyError in _get_lock's periodic cleanup."""
-        stale_id = "race-condition-stale-game"
-
-        # Set up a stale lock entry at time 0.0, then advance to 61.0 so that
-        # _get_lock's periodic cleanup would consider it stale.
-        times = iter([0.0] + [61.0] * 300)
-        with patch("backend.api.routes.time.time", side_effect=lambda: next(times)):
-            _get_lock(stale_id)
-            assert stale_id in _game_locks
-
-            # Simulate the race: _cleanup_game_lock removes the entry while
-            # _get_lock's periodic cleanup is about to process it. Both now
-            # acquire _lock_for_locks, so this must not raise KeyError.
+            assert stale_id not in _game_locks
+        finally:
             _cleanup_game_lock(stale_id)
+            _cleanup_game_lock("old-stale-time-sweep-other")
+            api_routes._last_sweep = 0.0
 
-            # Trigger periodic cleanup. Even though stale_id was already
-            # removed by _cleanup_game_lock, the pop-based cleanup must not
-            # raise KeyError.
-            for i in range(200):
-                _get_lock(f"dummy-race-{i}")
+    def test_cleanup_game_lock_no_keyerror_with_time_sweep(self) -> None:
+        """_cleanup_game_lock must not cause KeyError in _get_lock's sweep."""
+        import backend.api.routes as api_routes
 
-        assert stale_id not in _game_locks
+        stale_id = "race-condition-stale-game"
+        api_routes._game_locks.pop(stale_id, None)
+        api_routes._lock_last_access.pop(stale_id, None)
+
+        try:
+            with patch("backend.api.routes.time.time", return_value=0.0):
+                _get_lock(stale_id)
+                assert stale_id in _game_locks
+
+                # Simulate the race: _cleanup_game_lock removes the entry while
+                # _get_lock's sweep is about to process it. Both now acquire
+                # _lock_for_locks, so this must not raise KeyError.
+                _cleanup_game_lock(stale_id)
+                api_routes._last_sweep = 0.0
+
+            with patch("backend.api.routes.time.time", return_value=1000.0):
+                _get_lock("race-condition-other")
+
+            assert stale_id not in _game_locks
+        finally:
+            _cleanup_game_lock(stale_id)
+            _cleanup_game_lock("race-condition-other")
+            api_routes._last_sweep = 0.0
 
     def test_cleanup_stale_locks_concurrent_safety(self) -> None:
         """Verify _cleanup_stale_locks is safe when called concurrently with _get_lock."""
