@@ -1,5 +1,6 @@
 import os
 import random
+import re
 import sys
 from typing import ClassVar
 
@@ -2691,28 +2692,32 @@ class TestDistressBeacon:
         assert r1["outcome"] == r2["outcome"]
         assert r1["result"] == r2["result"]
 
-    def test_activate_distress_beacon_nonce_changes_between_activations(self) -> None:
-        from unittest.mock import MagicMock, patch
+    def test_activate_distress_beacon_repeated_calls_yield_distinct_outcomes(self) -> None:
+        """Repeated real activations on one state must not produce identical outcomes.
 
+        The RNG seed mixes in the ship-log counter, which advances on every
+        activation, so two activations in the same system with the same ship
+        must roll independent values. Pre-fix this produced the same turn count
+        twice ("try again in 3 turns" both times).
+        """
         state = self._make_stranded_state()
-        seen_args = []
+        state.ship.credits = 10000
 
-        def _capture(*args, **kwargs):
-            seen_args.append(args)
-            mock_rng = MagicMock()
-            mock_rng.random.side_effect = [0.61]
-            mock_rng.randint.side_effect = [3]
-            return mock_rng
+        first = activate_distress_beacon(state)
+        state.ship.distress_cooldown = False
+        state.ship.fuel = 0
+        second = activate_distress_beacon(state)
 
-        with patch("backend.game.engine.seeded_random", side_effect=_capture):
-            activate_distress_beacon(state)
-            state.ship.distress_cooldown = False
-            state.ship.credits = 200
-            state.ship.fuel = 0
-            activate_distress_beacon(state)
-
-        assert len(seen_args) == 2
-        assert seen_args[0][-1] != seen_args[1][-1]
+        assert "error" not in first
+        assert "error" not in second
+        # Both land on the same named branch, which pins observable behaviour...
+        assert first["outcome"] == "no_response"
+        assert second["outcome"] == "no_response"
+        # ...but the concrete roll differs, which is what the fix guarantees.
+        assert first["result"] != second["result"]
+        first_turns = int(re.search(r"try again in (\d+) turns", first["result"]).group(1))
+        second_turns = int(re.search(r"try again in (\d+) turns", second["result"]).group(1))
+        assert first_turns != second_turns
 
     def test_activate_distress_beacon_precondition_fail_continue(self) -> None:
         from unittest.mock import MagicMock, patch
@@ -2974,26 +2979,31 @@ class TestSalvage:
         assert r1["find"] == r2["find"]
         assert r1["result"] == r2["result"]
 
-    def test_perform_salvage_nonce_changes_between_attempts(self) -> None:
-        from unittest.mock import MagicMock, patch
+    def test_perform_salvage_repeated_attempts_yield_distinct_outcomes(self) -> None:
+        """Repeated real salvage attempts at the same attempt index must differ.
 
+        The attempt index is reset between calls so the only thing that can
+        decorrelate the two rolls is the ship-log counter mixed into the seed.
+        Pre-fix both attempts returned the identical find and value.
+        """
         state = self._make_salvage_state()
         body_id = state.ship.current_body_id
-        seen_args = []
 
-        def _capture(*args, **kwargs):
-            seen_args.append(args)
-            mock_rng = MagicMock()
-            mock_rng.random.side_effect = [0.95]
-            return mock_rng
+        first = perform_salvage(state)
+        state.ship.salvage_attempts[body_id] = 0
+        state.ship.fuel = 0
+        second = perform_salvage(state)
 
-        with patch("backend.game.engine.seeded_random", side_effect=_capture):
-            perform_salvage(state)
-            state.ship.salvage_attempts[body_id] = 0
-            perform_salvage(state)
-
-        assert len(seen_args) == 2
-        assert seen_args[0][-1] != seen_args[1][-1]
+        assert "error" not in first
+        assert "error" not in second
+        # Both land on the same named branch, which pins observable behaviour...
+        assert first["find"] == "spare_parts"
+        assert second["find"] == "spare_parts"
+        # ...but the concrete roll differs, which is what the fix guarantees.
+        assert first["result"] != second["result"]
+        first_value = int(re.search(r"Value: (\d+) credits", first["result"]).group(1))
+        second_value = int(re.search(r"Value: (\d+) credits", second["result"]).group(1))
+        assert first_value != second_value
 
     def test_perform_salvage_limited_attempts(self) -> None:
         from unittest.mock import MagicMock, patch
