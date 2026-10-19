@@ -15,6 +15,7 @@ def _isolate_test_db():
 
     from backend import database
     from backend.database import init_db, run_migrations
+    from backend.multiplayer.database import init_multiplayer_db
 
     patcher_dir = patch.object(database, "DATA_DIR", tmp_dir)
     patcher_db = patch.object(database, "DB_PATH", db_path)
@@ -23,6 +24,9 @@ def _isolate_test_db():
 
     init_db()
     run_migrations()
+    # Games default to shared_universe=True, so exploration endpoints write
+    # ripple events; the multiplayer schema must exist for every test.
+    init_multiplayer_db()
 
     yield
 
