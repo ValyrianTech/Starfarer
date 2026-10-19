@@ -2100,6 +2100,44 @@ class TestOldSaveLogEntryIdCollision:
         ), f"Expected warning about _next_log_id override, got: {warning_messages}"
 
 
+class TestStateFromDictLegacySharedUniverse:
+    """Tests pinning the backwards-compatible shared_universe fallback in _state_from_dict.
+
+    The canonical default for new games is ``shared_universe=True`` (see
+    ``GameState.shared_universe`` and ``new_game``). However, legacy saves
+    serialized before the field existed omit the key entirely; restoring those
+    as shared-universe would silently change their semantics (they would start
+    participating in ghost signatures / crossroads / ripples). So the fallback
+    for a missing key is deliberately ``False`` to preserve single-player.
+    """
+
+    def test_missing_shared_universe_falls_back_to_false(self) -> None:
+        """A legacy save without the shared_universe key restores as False."""
+        from backend.game.manager import _state_to_dict
+
+        state = GameState(id="legacy-shared-universe", seed=42, ship=Ship())
+        d = _state_to_dict(state)
+        assert d["shared_universe"] is True
+
+        # Simulate a save that predates the shared_universe field.
+        del d["shared_universe"]
+        assert "shared_universe" not in d
+
+        restored = _state_from_dict(d)
+        assert restored.shared_universe is False
+
+    def test_present_shared_universe_true_is_preserved(self) -> None:
+        """A round-trip with shared_universe=True in the dict preserves True."""
+        from backend.game.manager import _state_to_dict
+
+        state = GameState(id="shared-universe-true", seed=42, ship=Ship(), shared_universe=True)
+        d = _state_to_dict(state)
+        assert d["shared_universe"] is True
+
+        restored = _state_from_dict(d)
+        assert restored.shared_universe is True
+
+
 class TestAcceptedMissionsMigration:
     """Tests for the accepted_missions migration in _state_from_dict.
 

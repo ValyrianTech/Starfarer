@@ -42,11 +42,19 @@ class TestAPIGameCreation:
         assert data["state"]["ship"]["name"] == "Serendipity"
 
     def test_create_game_custom(self) -> None:
-        resp = client.post("/api/game/new", json={"seed": 999, "ship_name": "Voyager"})
+        resp = client.post("/api/game/new", json={"seed": 999, "ship_name": "Voyager", "shared_universe": False})
         assert resp.status_code == 200
         data = resp.json()
         assert data["state"]["ship"]["name"] == "Voyager"
         assert data["state"]["seed"] == 999
+
+    def test_create_game_omitted_shared_universe_defaults_true(self) -> None:
+        resp = client.post("/api/game/new", json={"seed": 123})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["state"]["shared_universe"] is True
+        state = GAME_STORE[data["game_id"]]
+        assert state.shared_universe is True
 
     def test_create_game_with_custom_id(self) -> None:
         resp = client.post("/api/game/new", json={"game_id": "test-game-id"})

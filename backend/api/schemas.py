@@ -14,13 +14,14 @@ class NewGameRequest(BaseModel):
     """Request body for creating a new game.
 
     All fields are optional; defaults are applied on the server side
-    if not specified.
+    if not specified. ``shared_universe`` defaults to ``True`` so that
+    an omitted value uses the canonical shared universe.
     """
 
     seed: int | None = None
     ship_name: str | None = None
     game_id: str | None = None
-    shared_universe: bool | None = None
+    shared_universe: bool = True
 
 
 class ResolveEventRequest(BaseModel):

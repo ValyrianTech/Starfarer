@@ -420,8 +420,7 @@ def api_new_game(req: NewGameRequest) -> dict:
     :raises HTTPException: 409 if the requested game_id already exists.
     """
     with _new_game_lock:
-        shared_universe = req.shared_universe if req.shared_universe is not None else False
-        state = new_game(seed=req.seed, ship_name=req.ship_name, shared_universe=shared_universe)
+        state = new_game(seed=req.seed, ship_name=req.ship_name, shared_universe=req.shared_universe)
         if req.game_id:
             if game_exists(req.game_id) or req.game_id in GAME_STORE:
                 raise HTTPException(status_code=409, detail="Game id already exists")

@@ -23,10 +23,10 @@ POST /api/game/new
 Content-Type: application/json
 
 {
-  "seed": 42,                    // optional: universe seed (same seed = same universe)
+  "seed": 42,                    // optional: universe seed (same seed = same universe; only used when shared_universe is false — ignored when shared_universe is true, since the shared universe always uses the canonical seed 42)
   "ship_name": "MyShip",         // optional: name your ship (default: "Serendipity")
   "game_id": "my-game-id",       // optional: custom game id (omit to auto-generate)
-  "shared_universe": false       // optional: enable multiplayer features (default: false)
+  "shared_universe": true        // optional: use the shared canonical universe + multiplayer features (default: true; when true, the supplied seed is ignored)
 }
 ```
 
@@ -41,6 +41,8 @@ Response:
   }
 }
 ```
+
+**Note on `seed`:** when `shared_universe` is `true` (the default), the canonical shared universe seed (`42`) is always used and any `seed` you supply is ignored, so every shared-universe game plays in the same 50-system galaxy. Supply `"shared_universe": false` to get a private universe generated from your own `seed` (or from the default seed if you omit `seed`).
 
 **Save the `game_id`** — you need it for every subsequent request.
 
@@ -791,7 +793,7 @@ All endpoints that access a specific game (mutating and read-only GET) accept th
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/health` | Server health check |
-| POST | `/api/game/new` | Create new game (optional `game_id`; returns HTTP 409 Conflict if a caller-supplied `game_id` already exists) |
+| POST | `/api/game/new` | Create new game (optional `game_id`; `seed` ignored when `shared_universe` is true; returns HTTP 409 Conflict if a caller-supplied `game_id` already exists) |
 | GET | `/api/game/{id}?sort={value\|name}&order={asc\|desc}` | Full game state (ship, system, events, log, fuel_status, hints, missions_available, reputation, shared_universe, total_value, top3_ids; cargo sorted only when `sort` and/or `order` is supplied) |
 | GET | `/api/game/{id}/galaxy` | Galaxy map data |
 | GET | `/api/game/{id}/system/{sid}` | System details |
