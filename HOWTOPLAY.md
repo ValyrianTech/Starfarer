@@ -26,7 +26,7 @@ Content-Type: application/json
   "seed": 42,                    // optional: universe seed (same seed = same universe)
   "ship_name": "MyShip",         // optional: name your ship (default: "Serendipity")
   "game_id": "my-game-id",       // optional: custom game id (omit to auto-generate)
-  "shared_universe": false       // optional: enable multiplayer features (default: false)
+  "shared_universe": true        // optional: enable multiplayer features (default: true)
 }
 ```
 
