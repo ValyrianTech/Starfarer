@@ -14,7 +14,7 @@ from contextlib import contextmanager
 from datetime import UTC, datetime
 from typing import Any
 
-from backend.config import DATA_DIR, DB_PATH
+from backend.config import DATA_DIR, DB_PATH, MAX_SAVES_PER_GAME
 
 
 def get_db() -> sqlite3.Connection:
@@ -239,6 +239,27 @@ def game_exists(game_id: str) -> bool:
         return row is not None
 
 
+def _prune_saves(conn: sqlite3.Connection, game_id: str) -> None:
+    """Delete excess save rows for a game, keeping only the newest.
+
+    Retains at most ``MAX_SAVES_PER_GAME`` most-recent rows for the given
+    game, deleting any older rows so the saves history does not grow
+    without bound.
+
+    :param conn: An open SQLite connection.
+    :type conn: sqlite3.Connection
+    :param game_id: The unique identifier for the game.
+    :type game_id: str
+    :returns: None
+    :rtype: None
+    """
+    conn.execute(
+        "DELETE FROM saves WHERE game_id = ? AND id NOT IN "
+        "(SELECT id FROM saves WHERE game_id = ? ORDER BY id DESC LIMIT ?)",
+        (game_id, game_id, MAX_SAVES_PER_GAME),
+    )
+
+
 def save_game(game_id: str, state: dict) -> None:
     """Save the current game state to both the games and saves tables.
 
@@ -285,6 +306,7 @@ def save_game(game_id: str, state: dict) -> None:
             "INSERT INTO saves (game_id, saved_at, state_json, token) VALUES (?, ?, ?, ?)",
             (game_id, now, json.dumps(state_data), token),
         )
+        _prune_saves(conn, game_id)
         conn.commit()
 
 
