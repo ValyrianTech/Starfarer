@@ -412,6 +412,11 @@ def _state_from_dict(d: dict) -> GameState | None:
         dismissed_hints=set(d.get("dismissed_hints", [])),
         hazard_event_counts=d.get("hazard_event_counts", {}),
         biomes_visited=set(d.get("biomes_visited", [])),
+        # The in-memory / new-game canonical default is True (see
+        # GameState.shared_universe and new_game). This False fallback is
+        # deliberately different: it only applies to legacy saves serialized
+        # before shared_universe existed, preserving their original
+        # single-player semantics.
         shared_universe=d.get("shared_universe", False),
         _next_log_id=_next_log_id,
         token=d.get("token", ""),
