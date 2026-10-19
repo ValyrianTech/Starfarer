@@ -280,3 +280,94 @@ class TestDatabaseSaveHistory:
                 conn.close()
         finally:
             self._cleanup(game_id)
+
+    def test_save_history_is_bounded(self) -> None:
+        from backend.config import MAX_SAVES_PER_GAME
+        from backend.database import get_db, init_db, load_save, save_game
+        game_id = "save-history-bounded"
+        init_db()
+        self._cleanup(game_id)
+        try:
+            for i in range(MAX_SAVES_PER_GAME + 5):
+                save_game(game_id, {"seed": 1, "ship": {"name": "Test Ship"}, "credits": i})
+            conn = get_db()
+            try:
+                row = conn.execute(
+                    "SELECT COUNT(*) FROM saves WHERE game_id = ?", (game_id,)
+                ).fetchone()
+                assert row[0] == MAX_SAVES_PER_GAME
+            finally:
+                conn.close()
+            assert load_save(game_id)["credits"] == MAX_SAVES_PER_GAME + 4
+        finally:
+            self._cleanup(game_id)
+
+    def test_pruning_is_per_game(self) -> None:
+        from backend.config import MAX_SAVES_PER_GAME
+        from backend.database import get_db, init_db, save_game
+        game_a = "save-history-per-game-a"
+        game_b = "save-history-per-game-b"
+        init_db()
+        self._cleanup(game_a)
+        self._cleanup(game_b)
+        try:
+            for i in range(2):
+                save_game(game_b, {"seed": 2, "ship": {"name": "Ship B"}, "credits": i})
+            for i in range(MAX_SAVES_PER_GAME + 5):
+                save_game(game_a, {"seed": 1, "ship": {"name": "Ship A"}, "credits": i})
+            conn = get_db()
+            try:
+                row_a = conn.execute(
+                    "SELECT COUNT(*) FROM saves WHERE game_id = ?", (game_a,)
+                ).fetchone()
+                row_b = conn.execute(
+                    "SELECT COUNT(*) FROM saves WHERE game_id = ?", (game_b,)
+                ).fetchone()
+                assert row_a[0] == MAX_SAVES_PER_GAME
+                assert row_b[0] == 2
+            finally:
+                conn.close()
+        finally:
+            self._cleanup(game_a)
+            self._cleanup(game_b)
+
+    def test_single_save_is_not_pruned(self) -> None:
+        from backend.database import get_db, init_db, save_game
+        game_id = "save-history-single"
+        init_db()
+        self._cleanup(game_id)
+        try:
+            save_game(game_id, {"seed": 1, "ship": {"name": "Test Ship"}, "credits": 10})
+            conn = get_db()
+            try:
+                row = conn.execute(
+                    "SELECT COUNT(*) FROM saves WHERE game_id = ?", (game_id,)
+                ).fetchone()
+                assert row[0] == 1
+            finally:
+                conn.close()
+        finally:
+            self._cleanup(game_id)
+
+    def test_pruning_retains_most_recent_snapshots(self) -> None:
+        from backend.config import MAX_SAVES_PER_GAME
+        from backend.database import get_db, init_db, load_save, save_game
+        game_id = "save-history-recent"
+        init_db()
+        self._cleanup(game_id)
+        try:
+            for i in range(MAX_SAVES_PER_GAME + 5):
+                save_game(game_id, {"seed": 1, "ship": {"name": "Test Ship"}, "credits": i})
+            data = load_save(game_id)
+            assert data is not None
+            assert data["credits"] == MAX_SAVES_PER_GAME + 4
+            conn = get_db()
+            try:
+                rows = conn.execute(
+                    "SELECT id FROM saves WHERE game_id = ? ORDER BY id ASC", (game_id,)
+                ).fetchall()
+                assert len(rows) == MAX_SAVES_PER_GAME
+            finally:
+                conn.close()
+        finally:
+            self._cleanup(game_id)
