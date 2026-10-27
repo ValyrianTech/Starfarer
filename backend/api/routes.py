@@ -114,6 +114,19 @@ def _client_ip(request: Request) -> str:
     :type request: Request
     :returns: The client host address, or ``"unknown"`` when unavailable.
     :rtype: str
+
+    .. note::
+        This returns the direct TCP peer address (``request.client.host``);
+        it does **not** consult ``X-Forwarded-For``, ``Forwarded``, or any other
+        proxy header. Behind a reverse proxy (nginx, Caddy, Traefik, a cloud
+        load balancer, etc.), every request therefore appears to come from the
+        proxy's own IP, so all clients share a single per-IP rate-limit bucket
+        and can collectively exhaust ``STARFARER_NEW_GAME_RATE_LIMIT``.
+        Operators should configure trusted client-IP handling at the ASGI
+        server/proxy layer (e.g. run uvicorn with ``--forwarded-allow-ips`` or
+        ``FORWARDED_ALLOW_IPS`` so its ``ProxyHeadersMiddleware`` rewrites
+        ``request.client.host`` from ``X-Forwarded-For`` for trusted proxies)
+        and should only trust forwarding headers from proxies they control.
     """
     if request.client is not None and request.client.host:
         return request.client.host
