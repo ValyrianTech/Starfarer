@@ -81,6 +81,18 @@ class TestStoredGameCap:
         resp = client.post("/api/game/new", json={})
         assert resp.status_code == 429
 
+    def test_cap_rejection_does_not_touch_game_store(self, monkeypatch) -> None:
+        monkeypatch.setenv("STARFARER_MAX_STORED_GAMES", "10")
+        monkeypatch.setenv("STARFARER_NEW_GAME_RATE_LIMIT", "0")
+        monkeypatch.setattr(routes, "count_games", lambda: 10)
+        before = dict(manager.GAME_STORE)
+        client = TestClient(app, client=("10.0.0.99", 1234))
+        resp = client.post("/api/game/new", json={})
+        assert resp.status_code == 429
+        assert manager.GAME_STORE == before
+        assert manager.GAME_STORE.keys() == before.keys()
+        assert all(manager.GAME_STORE[k] is v for k, v in before.items())
+
     def test_unlimited_stored_games_never_raises(self, monkeypatch) -> None:
         monkeypatch.setenv("STARFARER_MAX_STORED_GAMES", "0")
         monkeypatch.setenv("STARFARER_NEW_GAME_RATE_LIMIT", "0")
