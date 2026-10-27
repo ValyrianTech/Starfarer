@@ -239,6 +239,19 @@ def game_exists(game_id: str) -> bool:
         return row is not None
 
 
+def count_games() -> int:
+    """Return the number of rows in the ``games`` table.
+
+    Used to enforce the stored-game upper bound on new-game creation.
+
+    :returns: The total number of stored games.
+    :rtype: int
+    """
+    with get_db_ctx() as conn:
+        row = conn.execute("SELECT COUNT(*) FROM games").fetchone()
+        return int(row[0]) if row is not None else 0
+
+
 def _prune_saves(conn: sqlite3.Connection, game_id: str) -> None:
     """Delete excess save rows for a game, keeping only the newest.
 

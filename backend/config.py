@@ -73,6 +73,69 @@ def get_require_game_token() -> bool:
     return True
 
 
+def get_new_game_rate_limit() -> int:
+    """Return the per-IP new-game rate limit from STARFARER_NEW_GAME_RATE_LIMIT.
+
+    The value is the maximum number of ``POST /api/game/new`` requests
+    allowed per client IP within a single rate-limit window. A value of
+    ``0`` or negative disables rate limiting entirely. Falls back to the
+    default of ``30`` when the environment variable is unset, empty, or not
+    a valid integer.
+
+    :returns: The configured per-IP new-game request limit.
+    :rtype: int
+    """
+    raw = os.environ.get("STARFARER_NEW_GAME_RATE_LIMIT", "")
+    raw = raw.strip()
+    if not raw:
+        return 30
+    try:
+        return int(raw)
+    except ValueError:
+        return 30
+
+
+def get_new_game_rate_window() -> float:
+    """Return the new-game rate-limit window from STARFARER_NEW_GAME_RATE_WINDOW.
+
+    The value is the sliding-window duration in seconds. Falls back to the
+    default of ``60.0`` when the environment variable is unset, empty, or
+    not a valid float.
+
+    :returns: The configured rate-limit window in seconds.
+    :rtype: float
+    """
+    raw = os.environ.get("STARFARER_NEW_GAME_RATE_WINDOW", "")
+    raw = raw.strip()
+    if not raw:
+        return 60.0
+    try:
+        return float(raw)
+    except ValueError:
+        return 60.0
+
+
+def get_max_stored_games() -> int:
+    """Return the maximum number of stored games from STARFARER_MAX_STORED_GAMES.
+
+    The value caps the number of rows allowed in the ``games`` table. A
+    value of ``0`` or negative disables the cap (unlimited). Falls back to
+    the default of ``100000`` when the environment variable is unset, empty,
+    or not a valid integer.
+
+    :returns: The configured maximum number of stored games.
+    :rtype: int
+    """
+    raw = os.environ.get("STARFARER_MAX_STORED_GAMES", "")
+    raw = raw.strip()
+    if not raw:
+        return 100000
+    try:
+        return int(raw)
+    except ValueError:
+        return 100000
+
+
 GAME_NAME = "Starfarer: Echoes of the Void"
 GAME_VERSION = "0.1.0"
 

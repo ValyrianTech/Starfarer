@@ -13,7 +13,7 @@ from collections.abc import Generator
 from contextlib import contextmanager
 from threading import Lock
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Header, HTTPException, Request
 
 from backend.api.schemas import (
     AcceptMissionRequest,
@@ -27,8 +27,13 @@ from backend.api.schemas import (
     TradeRequest,
     UpgradeRequest,
 )
-from backend.config import get_require_game_token
-from backend.database import game_exists, get_leaderboard
+from backend.config import (
+    get_max_stored_games,
+    get_new_game_rate_limit,
+    get_new_game_rate_window,
+    get_require_game_token,
+)
+from backend.database import count_games, game_exists, get_leaderboard
 from backend.fuel import get_fuel_status
 from backend.game.engine import (
     activate_distress_beacon,
@@ -96,6 +101,110 @@ _LOCK_STALE_THRESHOLD_SECONDS = 60.0
 _MAX_TRACKED_LOCKS = 1024
 _SWEEP_INTERVAL_SECONDS = 5.0
 _last_sweep: float = 0.0
+
+_new_game_rate_lock: Lock = Lock()
+_new_game_rate_entries: dict[str, list[float]] = {}
+_MAX_RATE_LIMIT_IPS = 4096
+
+
+def _client_ip(request: Request) -> str:
+    """Return the client IP address from the incoming request.
+
+    :param request: The incoming HTTP request.
+    :type request: Request
+    :returns: The client host address, or ``"unknown"`` when unavailable.
+    :rtype: str
+    """
+    if request.client is not None and request.client.host:
+        return request.client.host
+    return "unknown"
+
+
+def reset_new_game_rate_limiter() -> None:
+    """Clear all tracked per-IP new-game rate-limit state.
+
+    Primarily used by tests to guarantee isolation between test cases.
+
+    :returns: None
+    :rtype: None
+    """
+    global _new_game_rate_entries
+    with _new_game_rate_lock:
+        _new_game_rate_entries.clear()
+
+
+def _evict_oldest_rate_limit_entry() -> None:
+    """Evict the oldest per-IP rate-limit entry to bound tracked IP count.
+
+    The caller must hold :data:`_new_game_rate_lock`. The entry with the
+    earliest recorded request timestamp is removed so the in-memory table
+    never exceeds :data:`_MAX_RATE_LIMIT_IPS` entries.
+
+    :returns: None
+    :rtype: None
+    """
+    oldest_ip = min(
+        _new_game_rate_entries,
+        key=lambda ip: min(_new_game_rate_entries[ip]),
+    )
+    del _new_game_rate_entries[oldest_ip]
+
+
+def _check_new_game_rate_limit(ip: str) -> None:
+    """Enforce the per-IP sliding-window rate limit for new-game creation.
+
+    When ``get_new_game_rate_limit()`` is ``<= 0`` the limiter is disabled
+    and this function returns immediately. Otherwise, expired timestamps for
+    the given IP are pruned, and if the remaining count meets or exceeds the
+    limit a ``429`` with a ``Retry-After`` header is raised. The per-IP table
+    is capped at :data:`_MAX_RATE_LIMIT_IPS` entries; the oldest entry is
+    evicted when the cap would be exceeded.
+
+    :param ip: The client IP address to check.
+    :type ip: str
+    :raises HTTPException: 429 with a ``Retry-After`` header when the limit
+        has been exceeded.
+    """
+    limit = get_new_game_rate_limit()
+    if limit <= 0:
+        return
+    window = get_new_game_rate_window()
+    now = time.time()
+    with _new_game_rate_lock:
+        if ip not in _new_game_rate_entries:
+            if len(_new_game_rate_entries) >= _MAX_RATE_LIMIT_IPS:
+                _evict_oldest_rate_limit_entry()
+            _new_game_rate_entries[ip] = []
+        timestamps = _new_game_rate_entries[ip]
+        timestamps[:] = [t for t in timestamps if now - t <= window]
+        if len(timestamps) >= limit:
+            retry_after = max(1, int(window - (now - timestamps[0])) + 1)
+            raise HTTPException(
+                status_code=429,
+                detail="Too many new-game requests. Please wait and retry.",
+                headers={"Retry-After": str(retry_after)},
+            )
+        timestamps.append(now)
+
+
+def _enforce_stored_game_cap() -> None:
+    """Raise ``429`` when the number of stored games meets or exceeds the cap.
+
+    When ``get_max_stored_games()`` is ``<= 0`` the cap is disabled and this
+    function returns immediately. Otherwise the current ``games`` row count is
+    compared against the configured maximum and an ``HTTPException`` is raised
+    if it has been reached or exceeded.
+
+    :raises HTTPException: 429 when the stored-game cap has been reached.
+    """
+    max_games = get_max_stored_games()
+    if max_games <= 0:
+        return
+    if count_games() >= max_games:
+        raise HTTPException(
+            status_code=429,
+            detail="New-game limit reached. Please try again later.",
+        )
 
 
 def _fetch_or_create_unlocked(game_id: str) -> Lock:
@@ -406,19 +515,26 @@ def health() -> HealthResponse:
 
 
 @router.post("/game/new")
-def api_new_game(req: NewGameRequest) -> dict:
+def api_new_game(request: Request, req: NewGameRequest) -> dict:
     """Create a new game session.
 
     Generates a procedurally created universe, initializes the ship,
-    and persists the game state to the database.
+    and persists the game state to the database. Before doing any work the
+    per-IP new-game rate limit is enforced, and before the synchronous save
+    the stored-game upper bound is enforced.
 
+    :param request: The incoming HTTP request, used to derive the client IP
+        for rate limiting.
+    :type request: Request
     :param req: The new game request with optional seed, ship_name,
         and game_id.
     :type req: NewGameRequest
     :returns: A dictionary with ``game_id`` and a ``state`` summary.
     :rtype: dict
-    :raises HTTPException: 409 if the requested game_id already exists.
+    :raises HTTPException: 409 if the requested game_id already exists;
+        429 if the per-IP rate limit or the stored-game cap is exceeded.
     """
+    _check_new_game_rate_limit(_client_ip(request))
     with _new_game_lock:
         state = new_game(seed=req.seed, ship_name=req.ship_name, shared_universe=req.shared_universe)
         if req.game_id:
@@ -427,6 +543,7 @@ def api_new_game(req: NewGameRequest) -> dict:
             state.id = req.game_id
         register_game(state)
         evict_if_needed(_locked_game_ids() | {state.id})
+        _enforce_stored_game_cap()
         game_save(state)
         return {
             "game_id": state.id,
