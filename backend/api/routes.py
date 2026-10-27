@@ -520,8 +520,8 @@ def api_new_game(request: Request, req: NewGameRequest) -> dict:
 
     Generates a procedurally created universe, initializes the ship,
     and persists the game state to the database. Before doing any work the
-    per-IP new-game rate limit is enforced, and before the synchronous save
-    the stored-game upper bound is enforced.
+    per-IP new-game rate limit is enforced, and before building or
+    registering the game the stored-game upper bound is enforced.
 
     :param request: The incoming HTTP request, used to derive the client IP
         for rate limiting.
@@ -536,6 +536,7 @@ def api_new_game(request: Request, req: NewGameRequest) -> dict:
     """
     _check_new_game_rate_limit(_client_ip(request))
     with _new_game_lock:
+        _enforce_stored_game_cap()
         state = new_game(seed=req.seed, ship_name=req.ship_name, shared_universe=req.shared_universe)
         if req.game_id:
             if game_exists(req.game_id) or req.game_id in GAME_STORE:
@@ -543,7 +544,6 @@ def api_new_game(request: Request, req: NewGameRequest) -> dict:
             state.id = req.game_id
         register_game(state)
         evict_if_needed(_locked_game_ids() | {state.id})
-        _enforce_stored_game_cap()
         game_save(state)
         return {
             "game_id": state.id,
