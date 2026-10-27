@@ -46,3 +46,27 @@ def _opt_out_auth_by_default(monkeypatch):
     """
     monkeypatch.setenv("STARFARER_ALLOW_NO_AUTH", "1")
     yield
+
+
+@pytest.fixture(autouse=True)
+def _isolate_dos_protections(monkeypatch):
+    """Reset rate-limit/shared-universe state and default the DoS guards off.
+
+    The application now rate-limits ``POST /api/game/new`` per client IP and
+    caps the number of stored games by default. The bulk of the suite creates
+    games in tight loops and would trip those limits, so we (1) reset the
+    per-IP limiter and the shared-universe cache before and after each test to
+    avoid cross-test leakage, and (2) default both ``STARFARER_NEW_GAME_RATE_LIMIT``
+    and ``STARFARER_MAX_STORED_GAMES`` to ``0`` (unlimited). Tests that exercise
+    the protections override these env vars and rely on the per-test reset.
+    """
+    from backend.api.routes import reset_new_game_rate_limiter
+    from backend.game.manager import reset_shared_universe_cache
+
+    reset_new_game_rate_limiter()
+    reset_shared_universe_cache()
+    monkeypatch.setenv("STARFARER_NEW_GAME_RATE_LIMIT", "0")
+    monkeypatch.setenv("STARFARER_MAX_STORED_GAMES", "0")
+    yield
+    reset_new_game_rate_limiter()
+    reset_shared_universe_cache()
