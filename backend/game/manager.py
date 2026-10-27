@@ -6,6 +6,7 @@ state, serializing/deserializing state to/from dictionaries, and
 querying galaxy and system data.
 """
 
+import copy
 import logging
 import secrets
 import threading
@@ -35,6 +36,44 @@ from backend.models.game_state import GameState
 from backend.models.ship import Ship
 
 logger = logging.getLogger(__name__)
+
+_SHARED_UNIVERSE_CACHE: tuple | None = None
+_SHARED_UNIVERSE_LOCK = threading.Lock()
+
+
+def _shared_universe() -> tuple:
+    """Return the lazily-built canonical shared universe.
+
+    Builds the shared universe with :func:`generate_universe` using the
+    canonical :data:`DEFAULT_SEED` (42) exactly once per process lifetime,
+    then caches and returns the ``(systems, lore_fragments)`` tuple on every
+    subsequent call. The double-checked locking keeps concurrent first-time
+    callers from generating the universe more than once.
+
+    :returns: A tuple of ``(systems, lore_fragments)`` where ``systems`` is
+        a dict mapping system IDs to :class:`StarSystem` instances and
+        ``lore_fragments`` is a list of placed :class:`LoreFragment` objects.
+    :rtype: tuple
+    """
+    global _SHARED_UNIVERSE_CACHE
+    if _SHARED_UNIVERSE_CACHE is None:
+        with _SHARED_UNIVERSE_LOCK:
+            if _SHARED_UNIVERSE_CACHE is None:
+                _SHARED_UNIVERSE_CACHE = generate_universe(DEFAULT_SEED)
+    return _SHARED_UNIVERSE_CACHE
+
+
+def reset_shared_universe_cache() -> None:
+    """Clear the cached shared universe so it is regenerated on next use.
+
+    Primarily used by tests to guarantee a deterministic universe-generation
+    call count across test cases.
+
+    :returns: None
+    :rtype: None
+    """
+    global _SHARED_UNIVERSE_CACHE
+    _SHARED_UNIVERSE_CACHE = None
 
 
 def new_game(seed: int | None = None, ship_name: str | None = None, shared_universe: bool = True) -> GameState:
@@ -68,7 +107,12 @@ def new_game(seed: int | None = None, ship_name: str | None = None, shared_unive
     game_id = str(uuid.uuid4())
     token = secrets.token_urlsafe(32)
 
-    systems, lore_fragments = generate_universe(s)
+    if s == DEFAULT_SEED:
+        systems, lore_fragments = _shared_universe()
+        systems = copy.deepcopy(systems)
+        lore_fragments = copy.deepcopy(lore_fragments)
+    else:
+        systems, lore_fragments = generate_universe(s)
     first_sys_id = next(iter(systems.keys()))
 
     ship = Ship(
