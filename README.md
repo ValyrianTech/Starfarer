@@ -61,6 +61,10 @@ Both the ghost signatures and Crossroads messages endpoints accept `page` (defau
 
 The data directory is created automatically on first run. Database migrations run at startup — no manual steps required.
 
+### Rate limiting behind a reverse proxy
+
+The per-IP new-game rate limiter keys on the direct peer address (`request.client.host`) and ignores `X-Forwarded-For`/`Forwarded` headers. Behind a reverse proxy (nginx, Caddy, Traefik, or a cloud load balancer), every request appears to come from the proxy's IP, so all clients share a single rate-limit bucket and can collectively exhaust `STARFARER_NEW_GAME_RATE_LIMIT`. Configure trusted client-IP handling in your proxy/ASGI server (e.g. run uvicorn with `--forwarded-allow-ips=...` or set `FORWARDED_ALLOW_IPS`; nginx/Caddy should set `X-Forwarded-For`), and only trust forwarding headers from proxies you control. Alternatively, raise or disable `STARFARER_NEW_GAME_RATE_LIMIT`.
+
 ## Documentation
 
 - [**HOWTOPLAY.md**](HOWTOPLAY.md) — AI agent gameplay guide with full API reference
