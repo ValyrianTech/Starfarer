@@ -72,6 +72,47 @@ class TestNewGameRateLimit:
         assert "ip0" not in routes._new_game_rate_entries
 
 
+class TestEvictOldestRateLimitEntry:
+    def test_empty_list_evicted_first(self, monkeypatch) -> None:
+        routes.reset_new_game_rate_limiter()
+        routes._new_game_rate_entries = {
+            "empty": [],
+            "active": [1.0, 2.0, 3.0],
+        }
+        routes._evict_oldest_rate_limit_entry()
+        assert "empty" not in routes._new_game_rate_entries
+        assert "active" in routes._new_game_rate_entries
+
+    def test_empty_list_evicted_among_multiple_empty(self, monkeypatch) -> None:
+        routes.reset_new_game_rate_limiter()
+        routes._new_game_rate_entries = {
+            "empty-a": [],
+            "empty-b": [],
+            "active": [100.0],
+        }
+        routes._evict_oldest_rate_limit_entry()
+        assert len(routes._new_game_rate_entries) == 2
+        assert "active" in routes._new_game_rate_entries
+        remaining = set(routes._new_game_rate_entries) - {"active"}
+        assert remaining & {"empty-a", "empty-b"} == remaining
+        assert remaining
+
+    def test_empty_entry_evicted_end_to_end_at_capacity(self, monkeypatch) -> None:
+        routes.reset_new_game_rate_limiter()
+        monkeypatch.setattr(routes, "_MAX_RATE_LIMIT_IPS", 2)
+        monkeypatch.setenv("STARFARER_NEW_GAME_RATE_LIMIT", "100")
+        monkeypatch.setenv("STARFARER_NEW_GAME_RATE_WINDOW", "60")
+        routes._new_game_rate_entries = {
+            "empty": [],
+            "active": [1.0],
+        }
+        routes._check_new_game_rate_limit("new-ip")
+        assert len(routes._new_game_rate_entries) == 2
+        assert "empty" not in routes._new_game_rate_entries
+        assert "new-ip" in routes._new_game_rate_entries
+        assert "active" in routes._new_game_rate_entries
+
+
 class TestStoredGameCap:
     def test_stored_game_cap_returns_429(self, monkeypatch) -> None:
         monkeypatch.setenv("STARFARER_MAX_STORED_GAMES", "10")

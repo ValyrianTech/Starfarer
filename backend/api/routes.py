@@ -138,14 +138,20 @@ def _evict_oldest_rate_limit_entry() -> None:
 
     The caller must hold :data:`_new_game_rate_lock`. The entry with the
     earliest recorded request timestamp is removed so the in-memory table
-    never exceeds :data:`_MAX_RATE_LIMIT_IPS` entries.
+    never exceeds :data:`_MAX_RATE_LIMIT_IPS` entries. Entries whose
+    timestamp list is empty (no recorded requests) are considered the oldest
+    and are evicted first, so an empty list never causes an error.
 
     :returns: None
     :rtype: None
     """
     oldest_ip = min(
         _new_game_rate_entries,
-        key=lambda ip: min(_new_game_rate_entries[ip]),
+        key=lambda ip: (
+            min(_new_game_rate_entries[ip])
+            if _new_game_rate_entries[ip]
+            else float("-inf")
+        ),
     )
     del _new_game_rate_entries[oldest_ip]
 
