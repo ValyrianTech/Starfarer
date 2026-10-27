@@ -48,6 +48,8 @@ Response:
 
 `game_id` is optional — if omitted, the server generates one. If you supply a `game_id` that already exists (in the database or in memory), the request returns HTTP 409 Conflict with `{"detail": "Game id already exists"}` and does **not** overwrite the existing game.
 
+Game creation is rate limited per client IP: by default the server allows at most 30 `POST /api/game/new` requests per IP per 60-second window (configurable via `STARFARER_NEW_GAME_RATE_LIMIT` and `STARFARER_NEW_GAME_RATE_WINDOW`; a value `<= 0` disables the limit). Exceeding the limit returns HTTP 429 with a `Retry-After` header. The server also enforces an upper bound on the total number of stored games (configurable via `STARFARER_MAX_STORED_GAMES`, default 100000; `<= 0` disables the cap); when the cap is reached, new-game creation returns HTTP 429 with detail `"New-game limit reached. Please try again later."`.
+
 The response also includes a `token`. Per-game token enforcement is **ON by default** (secure baseline), so every endpoint that accesses a specific game — both the state-mutating endpoints (jump, scan, land, explore, atmospheric-scan, sub-surface-explore, event resolve, trade, bulk-sell, upgrade, distress, salvage, salvage/craft, faction mission accept, missions accept/complete, save, load, hints/dismiss) and the read-only GET endpoints (full game state, galaxy, system detail, log, log/paginated, discoveries, cargo, lore, codex, upgrades, nearby, factions, faction detail, missions, crossroads items, crossroads lore, crossroads messages) — requires the token, supplied via the `X-Game-Token: <token>` header only (the `token` query parameter is no longer accepted). You can disable enforcement only for purely local, single-user play by starting the server with `STARFARER_ALLOW_NO_AUTH=1` (**never** do this in a shared/networked deployment), or explicitly with `STARFARER_REQUIRE_GAME_TOKEN` set to a falsy value. A missing token returns HTTP 403 with detail "Game token required"; a wrong token returns HTTP 403 with detail "Invalid game token".
 
 ### 2.2 Continue a Saved Game
@@ -793,7 +795,7 @@ All endpoints that access a specific game (mutating and read-only GET) accept th
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/health` | Server health check |
-| POST | `/api/game/new` | Create new game (optional `game_id`; `seed` ignored when `shared_universe` is true; returns HTTP 409 Conflict if a caller-supplied `game_id` already exists) |
+| POST | `/api/game/new` | Create new game (optional `game_id`; `seed` ignored when `shared_universe` is true; returns HTTP 409 Conflict if a caller-supplied `game_id` already exists; per-IP rate limited — HTTP 429 + `Retry-After` when exceeded — and subject to a stored-game cap, HTTP 429 `"New-game limit reached. Please try again later."`) |
 | GET | `/api/game/{id}?sort={value\|name}&order={asc\|desc}` | Full game state (ship, system, events, log, fuel_status, hints, missions_available, reputation, shared_universe, total_value, top3_ids; cargo sorted only when `sort` and/or `order` is supplied) |
 | GET | `/api/game/{id}/galaxy` | Galaxy map data |
 | GET | `/api/game/{id}/system/{sid}` | System details |
