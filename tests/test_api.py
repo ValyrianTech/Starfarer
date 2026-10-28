@@ -6150,3 +6150,280 @@ class TestRegisterGame:
         finally:
             for gid in created:
                 GAME_STORE.pop(gid, None)
+
+
+class TestSnapshotGames:
+    """Tests for snapshot_games in backend/game/manager.py."""
+
+    def test_returns_list_of_id_state_tuples(self) -> None:
+        """snapshot_games returns (game_id, GameState) tuples for the store."""
+        from backend.game.manager import snapshot_games
+
+        s1 = new_game(seed=42)
+        s2 = new_game(seed=42)
+        try:
+            GAME_STORE[s1.id] = s1
+            GAME_STORE[s2.id] = s2
+            snapshot = snapshot_games()
+            assert isinstance(snapshot, list)
+            as_dict = dict(snapshot)
+            assert as_dict[s1.id] is s1
+            assert as_dict[s2.id] is s2
+            for entry in snapshot:
+                assert isinstance(entry, tuple)
+                assert len(entry) == 2
+                assert isinstance(entry[0], str)
+                assert isinstance(entry[1], GameState)
+        finally:
+            GAME_STORE.pop(s1.id, None)
+            GAME_STORE.pop(s2.id, None)
+
+    def test_preserves_lru_order(self) -> None:
+        """The snapshot preserves the store's current LRU ordering."""
+        from backend.game.manager import snapshot_games
+
+        s1 = new_game(seed=42)
+        s2 = new_game(seed=42)
+        s3 = new_game(seed=42)
+        try:
+            GAME_STORE[s1.id] = s1
+            GAME_STORE[s2.id] = s2
+            GAME_STORE[s3.id] = s3
+            ids = [gid for gid, _ in snapshot_games()]
+            # s2/s3 appear after s1 and in insertion order relative to each other.
+            assert ids.index(s1.id) < ids.index(s2.id) < ids.index(s3.id)
+        finally:
+            GAME_STORE.pop(s1.id, None)
+            GAME_STORE.pop(s2.id, None)
+            GAME_STORE.pop(s3.id, None)
+
+    def test_snapshot_is_decoupled_from_the_store(self) -> None:
+        """Mutating GAME_STORE after the call must not affect the snapshot."""
+        from backend.game.manager import snapshot_games
+
+        s1 = new_game(seed=42)
+        s2 = new_game(seed=42)
+        try:
+            GAME_STORE[s1.id] = s1
+            snapshot = snapshot_games()
+            # Mutate the store after snapshotting: insert a new entry and pop s1.
+            GAME_STORE[s2.id] = s2
+            GAME_STORE.pop(s1.id, None)
+            # The snapshot is a plain list built under the lock, so it still
+            # reflects the state at call time and must not raise.
+            assert [gid for gid, _ in snapshot] == [s1.id]
+            assert dict(snapshot)[s1.id] is s1
+        finally:
+            GAME_STORE.pop(s1.id, None)
+            GAME_STORE.pop(s2.id, None)
+
+    def test_does_not_mutate_lru_order(self) -> None:
+        """snapshot_games is read-only: it must not touch or reorder the store."""
+        from backend.game.manager import snapshot_games
+
+        s1 = new_game(seed=42)
+        s2 = new_game(seed=42)
+        try:
+            GAME_STORE[s1.id] = s1
+            GAME_STORE[s2.id] = s2
+            before = list(GAME_STORE.keys())
+            snapshot_games()
+            assert list(GAME_STORE.keys()) == before
+        finally:
+            GAME_STORE.pop(s1.id, None)
+            GAME_STORE.pop(s2.id, None)
+
+    def test_acquires_store_lock(self) -> None:
+        """snapshot_games must block while _store_lock is held elsewhere.
+
+        This is the core of the fix: if snapshot_games did not take the lock
+        it would return immediately even while another thread is mid-mutation.
+        """
+        import threading
+
+        from backend.game import manager
+
+        acquired = threading.Event()
+        finished = threading.Event()
+
+        def _reader() -> None:
+            # Must block until the main thread releases _store_lock.
+            manager.snapshot_games()
+            finished.set()
+
+        manager._store_lock.acquire()
+        try:
+            reader = threading.Thread(target=_reader, daemon=True)
+            reader.start()
+            acquired.set()
+            # Give the reader a generous window to (wrongly) complete.
+            assert finished.wait(timeout=0.3) is False
+        finally:
+            manager._store_lock.release()
+        # Once the lock is free the reader must complete promptly.
+        assert finished.wait(timeout=2.0) is True
+        assert acquired.is_set()
+
+
+class TestSpectateGamesSnapshotRace:
+    """Regression tests: api_spectate_games must not race GAME_STORE mutation."""
+
+    def test_snapshot_is_atomic_against_mid_iteration_mutation(self) -> None:
+        """snapshot_games must be atomic w.r.t. concurrent store mutation.
+
+        This deterministically reproduces the original bug. A background thread
+        holds _store_lock and, while holding it, mutates GAME_STORE. A caller of
+        snapshot_games() must block until the mutation completes, so it always
+        observes a self-consistent store and can never raise
+        ``RuntimeError: dictionary changed size during iteration``.
+
+        Contrast: the pre-fix code in api_spectate_games iterated the store
+        without the lock, so a mutation landing mid-iteration raised. Here we
+        assert snapshot_games() serializes against the mutation.
+        """
+        import threading
+        import time
+
+        from backend.game import manager
+
+        s1 = new_game(seed=42)
+        s2 = new_game(seed=42)
+        try:
+            GAME_STORE[s1.id] = s1
+            GAME_STORE[s2.id] = s2
+
+            mutation_done = threading.Event()
+            snapshot_started = threading.Event()
+            snapshot_result: list = []
+
+            def _mutate_under_lock() -> None:
+                # Hold the lock, pause so the reader is definitely queued behind
+                # us, then mutate the store and release.
+                with manager._store_lock:
+                    time.sleep(0.1)
+                    GAME_STORE[s2.id] = s2
+                    GAME_STORE.move_to_end(s2.id)
+                    GAME_STORE.pop(s1.id, None)
+                mutation_done.set()
+
+            def _take_snapshot() -> None:
+                snapshot_started.set()
+                snapshot_result.append(manager.snapshot_games())
+
+            mutator = threading.Thread(target=_mutate_under_lock)
+            mutator.start()
+            time.sleep(0.02)  # let the mutator acquire the lock first
+            reader = threading.Thread(target=_take_snapshot)
+            reader.start()
+            reader.join(timeout=5.0)
+            mutator.join(timeout=5.0)
+
+            assert mutation_done.is_set()
+            assert snapshot_started.is_set()
+            assert not reader.is_alive()
+            assert len(snapshot_result) == 1
+            # The snapshot was taken AFTER the mutation completed (lock ordering),
+            # so it reflects the post-mutation store: s1 gone, s2 present.
+            ids = [gid for gid, _ in snapshot_result[0]]
+            assert s1.id not in ids
+            assert s2.id in ids
+        finally:
+            GAME_STORE.pop(s1.id, None)
+            GAME_STORE.pop(s2.id, None)
+
+    def test_listing_does_not_raise_under_concurrent_mutation(self) -> None:
+        """The endpoint stays 200 while GAME_STORE is mutated concurrently.
+
+        A best-effort smoke test that exercises the endpoint under store churn.
+        """
+        import concurrent.futures
+        import threading
+
+        from backend.game import manager
+
+        stop = threading.Event()
+        created: list[str] = []
+        created_lock = threading.Lock()
+
+        def _mutator() -> None:
+            while not stop.is_set():
+                state = new_game(seed=42)
+                with created_lock:
+                    created.append(state.id)
+                manager.register_game(state)
+                GAME_STORE.pop(state.id, None)
+
+        def _reader() -> None:
+            for _ in range(40):
+                resp = client.get("/api/spectate/games")
+                assert resp.status_code == 200
+                assert "games" in resp.json()
+
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+                mutator = executor.submit(_mutator)
+                readers = [executor.submit(_reader) for _ in range(4)]
+                for future in concurrent.futures.as_completed(readers):
+                    future.result()
+                stop.set()
+                mutator.result()
+        finally:
+            stop.set()
+            with created_lock:
+                for gid in created:
+                    GAME_STORE.pop(gid, None)
+
+    def test_active_flag_comes_from_snapshot(self) -> None:
+        """The active flag must be derived from the snapshot, not a re-read.
+
+        We take control of the snapshot to prove api_spectate_games consumes it:
+        a persisted game reported as present in the snapshot must come back
+        active, and one absent from it must not.
+        """
+        import backend.api.spectate as spectate_mod
+        from backend.game import manager
+
+        active_state = new_game(seed=42, ship_name="SnapshotActive")
+        absent_state = new_game(seed=42, ship_name="SnapshotAbsent")
+        game_save(active_state)
+        game_save(absent_state)
+        try:
+            GAME_STORE.pop(active_state.id, None)
+            GAME_STORE.pop(absent_state.id, None)
+            # Snapshot claims only active_state is resident.
+            with patch.object(
+                manager,
+                "GAME_STORE",
+                GAME_STORE,
+            ), patch.object(
+                spectate_mod,
+                "snapshot_games",
+                lambda: [(active_state.id, active_state)],
+            ):
+                data = client.get("/api/spectate/games?limit=100").json()
+            by_id = {g["game_id"]: g for g in data["games"]}
+            assert by_id[active_state.id]["active"] is True
+            assert by_id[absent_state.id]["active"] is False
+        finally:
+            GAME_STORE.pop(active_state.id, None)
+            GAME_STORE.pop(absent_state.id, None)
+
+    def test_in_memory_only_games_listed_from_snapshot(self) -> None:
+        """Games present only in the snapshot (never persisted) are listed."""
+        import backend.api.spectate as spectate_mod
+
+        state = new_game(seed=42, ship_name="SnapshotOnly")
+        try:
+            with patch.object(
+                spectate_mod,
+                "snapshot_games",
+                lambda: [(state.id, state)],
+            ):
+                data = client.get("/api/spectate/games").json()
+            game = next(
+                g for g in data["games"] if g["game_id"] == state.id
+            )
+            assert game["active"] is True
+            assert game["ship_name"] == "SnapshotOnly"
+        finally:
+            GAME_STORE.pop(state.id, None)

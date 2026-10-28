@@ -27,6 +27,7 @@ from backend.game.manager import (
     evict_if_needed,
     game_load,
     register_game,
+    snapshot_games,
     touch_game,
 )
 from backend.models.game_state import GameState
@@ -71,7 +72,11 @@ def api_spectate_games(limit: int = 25) -> dict:
     """List known games for the spectator game picker.
 
     Games currently loaded in memory (i.e. actively being played on this
-    server process) are flagged with ``active: true``.
+    server process) are flagged with ``active: true``. The in-memory store
+    is read via a single locked snapshot (taken internally by
+    ``manager.snapshot_games()``) so a concurrent eviction or registration
+    cannot trigger ``RuntimeError: dictionary changed size during
+    iteration``, and the ``active`` flag is derived from that same snapshot.
 
     :param limit: Maximum number of games to return (clamped to 1-100).
     :type limit: int
@@ -88,6 +93,8 @@ def api_spectate_games(limit: int = 25) -> dict:
             detail="Spectate game listing disabled while game token enforcement is enabled",
         )
     limit = max(1, min(100, limit))
+    in_memory_snapshot = snapshot_games()
+    in_memory_ids = {game_id for game_id, _ in in_memory_snapshot}
     games = []
     with get_db_ctx() as conn:
         rows = conn.execute(
@@ -111,10 +118,10 @@ def api_spectate_games(limit: int = 25) -> dict:
             "updated_at": row["updated_at"],
             "systems_visited": state.get("systems_visited", 0),
             "credits": _safe_ship_credits(state),
-            "active": row["id"] in GAME_STORE,
+            "active": row["id"] in in_memory_ids,
         })
     # Include in-memory games that were never persisted yet.
-    for game_id, state in list(GAME_STORE.items()):
+    for game_id, state in in_memory_snapshot:
         if game_id in seen:
             continue
         games.insert(0, {

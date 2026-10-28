@@ -592,3 +592,29 @@ def register_game(state: GameState) -> None:
     with _store_lock:
         GAME_STORE[state.id] = state
         GAME_STORE.move_to_end(state.id)
+
+
+def snapshot_games() -> list[tuple[str, GameState]]:
+    """Return a point-in-time snapshot of the in-memory game cache.
+
+    Acquires the module-level :data:`_store_lock` and returns
+    ``list(GAME_STORE.items())`` so the caller receives a stable list of
+    ``(game_id, GameState)`` tuples in current LRU order. Reads that
+    iterate the store must also be serialized under :data:`_store_lock`,
+    because mutating an ``OrderedDict`` while it is being iterated raises
+    ``RuntimeError: dictionary changed size during iteration`` (for example
+    when a concurrent :func:`evict_if_needed` removes an entry or a
+    concurrent :func:`register_game` inserts one). Callers should build
+    their response from the returned snapshot rather than re-reading
+    :data:`GAME_STORE`, which avoids check-then-act races between a
+    membership test and a later per-game lookup.
+
+    This function does not mutate the store: it never calls
+    :func:`touch_game` and never changes the LRU ordering.
+
+    :returns: A list of ``(game_id, GameState)`` tuples in current LRU
+        order.
+    :rtype: list[tuple[str, GameState]]
+    """
+    with _store_lock:
+        return list(GAME_STORE.items())
