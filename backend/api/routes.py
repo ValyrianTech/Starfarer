@@ -141,7 +141,6 @@ def reset_new_game_rate_limiter() -> None:
     :returns: None
     :rtype: None
     """
-    global _new_game_rate_entries
     with _new_game_rate_lock:
         _new_game_rate_entries.clear()
 

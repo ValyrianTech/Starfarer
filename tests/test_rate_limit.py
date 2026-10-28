@@ -3,9 +3,8 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from starlette.requests import Request
-
 from fastapi.testclient import TestClient
+from starlette.requests import Request
 
 from backend.api import routes
 from backend.config import (
