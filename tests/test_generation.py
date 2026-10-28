@@ -1872,6 +1872,83 @@ class TestStateFromDictCorruptSave:
         assert any("expected dict" in msg for msg in warning_messages)
 
 
+class TestStateFromDictCorruptSections:
+    """Malformed nested sections should be skipped or yield a graceful None.
+
+    Historically a corrupt ``faction_relations`` entry (missing ``faction_id``
+    or a non-dict value) raised ``KeyError``/``AttributeError`` and produced a
+    500 instead of the documented clean-404 behavior.
+    """
+
+    def _valid_dict(self) -> dict:
+        from backend.models.system import StarSystem
+
+        return {
+            "id": "corrupt-sections",
+            "seed": 42,
+            "ship": Ship(name="Test", current_system_id="s1").to_dict(),
+            "systems": {
+                "s1": StarSystem(
+                    id="s1", name="Sys1", x=0.0, y=0.0, star_type="G",
+                    star_color="#fff", phenomenon="none", phenomenon_desc="",
+                ).to_dict(),
+            },
+            "events": [],
+            "discoveries": [],
+            "lore_fragments": [],
+            "log_entries": [],
+            "faction_relations": {},
+            "systems_visited": 1,
+            "game_started": "",
+        }
+
+    def test_missing_faction_id_uses_key_as_fallback(self) -> None:
+        """A faction_relation lacking 'faction_id' falls back to its dict key."""
+        d = self._valid_dict()
+        d["faction_relations"] = {"void_traders": {"reputation": 25, "known": True}}
+        state = _state_from_dict(d)
+        assert state is not None
+        assert state.faction_relations["void_traders"].faction_id == "void_traders"
+        assert state.faction_relations["void_traders"].reputation == 25
+        assert state.faction_relations["void_traders"].known is True
+
+    def test_non_dict_faction_relation_is_skipped(self, caplog) -> None:
+        """A non-dict faction_relation value is skipped with a warning."""
+        import logging
+        caplog.set_level(logging.WARNING)
+        d = self._valid_dict()
+        d["faction_relations"] = {
+            "void_traders": None,
+            "stellar_cartographers": "corrupt",
+            "free_pilots": {"faction_id": "free_pilots", "reputation": 5},
+        }
+        state = _state_from_dict(d)
+        assert state is not None
+        assert set(state.faction_relations) == {"free_pilots"}
+        assert state.faction_relations["free_pilots"].reputation == 5
+        warnings = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+        assert sum("Skipping malformed faction_relation" in m for m in warnings) == 2
+
+    def test_malformed_systems_returns_none(self, caplog) -> None:
+        """A malformed 'systems' section is caught by the top-level guard."""
+        import logging
+        caplog.set_level(logging.WARNING)
+        d = self._valid_dict()
+        d["systems"] = {"s1": {"name": "NoStarType"}}
+        assert _state_from_dict(d) is None
+        warnings = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("failed to reconstruct state" in m for m in warnings)
+
+    def test_malformed_events_returns_none(self, caplog) -> None:
+        """A malformed 'events' section is caught by the top-level guard."""
+        import logging
+        caplog.set_level(logging.WARNING)
+        d = self._valid_dict()
+        d["events"] = ["not-a-dict"]
+        assert _state_from_dict(d) is None
+        warnings = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("failed to reconstruct state" in m for m in warnings)
+
 class TestOldSaveLogEntryIdCollision:
     """Tests for _next_log_id computation when loading old saves without _next_log_id."""
 

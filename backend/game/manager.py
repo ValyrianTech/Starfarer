@@ -326,8 +326,12 @@ def _state_from_dict(d: dict) -> GameState | None:
 
     Returns ``None`` if ``d`` is not a dict, or if any of the required
     top-level keys (``id``, ``seed``, ``ship``) is missing, or if
-    ``ship`` is present but not a dict. These corrupt-save conditions are
-    logged as warnings so callers can map ``None`` to a clean 404.
+    ``ship`` is present but not a dict. As a final safety net, any
+    unforeseen ``KeyError``/``TypeError``/``ValueError``/
+    ``AttributeError`` raised while
+    reconstructing a nested field is caught, logged, and also yields
+    ``None``. These corrupt-save conditions are logged as warnings so
+    callers can map ``None`` to a clean 404 instead of surfacing a 500.
 
     :param d: The dictionary representation of a game state.
     :type d: dict
@@ -346,127 +350,137 @@ def _state_from_dict(d: dict) -> GameState | None:
         logger.warning("Corrupt save for %r: 'ship' is not a dict", d.get("id"))
         return None
 
-    from backend.models.discovery import Discovery, LoreFragment
-    from backend.models.event import Event
-    from backend.models.system import StarSystem
+    try:
+        from backend.models.discovery import Discovery, LoreFragment
+        from backend.models.event import Event
+        from backend.models.system import StarSystem
 
-    systems = {}
-    for k, v in d.get("systems", {}).items():
-        systems[k] = StarSystem.from_dict(v)
+        systems = {}
+        for k, v in d.get("systems", {}).items():
+            systems[k] = StarSystem.from_dict(v)
 
-    events = [Event.from_dict(e) for e in d.get("events", [])]
+        events = [Event.from_dict(e) for e in d.get("events", [])]
 
-    discoveries = []
-    for raw in d.get("discoveries", []):
-        if not isinstance(raw, dict):
-            logger.warning("Skipping malformed discovery entry: %r", raw)
-            continue
-        try:
-            discoveries.append(Discovery.from_dict(raw))
-        except (KeyError, TypeError):
-            logger.warning("Skipping malformed discovery entry: %r", raw)
-            continue
+        discoveries = []
+        for raw in d.get("discoveries", []):
+            if not isinstance(raw, dict):
+                logger.warning("Skipping malformed discovery entry: %r", raw)
+                continue
+            try:
+                discoveries.append(Discovery.from_dict(raw))
+            except (KeyError, TypeError):
+                logger.warning("Skipping malformed discovery entry: %r", raw)
+                continue
 
-    lore = []
-    for raw in d.get("lore_fragments", []):
-        if not isinstance(raw, dict):
-            logger.warning("Skipping malformed lore fragment entry: %r", raw)
-            continue
-        try:
-            lore.append(LoreFragment.from_dict(raw))
-        except (KeyError, TypeError):
-            logger.warning("Skipping malformed lore fragment entry: %r", raw)
-            continue
-    _fixup_old_lore_fragment_numbers(lore)
+        lore = []
+        for raw in d.get("lore_fragments", []):
+            if not isinstance(raw, dict):
+                logger.warning("Skipping malformed lore fragment entry: %r", raw)
+                continue
+            try:
+                lore.append(LoreFragment.from_dict(raw))
+            except (KeyError, TypeError):
+                logger.warning("Skipping malformed lore fragment entry: %r", raw)
+                continue
+        _fixup_old_lore_fragment_numbers(lore)
 
-    faction_relations = {}
-    for fid, fr_data in d.get("faction_relations", {}).items():
-        faction_relations[fid] = FactionRelation(
-            faction_id=fr_data["faction_id"],
-            reputation=fr_data.get("reputation", 0),
-            known=fr_data.get("known", False),
-        )
+        faction_relations = {}
+        for fid, fr_data in d.get("faction_relations", {}).items():
+            if not isinstance(fr_data, dict):
+                logger.warning("Skipping malformed faction_relation: %r", fr_data)
+                continue
+            faction_relations[fid] = FactionRelation(
+                faction_id=fr_data.get("faction_id", fid),
+                reputation=fr_data.get("reputation", 0),
+                known=fr_data.get("known", False),
+            )
 
-    log_entries_raw = d.get("log_entries", [])
-    cleaned_entries = []
-    max_id = 0
-    for e in log_entries_raw:
-        if isinstance(e, dict):
-            if "id" not in e:
-                max_id += 1
-                cleaned_entries.append({**e, "id": max_id})
-            elif isinstance(e["id"], int) and not isinstance(e["id"], bool):
-                max_id = max(max_id, e["id"])
-                cleaned_entries.append(e)
+        log_entries_raw = d.get("log_entries", [])
+        cleaned_entries = []
+        max_id = 0
+        for e in log_entries_raw:
+            if isinstance(e, dict):
+                if "id" not in e:
+                    max_id += 1
+                    cleaned_entries.append({**e, "id": max_id})
+                elif isinstance(e["id"], int) and not isinstance(e["id"], bool):
+                    max_id = max(max_id, e["id"])
+                    cleaned_entries.append(e)
+                else:
+                    # Non-integer id — assign a new sequential id
+                    max_id += 1
+                    cleaned_entries.append({**e, "id": max_id})
+
+        _next_log_id = d.get("_next_log_id", max_id + 1)
+        if _next_log_id < max_id + 1:
+            logger.warning(
+                "_next_log_id from save data (%d) is lower than max_id + 1 (%d); "
+                "using max_id + 1 to prevent ID regression. This may indicate a bug "
+                "in an older version that produced a stale _next_log_id.",
+                _next_log_id, max_id + 1,
+            )
+            _next_log_id = max_id + 1
+
+        accepted_missions_raw = d.get("accepted_missions", {})
+        accepted_missions = {}
+        for k, v in accepted_missions_raw.items():
+            if isinstance(v, str):
+                # Old format: value was just a faction_id string
+                accepted_missions[k] = {
+                    "faction_id": v,
+                    "tier": 1,
+                    "title": "Unknown Mission",
+                    "description": "Migrated from old save format.",
+                    "objective_type": "courier",
+                    "objective_target": "",
+                    "fuel_cost": 3,
+                    "credit_cost": 10,
+                    "credit_reward": 75,
+                    "reputation_reward": 7,
+                }
             else:
-                # Non-integer id — assign a new sequential id
-                max_id += 1
-                cleaned_entries.append({**e, "id": max_id})
+                accepted_missions[k] = v
 
-    _next_log_id = d.get("_next_log_id", max_id + 1)
-    if _next_log_id < max_id + 1:
-        logger.warning(
-            "_next_log_id from save data (%d) is lower than max_id + 1 (%d); "
-            "using max_id + 1 to prevent ID regression. This may indicate a bug "
-            "in an older version that produced a stale _next_log_id.",
-            _next_log_id, max_id + 1,
+        state = GameState(
+            id=d["id"],
+            seed=d["seed"],
+            ship=Ship.from_dict(d["ship"]),
+            systems=systems,
+            events=events,
+            discoveries=discoveries,
+            lore_fragments=lore,
+            log_entries=cleaned_entries,
+            faction_relations=faction_relations,
+            systems_visited=d.get("systems_visited", 0),
+            game_started=d.get("game_started", ""),
+            last_event_title=d.get("last_event_title"),
+            jumps_since_rep_decay=d.get("jumps_since_rep_decay", 0),
+            station_visits=d.get("station_visits", {}),
+            event_cooldowns=d.get("event_cooldowns", {}),
+            crisis_cooldown=d.get("crisis_cooldown", 0),
+            completed_missions=d.get("completed_missions", []),
+            daily_missions_used=d.get("daily_missions_used", {}),
+            accepted_missions=accepted_missions,
+            dismissed_hints=set(d.get("dismissed_hints", [])),
+            hazard_event_counts=d.get("hazard_event_counts", {}),
+            biomes_visited=set(d.get("biomes_visited", [])),
+            # The in-memory / new-game canonical default is True (see
+            # GameState.shared_universe and new_game). This False fallback is
+            # deliberately different: it only applies to legacy saves serialized
+            # before shared_universe existed, preserving their original
+            # single-player semantics.
+            shared_universe=d.get("shared_universe", False),
+            _next_log_id=_next_log_id,
+            token=d.get("token", ""),
         )
-        _next_log_id = max_id + 1
-
-    accepted_missions_raw = d.get("accepted_missions", {})
-    accepted_missions = {}
-    for k, v in accepted_missions_raw.items():
-        if isinstance(v, str):
-            # Old format: value was just a faction_id string
-            accepted_missions[k] = {
-                "faction_id": v,
-                "tier": 1,
-                "title": "Unknown Mission",
-                "description": "Migrated from old save format.",
-                "objective_type": "courier",
-                "objective_target": "",
-                "fuel_cost": 3,
-                "credit_cost": 10,
-                "credit_reward": 75,
-                "reputation_reward": 7,
-            }
-        else:
-            accepted_missions[k] = v
-
-    state = GameState(
-        id=d["id"],
-        seed=d["seed"],
-        ship=Ship.from_dict(d["ship"]),
-        systems=systems,
-        events=events,
-        discoveries=discoveries,
-        lore_fragments=lore,
-        log_entries=cleaned_entries,
-        faction_relations=faction_relations,
-        systems_visited=d.get("systems_visited", 0),
-        game_started=d.get("game_started", ""),
-        last_event_title=d.get("last_event_title"),
-        jumps_since_rep_decay=d.get("jumps_since_rep_decay", 0),
-        station_visits=d.get("station_visits", {}),
-        event_cooldowns=d.get("event_cooldowns", {}),
-        crisis_cooldown=d.get("crisis_cooldown", 0),
-        completed_missions=d.get("completed_missions", []),
-        daily_missions_used=d.get("daily_missions_used", {}),
-        accepted_missions=accepted_missions,
-        dismissed_hints=set(d.get("dismissed_hints", [])),
-        hazard_event_counts=d.get("hazard_event_counts", {}),
-        biomes_visited=set(d.get("biomes_visited", [])),
-        # The in-memory / new-game canonical default is True (see
-        # GameState.shared_universe and new_game). This False fallback is
-        # deliberately different: it only applies to legacy saves serialized
-        # before shared_universe existed, preserving their original
-        # single-player semantics.
-        shared_universe=d.get("shared_universe", False),
-        _next_log_id=_next_log_id,
-        token=d.get("token", ""),
-    )
-    state.sync_cargo()
-    return state
+        state.sync_cargo()
+        return state
+    except (KeyError, TypeError, ValueError, AttributeError) as exc:
+        logger.warning(
+            "Corrupt save for %r: failed to reconstruct state: %s",
+            d.get("id"), exc,
+        )
+        return None
 
 
 def _fixup_old_lore_fragment_numbers(lore_fragments: list) -> None:
