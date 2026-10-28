@@ -323,11 +323,14 @@ def api_crossroads_items(
     :returns: A dictionary with ``items``, ``page``, ``per_page``,
         ``total_items``, and ``total_pages``.
     :rtype: dict
-    :raises HTTPException: 403/404 when token enforcement is enabled and the
-        token is missing/invalid or the game cannot be resolved.
+    :raises HTTPException: 404 if the game is not found.
+    :raises HTTPException: 403 if token enforcement is enabled and the
+        token is missing or invalid.
     """
     with _locked(game_id):
         _authorize_game(game_id, x_game_token)
+        if not _game_exists(game_id):
+            raise HTTPException(status_code=404, detail="Game not found")
         page = max(1, page)
         per_page = max(1, min(per_page, 50))
         all_items = get_available_items_list()
@@ -437,11 +440,14 @@ def api_crossroads_lore(
     :returns: A dictionary with ``lore``, ``page``, ``per_page``,
         ``total_lore``, and ``total_pages``.
     :rtype: dict
-    :raises HTTPException: 403/404 when token enforcement is enabled and the
-        token is missing/invalid or the game cannot be resolved.
+    :raises HTTPException: 404 if the game is not found.
+    :raises HTTPException: 403 if token enforcement is enabled and the
+        token is missing or invalid.
     """
     with _locked(game_id):
         _authorize_game(game_id, x_game_token)
+        if not _game_exists(game_id):
+            raise HTTPException(status_code=404, detail="Game not found")
         page = max(1, page)
         per_page = max(1, min(per_page, 50))
         all_lore = get_available_lore_list()
@@ -549,12 +555,15 @@ def api_crossroads_messages(
     :returns: A dictionary with ``messages`` list, ``page``, ``per_page``,
         ``total_messages``, and ``total_pages``.
     :rtype: dict
+    :raises HTTPException: 404 if the game is not found.
     :raises HTTPException: 404 if page exceeds total pages with active messages.
-    :raises HTTPException: 403/404 when token enforcement is enabled and the
-        token is missing/invalid or the game cannot be resolved.
+    :raises HTTPException: 403 if token enforcement is enabled and the
+        token is missing or invalid.
     """
     with _locked(game_id):
         _authorize_game(game_id, x_game_token)
+        if not _game_exists(game_id):
+            raise HTTPException(status_code=404, detail="Game not found")
         result = get_messages(page=page, per_page=per_page)
         if page > result["total_pages"] and result["total_messages"] > 0:
             raise HTTPException(status_code=404, detail="Page out of range")
