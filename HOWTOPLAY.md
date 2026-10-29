@@ -843,6 +843,7 @@ All endpoints that access a specific game (mutating and read-only GET) accept th
 | GET | `/api/game/{id}/ripples` | Get pending discovery ripples; sanitized public views (raw source game id and acknowledged-by game ids removed) |
 | POST | `/api/game/{id}/ripple/{ripple_id}/acknowledge` | Acknowledge a discovery ripple |
 
+A donated item's `value` is now preserved end-to-end at the Crossroads: `POST /api/crossroads/donate-item` stores the donated item's `value` on the Crossroads listing, and `POST /api/crossroads/claim-item/{item_id}` restores that value when another player claims it, so the claimed Discovery keeps the original credit value instead of being worth 0.
 
 ### Pagination Details
 
