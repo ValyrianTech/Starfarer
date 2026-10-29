@@ -74,6 +74,7 @@ class CrossroadsItem:
     item_name: str
     quantity: int
     message: str | None = None
+    value: int = 0
     claimed: bool = False
     claimer_game_id: str | None = None
     created_at: str = ""
@@ -91,6 +92,7 @@ class CrossroadsItem:
             "item_name": self.item_name,
             "quantity": self.quantity,
             "message": self.message,
+            "value": self.value,
             "claimed": self.claimed,
             "claimer_game_id": self.claimer_game_id,
             "created_at": self.created_at,
@@ -112,6 +114,7 @@ class CrossroadsItem:
             item_name=d["item_name"],
             quantity=d.get("quantity", 1),
             message=d.get("message"),
+            value=d.get("value", 0),
             claimed=d.get("claimed", False),
             claimer_game_id=d.get("claimer_game_id"),
             created_at=d.get("created_at", ""),
