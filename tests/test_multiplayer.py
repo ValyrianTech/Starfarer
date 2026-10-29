@@ -147,6 +147,7 @@ class TestMultiplayerModels:
             item_name="Rare Crystal",
             quantity=3,
             message="Enjoy!",
+            value=500,
             claimed=True,
             claimer_game_id="game-2",
             created_at="2025-01-01T00:00:00Z",
@@ -159,9 +160,23 @@ class TestMultiplayerModels:
         assert ci2.item_name == ci.item_name
         assert ci2.quantity == ci.quantity
         assert ci2.message == ci.message
+        assert ci2.value == ci.value
+        assert d["value"] == 500
         assert ci2.claimed == ci.claimed
         assert ci2.claimer_game_id == ci.claimer_game_id
         assert ci2.created_at == ci.created_at
+
+    def test_crossroads_item_from_dict_defaults_value(self) -> None:
+        ci = CrossroadsItem.from_dict({
+            "id": "item-defaults",
+            "donor_game_id": "game-1",
+            "donor_name": "TestPilot",
+            "item_name": "Legacy Crystal",
+            "quantity": 1,
+        })
+        assert ci.value == 0
+        d = ci.to_dict()
+        assert d["value"] == 0
 
     def test_crossroads_lore_roundtrip(self) -> None:
         cl = CrossroadsLore(
@@ -311,6 +326,90 @@ class TestMultiplayerDatabase:
         assert len(found) == 1
         assert found[0].item_name == "Space Diamond"
         assert found[0].quantity == 2
+
+    def test_save_and_get_available_items_preserves_value(self) -> None:
+        from backend.multiplayer.database import (
+            get_available_items,
+            save_crossroads_item,
+        )
+        ci = CrossroadsItem(
+            id="item-db-value-1",
+            donor_game_id="game-db-1",
+            donor_name="DBTester",
+            item_name="Valuable Gem",
+            quantity=1,
+            value=100,
+            claimed=False,
+            created_at=datetime.now(UTC).isoformat(),
+        )
+        save_crossroads_item(ci)
+        items = get_available_items()
+        found = [i for i in items if i.id == "item-db-value-1"]
+        assert len(found) == 1
+        assert found[0].value == 100
+
+    def test_claim_item_returns_value(self) -> None:
+        from backend.multiplayer.database import claim_item as db_claim_item
+        from backend.multiplayer.database import save_crossroads_item
+        ci = CrossroadsItem(
+            id="item-claim-value-1",
+            donor_game_id="game-db-1",
+            donor_name="DBTester",
+            item_name="Nebula Dust",
+            quantity=1,
+            value=100,
+            claimed=False,
+            created_at=datetime.now(UTC).isoformat(),
+        )
+        save_crossroads_item(ci)
+        result = db_claim_item("item-claim-value-1", "claimer-game-1")
+        assert isinstance(result, dict)
+        assert result["value"] == 100
+
+    def test_claim_item_partial_returns_value(self) -> None:
+        from backend.multiplayer.database import (
+            claim_item_partial,
+            save_crossroads_item,
+        )
+        ci = CrossroadsItem(
+            id="item-partial-value-1",
+            donor_game_id="game-db-1",
+            donor_name="DBTester",
+            item_name="Partial Valuable Gem",
+            quantity=3,
+            value=100,
+            claimed=False,
+            created_at=datetime.now(UTC).isoformat(),
+        )
+        save_crossroads_item(ci)
+        result = claim_item_partial("item-partial-value-1", "claimer", 1)
+        assert result is not None
+        assert result["value"] == 100
+        assert result["quantity"] == 1
+        assert result["remaining_quantity"] == 2
+
+    def test_init_multiplayer_db_adds_value_column(self) -> None:
+        from backend.multiplayer.database import get_db_ctx
+        with get_db_ctx() as conn:
+            conn.execute("DROP TABLE IF EXISTS crossroads_items")
+            conn.execute(
+                "CREATE TABLE crossroads_items ("
+                "id TEXT PRIMARY KEY,"
+                "donor_game_id TEXT NOT NULL,"
+                "donor_name TEXT NOT NULL,"
+                "item_name TEXT NOT NULL,"
+                "quantity INTEGER NOT NULL DEFAULT 1,"
+                "message TEXT,"
+                "claimed INTEGER NOT NULL DEFAULT 0,"
+                "claimer_game_id TEXT,"
+                "created_at TEXT NOT NULL"
+                ")"
+            )
+            conn.commit()
+        init_multiplayer_db()
+        with get_db_ctx() as conn:
+            columns = {row[1] for row in conn.execute("PRAGMA table_info(crossroads_items)").fetchall()}
+        assert "value" in columns
 
     def test_claim_item_success(self) -> None:
         from backend.multiplayer.database import claim_item as db_claim_item
@@ -1176,6 +1275,60 @@ class TestMultiplayerCrossroads:
 
         GAME_STORE.pop(donor.id, None)
         GAME_STORE.pop(claimer.id, None)
+
+    def test_donate_and_claim_preserves_value(self) -> None:
+        donor = new_game(42, "DonorShip", shared_universe=True)
+        GAME_STORE[donor.id] = donor
+        disc1 = _make_discovery(name="Valuable Gem", value=100)
+        disc2 = _make_discovery(name="Valuable Gem", value=100)
+        donor.discoveries.append(disc1)
+        donor.discoveries.append(disc2)
+        don_result = donate_item(donor, "Valuable Gem", 2)
+
+        claimer = new_game(43, "ClaimerShip", shared_universe=True)
+        GAME_STORE[claimer.id] = claimer
+        claim_item(don_result["donation"]["id"], claimer)
+
+        claimed = [d for d in claimer.discoveries if d.name == "Valuable Gem"]
+        assert len(claimed) == 2
+        assert all(d.value == 100 for d in claimed)
+        GAME_STORE.pop(donor.id, None)
+        GAME_STORE.pop(claimer.id, None)
+
+    def test_claim_legacy_item_value_zero(self) -> None:
+        from backend.multiplayer.database import save_crossroads_item
+        item = CrossroadsItem(
+            id="legacy-item-1",
+            donor_game_id="game-legacy",
+            donor_name="Donor",
+            item_name="Legacy Gem",
+            quantity=1,
+            value=0,
+            claimed=False,
+            created_at=datetime.now(UTC).isoformat(),
+        )
+        save_crossroads_item(item)
+
+        claimer = new_game(43, "ClaimerShip", shared_universe=True)
+        GAME_STORE[claimer.id] = claimer
+        claim_item("legacy-item-1", claimer)
+
+        claimed = [d for d in claimer.discoveries if d.name == "Legacy Gem"]
+        assert len(claimed) == 1
+        assert claimed[0].value == 0
+        GAME_STORE.pop(claimer.id, None)
+
+    def test_get_available_items_list_preserves_value(self) -> None:
+        state = new_game(42, "DonorShip", shared_universe=True)
+        GAME_STORE[state.id] = state
+        disc = _make_discovery(name="List Valuable Gem", value=100)
+        state.discoveries.append(disc)
+        donate_item(state, "List Valuable Gem", 1)
+        items = get_available_items_list()
+        found = [i for i in items if i["item_name"] == "List Valuable Gem"]
+        assert len(found) >= 1
+        assert all(i["value"] == 100 for i in found)
+        GAME_STORE.pop(state.id, None)
 
     def test_donate_lore_success(self) -> None:
         state = new_game(42, "LoreDonor", shared_universe=True)
