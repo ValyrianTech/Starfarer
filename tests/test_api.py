@@ -4265,6 +4265,89 @@ class TestSpectateStateSignature:
         assert hash(sig) is not None
 
 
+class TestSpectateTouchAndGet:
+    """Tests for the _touch_and_get helper and threadpool offloading."""
+
+    def test_touch_and_get_returns_live_state(self) -> None:
+        """_touch_and_get returns the live state and refreshes LRU order."""
+        from backend.api.spectate import _touch_and_get
+        state = new_game(seed=42, ship_name="TouchGetLive")
+        other = new_game(seed=42, ship_name="TouchGetOther")
+        try:
+            GAME_STORE[state.id] = state
+            GAME_STORE[other.id] = other
+            GAME_STORE.move_to_end(state.id, last=False)
+            result = _touch_and_get(state.id)
+            assert result is state
+            # touch_game moved it to the MRU end.
+            assert list(GAME_STORE.keys())[-1] == state.id
+        finally:
+            GAME_STORE.pop(state.id, None)
+            GAME_STORE.pop(other.id, None)
+
+    def test_touch_and_get_returns_none_when_evicted(self) -> None:
+        """_touch_and_get returns None for a game not in memory."""
+        from backend.api.spectate import _touch_and_get
+        game_id = "spectate-touch-get-missing"
+        GAME_STORE.pop(game_id, None)
+        assert _touch_and_get(game_id) is None
+
+    def test_stream_offloads_blocking_work_to_threadpool(self) -> None:
+        """The handler must run _get_state/_build_payload/json.dumps off the loop.
+
+        Patches run_in_threadpool with a spy that records each offloaded
+        callable and still executes it (delegating to the real implementation)
+        so the stream produces its normal output. This proves the blocking
+        DB/CPU/JSON work is dispatched to the threadpool rather than executed
+        inline on the event loop.
+        """
+        import asyncio
+
+        import backend.api.spectate as spectate_mod
+        from backend.api import spectate
+
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "spectate-offload"})
+        assert resp.status_code == 200
+        real_rit = spectate_mod.run_in_threadpool
+        calls: list[object] = []
+
+        async def spy(func, *args, **kwargs):
+            calls.append(func)
+            return await real_rit(func, *args, **kwargs)
+
+        old_poll = spectate.POLL_INTERVAL_SECONDS
+        old_hb = spectate.HEARTBEAT_INTERVAL_SECONDS
+        spectate.POLL_INTERVAL_SECONDS = 0.01
+        spectate.HEARTBEAT_INTERVAL_SECONDS = 100.0
+        try:
+            async def run() -> None:
+                with patch.object(spectate_mod, "run_in_threadpool", spy):
+                    response = await spectate_mod.api_spectate_stream("spectate-offload")
+                    agen = response.body_iterator
+                    try:
+                        await agen.__anext__()  # initial snapshot
+                        state = GAME_STORE["spectate-offload"]
+                        state.add_log("navigation", "offload change")
+                        await agen.__anext__()  # change detected -> rebuild
+                    finally:
+                        await agen.aclose()
+
+            asyncio.run(run())
+        finally:
+            spectate.POLL_INTERVAL_SECONDS = old_poll
+            spectate.HEARTBEAT_INTERVAL_SECONDS = old_hb
+            GAME_STORE.pop("spectate-offload", None)
+
+        # Initial 404-check + in-generator lookup both offload _get_state.
+        assert calls.count(spectate_mod._get_state) >= 2
+        # Initial build and change-triggered build both offload _build_payload.
+        assert calls.count(spectate_mod._build_payload) >= 2
+        # json.dumps is offloaded for the initial and changed snapshots.
+        assert calls.count(json.dumps) >= 2
+        # The per-tick touch+read is offloaded via _touch_and_get.
+        assert spectate_mod._touch_and_get in calls
+
+
 class TestSpectateGamesEndpoint:
     def test_list_games(self) -> None:
         resp = client.post("/api/game/new", json={"seed": 42, "game_id": "spectate-list-game"})
