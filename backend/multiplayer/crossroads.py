@@ -73,6 +73,7 @@ def donate_item(
     for i, d in enumerate(game_state.discoveries):
         if d.name == item_name and d.lore_fragment_id is None and len(indices_to_remove) < actual_quantity:
             indices_to_remove.append(i)
+    item_value = game_state.discoveries[indices_to_remove[0]].value
     for i in sorted(indices_to_remove, reverse=True):
         game_state.discoveries.pop(i)
 
@@ -84,6 +85,7 @@ def donate_item(
         donor_name=game_state.ship.name,
         item_name=item_name,
         quantity=actual_quantity,
+        value=item_value,
         message=message,
         created_at=datetime.now(UTC).isoformat(),
     )
@@ -136,7 +138,7 @@ def claim_item(item_id: str, game_state: GameState) -> dict:
             category="artifact",
             name=item_name,
             description=f"A gift from {donor_name} via the Crossroads.",
-            value=0,
+            value=item_data.get("value", 0),
             system_id=game_state.ship.current_system_id or "",
         )
         game_state.discoveries.append(disc)

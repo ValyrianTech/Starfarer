@@ -8,6 +8,7 @@ Uses the same database file as the main application via
 """
 
 import json
+import sqlite3
 from datetime import UTC, datetime, timedelta
 
 from backend.database import get_db_ctx
@@ -37,6 +38,7 @@ _MULTIPLAYER_MIGRATIONS = """
         donor_name TEXT NOT NULL,
         item_name TEXT NOT NULL,
         quantity INTEGER NOT NULL DEFAULT 1,
+        value INTEGER NOT NULL DEFAULT 0,
         message TEXT,
         claimed INTEGER NOT NULL DEFAULT 0,
         claimer_game_id TEXT,
@@ -102,7 +104,23 @@ def init_multiplayer_db() -> None:
     """
     with get_db_ctx() as conn:
         conn.executescript(_MULTIPLAYER_MIGRATIONS)
+        _ensure_value_column(conn)
         conn.commit()
+
+
+def _ensure_value_column(conn: sqlite3.Connection) -> None:
+    """Add the ``value`` column to ``crossroads_items`` if it does not exist.
+
+    Idempotent migration for databases created before the ``value`` column
+    was introduced. Inspects the table schema via ``PRAGMA table_info`` and
+    issues an ``ALTER TABLE`` only when the column is absent.
+
+    :param conn: An open SQLite connection.
+    :type conn: sqlite3.Connection
+    """
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(crossroads_items)").fetchall()}
+    if "value" not in columns:
+        conn.execute("ALTER TABLE crossroads_items ADD COLUMN value INTEGER NOT NULL DEFAULT 0")
 
 
 def _load_json_column(value: str) -> list:
@@ -236,14 +254,15 @@ def save_crossroads_item(item: CrossroadsItem) -> None:
     with get_db_ctx() as conn:
         conn.execute(
             "INSERT OR REPLACE INTO crossroads_items "
-            "(id, donor_game_id, donor_name, item_name, quantity, message, claimed, claimer_game_id, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "(id, donor_game_id, donor_name, item_name, quantity, value, message, claimed, claimer_game_id, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 item.id,
                 item.donor_game_id,
                 item.donor_name,
                 item.item_name,
                 item.quantity,
+                item.value,
                 item.message,
                 1 if item.claimed else 0,
                 item.claimer_game_id,
@@ -272,6 +291,7 @@ def get_available_items() -> list[CrossroadsItem]:
             item_name=row["item_name"],
             quantity=row["quantity"],
             message=row["message"],
+            value=row["value"],
             claimed=bool(row["claimed"]),
             claimer_game_id=row["claimer_game_id"],
             created_at=row["created_at"],
@@ -316,6 +336,7 @@ def claim_item(item_id: str, claimer_game_id: str) -> dict | None:
             "item_name": row["item_name"],
             "quantity": row["quantity"],
             "message": row["message"],
+            "value": row["value"],
             "claimed": bool(row["claimed"]),
             "claimer_game_id": row["claimer_game_id"],
             "created_at": row["created_at"],
@@ -390,6 +411,7 @@ def claim_item_partial(item_id: str, claimer_game_id: str, quantity: int) -> dic
             "donor_name": row["donor_name"],
             "item_name": row["item_name"],
             "message": row["message"],
+            "value": row["value"],
             "claimed": claimed,
             "claimer_game_id": updated_claimer_game_id,
             "created_at": row["created_at"],
