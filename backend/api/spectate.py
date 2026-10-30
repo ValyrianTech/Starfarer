@@ -17,6 +17,7 @@ from collections.abc import AsyncGenerator
 
 from fastapi import APIRouter, Header, HTTPException
 from fastapi.responses import StreamingResponse
+from starlette.concurrency import run_in_threadpool
 
 from backend.api import stream_tickets
 from backend.api.routes import _authorize_game
@@ -65,6 +66,25 @@ def _get_state(game_id: str) -> GameState | None:
         evict_if_needed(_locked_game_ids() | {game_id})
         return state
     return None
+
+
+def _touch_and_get(game_id: str) -> GameState | None:
+    """Touch a game and return its live in-memory state.
+
+    Keeps the watched game hot so LRU eviction cannot drop it mid-stream
+    and returns the live :class:`GameState` from ``GAME_STORE``. Both the
+    threading-lock acquisition in :func:`touch_game` and the store read
+    happen together so they can be offloaded from the asyncio event loop
+    in a single threadpool call.
+
+    :param game_id: The unique identifier of the game.
+    :type game_id: str
+    :returns: The live :class:`GameState` if present, or ``None`` if the
+        game has been evicted from memory.
+    :rtype: GameState | None
+    """
+    touch_game(game_id)
+    return GAME_STORE.get(game_id)
 
 
 @router.get("/games")
@@ -281,7 +301,7 @@ async def api_spectate_stream(
         # the game cannot be resolved).
         _authorize_game(game_id, None)
     # else: no credential supplied and enforcement is disabled — allow.
-    if _get_state(game_id) is None:
+    if await run_in_threadpool(_get_state, game_id) is None:
         raise HTTPException(status_code=404, detail="Game not found")
 
     async def event_stream() -> AsyncGenerator[str, None]:
@@ -300,7 +320,7 @@ async def api_spectate_stream(
             payload, ``end`` events when the game is gone, and comment
             heartbeats (``: ping``) while idle.
         """
-        state = _get_state(game_id)
+        state = await run_in_threadpool(_get_state, game_id)
         assert state is not None  # nosec B101 - runtime guard, not test assertion
         # Initial snapshot: include only the most recent log entries.
         initial_since = 0
@@ -310,16 +330,15 @@ async def api_spectate_stream(
         ]
         if len(int_ids) > INITIAL_LOG_ENTRIES:
             initial_since = sorted(int_ids)[-INITIAL_LOG_ENTRIES - 1]
-        payload, last_log_id = _build_payload(state, initial_since)
+        payload, last_log_id = await run_in_threadpool(_build_payload, state, initial_since)
         last_signature = _state_signature(state)
-        yield f"id: {last_log_id}\nevent: state\ndata: {json.dumps(payload)}\n\n"
+        yield f"id: {last_log_id}\nevent: state\ndata: {await run_in_threadpool(json.dumps, payload)}\n\n"
 
         idle_time = 0.0
         while True:
             await asyncio.sleep(POLL_INTERVAL_SECONDS)
             # keep the watched game hot so LRU eviction cannot drop it mid-stream
-            touch_game(game_id)
-            state = GAME_STORE.get(game_id)
+            state = await run_in_threadpool(_touch_and_get, game_id)
             if state is None:
                 # Game evicted from memory (due to the LRU cap or an explicit
                 # removal); end the stream so the client reconnects and
@@ -329,8 +348,8 @@ async def api_spectate_stream(
             signature = _state_signature(state)
             if signature != last_signature:
                 last_signature = signature
-                payload, last_log_id = _build_payload(state, last_log_id)
-                yield f"id: {last_log_id}\nevent: state\ndata: {json.dumps(payload)}\n\n"
+                payload, last_log_id = await run_in_threadpool(_build_payload, state, last_log_id)
+                yield f"id: {last_log_id}\nevent: state\ndata: {await run_in_threadpool(json.dumps, payload)}\n\n"
                 idle_time = 0.0
             else:
                 idle_time += POLL_INTERVAL_SECONDS
