@@ -5,6 +5,8 @@ Defines the data models used for validating API request bodies
 and structuring API responses.
 """
 
+import re
+
 from pydantic import BaseModel, field_validator
 
 from backend.models.faction import FACTION_DEFINITIONS
@@ -22,6 +24,29 @@ class NewGameRequest(BaseModel):
     ship_name: str | None = None
     game_id: str | None = None
     shared_universe: bool = True
+
+    @field_validator("game_id")
+    @classmethod
+    def validate_game_id(cls, value: str | None) -> str | None:
+        """Ensure an optional game_id matches the allowed character set.
+
+        Rejects game ids containing characters outside letters, digits,
+        hyphen, or underscore, or longer than 64 characters, at validation
+        time so the API never accepts a game id that could be misused.
+
+        :param value: The game id supplied in the request body.
+        :type value: str | None
+        :returns: The validated game id, or ``None`` if omitted.
+        :rtype: str | None
+        :raises ValueError: If the value does not match the allowed pattern.
+        """
+        if value is None:
+            return value
+        if not re.fullmatch(r"^[A-Za-z0-9_-]{1,64}$", value):
+            raise ValueError(
+                "game_id must be 1-64 characters of letters, digits, hyphen or underscore"
+            )
+        return value
 
 
 class ResolveEventRequest(BaseModel):
