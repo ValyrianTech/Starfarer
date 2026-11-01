@@ -539,7 +539,9 @@ def api_new_game(request: Request, req: NewGameRequest) -> dict:
     Generates a procedurally created universe, initializes the ship,
     and persists the game state to the database. Before doing any work the
     per-IP new-game rate limit is enforced, and before building or
-    registering the game the stored-game upper bound is enforced.
+    registering the game the stored-game upper bound is enforced. The
+    game_id conflict check is performed before universe generation so that
+    a rejected id never triggers the expensive galaxy construction.
 
     :param request: The incoming HTTP request, used to derive the client IP
         for rate limiting.
@@ -555,10 +557,10 @@ def api_new_game(request: Request, req: NewGameRequest) -> dict:
     _check_new_game_rate_limit(_client_ip(request))
     with _new_game_lock:
         _enforce_stored_game_cap()
+        if req.game_id and (game_exists(req.game_id) or req.game_id in GAME_STORE):
+            raise HTTPException(status_code=409, detail="Game id already exists")
         state = new_game(seed=req.seed, ship_name=req.ship_name, shared_universe=req.shared_universe)
         if req.game_id:
-            if game_exists(req.game_id) or req.game_id in GAME_STORE:
-                raise HTTPException(status_code=409, detail="Game id already exists")
             state.id = req.game_id
         register_game(state)
         evict_if_needed(_locked_game_ids() | {state.id})

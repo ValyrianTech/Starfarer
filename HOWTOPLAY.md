@@ -46,7 +46,7 @@ Response:
 
 **Save the `game_id`** — you need it for every subsequent request.
 
-`game_id` is optional — if omitted, the server generates one. If you supply a `game_id` that already exists (in the database or in memory), the request returns HTTP 409 Conflict with `{"detail": "Game id already exists"}` and does **not** overwrite the existing game.
+`game_id` is optional — if omitted, the server generates one. If you supply one, it must be 1-64 characters of letters, digits, hyphen, or underscore only (`^[A-Za-z0-9_-]+$`); an id that violates this (empty, longer than 64 chars, or containing spaces, slashes, punctuation, or non-ASCII characters) is rejected at validation time with HTTP 422. If you supply a `game_id` that already exists (in the database or in memory), the request returns HTTP 409 Conflict with `{"detail": "Game id already exists"}` and does **not** overwrite the existing game. The conflict check runs before universe generation, so a rejected duplicate id does not incur the cost of building a galaxy.
 
 Game creation is rate limited per client IP: by default the server allows at most 30 `POST /api/game/new` requests per IP per 60-second window (configurable via `STARFARER_NEW_GAME_RATE_LIMIT` and `STARFARER_NEW_GAME_RATE_WINDOW`; a value `<= 0` disables the limit). Exceeding the limit returns HTTP 429 with a `Retry-After` header. The server also enforces an upper bound on the total number of stored games (configurable via `STARFARER_MAX_STORED_GAMES`, default 100000; `<= 0` disables the cap); when the cap is reached, new-game creation returns HTTP 429 with detail `"New-game limit reached. Please try again later."`. The rate limiter keys on the direct peer address (`request.client.host`) and does **not** consult `X-Forwarded-For`/`Forwarded`; behind a reverse proxy (nginx, Caddy, Traefik, or a cloud load balancer) every client therefore shares one bucket, so operators should configure trusted client-IP handling (e.g. uvicorn `--forwarded-allow-ips` / `FORWARDED_ALLOW_IPS`, or nginx/Caddy setting `X-Forwarded-For`) and only trust forwarding headers from proxies they control.
 
@@ -795,7 +795,7 @@ All endpoints that access a specific game (mutating and read-only GET) accept th
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/health` | Server health check |
-| POST | `/api/game/new` | Create new game (optional `game_id`; `seed` ignored when `shared_universe` is true; returns HTTP 409 Conflict if a caller-supplied `game_id` already exists; per-IP rate limited — HTTP 429 + `Retry-After` when exceeded — and subject to a stored-game cap, HTTP 429 `"New-game limit reached. Please try again later."`) |
+| POST | `/api/game/new` | Create new game (optional `game_id`, which must be 1-64 chars of `[A-Za-z0-9_-]` — otherwise HTTP 422; `seed` ignored when `shared_universe` is true; returns HTTP 409 Conflict if a caller-supplied `game_id` already exists; per-IP rate limited — HTTP 429 + `Retry-After` when exceeded — and subject to a stored-game cap, HTTP 429 `"New-game limit reached. Please try again later."`) |
 | GET | `/api/game/{id}?sort={value\|name}&order={asc\|desc}` | Full game state (ship, system, events, log, fuel_status, hints, missions_available, reputation, shared_universe, total_value, top3_ids; cargo sorted only when `sort` and/or `order` is supplied) |
 | GET | `/api/game/{id}/galaxy` | Galaxy map data |
 | GET | `/api/game/{id}/system/{sid}` | System details |

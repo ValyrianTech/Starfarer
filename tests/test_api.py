@@ -95,6 +95,32 @@ class TestAPIGameCreation:
         assert resp.status_code == 200
         assert resp.json()["ship"]["credits"] == 9999
 
+    def test_conflict_check_runs_before_new_game(self) -> None:
+        """A rejected game_id must not trigger universe generation."""
+        game_id = "conflict-before-newgame"
+        resp = client.post("/api/game/new", json={"game_id": game_id})
+        assert resp.status_code == 200
+        with patch("backend.api.routes.new_game") as mock_new_game:
+            resp = client.post("/api/game/new", json={"game_id": game_id})
+        assert resp.status_code == 409
+        assert resp.json()["detail"] == "Game id already exists"
+        mock_new_game.assert_not_called()
+
+    def test_conflict_check_skips_new_game_when_id_in_memory(self) -> None:
+        """A game_id already in GAME_STORE is rejected before universe generation."""
+        game_id = "conflict-before-newgame-mem"
+        state = new_game(seed=42)
+        state.id = game_id
+        GAME_STORE[game_id] = state
+        try:
+            with patch("backend.api.routes.new_game") as mock_new_game:
+                resp = client.post("/api/game/new", json={"game_id": game_id})
+            assert resp.status_code == 409
+            assert resp.json()["detail"] == "Game id already exists"
+            mock_new_game.assert_not_called()
+        finally:
+            GAME_STORE.pop(game_id, None)
+
 
 class TestAPIGameFlow:
     def test_full_game_flow(self) -> None:
@@ -6510,3 +6536,53 @@ class TestSpectateGamesSnapshotRace:
             assert game["ship_name"] == "SnapshotOnly"
         finally:
             GAME_STORE.pop(state.id, None)
+
+
+class TestNewGameRequestGameIdValidation:
+    def test_none_is_allowed(self) -> None:
+        from backend.api.schemas import NewGameRequest
+
+        assert NewGameRequest().game_id is None
+        assert NewGameRequest(game_id=None).game_id is None
+
+    def test_valid_ids_accepted(self) -> None:
+        from backend.api.schemas import NewGameRequest
+
+        for v in ["abc", "A1_b-9", "x" * 64]:
+            assert NewGameRequest(game_id=v).game_id == v
+
+    def test_empty_string_rejected(self) -> None:
+        from backend.api.schemas import NewGameRequest
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            NewGameRequest(game_id="")
+
+    def test_too_long_rejected(self) -> None:
+        from backend.api.schemas import NewGameRequest
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            NewGameRequest(game_id="a" * 65)
+
+    @pytest.mark.parametrize("bad_id", ["has space", "slash/y", "semi;colon", "newline\n", "dot.dot", "üñî"])
+    def test_illegal_characters_rejected(self, bad_id: str) -> None:
+        from backend.api.schemas import NewGameRequest
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            NewGameRequest(game_id=bad_id)
+
+    def test_error_message_mentions_allowed_set(self) -> None:
+        from backend.api.schemas import NewGameRequest
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError) as exc_info:
+            NewGameRequest(game_id="bad id with spaces")
+        assert "game_id" in str(exc_info.value)
+
+    def test_api_rejects_invalid_game_id_with_422(self) -> None:
+        resp = client.post("/api/game/new", json={"game_id": "bad id with spaces"})
+        assert resp.status_code == 422
+        resp = client.post("/api/game/new", json={"game_id": "a" * 65})
+        assert resp.status_code == 422
