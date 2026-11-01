@@ -723,6 +723,8 @@ class TestMultiplayerDatabase:
 
         from backend.multiplayer.database import (
             acknowledge_ripple as db_ack_ripple,
+        )
+        from backend.multiplayer.database import (
             get_db_ctx,
             save_ripple_event,
         )
