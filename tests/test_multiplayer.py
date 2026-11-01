@@ -716,6 +716,85 @@ class TestMultiplayerDatabase:
         ok = db_ack_ripple("nonexistent-ripple", "game-x")
         assert ok is False
 
+    def test_acknowledge_ripple_concurrent_acknowledgments_preserved(self) -> None:
+        import concurrent.futures
+        import json
+        import threading
+
+        from backend.multiplayer.database import (
+            acknowledge_ripple as db_ack_ripple,
+            get_db_ctx,
+            save_ripple_event,
+        )
+
+        re = RippleEvent(
+            id="ripple-concurrent-1",
+            source_game_id="game-src",
+            source_player_name="Someone",
+            source_system_id="sys-a",
+            target_system_id="sys-b",
+            discovery_type="lore",
+            discovery_name="Concurrent Ripple",
+            created_at=datetime.now(UTC).isoformat(),
+        )
+        save_ripple_event(re)
+
+        NUM_ACKERS = 8
+        barrier = threading.Barrier(NUM_ACKERS)
+
+        def _worker(i: int) -> bool:
+            barrier.wait()
+            return db_ack_ripple("ripple-concurrent-1", f"game-concurrent-{i}")
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=NUM_ACKERS) as executor:
+            futures = [executor.submit(_worker, i) for i in range(NUM_ACKERS)]
+            results = [f.result() for f in concurrent.futures.as_completed(futures)]
+
+        assert all(r is True for r in results)
+
+        with get_db_ctx() as conn:
+            row = conn.execute(
+                "SELECT acknowledged_by FROM ripple_events WHERE id = ?",
+                ("ripple-concurrent-1",),
+            ).fetchone()
+        acked = json.loads(row["acknowledged_by"])
+        assert set(acked) == {f"game-concurrent-{i}" for i in range(NUM_ACKERS)}
+
+    def test_acknowledge_ripple_rollback_on_missing_row(self) -> None:
+        from backend.multiplayer.database import acknowledge_ripple as db_ack_ripple
+
+        select_cursor = MagicMock()
+        select_cursor.fetchone.return_value = None
+
+        mock_conn = MagicMock()
+        mock_conn.execute.side_effect = [MagicMock(), select_cursor]
+
+        with patch("backend.multiplayer.database.get_db_ctx") as mock_get_db_ctx:
+            mock_get_db_ctx.return_value.__enter__.return_value = mock_conn
+            result = db_ack_ripple("missing", "game-x")
+            assert result is False
+        assert mock_conn.rollback.called
+
+    def test_acknowledge_ripple_rollback_on_already_acked(self) -> None:
+        import json
+
+        from backend.multiplayer.database import acknowledge_ripple as db_ack_ripple
+
+        select_cursor = MagicMock()
+        select_cursor.fetchone.return_value = {
+            "id": "r1",
+            "acknowledged_by": json.dumps(["game-x"]),
+        }
+
+        mock_conn = MagicMock()
+        mock_conn.execute.return_value = select_cursor
+
+        with patch("backend.multiplayer.database.get_db_ctx") as mock_get_db_ctx:
+            mock_get_db_ctx.return_value.__enter__.return_value = mock_conn
+            result = db_ack_ripple("r1", "game-x")
+            assert result is False
+        assert mock_conn.rollback.called
+
     def test_load_json_column_error_handling(self) -> None:
         from backend.multiplayer.database import _load_json_column
         result = _load_json_column("not valid json {{{")
