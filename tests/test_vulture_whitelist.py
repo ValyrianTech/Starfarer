@@ -128,6 +128,6 @@ class TestModule:
 
     def test_all_misc_names_present(self) -> None:
         whitelist = vulture_whitelist.whitelist
-        expected = {"side_effect", "row_factory", "application", "status", "text_not_blank"}
+        expected = {"side_effect", "row_factory", "application", "status", "text_not_blank", "validate_game_id"}
         missing = expected - set(whitelist.__dict__.keys())
         assert not missing, f"Missing misc names in whitelist: {sorted(missing)}"

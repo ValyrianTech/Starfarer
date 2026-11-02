@@ -6552,30 +6552,34 @@ class TestNewGameRequestGameIdValidation:
             assert NewGameRequest(game_id=v).game_id == v
 
     def test_empty_string_rejected(self) -> None:
-        from backend.api.schemas import NewGameRequest
         from pydantic import ValidationError
+
+        from backend.api.schemas import NewGameRequest
 
         with pytest.raises(ValidationError):
             NewGameRequest(game_id="")
 
     def test_too_long_rejected(self) -> None:
-        from backend.api.schemas import NewGameRequest
         from pydantic import ValidationError
+
+        from backend.api.schemas import NewGameRequest
 
         with pytest.raises(ValidationError):
             NewGameRequest(game_id="a" * 65)
 
     @pytest.mark.parametrize("bad_id", ["has space", "slash/y", "semi;colon", "newline\n", "dot.dot", "üñî"])
     def test_illegal_characters_rejected(self, bad_id: str) -> None:
-        from backend.api.schemas import NewGameRequest
         from pydantic import ValidationError
+
+        from backend.api.schemas import NewGameRequest
 
         with pytest.raises(ValidationError):
             NewGameRequest(game_id=bad_id)
 
     def test_error_message_mentions_allowed_set(self) -> None:
-        from backend.api.schemas import NewGameRequest
         from pydantic import ValidationError
+
+        from backend.api.schemas import NewGameRequest
 
         with pytest.raises(ValidationError) as exc_info:
             NewGameRequest(game_id="bad id with spaces")

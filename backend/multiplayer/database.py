@@ -769,7 +769,9 @@ def acknowledge_ripple(ripple_id: str, game_id: str) -> bool:
     """Mark a ripple event as acknowledged by a game.
 
     Only succeeds if the ripple exists and the game has not already
-    acknowledged it.
+    acknowledged it. The read-modify-write is performed atomically inside
+    a ``BEGIN IMMEDIATE`` transaction so concurrent acknowledgments are
+    never lost.
 
     :param ripple_id: The unique identifier of the ripple event.
     :type ripple_id: str
@@ -779,14 +781,17 @@ def acknowledge_ripple(ripple_id: str, game_id: str) -> bool:
     :rtype: bool
     """
     with get_db_ctx() as conn:
+        conn.execute("BEGIN IMMEDIATE")
         row = conn.execute(
             "SELECT id, acknowledged_by FROM ripple_events WHERE id = ?",
             (ripple_id,),
         ).fetchone()
         if not row:
+            conn.rollback()
             return False
         acked = _load_json_column(row["acknowledged_by"])
         if game_id in acked:
+            conn.rollback()
             return False
         acked.append(game_id)
         conn.execute(
