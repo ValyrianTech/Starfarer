@@ -63,8 +63,8 @@ from backend.generation.events import (
 )
 from backend.models.discovery import Discovery, LoreFragment
 from backend.models.game_state import GameState
-from backend.utils import deterministic_hash
 from backend.models.system import Body, StarSystem
+from backend.utils import deterministic_hash
 
 
 class TestGameManager:
