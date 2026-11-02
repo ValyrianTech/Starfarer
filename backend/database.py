@@ -8,6 +8,7 @@ leaderboard data.
 
 import hashlib
 import json
+import logging
 import sqlite3
 from collections.abc import Generator
 from contextlib import contextmanager
@@ -15,6 +16,8 @@ from datetime import UTC, datetime
 from typing import Any
 
 from backend.config import DATA_DIR, DB_PATH, MAX_SAVES_PER_GAME
+
+logger = logging.getLogger(__name__)
 
 
 def get_db() -> sqlite3.Connection:
@@ -202,14 +205,21 @@ def load_game(game_id: str) -> dict | None:
     :param game_id: The unique identifier for the game.
     :type game_id: str
     :returns: The deserialized game state dictionary, or ``None`` if
-        not found.
+        not found or the persisted state is corrupt.
     :rtype: dict | None
     """
     with get_db_ctx() as conn:
         row = conn.execute("SELECT state_json, token FROM games WHERE id = ?", (game_id,)).fetchone()
         if row is None:
             return None
-        data = json.loads(row["state_json"])
+        try:
+            data = json.loads(row["state_json"])
+        except (json.JSONDecodeError, TypeError):
+            logger.warning("Corrupt state_json for game %r", game_id)
+            return None
+        if not isinstance(data, dict):
+            logger.warning("Corrupt state_json for game %r: not a dict", game_id)
+            return None
         token = _resolve_legacy_token(
             conn,
             data,
@@ -329,7 +339,7 @@ def load_save(game_id: str) -> dict | None:
     :param game_id: The unique identifier for the game.
     :type game_id: str
     :returns: The deserialized game state dictionary, or ``None`` if
-        no save exists.
+        no save exists or the persisted state is corrupt.
     :rtype: dict | None
     """
     with get_db_ctx() as conn:
@@ -339,7 +349,14 @@ def load_save(game_id: str) -> dict | None:
         ).fetchone()
         if row is None:
             return None
-        data = json.loads(row["state_json"])
+        try:
+            data = json.loads(row["state_json"])
+        except (json.JSONDecodeError, TypeError):
+            logger.warning("Corrupt state_json for save %r (game %r)", row["id"], game_id)
+            return None
+        if not isinstance(data, dict):
+            logger.warning("Corrupt state_json for save %r (game %r): not a dict", row["id"], game_id)
+            return None
         token = _resolve_legacy_token(
             conn,
             data,
