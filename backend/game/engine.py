@@ -625,11 +625,12 @@ def perform_sub_surface_exploration(state: GameState) -> tuple[bool, list[Discov
     body.sub_surface_explored = True
 
     discoveries = []
-    # Include len(state.discoveries) and state._next_log_id in the seed so
-    # repeated calls produce different results. The log-id advances even when
-    # the cargo hold is full, so a full hold cannot trap the player in a
-    # deterministically-repeating "found nothing" livelock.
-    item_rng = random.Random(state.seed + len(state.discoveries) + deterministic_hash(body.id) + 777 + state._next_log_id)  # nosec B311 - game RNG, not crypto
+    # Sub-surface exploration is one-time-per-body: ``sub_surface_explored``
+    # is set to True before this RNG is built, so the action can never be
+    # retried on the same body and there is no full-hold livelock to guard
+    # against. The fixed ``+ 777`` offset simply keeps this seed decorrelated
+    # from the other exploration actions.
+    item_rng = random.Random(state.seed + len(state.discoveries) + deterministic_hash(body.id) + 777)  # nosec B311 - game RNG, not crypto
     num_finds = item_rng.randint(1, 2)
 
     for i in range(num_finds):

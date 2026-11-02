@@ -6376,13 +6376,14 @@ class TestExplorationRngFullHoldLivelock:
         assert len(set(seeds)) == 3
         assert body.atmospheric_scan_count == 3
 
-    def test_sub_surface_full_hold_log_id_advances_seed(self) -> None:
-        """The sub-surface seed uses the pre-call ``_next_log_id``.
+    def test_sub_surface_seed_is_fixed_and_one_time_per_body(self) -> None:
+        """Sub-surface exploration uses a fixed seed and runs once per body.
 
-        ``perform_sub_surface_exploration`` reads ``state._next_log_id``
-        before ``add_log`` increments it, so the RNG seed folds in the
-        *pre-call* log-id. Spy on the RNG construction to assert the exact
-        seed the engine actually used.
+        ``perform_sub_surface_exploration`` flags the body
+        ``sub_surface_explored`` up front, so it cannot be retried on the same
+        body. Its RNG seed therefore does not (and need not) fold in
+        ``state._next_log_id`` — there is no full-hold livelock to guard
+        against. Spy on the RNG construction to assert the exact fixed seed.
         """
         state = new_game(seed=42)
         system = state.get_current_system()
@@ -6401,8 +6402,7 @@ class TestExplorationRngFullHoldLivelock:
         )
         state.sync_cargo()
 
-        # Capture the pre-call values before the engine runs.
-        log_id_before = state._next_log_id
+        # Capture the pre-call discovery count before the engine runs.
         discoveries_len_before = len(state.discoveries)
 
         captured_seeds = []
@@ -6418,12 +6418,15 @@ class TestExplorationRngFullHoldLivelock:
         assert ok is True
         assert discoveries == []
         assert len(captured_seeds) == 1
-        # The seed uses the PRE-call ``_next_log_id`` (read before ``add_log``
-        # increments it), so ``log_id_before`` — not ``state._next_log_id`` —
-        # is the correct term here.
+        # The seed is fixed: it has no ``_next_log_id`` term (and no attempt
+        # counter), only the decorrelating ``+ 777`` offset.
         assert captured_seeds[0] == (state.seed + discoveries_len_before
-                                     + deterministic_hash(body.id) + 777
-                                     + log_id_before)
-        # The log counter advanced across the call (it is folded into the seed
-        # for freshness on any future attempt).
-        assert state._next_log_id > log_id_before
+                                     + deterministic_hash(body.id) + 777)
+
+        # A second attempt on the same body is impossible: the body is now
+        # flagged ``sub_surface_explored``, so there is no retry and thus no
+        # possibility of a repeating "found nothing" livelock.
+        assert body.sub_surface_explored is True
+        ok_again, discoveries_again = perform_sub_surface_exploration(state)
+        assert ok_again is False
+        assert discoveries_again == []
