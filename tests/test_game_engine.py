@@ -3,6 +3,7 @@ import random
 import re
 import sys
 from typing import ClassVar
+from unittest.mock import patch
 
 import pytest
 
@@ -6376,6 +6377,13 @@ class TestExplorationRngFullHoldLivelock:
         assert body.atmospheric_scan_count == 3
 
     def test_sub_surface_full_hold_log_id_advances_seed(self) -> None:
+        """The sub-surface seed uses the pre-call ``_next_log_id``.
+
+        ``perform_sub_surface_exploration`` reads ``state._next_log_id``
+        before ``add_log`` increments it, so the RNG seed folds in the
+        *pre-call* log-id. Spy on the RNG construction to assert the exact
+        seed the engine actually used.
+        """
         state = new_game(seed=42)
         system = state.get_current_system()
         assert system is not None
@@ -6393,17 +6401,29 @@ class TestExplorationRngFullHoldLivelock:
         )
         state.sync_cargo()
 
+        # Capture the pre-call values before the engine runs.
         log_id_before = state._next_log_id
-        ok, discoveries = perform_sub_surface_exploration(state)
+        discoveries_len_before = len(state.discoveries)
+
+        captured_seeds = []
+        _real_random = random.Random
+
+        def _spy_random(seed_arg=None, *args, **kwargs):
+            captured_seeds.append(seed_arg)
+            return _real_random(seed_arg, *args, **kwargs)
+
+        with patch("backend.game.engine.random.Random", side_effect=_spy_random):
+            ok, discoveries = perform_sub_surface_exploration(state)
+
         assert ok is True
         assert discoveries == []
-        # The log counter advanced (it is folded into the seed for freshness).
+        assert len(captured_seeds) == 1
+        # The seed uses the PRE-call ``_next_log_id`` (read before ``add_log``
+        # increments it), so ``log_id_before`` — not ``state._next_log_id`` —
+        # is the correct term here.
+        assert captured_seeds[0] == (state.seed + discoveries_len_before
+                                     + deterministic_hash(body.id) + 777
+                                     + log_id_before)
+        # The log counter advanced across the call (it is folded into the seed
+        # for freshness on any future attempt).
         assert state._next_log_id > log_id_before
-        # Sub-surface can only run once per body, but the first attempt's seed
-        # already includes the advanced log-id, so it is distinct from the
-        # pre-call seed.
-        pre_seed = (state.seed + (len(state.discoveries) - 0)
-                    + deterministic_hash(body.id) + 777 + log_id_before)
-        used_seed = (state.seed + 1 + deterministic_hash(body.id) + 777
-                     + state._next_log_id)
-        assert used_seed != pre_seed
