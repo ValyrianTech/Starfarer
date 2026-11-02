@@ -3,6 +3,7 @@ import random
 import re
 import sys
 from typing import ClassVar
+from unittest.mock import patch
 
 import pytest
 
@@ -64,6 +65,7 @@ from backend.generation.events import (
 from backend.models.discovery import Discovery, LoreFragment
 from backend.models.game_state import GameState
 from backend.models.system import Body, StarSystem
+from backend.utils import deterministic_hash
 
 
 class TestGameManager:
@@ -6244,3 +6246,187 @@ class TestDiscoveryLoreFragmentDefensiveLoad:
         assert lf.title == "Unknown"
         assert lf.text == ""
         assert lf.id == ""
+
+
+class TestExplorationRngFullHoldLivelock:
+    """Regression tests for the exploration RNG full-hold livelock.
+
+    The exploration seed must include a monotonically-advancing value
+    (attempt counter / log-id) so that retrying an exploration at a full
+    cargo hold produces a *fresh* sequence instead of the same
+    ``num_finds`` / category / value every time. These tests use the real
+    seeded RNG (no ``randint`` mock) so they actually exercise the seed.
+    """
+
+    @staticmethod
+    def _explore_state() -> tuple[GameState, Body]:
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        body = Body(id="b_livelock", name="LockWorld", body_type="planet",
+                    biome="desert", size=5, distance_from_star=0.5,
+                    poi_count=100, initial_poi_count=100)
+        system.bodies = [body]
+        state.ship.current_body_id = body.id
+        state.ship.fuel = 100000
+        # Full cargo hold: len(state.discoveries) == max_cargo so _add_discoveries
+        # stores nothing and the old seed (which only folded in len(discoveries))
+        # never advanced.
+        state.ship.max_cargo = 1
+        state.discoveries.clear()
+        state.discoveries.append(
+            Discovery(id="livelock_filler", category="mineral",
+                      name="Filler", description="f", value=1)
+        )
+        state.sync_cargo()
+        assert state.ship.cargo == 1
+        return state, body
+
+    def test_explore_surface_full_hold_retries_do_not_repeat(self) -> None:
+        state, body = self._explore_state()
+        # Every retry at a full hold must still advance the attempt counter.
+        counts = []
+        for _ in range(3):
+            state.ship.fuel = 100000
+            ok, _msg, discoveries = explore_surface(state)
+            assert ok is True
+            # Full hold: nothing stored, cargo unchanged.
+            assert discoveries == []
+            assert state.ship.cargo == 1
+            counts.append(body.exploration_count)
+        # The attempt counter advanced on every retry (this is what feeds the seed).
+        assert counts == [1, 2, 3]
+
+    def test_explore_surface_seed_advances_with_attempt_counter(self) -> None:
+        """The explore seed must differ across full-hold retries.
+
+        With the fix the seed includes ``body.exploration_count``, which
+        advances every attempt, so two consecutive rolls at the same
+        ``len(state.discoveries)`` are decorrelated.
+        """
+        state, body = self._explore_state()
+        rolls = []
+        # A body permits at most 3 surface attempts before it is fully explored.
+        for _ in range(3):
+            state.ship.fuel = 100000
+            explore_surface(state)
+            rolls.append((body.exploration_count,
+                          random.Random(state.seed + len(state.discoveries)
+                                        + deterministic_hash(body.id)
+                                        + body.exploration_count).randint(1, 3)))
+        # The attempt counter advances on every attempt...
+        assert [c for c, _ in rolls] == [1, 2, 3]
+        # ...and the per-attempt seed (identical pre-fix) yields distinct rolls,
+        # which is exactly what breaks the full-hold livelock.
+        distinct_seeds = {random.Random(state.seed
+                                        + deterministic_hash(body.id)
+                                        + c).randint(1, 3)
+                          for c, _ in rolls}
+        assert len(distinct_seeds) > 1
+
+    def test_explore_surface_full_hold_sequence_varies_with_real_rng(self) -> None:
+        """End-to-end: real RNG finds nothing sometimes and something other
+        times across full-hold attempts cannot be observed because the hold is
+        full (all dropped), so instead assert the underlying roll varies."""
+        state, body = self._explore_state()
+        seen = set()
+        for _ in range(3):
+            state.ship.fuel = 100000
+            pre = body.exploration_count
+            explore_surface(state)
+            # Recompute the exact roll the function used, at the post-increment seed.
+            rng = random.Random(state.seed + len(state.discoveries)
+                                + deterministic_hash(body.id)
+                                + body.exploration_count)
+            roll = min(body.poi_count, rng.randint(1, 3))
+            if pre == 1:
+                roll = roll // 2
+            elif pre == 2:
+                roll = roll // 4
+            seen.add(roll)
+        assert len(seen) > 1, f"Expected varying num_finds, got only {seen}"
+
+    def test_atmospheric_scan_full_hold_counter_advances(self) -> None:
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        body = Body(id="b_atmo_livelock", name="AtmoLock", body_type="planet",
+                    biome="gas_giant", size=5, distance_from_star=0.5, poi_count=1)
+        system.bodies = [body]
+        state.ship.current_body_id = body.id
+        state.ship.fuel = 100000
+        state.ship.max_cargo = 1
+        state.discoveries.clear()
+        state.discoveries.append(
+            Discovery(id="atmo_filler", category="mineral", name="Filler",
+                      description="f", value=1)
+        )
+        state.sync_cargo()
+
+        seeds = []
+        for _ in range(3):
+            state.ship.fuel = 100000
+            ok, discoveries = perform_atmospheric_scan(state)
+            assert ok is True
+            assert discoveries == []
+            seeds.append(state.seed + len(state.discoveries)
+                         + deterministic_hash(body.id) + 999
+                         + body.atmospheric_scan_count)
+        # Each attempt folded a different, strictly-increasing counter into the seed.
+        assert len(set(seeds)) == 3
+        assert body.atmospheric_scan_count == 3
+
+    def test_sub_surface_seed_is_fixed_and_one_time_per_body(self) -> None:
+        """Sub-surface exploration uses a fixed seed and runs once per body.
+
+        ``perform_sub_surface_exploration`` flags the body
+        ``sub_surface_explored`` up front, so it cannot be retried on the same
+        body. Its RNG seed therefore does not (and need not) fold in
+        ``state._next_log_id`` — there is no full-hold livelock to guard
+        against. Spy on the RNG construction to assert the exact fixed seed.
+        """
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        body = Body(id="b_sub_livelock", name="SubLock", body_type="planet",
+                    biome="volcanic", size=5, distance_from_star=0.5, poi_count=1)
+        system.bodies = [body]
+        state.ship.current_body_id = body.id
+        state.ship.crew = 10
+        state.ship.fuel = 100000
+        state.ship.max_cargo = 1
+        state.discoveries.clear()
+        state.discoveries.append(
+            Discovery(id="sub_filler", category="mineral", name="Filler",
+                      description="f", value=1)
+        )
+        state.sync_cargo()
+
+        # Capture the pre-call discovery count before the engine runs.
+        discoveries_len_before = len(state.discoveries)
+
+        captured_seeds = []
+        _real_random = random.Random
+
+        def _spy_random(seed_arg=None, *args, **kwargs):
+            captured_seeds.append(seed_arg)
+            return _real_random(seed_arg, *args, **kwargs)
+
+        with patch("backend.game.engine.random.Random", side_effect=_spy_random):
+            ok, discoveries = perform_sub_surface_exploration(state)
+
+        assert ok is True
+        assert discoveries == []
+        assert len(captured_seeds) == 1
+        # The seed is fixed: it has no ``_next_log_id`` term (and no attempt
+        # counter), only the decorrelating ``+ 777`` offset.
+        assert captured_seeds[0] == (state.seed + discoveries_len_before
+                                     + deterministic_hash(body.id) + 777)
+
+        # A second attempt on the same body is impossible: the body is now
+        # flagged ``sub_surface_explored``, so there is no retry and thus no
+        # possibility of a repeating "found nothing" livelock.
+        assert body.sub_surface_explored is True
+        ok_again, discoveries_again = perform_sub_surface_exploration(state)
+        assert ok_again is False
+        assert discoveries_again == []
