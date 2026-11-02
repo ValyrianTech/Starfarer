@@ -910,6 +910,102 @@ class TestDiscoveryModel:
         restored = LoreFragment.from_dict(d)
         assert restored.fragment_number == -1
 
+    @pytest.mark.parametrize("bad", ["abc", [1, 2], {"a": 1}, True])
+    def test_discovery_from_dict_value_corrupt_coerces_to_zero(self, bad) -> None:
+        """A non-int (or bool) value should be coerced to 0 on deserialization."""
+        d = {
+            "id": "d_1", "category": "artifact", "name": "Relic",
+            "description": "A relic.", "value": bad, "system_id": "sys_1",
+        }
+        restored = Discovery.from_dict(d)
+        assert restored.value == 0
+
+    def test_discovery_from_dict_value_valid_int_passes_through(self) -> None:
+        """A valid integer value should be preserved on deserialization."""
+        d = {
+            "id": "d_1", "category": "artifact", "name": "Relic",
+            "description": "A relic.", "value": 42, "system_id": "sys_1",
+        }
+        restored = Discovery.from_dict(d)
+        assert restored.value == 42
+
+    @pytest.mark.parametrize("field, default", [
+        ("category", "unknown"),
+        ("name", "Unknown"),
+        ("description", ""),
+        ("system_id", ""),
+    ])
+    def test_discovery_from_dict_non_str_fields_default(self, field, default) -> None:
+        """Non-str string fields should fall back to their defaults."""
+        d = {
+            "id": "d_1", "category": "artifact", "name": "Relic",
+            "description": "A relic.", "value": 10, "system_id": "sys_1",
+        }
+        d[field] = {"not": "a string"}
+        restored = Discovery.from_dict(d)
+        assert getattr(restored, field) == default
+
+    @pytest.mark.parametrize("field", ["lore_fragment_id", "body_id"])
+    def test_discovery_from_dict_optional_id_non_str_none(self, field) -> None:
+        """Non-str optional id fields should fall back to None."""
+        d = {
+            "id": "d_1", "category": "artifact", "name": "Relic",
+            "description": "A relic.", "value": 10, "system_id": "sys_1",
+        }
+        d[field] = ["not", "a", "string"]
+        restored = Discovery.from_dict(d)
+        assert getattr(restored, field) is None
+
+    def test_discovery_from_dict_optional_id_str_preserved(self) -> None:
+        """Valid str optional ids should be preserved on deserialization."""
+        d = {
+            "id": "d_1", "category": "artifact", "name": "Relic",
+            "description": "A relic.", "value": 10, "system_id": "sys_1",
+            "lore_fragment_id": "lf_1", "body_id": "b_1",
+        }
+        restored = Discovery.from_dict(d)
+        assert restored.lore_fragment_id == "lf_1"
+        assert restored.body_id == "b_1"
+
+    @pytest.mark.parametrize("bad", ["abc", [1, 2], {"a": 1}, True])
+    def test_lore_fragment_from_dict_fragment_number_corrupt(self, bad) -> None:
+        """A corrupt fragment_number should be coerced to -1 on deserialization."""
+        d = {
+            "id": "l_1", "arc": "The Architects", "title": "First Contact",
+            "text": "They came...", "fragment_number": bad,
+        }
+        restored = LoreFragment.from_dict(d)
+        assert restored.fragment_number == -1
+
+    def test_lore_fragment_from_dict_fragment_number_valid(self) -> None:
+        """A valid fragment_number should be preserved on deserialization."""
+        d = {
+            "id": "l_1", "arc": "The Architects", "title": "First Contact",
+            "text": "They came...", "fragment_number": 7,
+        }
+        restored = LoreFragment.from_dict(d)
+        assert restored.fragment_number == 7
+
+    @pytest.mark.parametrize("field", ["discovered", "donated"])
+    @pytest.mark.parametrize("bad", [1, "yes", ["true"], {"x": 1}])
+    def test_lore_fragment_from_dict_bool_fields_non_bool(self, field, bad) -> None:
+        """Non-bool discovered/donated values should be coerced to False."""
+        d = {
+            "id": "l_1", "arc": "The Architects", "title": "First Contact",
+            "text": "They came...", field: bad,
+        }
+        restored = LoreFragment.from_dict(d)
+        assert getattr(restored, field) is False
+
+    def test_lore_fragment_from_dict_discovery_id_str_preserved(self) -> None:
+        """A valid str discovery_id should be preserved on deserialization."""
+        d = {
+            "id": "l_1", "arc": "The Architects", "title": "First Contact",
+            "text": "They came...", "discovery_id": "d_1",
+        }
+        restored = LoreFragment.from_dict(d)
+        assert restored.discovery_id == "d_1"
+
     def test_lore_fragment_donated_roundtrip(self) -> None:
         """LoreFragment donated flag should round-trip through to_dict/from_dict."""
         lore = LoreFragment(id="l_1", arc="The Architects", title="First Contact",
