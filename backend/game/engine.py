@@ -425,22 +425,29 @@ def explore_surface(state: GameState) -> tuple[bool, str, list[Discovery]]:
         return False, "No points of interest remain on this body.", []
 
     discoveries = []
-    # Include len(state.discoveries) in the seed so that repeated calls produce different results (the discovery count changes between calls).
-    item_rng = random.Random(state.seed + len(state.discoveries) + deterministic_hash(body.id))  # nosec B311 - game RNG, not crypto
 
     # Diminishing returns based on exploration count
     if body.exploration_count >= 3:
         return False, "This body has been fully explored.", []
-    num_finds = min(body.poi_count, item_rng.randint(1, 3))
-    if body.exploration_count == 1:
-        num_finds = num_finds // 2
-    elif body.exploration_count == 2:
-        num_finds = num_finds // 4
+
+    pre_increment_count = body.exploration_count
 
     # Charge the exploration cost and count the attempt up front so a full
     # cargo hold cannot grant free, repeated exploration (mirrors perform_scan).
     ship.fuel -= EXPLORE_FUEL_COST
     body.exploration_count += 1
+
+    # Include len(state.discoveries) and body.exploration_count in the seed so
+    # repeated calls produce different results. The attempt counter advances
+    # even when the cargo hold is full, so a full hold cannot trap the player
+    # in a deterministically-repeating "found nothing" livelock.
+    item_rng = random.Random(state.seed + len(state.discoveries) + deterministic_hash(body.id) + body.exploration_count)  # nosec B311 - game RNG, not crypto
+
+    num_finds = min(body.poi_count, item_rng.randint(1, 3))
+    if pre_increment_count == 1:
+        num_finds = num_finds // 2
+    elif pre_increment_count == 2:
+        num_finds = num_finds // 4
 
     if num_finds == 0:
         state.add_log("exploration", f"Explored {body.name}. Found nothing of interest.", category="exploration", title="Surface Exploration", system=system.name, body=body.name, fuel_change=-EXPLORE_FUEL_COST)
@@ -531,8 +538,11 @@ def perform_atmospheric_scan(state: GameState) -> tuple[bool, list[Discovery]]:
     body.atmospheric_scan_count += 1
 
     discoveries = []
-    # Include len(state.discoveries) in the seed so that repeated calls produce different results (the discovery count changes between calls).
-    item_rng = random.Random(state.seed + len(state.discoveries) + deterministic_hash(body.id) + 999)  # nosec B311 - game RNG, not crypto
+    # Include len(state.discoveries) and body.atmospheric_scan_count in the seed
+    # so repeated calls produce different results. The attempt counter advances
+    # even when the cargo hold is full, so a full hold cannot trap the player in
+    # a deterministically-repeating "found nothing" livelock.
+    item_rng = random.Random(state.seed + len(state.discoveries) + deterministic_hash(body.id) + 999 + body.atmospheric_scan_count)  # nosec B311 - game RNG, not crypto
     num_finds = item_rng.randint(1, 2)
 
     for i in range(num_finds):
@@ -615,8 +625,11 @@ def perform_sub_surface_exploration(state: GameState) -> tuple[bool, list[Discov
     body.sub_surface_explored = True
 
     discoveries = []
-    # Include len(state.discoveries) in the seed so that repeated calls produce different results (the discovery count changes between calls).
-    item_rng = random.Random(state.seed + len(state.discoveries) + deterministic_hash(body.id) + 777)  # nosec B311 - game RNG, not crypto
+    # Include len(state.discoveries) and state._next_log_id in the seed so
+    # repeated calls produce different results. The log-id advances even when
+    # the cargo hold is full, so a full hold cannot trap the player in a
+    # deterministically-repeating "found nothing" livelock.
+    item_rng = random.Random(state.seed + len(state.discoveries) + deterministic_hash(body.id) + 777 + state._next_log_id)  # nosec B311 - game RNG, not crypto
     num_finds = item_rng.randint(1, 2)
 
     for i in range(num_finds):
