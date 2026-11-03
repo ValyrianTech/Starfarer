@@ -933,6 +933,10 @@ def activate_distress_beacon(state: GameState) -> dict:
     Costs 50 credits. Has a 60% chance of attracting a rescue within
     1-3 turns.
 
+    The 50 credits and the distress cooldown are charged up front (before
+    the outcome is resolved), and are refunded if the outcome resolves to
+    an ``error`` dict.
+
     :param state: The current game state.
     :type state: GameState
     :returns: A dictionary with ``error`` on failure, or ``result``,
@@ -955,6 +959,9 @@ def activate_distress_beacon(state: GameState) -> dict:
     if ship.credits < 50:
         return {"error": "Not enough credits. Distress beacon costs 50 credits."}
 
+    ship.credits -= 50
+    ship.distress_cooldown = True
+
     rng = seeded_random(state.seed, "distress", system.id, str(state._next_log_id))
 
     rescued = rng.random() < 0.6
@@ -971,10 +978,9 @@ def activate_distress_beacon(state: GameState) -> dict:
         outcome = _resolve_distress_outcome(state, rng, rescue_roll, turns)
 
     if "error" in outcome:
+        ship.credits += 50
+        ship.distress_cooldown = False
         return outcome
-
-    ship.credits -= 50
-    ship.distress_cooldown = True
 
     if outcome["outcome"] == "no_response":
         state.add_log("emergency", f"Distress beacon activated in {system.name}. No response yet — try again in {turns} turns.", category="crisis", title="Distress Beacon Activated", system=system.name)

@@ -2820,6 +2820,35 @@ class TestDistressBeacon:
         assert state.ship.credits == 150
         assert state.ship.distress_cooldown is True
 
+    def test_activate_distress_beacon_piracy_at_50_credit_boundary(self) -> None:
+        from unittest.mock import MagicMock, patch
+        state = self._make_stranded_state()
+        state.ship.credits = 50
+        mock_rng = MagicMock()
+        mock_rng.random.side_effect = [0.2, 0.5, 0.6]
+        mock_rng.randint.side_effect = [2, 50]
+        with patch("backend.game.engine.seeded_random", return_value=mock_rng):
+            result = activate_distress_beacon(state)
+        assert result["outcome"] == "piracy"
+        assert "error" not in result
+        assert state.ship.credits == 0
+
+    def test_activate_distress_beacon_pilots_guild_at_50_credit_boundary(self) -> None:
+        from unittest.mock import MagicMock, patch
+        state = self._make_stranded_state()
+        system = state.get_current_system()
+        assert system is not None
+        system.has_trading_station = True
+        state.ship.credits = 50
+        mock_rng = MagicMock()
+        mock_rng.random.side_effect = [0.2, 0.1]
+        mock_rng.randint.side_effect = [1]
+        with patch("backend.game.engine.seeded_random", return_value=mock_rng):
+            result = activate_distress_beacon(state)
+        assert result["outcome"] == "pilots_guild"
+        assert "error" not in result
+        assert state.ship.credits == 0
+
     def test_distress_pilots_guild_no_system(self) -> None:
         """_distress_pilots_guild should return error dict when system is None."""
         from backend.game.engine import _distress_pilots_guild
