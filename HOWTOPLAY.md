@@ -234,6 +234,8 @@ POST /api/game/{game_id}/distress
 
 Costs 50 credits. Has a 60% chance of attracting a responder within 1-3 turns. If no responder comes, you can try again after the cooldown expires.
 
+The 50-credit cost and the cooldown are only applied once a rescue outcome actually resolves. If the activation is rejected with an error (HTTP 400 — e.g. the beacon cannot be resolved in the current state), you are **not** charged and the cooldown is **not** set, so a rejected activation never costs you credits.
+
 **Possible outcomes:**
 | Outcome | Chance | Effect |
 |---|---|---|

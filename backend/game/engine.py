@@ -898,6 +898,33 @@ _DISTRESS_TABLE: list[_BucketEntry] = [
 ]
 
 
+def _resolve_distress_outcome(state: GameState, rng: Any, rescue_roll: float, turns: int) -> dict:
+    """Resolve the rescue outcome for the distress beacon without charging.
+
+    Performs no credits/cooldown mutation on the ship; it only selects the
+    outcome bucket and delegates to its strategy (which may mutate state as
+    before). Returns the outcome dict, or an ``error`` dict when nothing
+    matches.
+    """
+    for bucket in _DISTRESS_TABLE:
+        if not bucket.precondition(state):
+            continue
+        if rescue_roll >= bucket.threshold:
+            continue
+        if bucket.strategy is not None:
+            return bucket.strategy(state, rng, turns)
+        if bucket.sub_table is not None:
+            sub_roll = rng.random()
+            cumulative = 0.0
+            for entry in bucket.sub_table:
+                cumulative += entry.weight
+                if sub_roll < cumulative:
+                    return entry.strategy(state, rng, turns)
+        break
+
+    return {"error": "No distress outcome matched."}
+
+
 def activate_distress_beacon(state: GameState) -> dict:
     """Activate the distress beacon to call for help when in trouble.
 
@@ -905,6 +932,10 @@ def activate_distress_beacon(state: GameState) -> dict:
     (below 20% of max), and when the distress cooldown is not active.
     Costs 50 credits. Has a 60% chance of attracting a rescue within
     1-3 turns.
+
+    The 50 credits and the distress cooldown are charged up front (before
+    the outcome is resolved), and are refunded if the outcome resolves to
+    an ``error`` dict.
 
     :param state: The current game state.
     :type state: GameState
@@ -936,33 +967,25 @@ def activate_distress_beacon(state: GameState) -> dict:
     rescued = rng.random() < 0.6
     if not rescued:
         turns = rng.randint(2, 4)
-        state.add_log("emergency", f"Distress beacon activated in {system.name}. No response yet — try again in {turns} turns.", category="crisis", title="Distress Beacon Activated", system=system.name)
-        return {
+        outcome = {
             "result": f"Distress beacon activated. No response yet — try again in {turns} turns.",
             "outcome": "no_response",
             "effects": {},
         }
+    else:
+        turns = rng.randint(1, 3)
+        rescue_roll = rng.random()
+        outcome = _resolve_distress_outcome(state, rng, rescue_roll, turns)
 
-    turns = rng.randint(1, 3)
-    rescue_roll = rng.random()
+    if "error" in outcome:
+        ship.credits += 50
+        ship.distress_cooldown = False
+        return outcome
 
-    for bucket in _DISTRESS_TABLE:
-        if not bucket.precondition(state):
-            continue
-        if rescue_roll >= bucket.threshold:
-            continue
-        if bucket.strategy is not None:
-            return bucket.strategy(state, rng, turns)
-        if bucket.sub_table is not None:
-            sub_roll = rng.random()
-            cumulative = 0.0
-            for entry in bucket.sub_table:
-                cumulative += entry.weight
-                if sub_roll < cumulative:
-                    return entry.strategy(state, rng, turns)
-        break
+    if outcome["outcome"] == "no_response":
+        state.add_log("emergency", f"Distress beacon activated in {system.name}. No response yet — try again in {turns} turns.", category="crisis", title="Distress Beacon Activated", system=system.name)
 
-    return {"error": "No distress outcome matched."}
+    return outcome
 
 
 def perform_salvage(state: GameState) -> dict:
