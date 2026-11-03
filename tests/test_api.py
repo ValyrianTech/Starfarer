@@ -6287,6 +6287,23 @@ class TestGameStoreEviction:
         first_call_lock = threading.Lock()
         first_call = [True]
 
+        # Side-effecting recursion to understand: routes_mod._get_state(victim.id)
+        # (called by _mutate) first calls get_and_touch; on a cache miss (the
+        # victim was already popped by the outer eviction below) it loads the
+        # victim from the DB, register_game(state)'s it, and then calls
+        # evict_if_needed(_locked_game_ids() | {victim.id}). That inner eviction
+        # is itself side-effecting: with the store over MAX_IN_MEMORY_GAMES it can
+        # call game_save on *other* residents (here the filler). Crucially,
+        # because _get_state passes {victim.id} in active_ids, the victim is
+        # NEVER re-saved by that recursive eviction; it can only touch the filler.
+        # So the victim is saved exactly twice on this path, both through
+        # _gated_save: (a) once by the outer eviction (the first_call branch,
+        # gated to run while _store_lock is held), and (b) once by the mutator's
+        # explicit manager.game_save(state) at the end. The filler's save (if any,
+        # from the recursive eviction) is real_save-only and never touches
+        # first_call or saved_credits, so it is irrelevant to the save-count
+        # reasoning below.
+
         def _gated_save(state) -> None:
             """Delegate to the real save, gating the eviction save of the victim."""
             if state.id == victim.id:
@@ -6294,17 +6311,19 @@ class TestGameStoreEviction:
                     is_first = first_call[0]
                     first_call[0] = False
                 if is_first:
-                    # Eviction save of the victim: runs while _store_lock is held.
+                    # Outer eviction save of the victim: runs while _store_lock is held.
                     observations.append((state.id, manager._store_lock.locked()))
                     save_in_progress.set()
                     mutator_attempted.wait()
                     mutator_interleaved.append(mutator_entered_critical.is_set())
                     real_save(state)
                     return
-                # The mutator's save of the victim: the final persisted write.
+                # The mutator's final save of the victim: the last persisted write.
                 saved_credits.append(state.ship.credits)
                 real_save(state)
                 return
+            # Any other game (e.g. the filler, saved by the recursive
+            # evict_if_needed triggered inside _get_state) is saved normally.
             real_save(state)
 
         def _mutate() -> None:
@@ -6313,6 +6332,9 @@ class TestGameStoreEviction:
             # save_in_progress is set while the eviction thread holds
             # _store_lock, so this guarantees _get_state blocks on the lock.
             save_in_progress.wait()
+            # On the cache miss, this triggers the recursive evict_if_needed
+            # described above; its game_save calls only ever touch the filler
+            # (the victim is in active_ids), so it cannot disturb first_call.
             state = routes_mod._get_state(victim.id)
             mutator_entered_critical.set()
             assert state is not None
@@ -6341,7 +6363,10 @@ class TestGameStoreEviction:
             # store lock. Its save must then be the last write for the victim.
             assert mutator_interleaved[0] is False
             assert observations == [(victim.id, True)]
-            assert saved_credits[-1] == 9999, saved_credits
+            # The victim is saved exactly twice (outer eviction + the mutator's
+            # final save); the recursive eviction only ever saves the filler, so
+            # saved_credits holds exactly the mutator's single final write.
+            assert saved_credits == [9999], saved_credits
             assert save_in_progress.is_set()
             assert mutator_done.is_set()
 
