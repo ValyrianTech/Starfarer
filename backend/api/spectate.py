@@ -27,6 +27,7 @@ from backend.game.manager import (
     GAME_STORE,
     evict_if_needed,
     game_load,
+    get_and_touch,
     register_game,
     snapshot_games,
     touch_game,
@@ -56,9 +57,9 @@ def _get_state(game_id: str) -> GameState | None:
     :returns: The :class:`GameState` if found, or ``None``.
     :rtype: GameState | None
     """
-    if game_id in GAME_STORE:
-        touch_game(game_id)
-        return GAME_STORE[game_id]
+    resident = get_and_touch(game_id)
+    if resident is not None:
+        return resident
     state = game_load(game_id)
     if state:
         register_game(state)
