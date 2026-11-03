@@ -565,6 +565,48 @@ def evict_if_needed(active_ids: set[str] | None = None) -> None:
     is removed from :data:`GAME_STORE`, so a concurrent :func:`_get_state`
     can never observe a game that has been popped but not yet saved.
 
+    This is a deliberate correctness-over-throughput trade-off: :func:`game_save`
+    (which performs the full JSON serialization via :func:`_state_to_dict` and
+    then the blocking SQLite write via :func:`backend.database.save_game`)
+    executes synchronously *inside* the :data:`_store_lock` critical section
+    rather than after the lock is released. While a victim is being persisted,
+    any other thread that needs the lock — :func:`touch_game`,
+    :func:`get_and_touch`, :func:`register_game`, :func:`snapshot_games`, and
+    other :func:`evict_if_needed` calls — blocks until that save finishes. The
+    latency impact is bounded, though: this blocking happens only on the
+    eviction path (when ``len(GAME_STORE) > MAX_IN_MEMORY_GAMES``), only for
+    victims that are not currently active, and each victim is saved exactly
+    once before being popped, so the amortized cost per request is small. A
+    database failure on save is caught and logged, and the entry is still
+    popped, so a slow or failing database cannot wedge the loop — the blocking
+    is bounded by the duration of a single :func:`game_save` call.
+
+    Correctness wins here because the alternative — saving *outside* the lock,
+    as the previous implementation did — leaves a window in which a concurrent
+    mutator reloads a popped-but-unsaved game from the database, mutates it, and
+    saves, after which the deferred eviction save overwrites the fresher row
+    with stale state (the lost update this change fixes).
+
+    Alternative considered: in-flight set. An in-flight set — a registry mapping
+    ``game_id`` to a ``threading.Event``/future, populated under
+    :data:`_store_lock` before the lock is released and cleared once the
+    :func:`game_save` completes, with readers (e.g. ``_get_state``) checking the
+    set and blocking, or reloading only after the save finishes, whenever their
+    game is in flight — could in principle keep the save outside
+    :data:`_store_lock` and preserve concurrency while still closing the
+    lost-update race. This approach was evaluated and rejected, not overlooked,
+    for four reasons: (a) it pushes correctness reasoning into every reader
+    (``_get_state``, ``_authorize_game``, the spectator ``_get_state``, and any
+    future direct :data:`GAME_STORE` access) rather than confining it to this one
+    function; (b) it reintroduces a wait/blocking path for readers anyway — a
+    reader that hits an in-flight game must wait for the save to finish — merely
+    moving the blocking from the writer to readers; (c) it adds a second
+    synchronization primitive (the in-flight set plus its own lock plus per-game
+    events) with subtle lifetime/cleanup concerns on exceptions; and (d) the
+    simple save-before-pop-under-lock approach is provably race-free and the
+    eviction path is infrequent and bounded, making the added complexity
+    unjustified.
+
     :param active_ids: Optional set of game IDs currently in use (held
         locks) that must not be evicted.
     :type active_ids: set[str] | None
