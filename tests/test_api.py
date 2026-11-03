@@ -6243,9 +6243,26 @@ class TestGameStoreEviction:
         reader could reload the stale database row, mutate it, persist it, and
         then have the deferred eviction save overwrite it with stale state.
 
-        The assertion is deliberately on the *last* ``game_save`` performed for
-        X: it must observe the mutator's credits, proving the mutating update
-        won rather than being clobbered.
+        This rewrite drives the interleaving deterministically with a strict
+        two-event handshake and no sleep/timeout in the correctness path. The
+        eviction save (which runs while the eviction thread holds
+        ``_store_lock``) signals ``save_in_progress`` and then blocks on
+        ``mutator_attempted``; the mutator signals ``mutator_attempted`` and
+        then blocks on ``save_in_progress`` before contending for the store
+        lock. Because ``save_in_progress`` is only ever set inside the eviction
+        save (i.e. while ``_store_lock`` is held), once the mutator observes it
+        its ``_get_state`` is *guaranteed* to queue on ``_store_lock`` rather
+        than win the race and observe a still-resident victim. The eviction
+        save then records that the mutator has not entered its critical
+        section, persists the victim, and eviction pops it and releases the
+        lock; only then does the mutator acquire the lock, reload the
+        freshly-saved victim from the DB, mutate it, and save it.
+
+        The assertions therefore prove three things: (a) the eviction save ran
+        with ``_store_lock`` held, (b) the mutator could not interleave into
+        the store during that save, and (c) the mutator's write is the final
+        persisted write for the victim (its credits and log entry survive a
+        reload), so the mutation was not lost.
         """
         import threading
 
@@ -6258,61 +6275,76 @@ class TestGameStoreEviction:
         game_save(victim)
         filler = new_game(seed=42, ship_name="EvictRaceFiller")
 
-        saved_credits: list[int] = []
         real_save = manager.game_save
-        eviction_save_started = threading.Event()
-        release_eviction_save = threading.Event()
+        save_in_progress = threading.Event()
+        mutator_attempted = threading.Event()
+        mutator_entered_critical = threading.Event()
+        mutator_done = threading.Event()
+
+        observations: list[tuple[str, bool]] = []
+        mutator_interleaved: list[bool] = []
+        saved_credits: list[int] = []
         first_call_lock = threading.Lock()
         first_call = [True]
 
-        def _slow_save(state) -> None:
-            """Delegate to the real save, but hold the first (eviction) save."""
-            saved_credits.append(state.ship.credits)
-            with first_call_lock:
-                is_first = first_call[0]
-                first_call[0] = False
-            if is_first:
-                eviction_save_started.set()
-                # Hold this save open so the concurrent mutator runs while
-                # eviction is mid-flight.
-                release_eviction_save.wait(timeout=5.0)
+        def _gated_save(state) -> None:
+            """Delegate to the real save, gating the eviction save of the victim."""
+            if state.id == victim.id:
+                with first_call_lock:
+                    is_first = first_call[0]
+                    first_call[0] = False
+                if is_first:
+                    # Eviction save of the victim: runs while _store_lock is held.
+                    observations.append((state.id, manager._store_lock.locked()))
+                    save_in_progress.set()
+                    mutator_attempted.wait()
+                    mutator_interleaved.append(mutator_entered_critical.is_set())
+                    real_save(state)
+                    return
+                # The mutator's save of the victim: the final persisted write.
+                saved_credits.append(state.ship.credits)
+                real_save(state)
+                return
             real_save(state)
 
         def _mutate() -> None:
-            # Always release the held eviction save, even if this raises, so a
-            # failure surfaces as a fast test error instead of a hang.
-            assert eviction_save_started.wait(timeout=5.0)
-            try:
-                # Re-lookup through the normal API entry point, exactly as a
-                # real mutating request (jump/trade/upgrade) would. Because the
-                # fix persists the victim while still holding ``_store_lock``
-                # and ``_get_state`` reads the store atomically under that same
-                # lock, this lookup can never observe a popped-but-unsaved game.
-                state = routes_mod._get_state(victim.id)
-                assert state is not None
-                state.ship.credits = 9999
-                state.add_log("system", "Concurrent mutation during eviction")
-                manager.game_save(state)
-            finally:
-                release_eviction_save.set()
+            mutator_attempted.set()
+            # Only contend for the store lock once the eviction save has begun;
+            # save_in_progress is set while the eviction thread holds
+            # _store_lock, so this guarantees _get_state blocks on the lock.
+            save_in_progress.wait()
+            state = routes_mod._get_state(victim.id)
+            mutator_entered_critical.set()
+            assert state is not None
+            state.ship.credits = 9999
+            state.add_log("system", "Concurrent mutation during eviction")
+            manager.game_save(state)
+            mutator_done.set()
 
         try:
             with patch.object(manager, "MAX_IN_MEMORY_GAMES", 1):
-                # X is inserted first so it is the LRU victim; F pushes past cap.
+                # victim is inserted first so it is the LRU victim; filler
+                # pushes the store over the cap.
                 GAME_STORE[victim.id] = victim
                 GAME_STORE[filler.id] = filler
 
                 mutator = threading.Thread(target=_mutate, daemon=True)
-                with patch.object(manager, "game_save", side_effect=_slow_save):
-                    mutator.start()
+                mutator.start()
+                with patch.object(manager, "game_save", side_effect=_gated_save):
                     evict_if_needed()
                     mutator.join(timeout=10.0)
 
                 assert not mutator.is_alive(), "mutator thread hung"
 
-            # The mutator's save must be the last write for X, and the mutation
-            # it made must be the version that survives.
+            # The mutator must never have entered its critical section during
+            # the eviction save, and the eviction save must have run under the
+            # store lock. Its save must then be the last write for the victim.
+            assert mutator_interleaved[0] is False
+            assert observations == [(victim.id, True)]
             assert saved_credits[-1] == 9999, saved_credits
+            assert save_in_progress.is_set()
+            assert mutator_done.is_set()
+
             reloaded = game_load(victim.id)
             assert reloaded is not None
             assert reloaded.ship.credits == 9999
@@ -6321,7 +6353,8 @@ class TestGameStoreEviction:
                 for e in reloaded.log_entries
             )
         finally:
-            release_eviction_save.set()
+            mutator_attempted.set()
+            save_in_progress.set()
             GAME_STORE.pop(victim.id, None)
             GAME_STORE.pop(filler.id, None)
             routes_mod._cleanup_game_lock(victim.id)
