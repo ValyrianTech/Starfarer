@@ -522,6 +522,30 @@ def touch_game(game_id: str) -> None:
             GAME_STORE.move_to_end(game_id)
 
 
+def get_and_touch(game_id: str) -> GameState | None:
+    """Return a resident game and mark it most-recently-used, atomically.
+
+    Performs the membership check, the LRU ``move_to_end`` and the read of
+    :data:`GAME_STORE` as a single operation under :data:`_store_lock`. Doing
+    these as three separate steps outside the lock is a check-then-act race:
+    a concurrent :func:`evict_if_needed` (which holds the lock) can remove the
+    entry between the ``in`` test and the subscript, raising ``KeyError`` —
+    and even the lighter-weight :func:`touch_game` + ``GAME_STORE[game_id]``
+    pair can read after a successful membership test but be popped in between.
+
+    :param game_id: The unique identifier of the game.
+    :type game_id: str
+    :returns: The resident :class:`GameState`, or ``None`` if it is not in
+        the in-memory cache.
+    :rtype: GameState | None
+    """
+    with _store_lock:
+        state = GAME_STORE.get(game_id)
+        if state is not None:
+            GAME_STORE.move_to_end(game_id)
+        return state
+
+
 def evict_if_needed(active_ids: set[str] | None = None) -> None:
     """Evict least-recently-used games until the in-memory cache is within cap.
 
@@ -529,28 +553,23 @@ def evict_if_needed(active_ids: set[str] | None = None) -> None:
     entries, the least-recently-used key is selected via ``next(iter(...))``.
     If that key is in ``active_ids`` (i.e. currently locked/in use), it is
     moved to the most-recently-used end and the next candidate is tried;
-    otherwise the game is removed from the cache and queued for persistence.
+    otherwise the game is persisted and then removed from the cache.
     A failed save is logged as a warning and the entry is still popped so a
     database error cannot wedge eviction or leak memory. The number of
     consecutive skipped (active) candidates is bounded to avoid an infinite
     loop when every resident game is active.
 
-    Victim selection, membership checks, ``move_to_end``, and ``pop`` are
-    serialized under the module-level :data:`_store_lock` so concurrent
-    eviction calls cannot interleave. Persistence (:func:`game_save`) is
-    performed *outside* the lock after all victims have been collected, so
-    blocking JSON serialization and SQLite writes do not stall concurrent
-    :func:`touch_game` / :func:`register_game` / :func:`evict_if_needed`
-    callers. This trades a small consistency window: a concurrent reader may
-    reload a just-evicted game from the database before its eviction save
-    has completed, observing stale state.
+    Victim selection, persistence, and removal are all serialized under the
+    module-level :data:`_store_lock` so concurrent eviction calls cannot
+    interleave. Each victim is persisted with :func:`game_save` *before* it
+    is removed from :data:`GAME_STORE`, so a concurrent :func:`_get_state`
+    can never observe a game that has been popped but not yet saved.
 
     :param active_ids: Optional set of game IDs currently in use (held
         locks) that must not be evicted.
     :type active_ids: set[str] | None
     """
     active_ids = active_ids or set()
-    to_save: list[GameState] = []
     with _store_lock:
         skipped = 0
         while len(GAME_STORE) > MAX_IN_MEMORY_GAMES:
@@ -562,16 +581,14 @@ def evict_if_needed(active_ids: set[str] | None = None) -> None:
                     break
                 continue
             skipped = 0
-            state = GAME_STORE.pop(game_id, None)
-            if state is not None:
-                to_save.append(state)
-    for state in to_save:
-        try:
-            game_save(state)
-        except Exception as exc:  # noqa: BLE001 - eviction must never wedge on any save failure
-            logger.warning(
-                "Failed to persist game %s during LRU eviction: %s", state.id, exc
-            )
+            state = GAME_STORE[game_id]
+            try:
+                game_save(state)
+            except Exception as exc:  # noqa: BLE001 - eviction must never wedge on any save failure
+                logger.warning(
+                    "Failed to persist game %s during LRU eviction: %s", state.id, exc
+                )
+            GAME_STORE.pop(game_id, None)
 
 
 def register_game(state: GameState) -> None:

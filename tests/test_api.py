@@ -6179,6 +6179,154 @@ class TestGameStoreEviction:
             GAME_STORE.pop(state.id, None)
             GAME_STORE.pop(unrelated.id, None)
 
+    def test_evict_saves_before_popping(self) -> None:
+        """Each victim is persisted while it is still resident in GAME_STORE.
+
+        This is the core ordering invariant of the fix: ``game_save`` must be
+        called *before* ``GAME_STORE.pop`` so a concurrent reader can never
+        observe a game that has been evicted from the cache but not yet
+        written to the database (which would let it reload stale state).
+        """
+        from backend.game import manager
+        from backend.game.manager import evict_if_needed
+
+        s1 = new_game(seed=42)
+        s2 = new_game(seed=42)
+        observed: list[tuple[str, bool]] = []
+
+        def _recording_save(state) -> None:
+            observed.append((state.id, state.id in GAME_STORE))
+
+        try:
+            with patch.object(manager, "MAX_IN_MEMORY_GAMES", 1):
+                GAME_STORE[s1.id] = s1
+                GAME_STORE[s2.id] = s2
+                with patch.object(manager, "game_save", side_effect=_recording_save):
+                    evict_if_needed()
+                assert observed == [(s1.id, True)]
+                assert s1.id not in GAME_STORE
+                assert s2.id in GAME_STORE
+        finally:
+            GAME_STORE.pop(s1.id, None)
+            GAME_STORE.pop(s2.id, None)
+
+    def test_evict_multiple_victims_saved_under_lock(self) -> None:
+        """Evicting several victims in one pass persists every one of them."""
+        from backend.game import manager
+        from backend.game.manager import evict_if_needed, game_load
+
+        victims = [new_game(seed=42) for _ in range(3)]
+        survivor = new_game(seed=42)
+        try:
+            with patch.object(manager, "MAX_IN_MEMORY_GAMES", 1):
+                for i, v in enumerate(victims):
+                    v.ship.credits = 500 + i
+                    GAME_STORE[v.id] = v
+                GAME_STORE[survivor.id] = survivor
+                evict_if_needed()
+                assert list(GAME_STORE.keys()) == [survivor.id]
+            for i, v in enumerate(victims):
+                loaded = game_load(v.id)
+                assert loaded is not None
+                assert loaded.ship.credits == 500 + i
+        finally:
+            for st in [*victims, survivor]:
+                GAME_STORE.pop(st.id, None)
+
+    def test_evict_concurrent_mutating_request_does_not_lose_state(self) -> None:
+        """A mutation racing an eviction must not be clobbered by the eviction save.
+
+        Reproduces the data-loss race from the issue: fill the store to the
+        cap, trigger eviction of game X, and concurrently issue a mutating
+        request for X. With the pre-fix implementation the victim was popped
+        from ``GAME_STORE`` and saved *outside* the lock, so a concurrent
+        reader could reload the stale database row, mutate it, persist it, and
+        then have the deferred eviction save overwrite it with stale state.
+
+        The assertion is deliberately on the *last* ``game_save`` performed for
+        X: it must observe the mutator's credits, proving the mutating update
+        won rather than being clobbered.
+        """
+        import threading
+
+        import backend.api.routes as routes_mod
+        from backend.game import manager
+        from backend.game.manager import evict_if_needed, game_load
+
+        victim = new_game(seed=42, ship_name="EvictRaceVictim")
+        victim.ship.credits = 1000
+        game_save(victim)
+        filler = new_game(seed=42, ship_name="EvictRaceFiller")
+
+        saved_credits: list[int] = []
+        real_save = manager.game_save
+        eviction_save_started = threading.Event()
+        release_eviction_save = threading.Event()
+        first_call_lock = threading.Lock()
+        first_call = [True]
+
+        def _slow_save(state) -> None:
+            """Delegate to the real save, but hold the first (eviction) save."""
+            saved_credits.append(state.ship.credits)
+            with first_call_lock:
+                is_first = first_call[0]
+                first_call[0] = False
+            if is_first:
+                eviction_save_started.set()
+                # Hold this save open so the concurrent mutator runs while
+                # eviction is mid-flight.
+                release_eviction_save.wait(timeout=5.0)
+            real_save(state)
+
+        def _mutate() -> None:
+            # Always release the held eviction save, even if this raises, so a
+            # failure surfaces as a fast test error instead of a hang.
+            assert eviction_save_started.wait(timeout=5.0)
+            try:
+                # Re-lookup through the normal API entry point, exactly as a
+                # real mutating request (jump/trade/upgrade) would. Because the
+                # fix persists the victim while still holding ``_store_lock``
+                # and ``_get_state`` reads the store atomically under that same
+                # lock, this lookup can never observe a popped-but-unsaved game.
+                state = routes_mod._get_state(victim.id)
+                assert state is not None
+                state.ship.credits = 9999
+                state.add_log("system", "Concurrent mutation during eviction")
+                manager.game_save(state)
+            finally:
+                release_eviction_save.set()
+
+        try:
+            with patch.object(manager, "MAX_IN_MEMORY_GAMES", 1):
+                # X is inserted first so it is the LRU victim; F pushes past cap.
+                GAME_STORE[victim.id] = victim
+                GAME_STORE[filler.id] = filler
+
+                mutator = threading.Thread(target=_mutate, daemon=True)
+                with patch.object(manager, "game_save", side_effect=_slow_save):
+                    mutator.start()
+                    evict_if_needed()
+                    mutator.join(timeout=10.0)
+
+                assert not mutator.is_alive(), "mutator thread hung"
+
+            # The mutator's save must be the last write for X, and the mutation
+            # it made must be the version that survives.
+            assert saved_credits[-1] == 9999, saved_credits
+            reloaded = game_load(victim.id)
+            assert reloaded is not None
+            assert reloaded.ship.credits == 9999
+            assert any(
+                e.get("message") == "Concurrent mutation during eviction"
+                for e in reloaded.log_entries
+            )
+        finally:
+            release_eviction_save.set()
+            GAME_STORE.pop(victim.id, None)
+            GAME_STORE.pop(filler.id, None)
+            routes_mod._cleanup_game_lock(victim.id)
+
+
 
 class TestRegisterGame:
     """Tests for register_game in backend/game/manager.py."""
