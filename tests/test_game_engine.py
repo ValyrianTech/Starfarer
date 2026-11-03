@@ -2832,6 +2832,11 @@ class TestDistressBeacon:
         assert result["outcome"] == "piracy"
         assert "error" not in result
         assert state.ship.credits == 0
+        assert state.ship.distress_cooldown is True
+        # The deferred 50cr charge ran first, emptying the balance, so the
+        # pirates find nothing left to steal. A non-zero value here would
+        # indicate the 50cr charge was applied AFTER the strategy.
+        assert result["effects"]["credits"] == 0
 
     def test_activate_distress_beacon_pilots_guild_at_50_credit_boundary(self) -> None:
         from unittest.mock import MagicMock, patch
@@ -2848,6 +2853,30 @@ class TestDistressBeacon:
         assert result["outcome"] == "pilots_guild"
         assert "error" not in result
         assert state.ship.credits == 0
+        assert state.ship.distress_cooldown is True
+        # The guild rescue still reports its full -100 cost. Because the
+        # deferred 50cr charge already emptied the balance, the additional
+        # -100 is clamped to 0 and the balance never goes negative.
+        assert result["effects"]["credits"] == -100
+
+    def test_activate_distress_beacon_deferred_charge_runs_before_credit_mutating_strategy(self) -> None:
+        from unittest.mock import MagicMock, patch
+        state = self._make_stranded_state()
+        state.ship.credits = 250
+        mock_rng = MagicMock()
+        mock_rng.random.side_effect = [0.2, 0.5, 0.6]
+        mock_rng.randint.side_effect = [2, 80]
+        with patch("backend.game.engine.seeded_random", return_value=mock_rng):
+            result = activate_distress_beacon(state)
+        assert result["outcome"] == "piracy"
+        assert "error" not in result
+        # 250 - 50 (deferred charge) - 80 (pirates steal) == 120. This only
+        # holds when the 50cr charge is applied BEFORE the pirates steal from
+        # the already-reduced 200 balance; if the steal happened first the
+        # result would differ, proving the charge is applied first.
+        assert state.ship.credits == 120
+        # Pirates stole the full 80 because 200 remained after the charge.
+        assert result["effects"]["credits"] == -80
 
     def test_distress_pilots_guild_no_system(self) -> None:
         """_distress_pilots_guild should return error dict when system is None."""
