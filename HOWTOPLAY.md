@@ -845,7 +845,7 @@ All endpoints that access a specific game (mutating and read-only GET) accept th
 | GET | `/api/game/{id}/ripples` | Get pending discovery ripples; sanitized public views (raw source game id and acknowledged-by game ids removed) |
 | POST | `/api/game/{id}/ripple/{ripple_id}/acknowledge` | Acknowledge a discovery ripple |
 
-A donated item's `value` is now preserved end-to-end at the Crossroads: `POST /api/crossroads/donate-item` stores the donated item's `value` on the Crossroads listing, and `POST /api/crossroads/claim-item/{item_id}` restores that value when another player claims it, so the claimed Discovery keeps the original credit value instead of being worth 0.
+A donated item's `value` is preserved end-to-end at the Crossroads: `POST /api/crossroads/donate-item` stores the total `value` of all the donated items (the sum across the whole stack, not just the first item) on the Crossroads listing, and `POST /api/crossroads/claim-item/{item_id}` restores value when another player claims it, so claimed Discoveries keep the original credit value instead of being worth 0. When a stack is only partially claimed, the stored value is prorated: the claimer receives the share of value proportional to the number of items claimed, distributed evenly across the claimed Discoveries, while the still-claimable remainder keeps exactly the value not yet handed out — so no value is lost or duplicated across partial claims.
 
 ### Pagination Details
 
