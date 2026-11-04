@@ -351,6 +351,13 @@ def claim_item_partial(item_id: str, claimer_game_id: str, quantity: int) -> dic
     the whole remaining quantity, the row is fully claimed; otherwise the
     leftover quantity stays claimable by other players.
 
+    The value handed out is prorated: the returned dict's ``value`` is the
+    value allocated to THIS claim (proportional to the fraction of the stack
+    being claimed), and a partial claim reduces the row's stored ``value`` by
+    the same amount so the leftover stack retains exactly the value not yet
+    handed out. The ``BEGIN IMMEDIATE`` lock serializes concurrent partial
+    claims, so the proportional math is race-free.
+
     :param item_id: The unique identifier of the item to claim.
     :type item_id: str
     :param claimer_game_id: The game ID of the claiming player.
@@ -358,10 +365,10 @@ def claim_item_partial(item_id: str, claimer_game_id: str, quantity: int) -> dic
     :param quantity: The maximum number of items to claim.
     :type quantity: int
     :returns: A dictionary describing the claim on success (with ``quantity``
-        being the amount actually claimed now and ``remaining_quantity`` the
-        amount left for others), or ``None`` if the item does not exist, was
-        already claimed, ``quantity`` is not positive, or another claimer won
-        the race.
+        being the amount actually claimed now, ``remaining_quantity`` the
+        amount left for others, and ``value`` the prorated value of this
+        claim), or ``None`` if the item does not exist, was already claimed,
+        ``quantity`` is not positive, or another claimer won the race.
     :rtype: dict or None
     """
     with get_db_ctx() as conn:
@@ -381,6 +388,12 @@ def claim_item_partial(item_id: str, claimer_game_id: str, quantity: int) -> dic
         claim_amount = min(quantity, row_quantity)
         remaining = row_quantity - claim_amount
 
+        full_value = row["value"]
+        if row_quantity > 0:
+            allocated_value = round(full_value * claim_amount / row_quantity)
+        else:
+            allocated_value = 0
+
         if remaining <= 0:
             cursor = conn.execute(
                 "UPDATE crossroads_items SET claimed = 1, claimer_game_id = ? "
@@ -392,11 +405,12 @@ def claim_item_partial(item_id: str, claimer_game_id: str, quantity: int) -> dic
                 return None
             claimed = True
             updated_claimer_game_id = claimer_game_id
+            allocated_value = full_value
         else:
             cursor = conn.execute(
-                "UPDATE crossroads_items SET quantity = quantity - ? "
+                "UPDATE crossroads_items SET quantity = quantity - ?, value = ? "
                 "WHERE id = ? AND claimed = 0 AND quantity >= ?",
-                (claim_amount, item_id, claim_amount),
+                (claim_amount, full_value - allocated_value, item_id, claim_amount),
             )
             if cursor.rowcount == 0:
                 conn.commit()
@@ -411,7 +425,7 @@ def claim_item_partial(item_id: str, claimer_game_id: str, quantity: int) -> dic
             "donor_name": row["donor_name"],
             "item_name": row["item_name"],
             "message": row["message"],
-            "value": row["value"],
+            "value": allocated_value,
             "claimed": claimed,
             "claimer_game_id": updated_claimer_game_id,
             "created_at": row["created_at"],

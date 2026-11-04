@@ -384,9 +384,15 @@ class TestMultiplayerDatabase:
         save_crossroads_item(ci)
         result = claim_item_partial("item-partial-value-1", "claimer", 1)
         assert result is not None
-        assert result["value"] == 100
+        assert result["value"] == 33
         assert result["quantity"] == 1
         assert result["remaining_quantity"] == 2
+
+        remaining = claim_item_partial("item-partial-value-1", "claimer2", 2)
+        assert remaining is not None
+        assert remaining["value"] == 67
+        assert remaining["quantity"] == 2
+        assert remaining["remaining_quantity"] == 0
 
     def test_init_multiplayer_db_adds_value_column(self) -> None:
         from backend.multiplayer.database import get_db_ctx
@@ -1375,6 +1381,109 @@ class TestMultiplayerCrossroads:
         assert all(d.value == 100 for d in claimed)
         GAME_STORE.pop(donor.id, None)
         GAME_STORE.pop(claimer.id, None)
+
+    def test_donate_multi_value_items_sums_value_and_claim_distributes(self) -> None:
+        """Donating same-named discoveries with different values must sum their
+        value, and claiming must distribute that total evenly without loss."""
+        donor = new_game(42, "DonorShip", shared_universe=True)
+        GAME_STORE[donor.id] = donor
+        for v in (10, 200, 150):
+            donor.discoveries.append(_make_discovery(name="Mixed Gem", value=v))
+        don_result = donate_item(donor, "Mixed Gem", 3)
+        assert don_result["success"] is True
+        assert don_result["donation"]["value"] == 360
+        assert don_result["donation"]["quantity"] == 3
+
+        claimer = new_game(43, "ClaimerShip", shared_universe=True)
+        GAME_STORE[claimer.id] = claimer
+        claim_item(don_result["donation"]["id"], claimer)
+
+        claimed = [d for d in claimer.discoveries if d.name == "Mixed Gem"]
+        assert len(claimed) == 3
+        assert all(isinstance(d.value, int) for d in claimed)
+        assert sum(d.value for d in claimed) == 360
+        GAME_STORE.pop(donor.id, None)
+        GAME_STORE.pop(claimer.id, None)
+
+    def test_partial_claim_preserves_total_value_across_claimers(self) -> None:
+        """Partial claims across two claimers must preserve the full donated value."""
+        donor = new_game(42, "DonorShip", shared_universe=True)
+        GAME_STORE[donor.id] = donor
+        for v in (10, 200, 150):
+            donor.discoveries.append(_make_discovery(name="Split Gem", value=v))
+        don_result = donate_item(donor, "Split Gem", 3)
+        assert don_result["donation"]["value"] == 360
+
+        claimer1 = new_game(43, "ClaimerPartial1", shared_universe=True)
+        GAME_STORE[claimer1.id] = claimer1
+        claimer1.ship.max_cargo = 2
+        claimer1.discoveries.clear()
+        claimer1.sync_cargo()
+        result1 = claim_item(don_result["donation"]["id"], claimer1)
+        assert result1["success"] is True
+        assert result1["item"]["stored"] == 2
+        claimer1_total = sum(d.value for d in claimer1.discoveries if d.name == "Split Gem")
+
+        items = get_available_items_list()
+        remaining = [i for i in items if i["id"] == don_result["donation"]["id"]]
+        assert len(remaining) == 1
+        assert remaining[0]["value"] == 360 - claimer1_total
+
+        claimer2 = new_game(44, "ClaimerPartial2", shared_universe=True)
+        GAME_STORE[claimer2.id] = claimer2
+        result2 = claim_item(don_result["donation"]["id"], claimer2)
+        assert result2["success"] is True
+        assert result2["item"]["stored"] == 1
+        claimer2_total = sum(d.value for d in claimer2.discoveries if d.name == "Split Gem")
+
+        assert claimer1_total + claimer2_total == 360
+        GAME_STORE.pop(donor.id, None)
+        GAME_STORE.pop(claimer1.id, None)
+        GAME_STORE.pop(claimer2.id, None)
+
+    def test_full_claim_preserves_donated_sum(self) -> None:
+        """A full claim of a multi-value stack must hand out exactly the donated sum."""
+        donor = new_game(42, "DonorShip", shared_universe=True)
+        GAME_STORE[donor.id] = donor
+        for v in (10, 200, 150):
+            donor.discoveries.append(_make_discovery(name="FullStack Gem", value=v))
+        don_result = donate_item(donor, "FullStack Gem", 3)
+
+        claimer = new_game(43, "ClaimerShip", shared_universe=True)
+        GAME_STORE[claimer.id] = claimer
+        result = claim_item(don_result["donation"]["id"], claimer)
+        assert result["success"] is True
+        assert result["item"]["value"] == 360
+        claimed = [d for d in claimer.discoveries if d.name == "FullStack Gem"]
+        assert sum(d.value for d in claimed) == 360
+        GAME_STORE.pop(donor.id, None)
+        GAME_STORE.pop(claimer.id, None)
+
+    def test_partial_claims_never_lose_value_on_rounding(self) -> None:
+        """A sequence of partial claims plus a final full claim must total the
+        original donated value, regardless of rounding in intermediate claims."""
+        donor = new_game(42, "DonorShip", shared_universe=True)
+        GAME_STORE[donor.id] = donor
+        for v in (1, 2, 3, 4, 5):
+            donor.discoveries.append(_make_discovery(name="Rounding Gem", value=v))
+        don_result = donate_item(donor, "Rounding Gem", 5)
+        total_donated = don_result["donation"]["value"]
+
+        received = 0
+        claim_order = [2, 1, 2]
+        for idx, amt in enumerate(claim_order):
+            claimer = new_game(50 + idx, f"RoundClaimer{idx}", shared_universe=True)
+            GAME_STORE[claimer.id] = claimer
+            claimer.ship.max_cargo = amt
+            claimer.discoveries.clear()
+            claimer.sync_cargo()
+            result = claim_item(don_result["donation"]["id"], claimer)
+            assert result["success"] is True
+            received += sum(d.value for d in claimer.discoveries if d.name == "Rounding Gem")
+            GAME_STORE.pop(claimer.id, None)
+
+        assert received == total_donated
+        GAME_STORE.pop(donor.id, None)
 
     def test_claim_legacy_item_value_zero(self) -> None:
         from backend.multiplayer.database import save_crossroads_item
@@ -4047,6 +4156,7 @@ class TestSyncCargoCrossroads:
             "donor_name": "DBTester",
             "item_name": "Race Gem",
             "quantity": 2,
+            "value": 100,
             "message": None,
             "claimed": 0,
             "claimer_game_id": None,
@@ -4076,6 +4186,37 @@ class TestSyncCargoCrossroads:
             mock_get_db_ctx.return_value.__enter__.return_value = mock_conn2
             result2 = claim_item_partial("item-race", "claimer", 1)
             assert result2 is None
+
+    def test_claim_item_partial_zero_quantity_row_guard(self) -> None:
+        """The defensive row_quantity guard must be exercised (row quantity <= 0)."""
+        from backend.multiplayer.database import claim_item_partial
+
+        row = {
+            "id": "item-zero-qty",
+            "donor_game_id": "game-db-1",
+            "donor_name": "DBTester",
+            "item_name": "Zero Qty Gem",
+            "quantity": 0,
+            "value": 100,
+            "message": None,
+            "claimed": 0,
+            "claimer_game_id": None,
+            "created_at": "",
+        }
+
+        select_cursor = MagicMock()
+        select_cursor.fetchone.return_value = row
+        update_cursor = MagicMock()
+        update_cursor.rowcount = 1
+        mock_conn = MagicMock()
+        mock_conn.execute.side_effect = [MagicMock(), select_cursor, update_cursor]
+
+        with patch("backend.multiplayer.database.get_db_ctx") as mock_get_db_ctx:
+            mock_get_db_ctx.return_value.__enter__.return_value = mock_conn
+            result = claim_item_partial("item-zero-qty", "claimer", 1)
+            assert result is not None
+            assert result["quantity"] == 0
+            assert result["remaining_quantity"] == 0
 
     def test_claim_item_partial_concurrent_claims_never_exceed_donated_total(self) -> None:
         import concurrent.futures
