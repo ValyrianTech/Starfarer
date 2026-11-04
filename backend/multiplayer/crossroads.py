@@ -73,7 +73,7 @@ def donate_item(
     for i, d in enumerate(game_state.discoveries):
         if d.name == item_name and d.lore_fragment_id is None and len(indices_to_remove) < actual_quantity:
             indices_to_remove.append(i)
-    item_value = game_state.discoveries[indices_to_remove[0]].value
+    item_value = sum(game_state.discoveries[i].value for i in indices_to_remove)
     for i in sorted(indices_to_remove, reverse=True):
         game_state.discoveries.pop(i)
 
@@ -109,6 +109,12 @@ def claim_item(item_id: str, game_state: GameState) -> dict:
     Uses an atomic database claim operation to eliminate the TOCTOU
     race condition between checking availability and claiming.
 
+    The claimed items are added to the player's discoveries. The total
+    value handed out equals the prorated ``value`` returned by the atomic
+    claim operation (see ``claim_item_partial``), distributed evenly across
+    the ``claimed`` discoveries using integer math so no value is lost or
+    created.
+
     :param item_id: The unique identifier of the item to claim.
     :type item_id: str
     :param game_state: The current game state.
@@ -132,13 +138,19 @@ def claim_item(item_id: str, game_state: GameState) -> dict:
     item_name = item_data["item_name"]
     donor_name = item_data["donor_name"]
 
-    for _ in range(claimed):
+    total_claim_value = item_data.get("value", 0)
+    n = claimed
+    base = total_claim_value // n if n else 0
+    remainder = total_claim_value - base * n
+
+    for i in range(claimed):
+        disc_value = base + (1 if i < remainder else 0)
         disc = Discovery(
             id=str(uuid.uuid4()),
             category="artifact",
             name=item_name,
             description=f"A gift from {donor_name} via the Crossroads.",
-            value=item_data.get("value", 0),
+            value=disc_value,
             system_id=game_state.ship.current_system_id or "",
         )
         game_state.discoveries.append(disc)
