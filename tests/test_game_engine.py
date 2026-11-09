@@ -3915,6 +3915,100 @@ class TestFuelPricing:
         assert "clamped to minimum" in price["breakdown_lines"][-1]
 
 
+class TestMarketPriceMod:
+    """Tests for the stable per-(game, station) market price modifier."""
+
+    def test_sell_price_stable_across_actions(self) -> None:
+        """Sell price should not change after a non-trade log action."""
+        from backend.models.discovery import Discovery
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        system.has_trading_station = True
+
+        counter = 0
+
+        def sell_one(value: int) -> int:
+            nonlocal counter
+            counter += 1
+            disc = Discovery(
+                id=f"stable_sell_{counter}",
+                category="mineral",
+                name=f"Mineral {counter}",
+                description="A test mineral",
+                value=value,
+            )
+            state.discoveries.append(disc)
+            credits_before = state.ship.credits
+            ok, _msg = perform_trade(state, "sell", disc.name, 1)
+            assert ok is True
+            return state.ship.credits - credits_before
+
+        first = sell_one(100)
+        state.add_log("explore", "A non-trade action happened", category="explore")
+        second = sell_one(100)
+        assert first == second
+
+    def test_bulk_sell_matches_trade_price(self) -> None:
+        """Bulk sell should use the same price modifier as a single trade."""
+        from backend.models.discovery import Discovery
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        system.has_trading_station = True
+
+        disc = Discovery(
+            id="bulk_cmp_1",
+            category="artifact",
+            name="Test Artifact",
+            description="A test artifact",
+            value=100,
+        )
+        state.discoveries.append(disc)
+        credits_before = state.ship.credits
+        ok, _msg = perform_trade(state, "sell", "artifact", 1)
+        assert ok is True
+        trade_price = state.ship.credits - credits_before
+
+        disc2 = Discovery(
+            id="bulk_cmp_2",
+            category="artifact",
+            name="Test Artifact",
+            description="A test artifact",
+            value=100,
+        )
+        state.discoveries.append(disc2)
+        ok, _msg, _sold_count, total_price = perform_bulk_sell(
+            state, [{"item": "artifact", "quantity": 1}]
+        )
+        assert ok is True
+        assert total_price == trade_price
+
+    def test_buy_fuel_applies_market_mod_and_matches_charge(self) -> None:
+        """Buy fuel should apply price_mod and the quote should match the charge."""
+        from backend.game.trading import _market_price_mod
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        system.has_trading_station = True
+        state.ship.fuel = 0
+        state.ship.credits = 100000
+        amount = 10
+
+        price_mod = _market_price_mod(state, system)
+        price_info = calculate_fuel_price(state, system)
+        final_unit_price = price_info["final_price"] * price_mod
+        expected_cost = round_half_up(amount * final_unit_price)
+
+        credits_before = state.ship.credits
+        ok, msg = perform_trade(state, "buy", "fuel", amount)
+        assert ok is True
+        assert "Market conditions:" in msg
+        assert f"Final price: {final_unit_price:.1f} credits/unit" in msg
+        charged = credits_before - state.ship.credits
+        assert charged == expected_cost
+
+
 class TestBlackHoleEvents:
     """Tests for black hole system-specific events."""
 
