@@ -139,6 +139,27 @@ def _validate_quantity(quantity: int) -> str | None:
     return None
 
 
+def _market_price_mod(state: GameState, system: StarSystem) -> float:
+    """Return the stable per-(game, station) market price modifier.
+
+    The modifier is derived deterministically from the game seed and the
+    station's system id, so it does not change as the player takes actions
+    or as the game log grows. It remains fixed for the lifetime of a game
+    at a given station, preventing players from re-rolling prices by
+    performing other actions between trades.
+
+    :param state: The current game state.
+    :type state: GameState
+    :param system: The star system where the market is located.
+    :type system: StarSystem
+    :returns: A price multiplier in the range ``[0.7, 1.5)``.
+    :rtype: float
+    """
+    det_seed = deterministic_hash(state.seed, system.id, "market_v1")
+    rng = random.Random(det_seed)  # nosec B311 - game RNG, not crypto
+    return rng.uniform(0.7, 1.5)
+
+
 def calculate_fuel_price(state: GameState, system: StarSystem) -> dict:
     """Calculate fuel price at a station with a full breakdown.
 
@@ -246,9 +267,7 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
     if not is_station:
         return False, "No trading facilities in this system."
 
-    det_seed = deterministic_hash(state.seed, system.id, len(state.log_entries))
-    rng = random.Random(det_seed)  # nosec B311 - game RNG, not crypto
-    price_mod = rng.uniform(0.7, 1.5)
+    price_mod = _market_price_mod(state, system)
 
     stellar_rep = state.get_faction_reputation("stellar_cartographers")
     stellar_sell_mod = 1.0 + min(max(stellar_rep, 0), 50) / 200.0
@@ -299,12 +318,16 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
             if amount <= 0:
                 return False, "Fuel tank is already full."
             price_info = calculate_fuel_price(state, system)
-            cost = round_half_up(amount * price_info["final_price"])
+            final_unit_price = price_info["final_price"] * price_mod
+            cost = round_half_up(amount * final_unit_price)
             if state.ship.credits < cost:
                 return False, f"Not enough credits. Need {cost}."
             state.ship.credits -= cost
             state.ship.fuel += amount
-            breakdown_str = "\n".join(price_info["breakdown_lines"])
+            breakdown_lines = list(price_info["breakdown_lines"])
+            breakdown_lines.insert(-1, f"Market conditions: {price_mod:+.0%}")
+            breakdown_lines[-1] = f"Final price: {final_unit_price:.1f} credits/unit"
+            breakdown_str = "\n".join(breakdown_lines)
             result_message = f"Purchased {amount} fuel for {cost} credits.\n{breakdown_str}"
             state.add_log("trade", result_message, category="trade", title="Trade", system=system.name, credits_change=-cost, fuel_change=amount)
             trade_completed = True
@@ -370,9 +393,7 @@ def perform_bulk_sell(state: GameState, items: list[dict]) -> tuple[bool, str, i
     if not is_station:
         return False, "No trading facilities in this system.", 0, 0
 
-    det_seed = deterministic_hash(state.seed, system.id, len(state.log_entries))
-    rng = random.Random(det_seed)  # nosec B311 - game RNG, not crypto
-    price_mod = rng.uniform(0.7, 1.5)
+    price_mod = _market_price_mod(state, system)
 
     stellar_rep = state.get_faction_reputation("stellar_cartographers")
     stellar_sell_mod = 1.0 + min(max(stellar_rep, 0), 50) / 200.0
