@@ -412,6 +412,8 @@ Content-Type: application/json
 
 Sells the first matching discovery from your inventory. Prices vary per system.
 
+The market price modifier for a station is derived deterministically from the game seed and the station's system id, and is fixed for the lifetime of a game at that station. It does **not** change as you take other actions or as your log grows between trades, so there is no benefit to performing unrelated actions (jumping, scanning, exploring) to "re-roll" a price before selling — a given item sells for the same amount at the same station regardless of what else you do. The same modifier applies to fuel purchases, where it is shown as a `Market conditions: ±N%` line in the price breakdown.
+
 ### Bulk Sell
 
 Sell multiple discoveries at once in a single transaction:
