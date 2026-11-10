@@ -4318,8 +4318,21 @@ class TestSpectateTouchAndGet:
         GAME_STORE.pop(game_id, None)
         assert _touch_and_get(game_id) is None
 
+    def test_initial_snapshot_returns_none_when_unresolvable(self) -> None:
+        """_initial_snapshot returns None when the game cannot be resolved.
+
+        Exercises the `if state is None: return None` guard: for an unknown
+        game id `_get_state` returns None (no store entry, no DB row), so the
+        atomic initial snapshot must report the game as unresolvable instead
+        of raising.
+        """
+        from backend.api.spectate import _initial_snapshot
+        game_id = "spectate-initial-snapshot-missing"
+        GAME_STORE.pop(game_id, None)
+        assert _initial_snapshot(game_id) is None
+
     def test_stream_offloads_blocking_work_to_threadpool(self) -> None:
-        """The handler must run _get_state/_build_payload/json.dumps off the loop.
+        """The handler must run _get_state/_initial_snapshot/_poll_snapshot/json.dumps off the loop.
 
         Patches run_in_threadpool with a spy that records each offloaded
         callable and still executes it (delegating to the real implementation)
@@ -4364,14 +4377,15 @@ class TestSpectateTouchAndGet:
             spectate.HEARTBEAT_INTERVAL_SECONDS = old_hb
             GAME_STORE.pop("spectate-offload", None)
 
-        # Initial 404-check + in-generator lookup both offload _get_state.
-        assert calls.count(spectate_mod._get_state) >= 2
-        # Initial build and change-triggered build both offload _build_payload.
-        assert calls.count(spectate_mod._build_payload) >= 2
+        # Initial 404-check (endpoint pre-check) still offloads _get_state.
+        assert spectate_mod._get_state in calls
+        # The blocking reads/builds now happen inside the offloaded snapshot
+        # helpers: the initial snapshot runs once, and the poll snapshot runs
+        # at least once for the change-detection tick.
+        assert calls.count(spectate_mod._initial_snapshot) == 1
+        assert calls.count(spectate_mod._poll_snapshot) >= 1
         # json.dumps is offloaded for the initial and changed snapshots.
         assert calls.count(json.dumps) >= 2
-        # The per-tick touch+read is offloaded via _touch_and_get.
-        assert spectate_mod._touch_and_get in calls
 
 
 class TestSpectateGamesEndpoint:
