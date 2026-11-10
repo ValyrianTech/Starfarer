@@ -104,6 +104,15 @@ class GameState:
         if not self.game_started:
             self.game_started = datetime.now(UTC).isoformat()
 
+    @property
+    def next_log_id(self) -> int:
+        """Return the next sequential log-entry id (public accessor for ``_next_log_id``).
+
+        :returns: The id that the next :meth:`add_log` call will assign.
+        :rtype: int
+        """
+        return self._next_log_id
+
     def get_current_system(self) -> StarSystem | None:
         """Retrieve the star system the ship is currently in.
 
