@@ -20,7 +20,7 @@ from fastapi.responses import StreamingResponse
 from starlette.concurrency import run_in_threadpool
 
 from backend.api import stream_tickets
-from backend.api.routes import _authorize_game
+from backend.api.routes import _authorize_game, _locked
 from backend.config import get_require_game_token
 from backend.database import _safe_ship_credits, get_db_ctx
 from backend.game.manager import (
@@ -196,7 +196,7 @@ def _state_signature(state: GameState) -> tuple:
     """
     ship = state.ship
     return (
-        state._next_log_id,
+        state.next_log_id,
         ship.fuel, ship.hull, ship.morale, ship.credits,
         ship.cargo, ship.crew,
         ship.current_system_id, ship.current_body_id,
@@ -204,6 +204,68 @@ def _state_signature(state: GameState) -> tuple:
         len([e for e in state.events if not e.resolved]),
         len(state.discoveries),
     )
+
+
+def _initial_snapshot(game_id: str) -> tuple[dict, int, tuple] | None:
+    """Atomically read the initial spectator snapshot under the per-game lock.
+
+    Acquires the same per-game lock that mutating handlers use so the
+    payload and change signature are built from a self-consistent state
+    (no torn reads, no ``list changed size during iteration`` errors).
+    Loads the game from the database if it is not resident.
+
+    :param game_id: The unique identifier of the game.
+    :type game_id: str
+    :returns: ``(payload, last_log_id, signature)`` or ``None`` if the
+        game cannot be resolved.
+    :rtype: tuple[dict, int, tuple] | None
+    """
+    with _locked(game_id):
+        state = _get_state(game_id)
+        if state is None:
+            return None
+        int_ids = [
+            e["id"] for e in state.log_entries
+            if isinstance(e.get("id"), int)
+        ]
+        initial_since = 0
+        if len(int_ids) > INITIAL_LOG_ENTRIES:
+            initial_since = sorted(int_ids)[-INITIAL_LOG_ENTRIES - 1]
+        payload, last_log_id = _build_payload(state, initial_since)
+        return payload, last_log_id, _state_signature(state)
+
+
+def _poll_snapshot(
+    game_id: str, since: int, last_signature: tuple
+) -> tuple[dict | None, int, tuple] | None:
+    """Atomically read a per-poll spectator snapshot under the per-game lock.
+
+    Touches the game (keeping it hot for the LRU cache) and reads it while
+    holding the same per-game lock as mutating handlers, so the change
+    signature and (when changed) the payload are computed from a
+    self-consistent state.
+
+    :param game_id: The unique identifier of the game.
+    :type game_id: str
+    :param since: Only log entries with an id greater than this are included
+        when the payload is rebuilt.
+    :type since: int
+    :param last_signature: The signature from the previous snapshot.
+    :type last_signature: tuple
+    :returns: ``None`` if the game has been evicted from memory; otherwise
+        ``(payload, last_log_id, signature)`` where ``payload`` is ``None``
+        when the state is unchanged since ``last_signature``.
+    :rtype: tuple[dict | None, int, tuple] | None
+    """
+    with _locked(game_id):
+        state = _touch_and_get(game_id)
+        if state is None:
+            return None
+        signature = _state_signature(state)
+        if signature == last_signature:
+            return None, since, signature
+        payload, last_log_id = _build_payload(state, since)
+        return payload, last_log_id, signature
 
 
 @router.post("/{game_id}/stream-ticket")
@@ -321,35 +383,27 @@ async def api_spectate_stream(
             payload, ``end`` events when the game is gone, and comment
             heartbeats (``: ping``) while idle.
         """
-        state = await run_in_threadpool(_get_state, game_id)
-        assert state is not None  # nosec B101 - runtime guard, not test assertion
-        # Initial snapshot: include only the most recent log entries.
-        initial_since = 0
-        int_ids = [
-            e["id"] for e in state.log_entries
-            if isinstance(e.get("id"), int)
-        ]
-        if len(int_ids) > INITIAL_LOG_ENTRIES:
-            initial_since = sorted(int_ids)[-INITIAL_LOG_ENTRIES - 1]
-        payload, last_log_id = await run_in_threadpool(_build_payload, state, initial_since)
-        last_signature = _state_signature(state)
+        initial = await run_in_threadpool(_initial_snapshot, game_id)
+        assert initial is not None  # nosec B101 - runtime guard, not test assertion
+        payload: dict | None
+        payload, last_log_id, last_signature = initial
         yield f"id: {last_log_id}\nevent: state\ndata: {await run_in_threadpool(json.dumps, payload)}\n\n"
 
         idle_time = 0.0
         while True:
             await asyncio.sleep(POLL_INTERVAL_SECONDS)
-            # keep the watched game hot so LRU eviction cannot drop it mid-stream
-            state = await run_in_threadpool(_touch_and_get, game_id)
-            if state is None:
+            snapshot = await run_in_threadpool(
+                _poll_snapshot, game_id, last_log_id, last_signature
+            )
+            if snapshot is None:
                 # Game evicted from memory (due to the LRU cap or an explicit
                 # removal); end the stream so the client reconnects and
                 # reloads the game from the database.
                 yield "event: end\ndata: {}\n\n"
                 return
-            signature = _state_signature(state)
-            if signature != last_signature:
-                last_signature = signature
-                payload, last_log_id = await run_in_threadpool(_build_payload, state, last_log_id)
+            payload, last_log_id, signature = snapshot
+            last_signature = signature
+            if payload is not None:
                 yield f"id: {last_log_id}\nevent: state\ndata: {await run_in_threadpool(json.dumps, payload)}\n\n"
                 idle_time = 0.0
             else:
