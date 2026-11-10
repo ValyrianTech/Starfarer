@@ -385,6 +385,7 @@ async def api_spectate_stream(
         """
         initial = await run_in_threadpool(_initial_snapshot, game_id)
         assert initial is not None  # nosec B101 - runtime guard, not test assertion
+        payload: dict | None
         payload, last_log_id, last_signature = initial
         yield f"id: {last_log_id}\nevent: state\ndata: {await run_in_threadpool(json.dumps, payload)}\n\n"
 
