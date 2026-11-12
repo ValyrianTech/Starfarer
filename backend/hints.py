@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from backend.fuel import get_fuel_status
+from backend.game.engine import is_effectively_stranded
 from backend.missions import get_missions_summary
 from backend.models.game_state import GameState
 from backend.models.system import StarSystem
@@ -73,6 +74,16 @@ class Hint:
 def _fuel_zero(game_state: GameState, systems: dict[str, StarSystem]) -> bool:
     """Fuel is exactly 0."""
     return game_state.ship.fuel == 0
+
+
+def _fuel_stranded(game_state: GameState, systems: dict[str, StarSystem]) -> bool:
+    """Ship cannot afford any jump from here while still having some fuel (1+).
+
+    Gated on ``fuel > 0`` so this hint does not fire alongside the
+    ``fuel_zero`` hint when fuel is exactly 0, which would otherwise
+    consume both hint slots with redundant critical messaging.
+    """
+    return game_state.ship.fuel > 0 and is_effectively_stranded(game_state)
 
 
 def _fuel_critical(game_state: GameState, systems: dict[str, StarSystem]) -> bool:
@@ -194,6 +205,14 @@ HINT_DEFINITIONS: list[Hint] = [
         condition=_fuel_zero,
         command="/distress",
         priority=100,
+    ),
+    Hint(
+        hint_id="fuel_stranded",
+        severity="critical",
+        message_template="You cannot afford any jump from here. Use the distress beacon (/distress) or, if landed, salvage for a fuel cache.",
+        condition=_fuel_stranded,
+        command="/distress",
+        priority=95,
     ),
     Hint(
         hint_id="fuel_critical",
