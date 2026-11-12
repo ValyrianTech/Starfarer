@@ -483,7 +483,12 @@ class TestGetContextualHints:
         assert isinstance(hints, list)
 
     def test_fuel_low_no_station_no_current_system(self) -> None:
-        """When fuel < 10 and there's no current system, _fuel_low_no_station should return False."""
+        """When fuel < 10 and there's no current system, _fuel_low_no_station should return False.
+
+        Also asserts the fuel_stranded hint is present: with no current system,
+        is_effectively_stranded returns True and fuel (8) > 0, so _fuel_stranded
+        fires and produces the critical fuel_stranded hint.
+        """
         state = _make_game()
         state.ship.current_system_id = "nonexistent"
         state.ship.fuel = 8  # Less than 10, so first check passes
@@ -491,6 +496,9 @@ class TestGetContextualHints:
         # _fuel_low_no_station must not trigger without a current system
         # (the ship is effectively stranded, which is covered by fuel_stranded).
         assert not any(h["id"] == "fuel_low_no_station" for h in hints)
+        # With no current system the ship is effectively stranded; fuel (8) > 0,
+        # so the critical fuel_stranded hint should be present.
+        assert any(h["id"] == "fuel_stranded" for h in hints)
 
     def test_critical_hint_not_dismissible(self) -> None:
         state = _make_game()
