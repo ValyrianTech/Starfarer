@@ -424,6 +424,17 @@ class TestGetContextualHints:
         assert stranded["severity"] == "critical"
         assert stranded["command"] == "/distress"
 
+    def test_fuel_zero_and_fuel_stranded_do_not_overlap(self) -> None:
+        """When fuel is exactly 0, only fuel_zero fires; fuel_stranded must not also fire."""
+        state = _make_game()
+        state.ship.fuel = 0
+        with patch("backend.hints.is_effectively_stranded", return_value=True):
+            hints = get_contextual_hints(state, state.systems)
+        assert hints[0]["id"] == "fuel_zero"
+        assert any(h["id"] == "fuel_zero" for h in hints)
+        assert not any(h["id"] == "fuel_stranded" for h in hints)
+        assert sum(h["severity"] == "critical" for h in hints) == 1
+
     def test_fuel_critical_returns_warning(self) -> None:
         state = _make_game()
         state.ship.fuel = 3
