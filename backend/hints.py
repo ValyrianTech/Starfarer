@@ -77,8 +77,13 @@ def _fuel_zero(game_state: GameState, systems: dict[str, StarSystem]) -> bool:
 
 
 def _fuel_stranded(game_state: GameState, systems: dict[str, StarSystem]) -> bool:
-    """Ship cannot afford any jump from here (fuel 0 or below cheapest reachable cost)."""
-    return is_effectively_stranded(game_state)
+    """Ship cannot afford any jump from here while still having some fuel (1+).
+
+    Gated on ``fuel > 0`` so this hint does not fire alongside the
+    ``fuel_zero`` hint when fuel is exactly 0, which would otherwise
+    consume both hint slots with redundant critical messaging.
+    """
+    return game_state.ship.fuel > 0 and is_effectively_stranded(game_state)
 
 
 def _fuel_critical(game_state: GameState, systems: dict[str, StarSystem]) -> bool:
