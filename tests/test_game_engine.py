@@ -27,10 +27,12 @@ from backend.game.engine import (
     _generate_discovery,
     activate_distress_beacon,
     can_jump,
+    cheapest_reachable_fuel_cost,
     emergency_craft,
     explore_surface,
     get_nearby_systems,
     get_scanner_tier_data,
+    is_effectively_stranded,
     land_on_body,
     perform_atmospheric_scan,
     perform_jump,
@@ -2556,6 +2558,161 @@ class TestLoreExploration:
         assert all(d.lore_fragment_id is None for d in state.discoveries)
         assert state.lore_fragments_collected == 0
         assert not any(e["type"] == "lore" for e in state.log_entries)
+
+
+class TestEffectivelyStranded:
+    """Tests for cheapest_reachable_fuel_cost, is_effectively_stranded, and their gates."""
+
+    def _make_state(self, seed: int = 42) -> GameState:
+        state = new_game(seed=seed)
+        state.ship.hull = 80
+        state.ship.credits = 200
+        return state
+
+    # --- cheapest_reachable_fuel_cost -----------------------------------
+
+    def test_cheapest_reachable_fuel_cost_fresh_game(self) -> None:
+        from backend.generation.universe import distance_between
+        state = new_game(seed=42)
+        result = cheapest_reachable_fuel_cost(state)
+        assert isinstance(result, int)
+        assert result >= 1
+        current = state.get_current_system()
+        assert current is not None
+        expected = None
+        for sys_id, sys_data in state.systems.items():
+            if sys_id == state.ship.current_system_id:
+                continue
+            dist_ly = round(distance_between(current, sys_data) / 10.0, 1)
+            if dist_ly > state.ship.jump_range:
+                continue
+            cost = max(1, int(dist_ly * 3))
+            if expected is None or cost < expected:
+                expected = cost
+        assert result == expected
+
+    def test_cheapest_reachable_fuel_cost_no_current_system(self) -> None:
+        state = new_game(seed=42)
+        state.ship.current_system_id = "nonexistent"
+        assert cheapest_reachable_fuel_cost(state) is None
+
+    # --- is_effectively_stranded ----------------------------------------
+
+    def test_is_effectively_stranded_fuel_zero(self) -> None:
+        state = self._make_state()
+        state.ship.fuel = 0
+        assert is_effectively_stranded(state) is True
+
+    def test_is_effectively_stranded_fuel_below_cheapest(self) -> None:
+        state = self._make_state()
+        state.ship.fuel = 7
+        with patch("backend.game.engine.cheapest_reachable_fuel_cost", return_value=8):
+            assert is_effectively_stranded(state) is True
+
+    def test_is_effectively_stranded_fuel_at_cheapest(self) -> None:
+        state = self._make_state()
+        state.ship.fuel = 8
+        with patch("backend.game.engine.cheapest_reachable_fuel_cost", return_value=8):
+            assert is_effectively_stranded(state) is False
+
+    def test_is_effectively_stranded_fuel_above_cheapest(self) -> None:
+        state = self._make_state()
+        state.ship.fuel = 40
+        with patch("backend.game.engine.cheapest_reachable_fuel_cost", return_value=3):
+            assert is_effectively_stranded(state) is False
+
+    def test_is_effectively_stranded_no_reachable_system(self) -> None:
+        state = self._make_state()
+        state.ship.fuel = 40
+        with patch("backend.game.engine.cheapest_reachable_fuel_cost", return_value=None):
+            assert is_effectively_stranded(state) is True
+
+    def test_is_effectively_stranded_no_current_system(self) -> None:
+        state = self._make_state()
+        state.ship.fuel = 40
+        state.ship.current_system_id = "nonexistent"
+        assert is_effectively_stranded(state) is True
+
+    # --- distress beacon gate -------------------------------------------
+
+    def test_distress_allowed_when_cannot_afford_cheapest_jump(self) -> None:
+        from unittest.mock import MagicMock
+        state = self._make_state()
+        state.ship.fuel = 7
+        mock_rng = MagicMock()
+        mock_rng.random.side_effect = [0.61]
+        mock_rng.randint.side_effect = [3]
+        with patch("backend.game.engine.cheapest_reachable_fuel_cost", return_value=8), patch(
+            "backend.game.engine.seeded_random", return_value=mock_rng
+        ):
+            result = activate_distress_beacon(state)
+        assert "error" not in result
+        assert result["outcome"] == "no_response"
+
+    def test_distress_rejected_when_cheapest_jump_affordable(self) -> None:
+        state = self._make_state()
+        state.ship.fuel = 7
+        credits_before = state.ship.credits
+        with patch("backend.game.engine.cheapest_reachable_fuel_cost", return_value=3):
+            result = activate_distress_beacon(state)
+        assert "error" in result
+        assert "stranded" in result["error"].lower() or "Distress beacon can only" in result["error"]
+        assert state.ship.credits == credits_before
+        assert state.ship.distress_cooldown is False
+
+    def test_distress_allowed_at_zero_fuel(self) -> None:
+        state = self._make_state()
+        state.ship.fuel = 0
+        result = activate_distress_beacon(state)
+        assert "error" not in result
+
+    def test_distress_allowed_when_hull_critically_low_not_stranded(self) -> None:
+        from unittest.mock import MagicMock
+        state = self._make_state()
+        state.ship.fuel = 40
+        state.ship.hull = 15
+        mock_rng = MagicMock()
+        mock_rng.random.side_effect = [0.61]
+        mock_rng.randint.side_effect = [3]
+        with patch("backend.game.engine.cheapest_reachable_fuel_cost", return_value=1), patch(
+            "backend.game.engine.seeded_random", return_value=mock_rng
+        ):
+            result = activate_distress_beacon(state)
+        assert "error" not in result
+
+    # --- salvage gate ---------------------------------------------------
+
+    def test_salvage_allowed_when_cannot_afford_cheapest_jump(self) -> None:
+        from unittest.mock import MagicMock
+        state = self._make_state()
+        state.ship.fuel = 7
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), system.bodies[0])
+        land_on_body(state, planet.id)
+        mock_rng = MagicMock()
+        mock_rng.random.side_effect = [0.2]
+        mock_rng.randint.side_effect = [5]
+        with patch("backend.game.engine.cheapest_reachable_fuel_cost", return_value=8), patch(
+            "backend.game.engine.seeded_random", return_value=mock_rng
+        ):
+            result = perform_salvage(state)
+        assert "error" not in result
+        assert result["find"] == "fuel_cache"
+
+    def test_salvage_rejected_when_cheapest_jump_affordable(self) -> None:
+        state = self._make_state()
+        state.ship.fuel = 7
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), system.bodies[0])
+        land_on_body(state, planet.id)
+        morale_before = state.ship.morale
+        with patch("backend.game.engine.cheapest_reachable_fuel_cost", return_value=3):
+            result = perform_salvage(state)
+        assert "error" in result
+        assert "stranded" in result["error"].lower()
+        assert state.ship.morale == morale_before
 
 
 class TestDistressBeacon:

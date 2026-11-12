@@ -226,7 +226,7 @@ Choices have outcomes that modify stats: `fuel`, `hull`, `morale`, `credits`, `c
 
 ### 3.11 Distress Beacon
 
-When your ship is in danger — out of fuel or critically damaged (hull below 20% of max) — you can activate the distress beacon to call for help.
+When your ship is in danger — effectively stranded (out of fuel, or unable to afford the cheapest reachable jump) or critically damaged (hull below 20% of max) — you can activate the distress beacon to call for help.
 
 ```http
 POST /api/game/{game_id}/distress
@@ -250,7 +250,7 @@ The distress beacon has a cooldown period after each activation. Use it only whe
 
 ### 3.12 Salvage & Emergency Crafting
 
-When stranded with no fuel and landed on a body, you can salvage the area for resources.
+When effectively stranded (fuel 0, or unable to afford the cheapest reachable jump) and landed on a body, you can salvage the area for resources.
 
 #### Salvage
 
@@ -258,7 +258,7 @@ When stranded with no fuel and landed on a body, you can salvage the area for re
 POST /api/game/{game_id}/salvage
 ```
 
-Only available when fuel is 0 and you're landed on a body. Each body can be salvaged up to 3 times. Morale cost increases with each attempt (1 + 2 per prior attempt on the same body).
+Only available when effectively stranded (fuel 0, or unable to afford the cheapest reachable jump) and you're landed on a body. Each body can be salvaged up to 3 times. Morale cost increases with each attempt (1 + 2 per prior attempt on the same body).
 
 | Roll | Find | Effect |
 |---|---|---|
@@ -352,6 +352,7 @@ The full game state response (`GET /api/game/{id}`) includes a `hints` field —
 | Hint ID | Severity | Trigger Condition |
 |---------|----------|-------------------|
 | `fuel_zero` | critical | Ship has 0 fuel — activates salvage/distress options |
+| `fuel_stranded` | critical | Ship cannot afford any jump from here — use `/distress` or salvage |
 | `fuel_critical` | warning | Fuel is critically low (below 5 units) |
 | `fuel_low_no_station` | warning | Fuel is low and no trading station is in range |
 | `hull_low` | warning | Hull integrity is below 30% of maximum |
@@ -360,7 +361,7 @@ The full game state response (`GET /api/game/{id}`) includes a `hints` field —
 | `cargo_full` | tip | Cargo hold is at or near maximum capacity |
 | `first_crisis` | warning | First crisis-level event encountered |
 
-A maximum of 2 hints are returned at a time, ordered by priority (critical > warning > info > tip). Critical hints (`fuel_zero`) cannot be dismissed.
+A maximum of 2 hints are returned at a time, ordered by priority (critical > warning > info > tip). Critical hints (`fuel_zero`, `fuel_stranded`) cannot be dismissed.
 
 #### Dismissing Hints
 
