@@ -66,6 +66,56 @@ def can_jump(ship: Ship, target: StarSystem, current: StarSystem | None) -> tupl
     return True, fuel_cost, ""
 
 
+def cheapest_reachable_fuel_cost(state: GameState) -> int | None:
+    """Return the minimum fuel cost to jump to any reachable system.
+
+    Computes the fuel cost to every other system in the galaxy using the
+    same distance/fuel model as :func:`can_jump` and
+    :func:`get_nearby_systems`, and returns the minimum cost among those
+    within the ship's jump range (independent of current fuel).
+
+    :param state: The current game state.
+    :type state: GameState
+    :returns: The cheapest reachable jump cost, or ``None`` if there is no
+        current system or no other system within jump range.
+    :rtype: Optional[int]
+    """
+    current = state.get_current_system()
+    if current is None:
+        return None
+    cheapest: int | None = None
+    for sys_id, sys_data in state.systems.items():
+        if sys_id == state.ship.current_system_id:
+            continue
+        dist = distance_between(current, sys_data)
+        dist_ly = round(dist / 10.0, 1)
+        if dist_ly > state.ship.jump_range:
+            continue
+        fuel_cost = max(1, int(dist_ly * JUMP_FUEL_COST_PER_LY))
+        if cheapest is None or fuel_cost < cheapest:
+            cheapest = fuel_cost
+    return cheapest
+
+
+def is_effectively_stranded(state: GameState) -> bool:
+    """Whether the ship cannot afford any jump from its current position.
+
+    A ship is effectively stranded when it has zero fuel, when there is no
+    system within jump range, or when it cannot afford the cheapest jump.
+
+    :param state: The current game state.
+    :type state: GameState
+    :returns: ``True`` if the ship is effectively stranded.
+    :rtype: bool
+    """
+    if state.ship.fuel == 0:
+        return True
+    cheapest = cheapest_reachable_fuel_cost(state)
+    if cheapest is None:
+        return True
+    return state.ship.fuel < cheapest
+
+
 def perform_jump(state: GameState, target_system: StarSystem, fuel_cost: int) -> str:
     """Execute a hyperspace jump to the target star system.
 
@@ -928,7 +978,8 @@ def _resolve_distress_outcome(state: GameState, rng: Any, rescue_roll: float, tu
 def activate_distress_beacon(state: GameState) -> dict:
     """Activate the distress beacon to call for help when in trouble.
 
-    Can only be used when fuel is at 0 or hull is critically low
+    Can only be used when effectively stranded (fuel at 0 or unable to
+    afford the cheapest reachable jump) or when hull is critically low
     (below 20% of max), and when the distress cooldown is not active.
     Costs 50 credits. Has a 60% chance of attracting a rescue within
     1-3 turns.
@@ -950,8 +1001,8 @@ def activate_distress_beacon(state: GameState) -> dict:
         return {"error": "No current system."}
 
     hull_threshold = int(ship.max_hull * 0.2)
-    if ship.fuel > 0 and ship.hull >= hull_threshold:
-        return {"error": "Distress beacon can only be activated when fuel is empty or hull is critically low (below 20%)."}
+    if not is_effectively_stranded(state) and ship.hull >= hull_threshold:
+        return {"error": "Distress beacon can only be activated when stranded (cannot afford any jump) or hull is critically low (below 20%)."}
 
     if ship.distress_cooldown:
         return {"error": "Distress beacon is on cooldown. Wait for it to recharge."}
@@ -991,7 +1042,8 @@ def activate_distress_beacon(state: GameState) -> dict:
 def perform_salvage(state: GameState) -> dict:
     """Salvage the surrounding area for resources when stranded.
 
-    Only available when fuel is 0 and the ship is landed on a body.
+    Only available when the ship is effectively stranded (fuel at 0 or
+    unable to afford the cheapest reachable jump) and landed on a body.
     Each body can be salvaged up to 3 times. Morale cost increases
     with each attempt.
 
@@ -1010,8 +1062,8 @@ def perform_salvage(state: GameState) -> dict:
     ship = state.ship
     morale_before = ship.morale
 
-    if ship.fuel > 0:
-        return {"error": "Salvage is only possible when stranded with no fuel."}
+    if not is_effectively_stranded(state):
+        return {"error": "Salvage is only possible when stranded."}
 
     if not ship.current_body_id:
         return {"error": "Must be landed on a body to salvage."}

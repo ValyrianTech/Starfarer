@@ -19,6 +19,7 @@ from backend.hints import (
     _format_message,
     _fuel_critical,
     _fuel_low_no_station,
+    _fuel_stranded,
     _fuel_zero,
     _hull_low,
     _morale_low,
@@ -51,6 +52,18 @@ class TestConditionFunctions:
         state = _make_game()
         state.ship.fuel = 5
         assert _fuel_zero(state, state.systems) is False
+
+    def test_fuel_stranded_true(self) -> None:
+        state = _make_game()
+        state.ship.fuel = 7
+        with patch("backend.hints.is_effectively_stranded", return_value=True):
+            assert _fuel_stranded(state, state.systems) is True
+
+    def test_fuel_stranded_false(self) -> None:
+        state = _make_game()
+        state.ship.fuel = 40
+        with patch("backend.hints.is_effectively_stranded", return_value=False):
+            assert _fuel_stranded(state, state.systems) is False
 
     def test_fuel_critical_low(self) -> None:
         state = _make_game()
@@ -394,6 +407,16 @@ class TestGetContextualHints:
         assert hints[0]["id"] == "fuel_zero"
         assert hints[0]["severity"] == "critical"
 
+    def test_fuel_stranded_returns_critical_hint(self) -> None:
+        state = _make_game()
+        state.ship.fuel = 7
+        with patch("backend.hints.is_effectively_stranded", return_value=True):
+            hints = get_contextual_hints(state, state.systems)
+        assert any(h["id"] == "fuel_stranded" for h in hints)
+        stranded = next(h for h in hints if h["id"] == "fuel_stranded")
+        assert stranded["severity"] == "critical"
+        assert stranded["command"] == "/distress"
+
     def test_fuel_critical_returns_warning(self) -> None:
         state = _make_game()
         state.ship.fuel = 3
@@ -447,8 +470,9 @@ class TestGetContextualHints:
         state.ship.current_system_id = "nonexistent"
         state.ship.fuel = 8  # Less than 10, so first check passes
         hints = get_contextual_hints(state, state.systems)
-        # No hints should be returned since there's no current system
-        assert hints == []
+        # _fuel_low_no_station must not trigger without a current system
+        # (the ship is effectively stranded, which is covered by fuel_stranded).
+        assert not any(h["id"] == "fuel_low_no_station" for h in hints)
 
     def test_critical_hint_not_dismissible(self) -> None:
         state = _make_game()
@@ -625,6 +649,27 @@ class TestDismissHintAPI:
         data = resp3.json()
         hints = data["hints"]
         assert any(h["id"] == "fuel_zero" for h in hints)
+
+    def test_fuel_stranded_critical_hint_cannot_be_dismissed(self) -> None:
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+
+        state = GAME_STORE[game_id]
+        state.ship.fuel = 7
+
+        with patch("backend.hints.is_effectively_stranded", return_value=True):
+            resp2 = client.post(
+                f"/api/game/{game_id}/hints/dismiss",
+                json={"hint_id": "fuel_stranded"},
+            )
+        assert resp2.status_code == 400
+        assert "critical" in resp2.json()["detail"].lower()
+
+        with patch("backend.hints.is_effectively_stranded", return_value=True):
+            resp3 = client.get(f"/api/game/{game_id}")
+        data = resp3.json()
+        hints = data["hints"]
+        assert any(h["id"] == "fuel_stranded" for h in hints)
 
 
 class TestDismissedHintsPersistence:
