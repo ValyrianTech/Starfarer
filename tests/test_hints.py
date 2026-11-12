@@ -65,6 +65,13 @@ class TestConditionFunctions:
         with patch("backend.hints.is_effectively_stranded", return_value=False):
             assert _fuel_stranded(state, state.systems) is False
 
+    def test_fuel_stranded_zero_fuel_is_false(self) -> None:
+        """When fuel is exactly 0, the stranded hint must not fire (fuel_zero covers it)."""
+        state = _make_game()
+        state.ship.fuel = 0
+        with patch("backend.hints.is_effectively_stranded", return_value=True):
+            assert _fuel_stranded(state, state.systems) is False
+
     def test_fuel_critical_low(self) -> None:
         state = _make_game()
         state.ship.fuel = 1
