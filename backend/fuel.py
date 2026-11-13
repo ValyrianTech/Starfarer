@@ -7,6 +7,11 @@ level and supporting information.
 """
 
 from backend.config import JUMP_FUEL_COST_PER_LY
+from backend.game.engine import (
+    cheapest_reachable_fuel_cost,
+    cheapest_reachable_system,
+    is_effectively_stranded,
+)
 from backend.generation.universe import distance_between
 from backend.models.game_state import GameState
 from backend.models.system import StarSystem
@@ -27,6 +32,11 @@ def get_fuel_status(game_state: GameState, systems: dict[str, StarSystem]) -> di
     current_system = game_state.get_current_system()
     current_fuel = game_state.ship.fuel
 
+    cheapest_system = cheapest_reachable_system(game_state)
+    cheapest_reachable_jump_fuel = cheapest_reachable_fuel_cost(game_state)
+    cheapest_reachable_name = cheapest_system.name if cheapest_system else None
+    stranded = is_effectively_stranded(game_state)
+
     # Early return: if already at a trading station, fuel status is always green
     if current_system and current_system.has_trading_station:
         return {
@@ -37,6 +47,9 @@ def get_fuel_status(game_state: GameState, systems: dict[str, StarSystem]) -> di
             "fuel_for_one_way": 0,
             "nearest_station_system": current_system.name,
             "nearest_station_distance": 0.0,
+            "cheapest_reachable_jump_fuel": cheapest_reachable_jump_fuel,
+            "cheapest_reachable_system": cheapest_reachable_name,
+            "stranded": stranded,
         }
 
     nearest_system = None
@@ -60,6 +73,9 @@ def get_fuel_status(game_state: GameState, systems: dict[str, StarSystem]) -> di
             "fuel_for_one_way": 0,
             "nearest_station_system": None,
             "nearest_station_distance": 0.0,
+            "cheapest_reachable_jump_fuel": cheapest_reachable_jump_fuel,
+            "cheapest_reachable_system": cheapest_reachable_name,
+            "stranded": stranded,
         }
 
     distance_ly = nearest_distance / 10.0
@@ -87,4 +103,7 @@ def get_fuel_status(game_state: GameState, systems: dict[str, StarSystem]) -> di
         "fuel_for_one_way": fuel_for_one_way,
         "nearest_station_system": nearest_system.name,
         "nearest_station_distance": round(nearest_distance / 10.0, 1),
+        "cheapest_reachable_jump_fuel": cheapest_reachable_jump_fuel,
+        "cheapest_reachable_system": cheapest_reachable_name,
+        "stranded": stranded,
     }
