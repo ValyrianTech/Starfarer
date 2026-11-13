@@ -3318,10 +3318,16 @@ class TestFuelWarningSystem:
         assert "fuel_for_one_way" in fs
         assert "nearest_station_system" in fs
         assert "nearest_station_distance" in fs
+        assert "cheapest_reachable_jump_fuel" in fs
+        assert "cheapest_reachable_system" in fs
+        assert "stranded" in fs
         assert isinstance(fs["current_fuel"], int)
         assert isinstance(fs["fuel_for_round_trip"], int)
         assert isinstance(fs["fuel_for_one_way"], int)
         assert isinstance(fs["nearest_station_distance"], (int, float))
+        assert fs["cheapest_reachable_jump_fuel"] is None or isinstance(fs["cheapest_reachable_jump_fuel"], int)
+        assert fs["cheapest_reachable_system"] is None or isinstance(fs["cheapest_reachable_system"], str)
+        assert isinstance(fs["stranded"], bool)
 
     def test_fuel_warning_critical(self) -> None:
         """Fuel < 5 produces 'critical' level."""
@@ -3443,6 +3449,172 @@ class TestFuelWarningSystem:
         assert fs["nearest_station_distance"] == 0.0
         assert fs["fuel_for_round_trip"] == 0
         assert fs["fuel_for_one_way"] == 0
+        assert fs["cheapest_reachable_jump_fuel"] is not None
+        assert isinstance(fs["cheapest_reachable_system"], str)
+        assert fs["stranded"] is False
+
+    def test_fuel_status_new_keys_cheapest_reachable(self) -> None:
+        """The three new keys expose the cheapest reachable jump and stranded state."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "fuel-new-keys"})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        current_sys = state.get_current_system()
+        assert current_sys is not None
+        for sys_data in state.systems.values():
+            sys_data.has_trading_station = False
+        current_sys.has_trading_station = False
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        from backend.game.engine import cheapest_reachable_system
+
+        expected_system = cheapest_reachable_system(state)
+        assert expected_system is not None
+
+        resp = client.get(f"/api/game/{game_id}")
+        assert resp.status_code == 200
+        fs = resp.json()["fuel_status"]
+        assert fs["cheapest_reachable_system"] == expected_system.name
+        assert fs["cheapest_reachable_jump_fuel"] is not None
+        assert isinstance(fs["cheapest_reachable_jump_fuel"], int)
+        assert fs["stranded"] is False
+
+
+class TestRecoveryOptions:
+    """Tests for the recovery_options surfacing in the game state response."""
+
+    def _new_game(self, game_id: str) -> tuple[str, GameState]:
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": game_id})
+        assert resp.status_code == 200
+        gid = resp.json()["game_id"]
+        return gid, GAME_STORE[gid]
+
+    @staticmethod
+    def _save(state: GameState) -> None:
+        GAME_STORE[state.id] = state
+        game_save(state)
+
+    def _recovery(self, state: GameState) -> dict:
+        self._save(state)
+        resp = client.get(f"/api/game/{state.id}")
+        assert resp.status_code == 200
+        return resp.json()["recovery_options"]
+
+    def test_fresh_game_not_stranded_reports_blockers(self) -> None:
+        """A fresh, healthy ship is not stranded: every recovery action is blocked."""
+        _gid, state = self._new_game("recov-fresh")
+        ro = self._recovery(state)
+        assert ro["distress"]["available"] is False
+        assert "stranded or hull below 20%" in ro["distress"]["reason"]
+        assert ro["salvage"]["available"] is False
+        assert ro["salvage"]["reason"] == "requires being stranded"
+        assert ro["salvage"]["attempts_remaining"] == 3
+        assert ro["craft"]["available"] is False
+        assert ro["craft"]["reason"] == "no craftable discoveries in cargo"
+        assert ro["craft"]["craftable"] == []
+
+    def test_distress_requires_stranded_or_low_hull(self) -> None:
+        """Not stranded and healthy hull blocks distress on the first gate."""
+        _gid, state = self._new_game("recov-distress-gate")
+        ro = self._recovery(state)
+        assert ro["distress"]["available"] is False
+        assert "stranded or hull below 20%" in ro["distress"]["reason"]
+
+    def test_distress_insufficient_credits(self) -> None:
+        """Stranded with too few credits blocks distress on the credit gate."""
+        _gid, state = self._new_game("recov-distress-credits")
+        state.ship.fuel = 0
+        state.ship.credits = 4
+        ro = self._recovery(state)
+        assert ro["distress"]["available"] is False
+        assert "50 credits" in ro["distress"]["reason"]
+        assert "you have 4" in ro["distress"]["reason"]
+
+    def test_distress_cooldown(self) -> None:
+        """Stranded with credits but a live cooldown blocks distress on cooldown."""
+        _gid, state = self._new_game("recov-distress-cooldown")
+        state.ship.fuel = 0
+        state.ship.credits = 100
+        state.ship.distress_cooldown = True
+        ro = self._recovery(state)
+        assert ro["distress"]["available"] is False
+        assert "cooldown" in ro["distress"]["reason"]
+
+    def test_distress_available_when_stranded_with_credits(self) -> None:
+        """Stranded with credits and no cooldown leaves distress available."""
+        _gid, state = self._new_game("recov-distress-ok")
+        state.ship.fuel = 0
+        state.ship.credits = 100
+        ro = self._recovery(state)
+        assert ro["distress"]["available"] is True
+        assert ro["distress"]["reason"] is None
+
+    def test_salvage_requires_being_stranded(self) -> None:
+        """Not stranded blocks salvage."""
+        _gid, state = self._new_game("recov-salvage-not-stranded")
+        ro = self._recovery(state)
+        assert ro["salvage"]["available"] is False
+        assert ro["salvage"]["reason"] == "requires being stranded"
+
+    def test_salvage_requires_landed(self) -> None:
+        """Stranded but not landed blocks salvage."""
+        _gid, state = self._new_game("recov-salvage-not-landed")
+        state.ship.fuel = 0
+        state.ship.current_body_id = None
+        ro = self._recovery(state)
+        assert ro["salvage"]["available"] is False
+        assert "landed" in ro["salvage"]["reason"]
+
+    def test_salvage_body_exhausted(self) -> None:
+        """Stranded and landed, but the body is fully salvaged."""
+        _gid, state = self._new_game("recov-salvage-exhausted")
+        body_id = state.get_current_system().bodies[0].id
+        state.ship.fuel = 0
+        state.ship.current_body_id = body_id
+        state.ship.salvage_attempts[body_id] = 3
+        ro = self._recovery(state)
+        assert ro["salvage"]["available"] is False
+        assert "3 attempts" in ro["salvage"]["reason"]
+        assert ro["salvage"]["attempts_remaining"] == 0
+
+    def test_salvage_available(self) -> None:
+        """Stranded and landed with attempts remaining makes salvage available."""
+        _gid, state = self._new_game("recov-salvage-ok")
+        body_id = state.get_current_system().bodies[0].id
+        state.ship.fuel = 0
+        state.ship.current_body_id = body_id
+        state.ship.salvage_attempts[body_id] = 1
+        ro = self._recovery(state)
+        assert ro["salvage"]["available"] is True
+        assert ro["salvage"]["reason"] is None
+        assert ro["salvage"]["attempts_remaining"] == 2
+
+    def test_craft_available(self) -> None:
+        """Craftable discoveries in cargo expose the craftable outputs."""
+        from backend.models.discovery import Discovery
+
+        _gid, state = self._new_game("recov-craft-ok")
+        state.discoveries.append(
+            Discovery(id="recov-craft-1", category="artifact", name="Relic",
+                      description="Old relic", value=50)
+        )
+        state.discoveries.append(
+            Discovery(id="recov-craft-2", category="mineral", name="Ore",
+                      description="Shiny", value=40)
+        )
+        ro = self._recovery(state)
+        assert ro["craft"]["available"] is True
+        assert ro["craft"]["reason"] is None
+        assert ro["craft"]["craftable"] == ["fuel", "repair"]
+
+    def test_craft_not_available(self) -> None:
+        """No craftable discoveries leaves crafting unavailable with empty list."""
+        _gid, state = self._new_game("recov-craft-empty")
+        ro = self._recovery(state)
+        assert ro["craft"]["available"] is False
+        assert "no craftable discoveries" in ro["craft"]["reason"]
+        assert ro["craft"]["craftable"] == []
 
 
 class TestAPIReputationLabels:

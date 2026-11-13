@@ -331,8 +331,23 @@ The `fuel_status` object includes:
 - `fuel_for_round_trip` — fuel needed for a round trip to the nearest station
 - `nearest_station_system` — name of the nearest system with a trading station
 - `nearest_station_distance` — distance to the nearest station in light-years
+- `cheapest_reachable_jump_fuel` — fuel cost of the cheapest jump to any system within jump range (`null` if none)
+- `cheapest_reachable_system` — name of the system reached by the cheapest jump (`null` if none)
+- `stranded` — whether the ship is effectively stranded (cannot afford any jump from its current position)
 
 If you are already at a trading station, the status is always `green` with zero distances.
+
+#### Recovery Action Availability
+
+The full game state response also includes a `recovery_options` block that surfaces — *before* you attempt them — whether each recovery action is available and, if not, the specific missing precondition. This mirrors the preflight checks of the actual `/distress`, `/salvage`, and `/craft` endpoints without consuming any resources.
+
+The `recovery_options` object has three sub-objects:
+
+- `distress` — the distress beacon. Fields: `available` (bool) and `reason` (string naming the first blocker, or `null` when available). Checked in order: being stranded or hull below 20%, having 50 credits, and not being on cooldown.
+- `salvage` — salvaging the current body. Fields: `available` (bool), `reason` (string or `null`), and `attempts_remaining` (int, 0–3). Blockers: not stranded, not landed on a body, or the body already fully salvaged (3 attempts used).
+- `craft` — emergency crafting. Fields: `available` (bool), `reason` (string or `null`), and `craftable` (list of output types such as `fuel`, `repair`, `morale`, `credits` derivable from discoveries in cargo). Unavailable when there are no craftable discoveries in cargo.
+
+`reason` strings always name the specific missing precondition (for example `requires 50 credits (you have 4)`, `beacon is on cooldown`, `must be landed on a body`, or `this body is fully salvaged (3 attempts used)`).
 
 ### 4.4 Contextual Hints
 
