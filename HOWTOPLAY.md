@@ -343,7 +343,7 @@ The full game state response also includes a `recovery_options` block that surfa
 
 The `recovery_options` object has three sub-objects:
 
-- `distress` — the distress beacon. Fields: `available` (bool) and `reason` (string naming the first blocker, or `null` when available). Checked in order: being stranded or hull below 20%, having 50 credits, and not being on cooldown.
+- `distress` — the distress beacon. Fields: `available` (bool) and `reason` (string naming the first blocker, or `null` when available). Checked in order: being stranded or hull below 20%, not being on cooldown, and having 50 credits.
 - `salvage` — salvaging the current body. Fields: `available` (bool), `reason` (string or `null`), and `attempts_remaining` (int, 0–3). Blockers: not stranded, not landed on a body, or the body already fully salvaged (3 attempts used).
 - `craft` — emergency crafting. Fields: `available` (bool), `reason` (string or `null`), and `craftable` (list of output types such as `fuel`, `repair`, `morale`, `credits` derivable from discoveries in cargo). Unavailable when there are no craftable discoveries in cargo.
 

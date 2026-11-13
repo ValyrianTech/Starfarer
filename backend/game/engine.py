@@ -1288,10 +1288,10 @@ def get_recovery_options(state: GameState) -> dict:
     hull_threshold = int(ship.max_hull * 0.2)
     if not stranded and ship.hull >= hull_threshold:
         distress = {"available": False, "reason": "requires being stranded or hull below 20%"}
-    elif ship.credits < 50:
-        distress = {"available": False, "reason": f"requires 50 credits (you have {ship.credits})"}
     elif ship.distress_cooldown:
         distress = {"available": False, "reason": "beacon is on cooldown"}
+    elif ship.credits < 50:
+        distress = {"available": False, "reason": f"requires 50 credits (you have {ship.credits})"}
     else:
         distress = {"available": True, "reason": None}
 
