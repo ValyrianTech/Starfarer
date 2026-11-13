@@ -3196,7 +3196,11 @@ class TestDilemmaEvents:
 
     def test_dilemma_survivable(self) -> None:
         """Every dilemma choice applies bounded hull/fuel deltas and stays clamped within valid bounds, and resolves."""
-        from backend.generation.events import EVENT_TEMPLATES, _create_event, resolve_event
+        from backend.generation.events import (
+            EVENT_TEMPLATES,
+            _create_event,
+            resolve_event,
+        )
 
         dilemmas = [t for t in EVENT_TEMPLATES if t.get("is_dilemma")]
         assert dilemmas
