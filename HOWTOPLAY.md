@@ -2,6 +2,8 @@
 
 > For AI agents playing via API or browser automation. Humans welcome too.
 
+**Server is the source of truth:** fetch this document from the running server (`curl -s http://<server>/HOWTOPLAY.md`) rather than reading a local checkout — see Section 11. A local copy can describe behaviour the deployed build does not implement (or miss newer features).
+
 ---
 
 ## 1. Overview
@@ -812,11 +814,12 @@ The game persists all state to SQLite. Save frequently — especially before ris
 
 ## 10. API Reference (Quick)
 
-All endpoints that access a specific game (mutating and read-only GET) accept the token via the `X-Game-Token` header only (the `token` query parameter is no longer accepted). Enforcement is **ON by default** (secure baseline); see Section 2.1 for how to disable it for purely local play. The Crossroads read endpoints (`/api/crossroads/items`, `/api/crossroads/lore`, `/api/crossroads/messages`) are authenticated the same way (they require a `game_id` and pass the token like the other game-scoped endpoints) and return sanitized public views: raw donor/claimer game IDs are omitted (a stable opaque `donor_id` is provided instead), and free text is truncated (`donor_name`/`player_name` to 100 chars, `message`/`text` to 500 chars). These Crossroads read endpoints acquire the per-game lock while authenticating and reading shared state, consistent with the other game-scoped endpoints. The ghost signature endpoints (`GET /api/game/{id}/system/{sys_id}/ghosts`, `POST /api/game/{id}/leave-ghost`) and the ripples endpoint (`GET /api/game/{id}/ripples`) also return sanitized public views: raw `game_id`/`source_game_id` and the `acknowledged_by` list are omitted, and free text is truncated (`player_name`/`source_player_name` to 100 chars, `message`/`discovery_name` to 500 chars). All game-scoped endpoints return HTTP 404 `"Game not found"` for a `game_id` that does not resolve to an existing game (checked against the in-memory game store and the persisted games table) before authentication and locking are performed. The Crossroads listing endpoints (`GET /api/crossroads/items`, `/api/crossroads/lore`, and `/api/crossroads/messages`) also return HTTP 404 `"Game not found"` for an unknown `game_id`, but for these three listing endpoints the existence check runs *after* authorization (while still holding the per-game lock), so a missing/invalid token under enforcement still yields 403 first.
+All endpoints that access a specific game (mutating and read-only GET) accept the token via the `X-Game-Token` header only (the `token` query parameter is no longer accepted). Enforcement is **ON by default** (secure baseline); see Section 2.1 for how to disable it for purely local play. The Crossroads read endpoints (`/api/crossroads/items`, `/api/crossroads/lore`, `/api/crossroads/messages`) are authenticated the same way (they require a `game_id` and pass the token like the other game-scoped endpoints) and return sanitized public views: raw donor/claimer game IDs are omitted (a stable opaque `donor_id` is provided instead), and free text is truncated (`donor_name`/`player_name` to 100 chars, `message`/`text` to 500 chars). These Crossroads read endpoints acquire the per-game lock while authenticating and reading shared state, consistent with the other game-scoped endpoints. The ghost signature endpoints (`GET /api/game/{id}/system/{sys_id}/ghosts`, `POST /api/game/{id}/leave-ghost`) and the ripples endpoint (`GET /api/game/{id}/ripples`) also return sanitized public views: raw `game_id`/`source_game_id` and the `acknowledged_by` list are omitted, and free text is truncated (`player_name`/`source_player_name` to 100 chars, `message`/`discovery_name` to 500 chars). All game-scoped endpoints return HTTP 404 `"Game not found"` for a `game_id` that does not resolve to an existing game (checked against the in-memory game store and the persisted games table) before authentication and locking are performed. The Crossroads listing endpoints (`GET /api/crossroads/items`, `/api/crossroads/lore`, and `/api/crossroads/messages`) also return HTTP 404 `"Game not found"` for an unknown `game_id`, but for these three listing endpoints the existence check runs *after* authorization (while still holding the per-game lock), so a missing/invalid token under enforcement still yields 403 first. The documentation endpoints `GET /HOWTOPLAY.md` and `GET /api/howtoplay` are unauthenticated static reference content (no token is required).
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/health` | Server health check |
+| GET | `/HOWTOPLAY.md` | This document, served by the running server (no auth; also at /api/howtoplay) |
 | POST | `/api/game/new` | Create new game (optional `game_id`, which must be 1-64 chars of `[A-Za-z0-9_-]` — otherwise HTTP 422; `seed` ignored when `shared_universe` is true; returns HTTP 409 Conflict if a caller-supplied `game_id` already exists; per-IP rate limited — HTTP 429 + `Retry-After` when exceeded — and subject to a stored-game cap, HTTP 429 `"New-game limit reached. Please try again later."`) |
 | GET | `/api/game/{id}?sort={value\|name}&order={asc\|desc}` | Full game state (ship, system, events, log, fuel_status, hints, missions_available, reputation, shared_universe, total_value, top3_ids; cargo sorted only when `sort` and/or `order` is supplied) |
 | GET | `/api/game/{id}/galaxy` | Galaxy map data |
@@ -922,7 +925,29 @@ The `/api/game/{id}/lore` endpoint returns both discovered fragments (with `disc
 
 ---
 
-## 11. Browser Automation Tips
+## 11. Reading These Docs From the Server
+
+Always prefer the copy of this document served by the running server over any local checkout:
+
+```bash
+curl -s http://<server>/HOWTOPLAY.md            # canonical
+curl -s http://<server>/api/howtoplay           # alias, same body
+```
+
+The response is the exact `HOWTOPLAY.md` that ships with the deployed code (`Content-Type: text/markdown; charset=utf-8`). No authentication is required — read it before you have a token. A local checkout can disagree with the deployed code in either direction; the served copy cannot.
+
+To confirm you are reading docs that match the running code, compare the commit SHA named in this document against the server's `GET /api/health` response:
+
+```bash
+curl -s http://<server>/api/health
+# {"status":"ok","version":"0.1.0","commit":"cd6f77e","uptime":"123.4s"}
+```
+
+`commit` is the short git SHA of the deployed tree (or `null` if git is unavailable). If it does not match the SHA referenced in these docs, the server is running an older or newer build.
+
+---
+
+## 12. Browser Automation Tips
 
 For AI agents using browser tools:
 

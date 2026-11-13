@@ -14,6 +14,7 @@ from contextlib import contextmanager
 from threading import Lock
 
 from fastapi import APIRouter, Header, HTTPException, Request
+from fastapi.responses import FileResponse
 
 from backend.api.schemas import (
     AcceptMissionRequest,
@@ -85,6 +86,7 @@ from backend.models.faction import get_faction
 from backend.models.game_state import GameState, is_lore_fragment_collected
 from backend.multiplayer.ripples import create_ripple
 from backend.utils import deterministic_hash, seeded_random
+from backend.version import HOWTOPLAY_PATH, resolve_commit_sha
 
 logger = logging.getLogger(__name__)
 
@@ -523,14 +525,36 @@ def _authorize_game(game_id: str, token: str | None) -> None:
 def health() -> HealthResponse:
     """Health check endpoint.
 
-    Returns the server status, version, and uptime since startup.
+    Returns the server status, version, uptime since startup, and the short
+    git commit SHA of the deployed tree (``commit`` may be ``None`` when git
+    is unavailable).
 
     :returns: A :class:`HealthResponse` with status ``"ok"``, the
-        game version, and uptime string.
+        game version, uptime string, and commit SHA.
     :rtype: HealthResponse
     """
     uptime = round(time.time() - START_TIME, 1)
-    return HealthResponse(status="ok", version="0.1.0", uptime=f"{uptime}s")
+    return HealthResponse(
+        status="ok",
+        version="0.1.0",
+        uptime=f"{uptime}s",
+        commit=resolve_commit_sha(),
+    )
+
+
+@router.get("/howtoplay", include_in_schema=False)
+def api_howtoplay() -> FileResponse:
+    """Serve the HOWTOPLAY documentation that ships with the deployed code.
+
+    This unauthenticated alias endpoint (reachable at ``/api/howtoplay``)
+    returns the same ``HOWTOPLAY.md`` content as ``GET /HOWTOPLAY.md``,
+    with ``Content-Type: text/markdown; charset=utf-8``. It performs no
+    token/auth check because it serves static reference content.
+
+    :returns: A file response with the ``HOWTOPLAY.md`` content.
+    :rtype: FileResponse
+    """
+    return FileResponse(HOWTOPLAY_PATH, media_type="text/markdown; charset=utf-8")
 
 
 @router.post("/game/new")

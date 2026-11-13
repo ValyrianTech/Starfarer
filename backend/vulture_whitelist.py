@@ -86,6 +86,8 @@ whitelist.api_post_message  # noqa: B018
 whitelist.api_ripples  # noqa: B018
 whitelist.api_acknowledge_ripple  # noqa: B018
 whitelist.index  # noqa: B018
+whitelist.howtoplay  # noqa: B018
+whitelist.api_howtoplay  # noqa: B018
 
 # Pydantic model fields/validators
 whitelist.status  # noqa: B018
@@ -103,6 +105,14 @@ whitelist.MAX_MORALE  # noqa: B018
 whitelist.MAX_CREW  # noqa: B018
 whitelist.BIOME_COLORS  # noqa: B018
 whitelist.ALL_DISCOVERY_CATEGORIES  # noqa: B018
+
+# Deployment version metadata (backend/version.py)
+whitelist.REPO_ROOT  # noqa: B018
+whitelist.HOWTOPLAY_PATH  # noqa: B018
+whitelist.get_commit_sha  # noqa: B018
+whitelist.resolve_commit_sha  # noqa: B018
+whitelist.reset_commit_sha_cache  # noqa: B018
+whitelist.ensure_howtoplay_exists  # noqa: B018
 
 # Pytest fixtures
 whitelist.setup_db  # noqa: B018
