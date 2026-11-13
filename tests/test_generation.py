@@ -3195,20 +3195,28 @@ class TestDilemmaEvents:
         assert _parse_outcome_vector("fuel:5x; credits:50") == {"fuel": 0, "credits": 50}
 
     def test_dilemma_survivable(self) -> None:
-        """Every dilemma choice leaves the ship survivable (hull >= 1, fuel >= 0) and resolves."""
+        """Every dilemma choice applies bounded hull/fuel deltas and stays clamped within valid bounds, and resolves."""
         from backend.generation.events import EVENT_TEMPLATES, _create_event, resolve_event
 
         dilemmas = [t for t in EVENT_TEMPLATES if t.get("is_dilemma")]
         assert dilemmas
         for template in dilemmas:
             for choice in template["choices"]:
-                ship = Ship()
-                state = GameState(id="dilemma-survive", seed=42, ship=ship)
+                effects = GameState(id="dilemma-survive", seed=42, ship=Ship()).apply_choice_outcome(
+                    choice["outcome"]
+                )
+                assert -25 <= effects["hull"] <= 25, \
+                    f"Dilemma '{template['title']}' choice '{choice['text']}' has unreasonable hull delta {effects['hull']}"
+                assert -30 <= effects["fuel"] <= 30, \
+                    f"Dilemma '{template['title']}' choice '{choice['text']}' has unreasonable fuel delta {effects['fuel']}"
+
+                ship = Ship(hull=5, fuel=3)
+                state = GameState(id="dilemma-near-death", seed=42, ship=ship)
                 state.apply_choice_outcome(choice["outcome"])
-                assert ship.hull >= 1, \
-                    f"Dilemma '{template['title']}' choice '{choice['text']}' drops hull below 1"
-                assert ship.fuel >= 0, \
-                    f"Dilemma '{template['title']}' choice '{choice['text']}' drops fuel below 0"
+                assert 0 <= ship.hull <= ship.max_hull, \
+                    f"Dilemma '{template['title']}' choice '{choice['text']}' leaves hull outside [0, max_hull]"
+                assert 0 <= ship.fuel <= ship.max_fuel, \
+                    f"Dilemma '{template['title']}' choice '{choice['text']}' leaves fuel outside [0, max_fuel]"
 
             for idx in range(len(template["choices"])):
                 state = new_game(seed=42)
