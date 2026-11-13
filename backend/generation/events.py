@@ -3,6 +3,14 @@ Procedural event generation and resolution system.
 
 Defines the template library of in-game events and provides functions
 for triggering random events and resolving player choices against them.
+
+Convention: event templates may carry the ``is_dilemma`` and ``axes``
+keys. These are *descriptive metadata only*: they are never read by
+``trigger_event``, ``resolve_event``, or ``apply_cooldown``, and they do
+not influence event selection, trigger probabilities, cooldowns, or
+outcome resolution. They exist so that tests and tooling can audit the
+set of dilemma events and verify that no choice dominates another across
+the declared axes.
 """
 
 import random
@@ -651,6 +659,12 @@ EVENT_TEMPLATES: list[dict[str, Any]] = [
             {"text": "Synthesize antidote", "outcome": "fuel:-10; Synthesized antidote cured the illness."},
         ],
     },
+    # The following four templates are "dilemma" events: their `is_dilemma`
+    # and `axes` keys are DESCRIPTIVE METADATA ONLY. They do not influence
+    # event selection, trigger probabilities, cooldowns, or outcome
+    # resolution in trigger_event/resolve_event/apply_cooldown. They exist
+    # solely so that tests and tooling can audit the set of dilemma events
+    # and verify that no choice dominates another across the declared axes.
     {
         "type": "encounter",
         "rarity": "uncommon",

@@ -3227,3 +3227,40 @@ class TestDilemmaEvents:
                 ok, _msg, _extra = resolve_event(state, event.id, idx)
                 assert ok is True, \
                     f"Failed to resolve choice {idx} of dilemma '{template['title']}'"
+
+    def test_dilemma_metadata_does_not_affect_selection(self, monkeypatch) -> None:
+        """is_dilemma/axes are descriptive metadata and never change what trigger_event selects.
+
+        Removes the ``is_dilemma`` and ``axes`` keys from every template and
+        shows that, across many deterministic seeds, ``trigger_event`` selects
+        exactly the same event (or ``None``) as when the keys are present.
+        """
+        from backend.generation import events as events_mod
+        from backend.generation.events import EVENT_TEMPLATES, trigger_event
+        from backend.generation.universe import generate_universe
+        from backend.models.ship import Ship
+
+        systems, _lore = generate_universe(42)
+        system_id = next(iter(systems.keys()))
+
+        stripped = [
+            {k: v for k, v in template.items() if k not in ("is_dilemma", "axes")}
+            for template in EVENT_TEMPLATES
+        ]
+
+        def _selected_title(seed: int) -> str | None:
+            ship = Ship(current_system_id=system_id)
+            state = GameState(id="dilemma-meta-inert", seed=42, ship=ship, systems=systems)
+            state.event_cooldowns = {}
+            state.last_event_title = None
+            event = trigger_event(state, rng_override=random.Random(seed))
+            return event.title if event else None
+
+        seeds = list(range(50))
+        original_titles = [_selected_title(seed) for seed in seeds]
+
+        monkeypatch.setattr(events_mod, "EVENT_TEMPLATES", stripped)
+        stripped_titles = [_selected_title(seed) for seed in seeds]
+
+        assert stripped_titles == original_titles, \
+            "Removing is_dilemma/axes must not change which event trigger_event selects"
