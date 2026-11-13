@@ -120,11 +120,12 @@ def cheapest_reachable_fuel_cost(state: GameState) -> int | None:
 
 
 def cheapest_reachable_system(state: GameState) -> StarSystem | None:
-    """Return the system reached by the cheapest affordable jump.
+    """Return the system reached by the cheapest in-range jump.
 
     Computes the same distance/fuel model as
     :func:`cheapest_reachable_fuel_cost` and returns the :class:`StarSystem`
-    whose jump fuel cost equals that minimum, or ``None`` if there is no
+    whose jump fuel cost equals that minimum (among systems within the ship's
+    jump range, independent of current fuel), or ``None`` if there is no
     current system or no other system within jump range.
 
     :param state: The current game state.
