@@ -21,6 +21,7 @@ from backend.config import ALLOW_CREDENTIALS, ALLOWED_ORIGINS, DATA_DIR
 from backend.database import init_db, run_migrations
 from backend.multiplayer.api import router as multiplayer_router
 from backend.multiplayer.database import init_multiplayer_db
+from backend.version import HOWTOPLAY_PATH, ensure_howtoplay_exists, resolve_commit_sha
 
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend")
 WEBUI_DIR = os.path.join(os.path.dirname(__file__), "..", "webui")
@@ -31,7 +32,10 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
     """FastAPI lifespan context manager for application startup and shutdown.
 
     On startup: initializes the SQLite database and creates required
-    data directories. On shutdown: performs cleanup (currently a no-op).
+    data directories, verifies the shipped ``HOWTOPLAY.md`` documentation is
+    present (failing loudly if missing), and resolves/caches the deployed
+    commit SHA (which never raises). On shutdown: performs cleanup (currently
+    a no-op).
 
     :param application: The FastAPI application instance.
     :type application: FastAPI
@@ -42,6 +46,8 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
     init_db()
     run_migrations()
     init_multiplayer_db()
+    ensure_howtoplay_exists()
+    resolve_commit_sha()
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     (DATA_DIR / "save").mkdir(parents=True, exist_ok=True)
     yield
@@ -98,3 +104,18 @@ def index() -> Response:
     if os.path.exists(index_path):
         return FileResponse(index_path)
     return JSONResponse({"message": "Starfarer API. Visit /docs for API documentation."})
+
+
+@app.get("/HOWTOPLAY.md", include_in_schema=False)
+def howtoplay() -> FileResponse:
+    """Serve the HOWTOPLAY documentation that ships with the deployed code.
+
+    This unauthenticated endpoint always returns the ``HOWTOPLAY.md`` file
+    bundled with the running build, so AI agents read documentation that
+    exactly matches the deployed behaviour instead of relying on a local
+    checkout that may drift in either direction.
+
+    :returns: A file response with the ``HOWTOPLAY.md`` content.
+    :rtype: FileResponse
+    """
+    return FileResponse(HOWTOPLAY_PATH, media_type="text/markdown; charset=utf-8")
