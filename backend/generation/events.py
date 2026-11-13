@@ -651,6 +651,56 @@ EVENT_TEMPLATES: list[dict[str, Any]] = [
             {"text": "Synthesize antidote", "outcome": "fuel:-10; Synthesized antidote cured the illness."},
         ],
     },
+    {
+        "type": "encounter",
+        "rarity": "uncommon",
+        "title": "Stranded Convoy",
+        "flavor": "A crippled convoy drifts in a debris field, engines dead and life support failing. Their hails are desperate \u2014 they cannot afford another jump.",
+        "choices": [
+            {"text": "Burn fuel towing them clear", "outcome": "fuel:-8; morale:15; credits:40; Towed the convoy clear of the debris field."},
+            {"text": "Take their cargo as payment", "outcome": "cargo:2; morale:-12; Claimed their cargo in exchange for a jump they could not afford."},
+            {"text": "Leave them to their fate", "outcome": "morale:-3; Left the convoy behind."},
+        ],
+        "is_dilemma": True,
+        "axes": ["fuel", "morale", "credits", "cargo"],
+    },
+    {
+        "type": "crisis",
+        "category": "crisis",
+        "rarity": "common",
+        "title": "Bulkhead Breach",
+        "flavor": "A pressure sensor screams as the outer hull plate buckles. Atmosphere is venting, and the breach is widening.",
+        "choices": [
+            {"text": "Patch the outer plate", "outcome": "hull:-10; credits:0; Patched the outer plate from inside the airlock."},
+            {"text": "Seal the inner bulkhead", "outcome": "hull:-3; cargo:-1; Sealed the inner bulkhead, venting a cargo pod to vacuum."},
+        ],
+        "is_dilemma": True,
+        "axes": ["hull", "cargo"],
+    },
+    {
+        "type": "crew",
+        "rarity": "common",
+        "title": "Veteran or Recruit",
+        "flavor": "A veteran crew member and a fresh recruit are at odds over a dangerous maneuver. The argument has split the crew into factions.",
+        "choices": [
+            {"text": "Side with the veteran", "outcome": "morale:5; crew:-1; The recruit transfers off at the next port."},
+            {"text": "Side with the recruit", "outcome": "morale:-5; crew:1; The veteran resigns, but the recruit brings a friend aboard."},
+        ],
+        "is_dilemma": True,
+        "axes": ["morale", "crew"],
+    },
+    {
+        "type": "trade",
+        "rarity": "uncommon",
+        "title": "Salvage Rights Dispute",
+        "flavor": "Your crew found a derelict rich with salvage. Now everyone aboard has an opinion about who should claim the haul.",
+        "choices": [
+            {"text": "Sell the salvage to the highest bidder", "outcome": "credits:120; morale:-10; The crew resented the sale."},
+            {"text": "Split the salvage with the crew", "outcome": "credits:40; morale:15; The crew shared in the windfall."},
+        ],
+        "is_dilemma": True,
+        "axes": ["credits", "morale"],
+    },
 ]
 
 
@@ -662,6 +712,7 @@ EVENT_COOLDOWNS = {
     "Asteroid Swarm": 3,
     "Binary Eclipse": 6,
     "Black Market Access": 8,
+    "Bulkhead Breach": 8,
     "Crew Discovery": 3,
     "Crew Dispute": 8,
     "Crew Illness": 8,
@@ -701,14 +752,17 @@ EVENT_COOLDOWNS = {
     "Radiation Leak": 8,
     "Radiation Pulse": 6,
     "Restricted Coordinates": 8,
+    "Salvage Rights Dispute": 6,
     "Signal from Home": 10,
     "Solar Flare": 3,
     "Spaghettification Near-Miss": 8,
+    "Stranded Convoy": 6,
     "Tidal Lock World": 6,
     "Time Dilation Anomaly": 6,
     "Time Dilation Echo": 10,
     "Trade Route Opportunity": 6,
     "Uncharted Ruins": 5,
+    "Veteran or Recruit": 8,
     "Wormhole Anomaly": 6,
 }
 

@@ -3107,3 +3107,115 @@ class TestEventCooldowns:
             title = template["title"]
             assert title in EVENT_COOLDOWNS, \
                 f"Event template '{title}' is missing from EVENT_COOLDOWNS"
+
+
+_STATS = ("fuel", "hull", "morale", "credits", "cargo", "crew")
+
+
+def _parse_outcome_vector(outcome: str) -> dict[str, int]:
+    """Parse a semicolon-separated ``stat:value`` outcome into a stat vector.
+
+    Mirrors :meth:`GameState.apply_choice_outcome` parsing: each part is
+    split on ``;``, recognized stats among the six primary ship stats are
+    matched by a ``stat:`` prefix, and only the leading integer segment of
+    the value is used. Unknown or narrative segments are ignored.
+
+    :param outcome: The outcome string to parse.
+    :type outcome: str
+    :returns: A mapping of recognized stat names to their integer deltas.
+    :rtype: dict[str, int]
+    """
+    vector: dict[str, int] = {}
+    if not isinstance(outcome, str):
+        return vector
+    for part in outcome.split(";"):
+        part = part.strip()
+        for stat in _STATS:
+            prefix = f"{stat}:"
+            if part.startswith(prefix):
+                value = part.split(":", 1)[1].strip()
+                try:
+                    vector[stat] = int(value.split(":", 1)[0].strip())
+                except ValueError:
+                    vector[stat] = 0
+                break
+    return vector
+
+
+class TestDilemmaEvents:
+    """Tests for the genuine trade-off (dilemma) event templates."""
+
+    DILEMMA_TITLES = {
+        "Stranded Convoy",
+        "Bulkhead Breach",
+        "Veteran or Recruit",
+        "Salvage Rights Dispute",
+    }
+
+    def test_dilemma_templates_exist(self) -> None:
+        """The four dilemma templates must be present with truthy is_dilemma and non-empty axes."""
+        from backend.generation.events import EVENT_TEMPLATES
+
+        dilemmas = [t for t in EVENT_TEMPLATES if t.get("is_dilemma")]
+        assert len(dilemmas) >= 4, f"Expected at least 4 dilemma templates, got {len(dilemmas)}"
+        titles = {t["title"] for t in dilemmas}
+        assert self.DILEMMA_TITLES <= titles, \
+            f"Missing dilemma titles: {self.DILEMMA_TITLES - titles}"
+        for template in dilemmas:
+            assert template.get("axes"), f"Dilemma '{template['title']}' has empty axes"
+            assert len(template["choices"]) >= 2, \
+                f"Dilemma '{template['title']}' must have at least 2 choices"
+
+    def test_dilemma_no_dominated_choice(self) -> None:
+        """No dilemma choice may weakly dominate another across all outcome axes."""
+        from backend.generation.events import EVENT_TEMPLATES
+
+        dilemmas = [t for t in EVENT_TEMPLATES if t.get("is_dilemma")]
+        assert dilemmas
+        for template in dilemmas:
+            choices = template["choices"]
+            vectors = [_parse_outcome_vector(c["outcome"]) for c in choices]
+            axes = set(template.get("axes", []))
+            for vector in vectors:
+                axes |= set(vector.keys())
+            axes = sorted(axes)
+            for i, a in enumerate(vectors):
+                for j, b in enumerate(vectors):
+                    if i == j:
+                        continue
+                    a_ge_b_all = all(a.get(ax, 0) >= b.get(ax, 0) for ax in axes)
+                    a_gt_b_any = any(a.get(ax, 0) > b.get(ax, 0) for ax in axes)
+                    assert not (a_ge_b_all and a_gt_b_any), \
+                        f"Dilemma '{template['title']}' choice {i} dominates choice {j} " \
+                        f"over axes {axes}"
+
+    def test_parse_outcome_vector_malformed_input(self) -> None:
+        """The parser helper ignores non-string input and malformed stat values."""
+        assert _parse_outcome_vector(None) == {}
+        assert _parse_outcome_vector("fuel:5x; credits:50") == {"fuel": 0, "credits": 50}
+
+    def test_dilemma_survivable(self) -> None:
+        """Every dilemma choice leaves the ship survivable (hull >= 1, fuel >= 0) and resolves."""
+        from backend.generation.events import EVENT_TEMPLATES, _create_event, resolve_event
+
+        dilemmas = [t for t in EVENT_TEMPLATES if t.get("is_dilemma")]
+        assert dilemmas
+        for template in dilemmas:
+            for choice in template["choices"]:
+                ship = Ship()
+                state = GameState(id="dilemma-survive", seed=42, ship=ship)
+                state.apply_choice_outcome(choice["outcome"])
+                assert ship.hull >= 1, \
+                    f"Dilemma '{template['title']}' choice '{choice['text']}' drops hull below 1"
+                assert ship.fuel >= 0, \
+                    f"Dilemma '{template['title']}' choice '{choice['text']}' drops fuel below 0"
+
+            for idx in range(len(template["choices"])):
+                state = new_game(seed=42)
+                current = state.get_current_system()
+                assert current is not None
+                event = _create_event(template, current.id)
+                state.events.append(event)
+                ok, _msg, _extra = resolve_event(state, event.id, idx)
+                assert ok is True, \
+                    f"Failed to resolve choice {idx} of dilemma '{template['title']}'"
