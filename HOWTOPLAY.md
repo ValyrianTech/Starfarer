@@ -194,6 +194,8 @@ Choices have outcomes that modify stats: `fuel`, `hull`, `morale`, `credits`, `c
 
 **Strategy tip:** Prefer choices that give credits early game. Avoid choices that damage hull or morale unless the reward is high.
 
+**Some events have no best choice.** A dilemma event deliberately puts its costs and benefits on different axes — for example, spending fuel to earn morale, or spending cargo to save hull. There is no arithmetic way to rank the choices; a fuel-poor pilot and a fuel-rich pilot should pick differently, and both are defensible. Examples include *Stranded Convoy*, *Bulkhead Breach*, *Veteran or Recruit*, and *Salvage Rights Dispute*. Read the flavor, weigh what you can spare, and choose the trade-off you can live with.
+
 #### Event Decision Framework
 
 | Event Type | Recommended Choice | Reasoning |
