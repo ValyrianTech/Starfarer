@@ -66,6 +66,41 @@ def can_jump(ship: Ship, target: StarSystem, current: StarSystem | None) -> tupl
     return True, fuel_cost, ""
 
 
+def _cheapest_reachable(state: GameState) -> tuple[StarSystem | None, int | None]:
+    """Return the cheapest reachable system and its jump fuel cost.
+
+    Computes the fuel cost to every other system in the galaxy using the
+    same distance/fuel model as :func:`can_jump` and
+    :func:`get_nearby_systems`, and returns the system with the minimum
+    cost among those within the ship's jump range (independent of current
+    fuel).
+
+    :param state: The current game state.
+    :type state: GameState
+    :returns: A tuple of ``(system, fuel_cost)`` for the cheapest reachable
+        jump, or ``(None, None)`` if there is no current system or no other
+        system within jump range.
+    :rtype: tuple[Optional[StarSystem], Optional[int]]
+    """
+    current = state.get_current_system()
+    if current is None:
+        return None, None
+    cheapest_system: StarSystem | None = None
+    cheapest: int | None = None
+    for sys_id, sys_data in state.systems.items():
+        if sys_id == state.ship.current_system_id:
+            continue
+        dist = distance_between(current, sys_data)
+        dist_ly = round(dist / 10.0, 1)
+        if dist_ly > state.ship.jump_range:
+            continue
+        fuel_cost = max(1, int(dist_ly * JUMP_FUEL_COST_PER_LY))
+        if cheapest is None or fuel_cost < cheapest:
+            cheapest = fuel_cost
+            cheapest_system = sys_data
+    return cheapest_system, cheapest
+
+
 def cheapest_reachable_fuel_cost(state: GameState) -> int | None:
     """Return the minimum fuel cost to jump to any reachable system.
 
@@ -80,21 +115,27 @@ def cheapest_reachable_fuel_cost(state: GameState) -> int | None:
         current system or no other system within jump range.
     :rtype: Optional[int]
     """
-    current = state.get_current_system()
-    if current is None:
-        return None
-    cheapest: int | None = None
-    for sys_id, sys_data in state.systems.items():
-        if sys_id == state.ship.current_system_id:
-            continue
-        dist = distance_between(current, sys_data)
-        dist_ly = round(dist / 10.0, 1)
-        if dist_ly > state.ship.jump_range:
-            continue
-        fuel_cost = max(1, int(dist_ly * JUMP_FUEL_COST_PER_LY))
-        if cheapest is None or fuel_cost < cheapest:
-            cheapest = fuel_cost
+    _, cheapest = _cheapest_reachable(state)
     return cheapest
+
+
+def cheapest_reachable_system(state: GameState) -> StarSystem | None:
+    """Return the system reached by the cheapest in-range jump.
+
+    Computes the same distance/fuel model as
+    :func:`cheapest_reachable_fuel_cost` and returns the :class:`StarSystem`
+    whose jump fuel cost equals that minimum (among systems within the ship's
+    jump range, independent of current fuel), or ``None`` if there is no
+    current system or no other system within jump range.
+
+    :param state: The current game state.
+    :type state: GameState
+    :returns: The :class:`StarSystem` reached by the cheapest jump, or
+        ``None`` when none is reachable.
+    :rtype: Optional[StarSystem]
+    """
+    cheapest_system, _ = _cheapest_reachable(state)
+    return cheapest_system
 
 
 def is_effectively_stranded(state: GameState) -> bool:
@@ -1221,3 +1262,58 @@ def emergency_craft(state: GameState, discovery_id: str, output: str) -> dict:
         }
     # Fallback — should never be reached with current CRAFT_CONVERSIONS
     raise ValueError(f"Unhandled output type: {output} — CRAFT_CONVERSIONS is out of sync with the branch logic")
+
+
+def get_recovery_options(state: GameState) -> dict:
+    """Report which recovery actions are currently available and why.
+
+    Surfaces the availability of the three recovery actions (distress
+    beacon, salvage, and emergency crafting) without mutating state. Each
+    action reports ``available`` plus a ``reason`` naming the first missing
+    precondition (including ``no current system`` for distress), mirroring
+    the preflight checks of the corresponding action functions.
+
+    :param state: The current game state.
+    :type state: GameState
+    :returns: A dict with ``distress``, ``salvage``, and ``craft``
+        sub-objects.
+    :rtype: dict
+    """
+    ship = state.ship
+    system = state.get_current_system()
+    stranded = is_effectively_stranded(state)
+
+    distress: dict[str, Any]
+    salvage: dict[str, Any]
+    craft: dict[str, Any]
+
+    hull_threshold = int(ship.max_hull * 0.2)
+    if not system:
+        distress = {"available": False, "reason": "no current system"}
+    elif not stranded and ship.hull >= hull_threshold:
+        distress = {"available": False, "reason": "requires being stranded or hull below 20%"}
+    elif ship.distress_cooldown:
+        distress = {"available": False, "reason": "beacon is on cooldown"}
+    elif ship.credits < 50:
+        distress = {"available": False, "reason": f"requires 50 credits (you have {ship.credits})"}
+    else:
+        distress = {"available": True, "reason": None}
+
+    used = ship.salvage_attempts.get(ship.current_body_id, 0) if ship.current_body_id else 0
+    attempts_remaining = max(0, 3 - used)
+    if not stranded:
+        salvage = {"available": False, "reason": "requires being stranded", "attempts_remaining": attempts_remaining}
+    elif not ship.current_body_id:
+        salvage = {"available": False, "reason": "must be landed on a body", "attempts_remaining": attempts_remaining}
+    elif used >= 3:
+        salvage = {"available": False, "reason": "this body is fully salvaged (3 attempts used)", "attempts_remaining": attempts_remaining}
+    else:
+        salvage = {"available": True, "reason": None, "attempts_remaining": attempts_remaining}
+
+    craftable = sorted({CRAFT_CONVERSIONS[d.category][0] for d in state.discoveries if d.category in CRAFT_CONVERSIONS})
+    if craftable:
+        craft = {"available": True, "reason": None, "craftable": craftable}
+    else:
+        craft = {"available": False, "reason": "no craftable discoveries in cargo", "craftable": []}
+
+    return {"distress": distress, "salvage": salvage, "craft": craft}
