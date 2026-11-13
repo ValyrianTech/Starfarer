@@ -3541,6 +3541,16 @@ class TestRecoveryOptions:
         assert ro["distress"]["available"] is False
         assert "cooldown" in ro["distress"]["reason"]
 
+    def test_distress_cooldown_takes_precedence_over_credits(self) -> None:
+        """With both low credits and a live cooldown, cooldown is surfaced first."""
+        _gid, state = self._new_game("recov-distress-cooldown-and-credits")
+        state.ship.fuel = 0
+        state.ship.credits = 4
+        state.ship.distress_cooldown = True
+        ro = self._recovery(state)
+        assert ro["distress"]["available"] is False
+        assert "cooldown" in ro["distress"]["reason"]
+
     def test_distress_available_when_stranded_with_credits(self) -> None:
         """Stranded with credits and no cooldown leaves distress available."""
         _gid, state = self._new_game("recov-distress-ok")
