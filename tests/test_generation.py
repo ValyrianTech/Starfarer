@@ -6,6 +6,7 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 import random
+import typing
 
 from backend.config import GALAXY_SYSTEM_COUNT
 from backend.game.manager import (
@@ -3145,7 +3146,7 @@ def _parse_outcome_vector(outcome: str) -> dict[str, int]:
 class TestDilemmaEvents:
     """Tests for the genuine trade-off (dilemma) event templates."""
 
-    DILEMMA_TITLES = {
+    DILEMMA_TITLES: typing.ClassVar[set[str]] = {
         "Stranded Convoy",
         "Bulkhead Breach",
         "Veteran or Recruit",
