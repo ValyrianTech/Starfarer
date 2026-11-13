@@ -1269,8 +1269,8 @@ def get_recovery_options(state: GameState) -> dict:
     Surfaces the availability of the three recovery actions (distress
     beacon, salvage, and emergency crafting) without mutating state. Each
     action reports ``available`` plus a ``reason`` naming the first missing
-    precondition, mirroring the preflight checks of the corresponding action
-    functions.
+    precondition (including ``no current system`` for distress), mirroring
+    the preflight checks of the corresponding action functions.
 
     :param state: The current game state.
     :type state: GameState
@@ -1279,6 +1279,7 @@ def get_recovery_options(state: GameState) -> dict:
     :rtype: dict
     """
     ship = state.ship
+    system = state.get_current_system()
     stranded = is_effectively_stranded(state)
 
     distress: dict[str, Any]
@@ -1286,7 +1287,9 @@ def get_recovery_options(state: GameState) -> dict:
     craft: dict[str, Any]
 
     hull_threshold = int(ship.max_hull * 0.2)
-    if not stranded and ship.hull >= hull_threshold:
+    if not system:
+        distress = {"available": False, "reason": "no current system"}
+    elif not stranded and ship.hull >= hull_threshold:
         distress = {"available": False, "reason": "requires being stranded or hull below 20%"}
     elif ship.distress_cooldown:
         distress = {"available": False, "reason": "beacon is on cooldown"}

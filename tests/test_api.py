@@ -3521,6 +3521,14 @@ class TestRecoveryOptions:
         assert ro["distress"]["available"] is False
         assert "stranded or hull below 20%" in ro["distress"]["reason"]
 
+    def test_distress_no_current_system(self) -> None:
+        """No current system blocks distress on the first gate, mirroring activate_distress_beacon."""
+        _gid, state = self._new_game("recov-distress-no-system")
+        state.ship.current_system_id = "nonexistent_system_xyz"
+        ro = self._recovery(state)
+        assert ro["distress"]["available"] is False
+        assert ro["distress"]["reason"] == "no current system"
+
     def test_distress_insufficient_credits(self) -> None:
         """Stranded with too few credits blocks distress on the credit gate."""
         _gid, state = self._new_game("recov-distress-credits")
