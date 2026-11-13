@@ -685,7 +685,7 @@ EVENT_TEMPLATES: list[dict[str, Any]] = [
         "title": "Bulkhead Breach",
         "flavor": "A pressure sensor screams as the outer hull plate buckles. Atmosphere is venting, and the breach is widening.",
         "choices": [
-            {"text": "Patch the outer plate", "outcome": "hull:-10; credits:0; Patched the outer plate from inside the airlock."},
+            {"text": "Patch the outer plate", "outcome": "hull:-10; Patched the outer plate from inside the airlock."},
             {"text": "Seal the inner bulkhead", "outcome": "hull:-3; cargo:-1; Sealed the inner bulkhead, venting a cargo pod to vacuum."},
         ],
         "is_dilemma": True,
