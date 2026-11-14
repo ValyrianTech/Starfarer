@@ -122,9 +122,9 @@ Each step has a corresponding API endpoint for AI play.
 - Costs 1 fuel (configurable via `ATMOSPHERIC_SCAN_FUEL_COST`)
 - No landing required; can be performed from orbit
 - Yields 1–2 atmospheric phenomena discoveries (20–60 credits each)
-- Capped at 3 scans per body (tracked by `atmospheric_scan_count`)
+- Capped at 6 scans per body (tracked by `atmospheric_scan_count`, constant `ATMOSPHERIC_SCAN_MAX`)
 - The 1 fuel cost and the `atmospheric_scan_count` increment are applied up front (before discovery generation and cargo-capacity filtering), so a full cargo hold cannot be used to obtain free repeated scans
-- The endpoint returns HTTP 400 only when an atmospheric scan is genuinely not possible (no current system, no eligible body, insufficient fuel, or the body already at the 3-scan cap); a successful scan whose cargo hold is full returns HTTP 200 with an empty `discoveries` list
+- The endpoint returns HTTP 400 only when an atmospheric scan is genuinely not possible (no current system, no eligible body, insufficient fuel, or the body already at the 6-scan cap); a successful scan whose cargo hold is full returns HTTP 200 with an empty `discoveries` list
 
 **Sub-Surface Exploration:**
 - Available on volcanic, desert, and tundra biomes → yields cave systems and geological formations (50–120 credits each)
@@ -139,6 +139,13 @@ Each step has a corresponding API endpoint for AI play.
 - Bodies with `initial_poi_count >= 4` have an 8% chance per discovery to generate a motherlode
 - Motherlodes apply a 3–5× value multiplier to the discovery value
 - Configurable via `MOTHERLODE_CHANCE` and `MOTHERLODE_VALUE_MULTIPLIER`
+
+**Exploration Value Multiplier:**
+- Discovery credit values scale deterministically with persisted exploration state via `exploration_value_multiplier(state)` in `backend/game/engine.py`
+- +5% per system visited beyond the first (`EXPLORATION_VALUE_MULTIPLIER_PER_SYSTEM`), +2% per unique biome visited (`EXPLORATION_VALUE_MULTIPLIER_PER_BIOME`), capped at 2.0x (`EXPLORATION_VALUE_MULTIPLIER_MAX`)
+- The first body explored in a system gets an extra 1.25x first-discovery bonus (`FIRST_DISCOVERY_BONUS_MULTIPLIER`)
+- Applied to discoveries from surface exploration, atmospheric scan, and sub-surface exploration (after any motherlode bonus)
+- The first-ever exploration of a fresh body always yields at least one discovery
 
 **Diminishing Returns:**
 - Surface exploration tracks `exploration_count` per body
@@ -313,7 +320,7 @@ POST /api/game/{id}/trade — Buy or sell at a station
 POST /api/game/{id}/upgrade — Purchase a ship upgrade
 GET /api/game/{id}/nearby — Nearby systems within jump range
 GET /api/leaderboard — Top AI players by discoveries and efficiency (response uses an opaque `entry_id`; never exposes `game_id` or `seed` — a deliberate breaking change vs. the original design)
-POST /api/game/{id}/atmospheric-scan — Atmospheric scan (1 fuel, gas giants/volcanic/ocean biomes, yields atmospheric phenomena discoveries, capped at 3 per body)
+POST /api/game/{id}/atmospheric-scan — Atmospheric scan (1 fuel, gas giants/volcanic/ocean biomes, yields atmospheric phenomena discoveries, capped at 6 per body)
 POST /api/game/{id}/sub-surface-explore — Sub-surface exploration (3 fuel + 1 crew, volcanic/desert/tundra → geological formations, ocean → biological specimens, one-time per body)
 
 ### 4.4 Frontend DOM Structure (for Browser Automation)
