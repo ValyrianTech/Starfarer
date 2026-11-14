@@ -78,7 +78,6 @@ from backend.missions import (
     FactionMission,
     complete_mission,
     generate_missions,
-    get_faction_completed_count,
     get_missions_summary,
     get_primary_faction_id,
 )
@@ -1665,10 +1664,7 @@ def api_faction_mission(game_id: str, faction_id: str, x_game_token: str | None 
         if not current_system.has_trading_station:
             raise HTTPException(status_code=400, detail="No trading station in this system")
 
-        faction_completed_count = sum(
-            1 for c in state.completed_missions if c.get("faction_id") == faction_id
-        )
-        missions = generate_missions(state, current_system, faction_id, faction_completed_count)
+        missions = generate_missions(state, current_system, faction_id)
         if not missions:
             raise HTTPException(status_code=400, detail="No missions available from this faction")
 
@@ -1768,8 +1764,7 @@ def api_missions(
 
         primary_faction_id = get_primary_faction_id(state, current_system)
 
-        completed_count = get_faction_completed_count(state, primary_faction_id)
-        missions = generate_missions(state, current_system, primary_faction_id, completed_count)
+        missions = generate_missions(state, current_system, primary_faction_id)
         faction = get_faction(primary_faction_id)
 
         daily_available = any(m.objective_type == "daily" for m in missions)
@@ -1844,8 +1839,7 @@ def api_accept_mission(game_id: str, mission_id: str, req: AcceptMissionRequest,
 
         mission_found = None
         for fid in factions_to_check:
-            completed_count = get_faction_completed_count(state, fid)
-            missions = generate_missions(state, current_system, fid, completed_count)
+            missions = generate_missions(state, current_system, fid)
             for m in missions:
                 if m.id == mission_id:
                     mission_found = m
