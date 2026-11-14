@@ -6880,31 +6880,38 @@ class TestExplorationEconomyRebalance:
         assert scaled.value == max(1, round(base.value * 2.0))
         assert scaled.value >= base.value
 
-    def test_first_discovery_bonus_only_on_unvisited_system(self) -> None:
-        state_unvisited = new_game(seed=42)
-        system_u = state_unvisited.get_current_system()
+    def test_first_discovery_bonus_only_on_first_body_in_system(self) -> None:
+        state_unexplored = new_game(seed=42)
+        system_u = state_unexplored.get_current_system()
         assert system_u is not None
-        system_u.visited = False
+        system_u.visited = True
         body_u = Body(id="b_bonus", name="BonusWorld", body_type="planet",
                       biome="desert", size=5, distance_from_star=0.5,
                       poi_count=10, initial_poi_count=1)
-        system_u.bodies = [body_u]
-        state_unvisited.ship.current_body_id = body_u.id
-        state_unvisited.ship.fuel = 100
+        other_body_u = Body(id="b_other", name="OtherWorld", body_type="planet",
+                            biome="desert", size=5, distance_from_star=1.0,
+                            poi_count=10, initial_poi_count=1)
+        system_u.bodies = [body_u, other_body_u]
+        state_unexplored.ship.current_body_id = body_u.id
+        state_unexplored.ship.fuel = 100
 
-        state_visited = new_game(seed=42)
-        system_v = state_visited.get_current_system()
+        state_explored = new_game(seed=42)
+        system_v = state_explored.get_current_system()
         assert system_v is not None
         system_v.visited = True
         body_v = Body(id="b_bonus", name="BonusWorld", body_type="planet",
                       biome="desert", size=5, distance_from_star=0.5,
                       poi_count=10, initial_poi_count=1)
-        system_v.bodies = [body_v]
-        state_visited.ship.current_body_id = body_v.id
-        state_visited.ship.fuel = 100
+        other_body_v = Body(id="b_other", name="OtherWorld", body_type="planet",
+                            biome="desert", size=5, distance_from_star=1.0,
+                            poi_count=10, initial_poi_count=1)
+        other_body_v.exploration_count = 1
+        system_v.bodies = [body_v, other_body_v]
+        state_explored.ship.current_body_id = body_v.id
+        state_explored.ship.fuel = 100
 
-        ok_u, _msg_u, discs_u = explore_surface(state_unvisited)
-        ok_v, _msg_v, discs_v = explore_surface(state_visited)
+        ok_u, _msg_u, discs_u = explore_surface(state_unexplored)
+        ok_v, _msg_v, discs_v = explore_surface(state_explored)
         assert ok_u is True
         assert ok_v is True
         assert len(discs_u) == len(discs_v)

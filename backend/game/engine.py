@@ -562,10 +562,16 @@ def explore_surface(state: GameState) -> tuple[bool, str, list[Discovery]]:
     body.exploration_count += 1
 
     value_multiplier = exploration_value_multiplier(state)
-    # First discovery of a fresh body in a never-visited system is worth more.
-    # ``system.visited`` is only set by perform_jump (never by land_on_body), so
-    # it reflects whether this system was visited before this action.
-    is_first_discovery = (pre_increment_count == 0) and (not system.visited)
+    # First discovery of the first body explored in a system is worth more.
+    # ``system.visited`` is always True by the time we get here (the starting
+    # system is marked visited at creation and every jump marks its target
+    # visited on arrival), so we key the bonus off a signal that actually
+    # occurs in the jump->land->explore flow: this is the first body explored
+    # in the current system when no other body has been explored yet.
+    other_bodies_explored = any(
+        b.exploration_count > 0 for b in system.bodies if b.id != body.id
+    )
+    is_first_discovery = (pre_increment_count == 0) and (not other_bodies_explored)
     if is_first_discovery:
         value_multiplier = value_multiplier * FIRST_DISCOVERY_BONUS_MULTIPLIER
 

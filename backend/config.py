@@ -252,4 +252,4 @@ ATMOSPHERIC_SCAN_MAX = 6  # Per-body atmospheric scan cap (raised from 3).
 EXPLORATION_VALUE_MULTIPLIER_PER_SYSTEM = 0.05  # +5% value per system visited beyond the first.
 EXPLORATION_VALUE_MULTIPLIER_PER_BIOME = 0.02  # +2% value per unique biome visited.
 EXPLORATION_VALUE_MULTIPLIER_MAX = 2.0  # Hard cap so the value multiplier cannot run away.
-FIRST_DISCOVERY_BONUS_MULTIPLIER = 1.25  # Bonus for the first exploration of a body in a never-visited system.
+FIRST_DISCOVERY_BONUS_MULTIPLIER = 1.25  # Bonus for the first body explored in a system.
