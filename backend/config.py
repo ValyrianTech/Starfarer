@@ -244,3 +244,12 @@ SUB_SURFACE_FUEL_COST = 3
 SUB_SURFACE_CREW_COST = 1
 MOTHERLODE_CHANCE = 0.08
 MOTHERLODE_VALUE_MULTIPLIER = (3, 5)
+
+# Exploration economy rebalance: exploration is the core activity, so the value
+# of discoveries grows deterministically from persisted state as the player
+# sees more of the galaxy.
+ATMOSPHERIC_SCAN_MAX = 6  # Per-body atmospheric scan cap (raised from 3).
+EXPLORATION_VALUE_MULTIPLIER_PER_SYSTEM = 0.05  # +5% value per system visited beyond the first.
+EXPLORATION_VALUE_MULTIPLIER_PER_BIOME = 0.02  # +2% value per unique biome visited.
+EXPLORATION_VALUE_MULTIPLIER_MAX = 2.0  # Hard cap so the value multiplier cannot run away.
+FIRST_DISCOVERY_BONUS_MULTIPLIER = 1.25  # Bonus for the first exploration of a body in a never-visited system.

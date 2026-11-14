@@ -13,7 +13,12 @@ from datetime import UTC
 
 from backend.config import (
     ATMOSPHERIC_SCAN_FUEL_COST,
+    ATMOSPHERIC_SCAN_MAX,
+    EXPLORATION_VALUE_MULTIPLIER_MAX,
+    EXPLORATION_VALUE_MULTIPLIER_PER_BIOME,
+    EXPLORATION_VALUE_MULTIPLIER_PER_SYSTEM,
     EXPLORE_FUEL_COST,
+    FIRST_DISCOVERY_BONUS_MULTIPLIER,
     SCAN_FUEL_COST,
     SUB_SURFACE_CREW_COST,
     SUB_SURFACE_FUEL_COST,
@@ -29,6 +34,7 @@ from backend.game.engine import (
     can_jump,
     cheapest_reachable_fuel_cost,
     emergency_craft,
+    exploration_value_multiplier,
     explore_surface,
     get_nearby_systems,
     get_scanner_tier_data,
@@ -5607,9 +5613,9 @@ class TestAtmosphericScan:
         perform_atmospheric_scan(state)
         assert body.atmospheric_scan_count == 1
 
-    def test_atmospheric_scan_limited_to_three(self):
+    def test_atmospheric_scan_limited_to_max(self):
         state, body = self._make_state("gas_giant")
-        for i in range(3):
+        for i in range(ATMOSPHERIC_SCAN_MAX):
             state.ship.fuel = 100
             ok, discoveries = perform_atmospheric_scan(state)
             assert ok is True, f"Scan {i+1} should succeed"
@@ -5618,7 +5624,7 @@ class TestAtmosphericScan:
         ok, discoveries = perform_atmospheric_scan(state)
         assert ok is False
         assert discoveries == []
-        assert body.atmospheric_scan_count == 3
+        assert body.atmospheric_scan_count == ATMOSPHERIC_SCAN_MAX
 
     def test_atmospheric_scan_counter_survives_serialization(self):
         state, body = self._make_state("gas_giant")
@@ -5957,12 +5963,12 @@ class TestAtmosphericScanAdditional:
         assert len(discoveries) > 0
 
     def test_atmospheric_scan_skips_exhausted_body(self):
-        """When auto-selecting a body, skip those with atmospheric_scan_count >= 3."""
+        """When auto-selecting a body, skip those with atmospheric_scan_count >= ATMOSPHERIC_SCAN_MAX."""
         state = new_game(seed=42)
         system = state.get_current_system()
         assert system is not None
         # First eligible body is exhausted
-        body1 = Body(id="b_exhausted", name="Exhausted Giant", body_type="planet", biome="gas_giant", size=5, distance_from_star=1.0, poi_count=1, atmospheric_scan_count=3)
+        body1 = Body(id="b_exhausted", name="Exhausted Giant", body_type="planet", biome="gas_giant", size=5, distance_from_star=1.0, poi_count=1, atmospheric_scan_count=ATMOSPHERIC_SCAN_MAX)
         # Second eligible body has remaining scans
         body2 = Body(id="b_fresh", name="Fresh Giant", body_type="planet", biome="gas_giant", size=5, distance_from_star=2.0, poi_count=1, atmospheric_scan_count=0)
         system.bodies = [body1, body2]
@@ -5971,15 +5977,15 @@ class TestAtmosphericScanAdditional:
         assert ok is True
         assert len(discoveries) > 0, "Should find discoveries on the second eligible body"
         # The scan should have been performed on body2
-        assert body1.atmospheric_scan_count == 3, "First body should remain exhausted"
+        assert body1.atmospheric_scan_count == ATMOSPHERIC_SCAN_MAX, "First body should remain exhausted"
         assert body2.atmospheric_scan_count == 1, "Second body's scan count should increment"
 
     def test_atmospheric_scan_landed_on_exhausted_body_logs_message(self):
-        """When landed on a body with atmospheric_scan_count >= 3, a log entry should be created explaining why."""
+        """When landed on a body with atmospheric_scan_count >= ATMOSPHERIC_SCAN_MAX, a log entry should be created explaining why."""
         state = new_game(seed=42)
         system = state.get_current_system()
         assert system is not None
-        body = Body(id="b_exhausted_landed", name="Exhausted Giant", body_type="planet", biome="gas_giant", size=5, distance_from_star=1.0, poi_count=1, atmospheric_scan_count=3)
+        body = Body(id="b_exhausted_landed", name="Exhausted Giant", body_type="planet", biome="gas_giant", size=5, distance_from_star=1.0, poi_count=1, atmospheric_scan_count=ATMOSPHERIC_SCAN_MAX)
         system.bodies = [body]
         state.ship.current_body_id = body.id
         state.ship.fuel = 100
@@ -5993,7 +5999,7 @@ class TestAtmosphericScanAdditional:
         log_entry = state.log_entries[-1]
         assert "Atmospheric scan not possible" in log_entry["message"]
         assert "Exhausted Giant" in log_entry["message"]
-        assert "3/3 scans completed" in log_entry["message"]
+        assert f"{ATMOSPHERIC_SCAN_MAX}/{ATMOSPHERIC_SCAN_MAX} scans completed" in log_entry["message"]
         assert log_entry["category"] == "exploration"
         assert log_entry["title"] == "Atmospheric Scan Exhausted"
 
@@ -6803,3 +6809,124 @@ class TestExplorationRngFullHoldLivelock:
         ok_again, discoveries_again = perform_sub_surface_exploration(state)
         assert ok_again is False
         assert discoveries_again == []
+
+
+class TestExplorationEconomyRebalance:
+    """Tests for the exploration value multiplier and first-discovery bonus."""
+
+    def test_exploration_value_multiplier_brand_new_game_is_one(self) -> None:
+        state = new_game(seed=42)
+        assert exploration_value_multiplier(state) == 1.0
+
+    def test_exploration_value_multiplier_grows_with_systems_visited(self) -> None:
+        state = new_game(seed=42)
+        state.systems_visited = 5
+        expected = 1.0 + 4 * EXPLORATION_VALUE_MULTIPLIER_PER_SYSTEM
+        assert exploration_value_multiplier(state) == pytest.approx(expected)
+
+    def test_exploration_value_multiplier_grows_with_biomes_visited(self) -> None:
+        state = new_game(seed=42)
+        state.biomes_visited = {"desert"}
+        expected = 1.0 + 1 * EXPLORATION_VALUE_MULTIPLIER_PER_BIOME
+        assert exploration_value_multiplier(state) == pytest.approx(expected)
+
+    def test_exploration_value_multiplier_clamped_at_max(self) -> None:
+        state = new_game(seed=42)
+        state.systems_visited = 100000
+        assert exploration_value_multiplier(state) == EXPLORATION_VALUE_MULTIPLIER_MAX
+
+    def test_explore_surface_minimum_yield_on_fresh_body(self) -> None:
+        """A fresh body whose num_finds would be 0 still yields one discovery."""
+        from unittest import mock
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        body = Body(id="b_min_yield", name="MinYield", body_type="planet",
+                    biome="desert", size=5, distance_from_star=0.5,
+                    poi_count=5, initial_poi_count=1)
+        system.bodies = [body]
+        state.ship.current_body_id = body.id
+        state.ship.fuel = 100
+
+        # randint(1, 3) mocked to 0 forces num_finds == 0 on the first attempt,
+        # which the minimum-yield guarantee then coerces to 1.
+        with mock.patch("random.Random.randint", return_value=0):
+            ok, _msg, discoveries = explore_surface(state)
+        assert ok is True
+        assert len(discoveries) == 1
+        assert body.exploration_count == 1
+
+        # The second attempt keeps its original diminishing-returns behaviour
+        # (num_finds // 2 == 0) and is NOT rescued by the minimum-yield rule.
+        state.ship.fuel = 100
+        with mock.patch("random.Random.randint", return_value=0):
+            ok2, _msg2, discoveries2 = explore_surface(state)
+        assert ok2 is True
+        assert discoveries2 == []
+        assert body.exploration_count == 2
+
+    def test_generate_discovery_applies_value_multiplier(self) -> None:
+        import random as rnd_mod
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        body = Body(id="b_mult", name="MultWorld", body_type="planet",
+                    biome="desert", size=5, distance_from_star=0.5,
+                    poi_count=1, initial_poi_count=1)
+        rng1 = rnd_mod.Random(7)
+        rng2 = rnd_mod.Random(7)
+        base = _generate_discovery(rng1, "mineral", body, system)
+        scaled = _generate_discovery(rng2, "mineral", body, system, value_multiplier=2.0)
+        assert scaled.value == max(1, round(base.value * 2.0))
+        assert scaled.value >= base.value
+
+    def test_first_discovery_bonus_only_on_unvisited_system(self) -> None:
+        state_unvisited = new_game(seed=42)
+        system_u = state_unvisited.get_current_system()
+        assert system_u is not None
+        system_u.visited = False
+        body_u = Body(id="b_bonus", name="BonusWorld", body_type="planet",
+                      biome="desert", size=5, distance_from_star=0.5,
+                      poi_count=10, initial_poi_count=1)
+        system_u.bodies = [body_u]
+        state_unvisited.ship.current_body_id = body_u.id
+        state_unvisited.ship.fuel = 100
+
+        state_visited = new_game(seed=42)
+        system_v = state_visited.get_current_system()
+        assert system_v is not None
+        system_v.visited = True
+        body_v = Body(id="b_bonus", name="BonusWorld", body_type="planet",
+                      biome="desert", size=5, distance_from_star=0.5,
+                      poi_count=10, initial_poi_count=1)
+        system_v.bodies = [body_v]
+        state_visited.ship.current_body_id = body_v.id
+        state_visited.ship.fuel = 100
+
+        ok_u, _msg_u, discs_u = explore_surface(state_unvisited)
+        ok_v, _msg_v, discs_v = explore_surface(state_visited)
+        assert ok_u is True
+        assert ok_v is True
+        assert len(discs_u) == len(discs_v)
+        assert len(discs_u) > 0
+        for du, dv in zip(discs_u, discs_v):
+            assert du.value == max(1, round(dv.value * FIRST_DISCOVERY_BONUS_MULTIPLIER))
+
+    def test_atmospheric_scan_cap_uses_max_constant(self) -> None:
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        body = Body(id="b_atmo_cap", name="AtmoCap", body_type="planet",
+                    biome="gas_giant", size=5, distance_from_star=0.5, poi_count=1)
+        system.bodies = [body]
+        state.ship.current_body_id = body.id
+        for _ in range(ATMOSPHERIC_SCAN_MAX):
+            state.ship.fuel = 100
+            ok, discoveries = perform_atmospheric_scan(state)
+            assert ok is True
+            assert len(discoveries) > 0
+        state.ship.fuel = 100
+        ok, discoveries = perform_atmospheric_scan(state)
+        assert ok is False
+        assert discoveries == []
+        assert body.atmospheric_scan_count == ATMOSPHERIC_SCAN_MAX
