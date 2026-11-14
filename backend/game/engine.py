@@ -14,7 +14,12 @@ from typing import Any, NamedTuple
 
 from backend.config import (
     ATMOSPHERIC_SCAN_FUEL_COST,
+    ATMOSPHERIC_SCAN_MAX,
+    EXPLORATION_VALUE_MULTIPLIER_MAX,
+    EXPLORATION_VALUE_MULTIPLIER_PER_BIOME,
+    EXPLORATION_VALUE_MULTIPLIER_PER_SYSTEM,
     EXPLORE_FUEL_COST,
+    FIRST_DISCOVERY_BONUS_MULTIPLIER,
     JUMP_FUEL_COST_PER_LY,
     MORALE_DECAY_PER_JUMP,
     MOTHERLODE_CHANCE,
@@ -479,6 +484,34 @@ def land_on_body(state: GameState, body_id: str) -> tuple[bool, str]:
 
 
 
+def exploration_value_multiplier(state: GameState) -> float:
+    """Compute the discovery value multiplier from persisted exploration state.
+
+    Exploration is the core activity, so the credit value of every discovery
+    scales deterministically with how much of the galaxy the player has already
+    seen:
+
+    * each system visited beyond the first adds
+      ``EXPLORATION_VALUE_MULTIPLIER_PER_SYSTEM`` (5%);
+    * each unique biome visited adds ``EXPLORATION_VALUE_MULTIPLIER_PER_BIOME``
+      (2%).
+
+    The result is computed only from persisted fields (``systems_visited`` and
+    ``biomes_visited``), so the same save always yields the same multiplier. It
+    is clamped to the range ``[1.0, EXPLORATION_VALUE_MULTIPLIER_MAX]``. A
+    brand-new game (``systems_visited == 1`` and an empty ``biomes_visited``)
+    therefore returns exactly ``1.0``.
+
+    :param state: The current game state.
+    :type state: GameState
+    :returns: The discovery value multiplier.
+    :rtype: float
+    """
+    systems_term = max(0, state.systems_visited - 1) * EXPLORATION_VALUE_MULTIPLIER_PER_SYSTEM
+    biome_term = len(state.biomes_visited) * EXPLORATION_VALUE_MULTIPLIER_PER_BIOME
+    return min(EXPLORATION_VALUE_MULTIPLIER_MAX, max(1.0, 1.0 + systems_term + biome_term))
+
+
 def explore_surface(state: GameState) -> tuple[bool, str, list[Discovery]]:
     """Explore the surface of the currently landed-on body.
 
@@ -528,6 +561,14 @@ def explore_surface(state: GameState) -> tuple[bool, str, list[Discovery]]:
     ship.fuel -= EXPLORE_FUEL_COST
     body.exploration_count += 1
 
+    value_multiplier = exploration_value_multiplier(state)
+    # First discovery of a fresh body in a never-visited system is worth more.
+    # ``system.visited`` is only set by perform_jump (never by land_on_body), so
+    # it reflects whether this system was visited before this action.
+    is_first_discovery = (pre_increment_count == 0) and (not system.visited)
+    if is_first_discovery:
+        value_multiplier = value_multiplier * FIRST_DISCOVERY_BONUS_MULTIPLIER
+
     # Include len(state.discoveries) and body.exploration_count in the seed so
     # repeated calls produce different results. The attempt counter advances
     # even when the cargo hold is full, so a full hold cannot trap the player
@@ -540,6 +581,11 @@ def explore_surface(state: GameState) -> tuple[bool, str, list[Discovery]]:
     elif pre_increment_count == 2:
         num_finds = num_finds // 4
 
+    # Guarantee the first-ever exploration of a fresh body always yields at
+    # least one discovery, so a brand-new surface is never a total dud.
+    if pre_increment_count == 0 and num_finds == 0:
+        num_finds = 1
+
     if num_finds == 0:
         state.add_log("exploration", f"Explored {body.name}. Found nothing of interest.", category="exploration", title="Surface Exploration", system=system.name, body=body.name, fuel_change=-EXPLORE_FUEL_COST)
         return True, f"Explored {body.name}. Found nothing of interest.", []
@@ -548,7 +594,7 @@ def explore_surface(state: GameState) -> tuple[bool, str, list[Discovery]]:
 
     for _ in range(num_finds):
         cat = item_rng.choice(["mineral", "artifact", "lifeform", "signal", "ruin"])
-        disc = _generate_discovery(item_rng, cat, body, system)
+        disc = _generate_discovery(item_rng, cat, body, system, value_multiplier=value_multiplier)
         discoveries.append(disc)
 
     accepted = _add_discoveries(state, discoveries)
@@ -609,7 +655,7 @@ def perform_atmospheric_scan(state: GameState) -> tuple[bool, list[Discovery]]:
                 break
     if not body:
         for b in system.bodies:
-            if b.biome in ("gas_giant", "volcanic", "ocean") and b.atmospheric_scan_count < 3:
+            if b.biome in ("gas_giant", "volcanic", "ocean") and b.atmospheric_scan_count < ATMOSPHERIC_SCAN_MAX:
                 body = b
                 break
     if not body:
@@ -618,8 +664,8 @@ def perform_atmospheric_scan(state: GameState) -> tuple[bool, list[Discovery]]:
     if body.biome not in ("gas_giant", "volcanic", "ocean"):
         return False, []
 
-    if body.atmospheric_scan_count >= 3:
-        state.add_log("exploration", f"Atmospheric scan not possible on {body.name} — this body has already been fully scanned (3/3 scans completed).", category="exploration", title="Atmospheric Scan Exhausted", system=system.name, body=body.name)
+    if body.atmospheric_scan_count >= ATMOSPHERIC_SCAN_MAX:
+        state.add_log("exploration", f"Atmospheric scan not possible on {body.name} — this body has already been fully scanned ({body.atmospheric_scan_count}/{ATMOSPHERIC_SCAN_MAX} scans completed).", category="exploration", title="Atmospheric Scan Exhausted", system=system.name, body=body.name)
         return False, []
 
     # Charge the fuel cost and count the attempt up front so a full cargo
@@ -635,9 +681,10 @@ def perform_atmospheric_scan(state: GameState) -> tuple[bool, list[Discovery]]:
     # a deterministically-repeating "found nothing" livelock.
     item_rng = random.Random(state.seed + len(state.discoveries) + deterministic_hash(body.id) + 999 + body.atmospheric_scan_count)  # nosec B311 - game RNG, not crypto
     num_finds = item_rng.randint(1, 2)
+    value_multiplier = exploration_value_multiplier(state)
 
     for i in range(num_finds):
-        disc = _generate_discovery(item_rng, "atmospheric_phenomena", body, system)
+        disc = _generate_discovery(item_rng, "atmospheric_phenomena", body, system, value_multiplier=value_multiplier)
         discoveries.append(disc)
 
     discoveries = _add_discoveries(state, discoveries)
@@ -723,9 +770,10 @@ def perform_sub_surface_exploration(state: GameState) -> tuple[bool, list[Discov
     # from the other exploration actions.
     item_rng = random.Random(state.seed + len(state.discoveries) + deterministic_hash(body.id) + 777)  # nosec B311 - game RNG, not crypto
     num_finds = item_rng.randint(1, 2)
+    value_multiplier = exploration_value_multiplier(state)
 
     for i in range(num_finds):
-        disc = _generate_discovery(item_rng, category, body, system)
+        disc = _generate_discovery(item_rng, category, body, system, value_multiplier=value_multiplier)
         discoveries.append(disc)
 
     discoveries = _add_discoveries(state, discoveries)
@@ -739,7 +787,7 @@ def perform_sub_surface_exploration(state: GameState) -> tuple[bool, list[Discov
     return True, discoveries
 
 
-def _generate_discovery(rng: random.Random, category: str, body: Body, system: StarSystem) -> Discovery:
+def _generate_discovery(rng: random.Random, category: str, body: Body, system: StarSystem, value_multiplier: float = 1.0) -> Discovery:
     """Generate a single discovery for a surface exploration.
 
     Creates a randomised discovery (mineral, artifact, lifeform,
@@ -757,6 +805,10 @@ def _generate_discovery(rng: random.Random, category: str, body: Body, system: S
     :type body: Body
     :param system: The star system containing the body.
     :type system: StarSystem
+    :param value_multiplier: Optional multiplier applied to the final
+        credit value (after any motherlode bonus). Defaults to ``1.0``,
+        which leaves the computed value unchanged.
+    :type value_multiplier: float
     :returns: A newly generated :class:`Discovery`.
     :rtype: Discovery
     """
@@ -835,6 +887,8 @@ def _generate_discovery(rng: random.Random, category: str, body: Body, system: S
         multiplier = rng.randint(MOTHERLODE_VALUE_MULTIPLIER[0], MOTHERLODE_VALUE_MULTIPLIER[1])
         value = value * multiplier
         name = f"*** MOTHERLODE: {name} ({value}cr) ***"
+    # Apply the exploration value multiplier (default 1.0 leaves value unchanged).
+    value = max(1, round(value * value_multiplier))
     return Discovery(
         id=d_id, category=category, name=name, description=desc,
         value=value, system_id=system.id, body_id=body.id,
