@@ -10,6 +10,7 @@ import random
 
 from backend.config import (
     FUEL_BASE_PRICE,
+    UPGRADE_COST_SCHEDULES,
     UPGRADE_COSTS,
     UPGRADE_EFFECTS,
     UPGRADE_MAX_LEVELS,
@@ -36,6 +37,27 @@ def round_half_up(x: float) -> int:
     return int(x + 0.5 if x >= 0 else x - 0.5)
 
 
+def upgrade_cost(upgrade_id: str, current_level: int) -> int:
+    """Return the cost to purchase the next level of an upgrade.
+
+    When the upgrade has an explicit per-level cost schedule in
+    ``UPGRADE_COST_SCHEDULES`` and ``current_level`` is within range, the
+    scheduled cost is used. Otherwise the cost falls back to the linear
+    ``UPGRADE_COSTS[upgrade_id] * (current_level + 1)`` formula.
+
+    :param upgrade_id: The identifier of the upgrade.
+    :type upgrade_id: str
+    :param current_level: The upgrade's current level (before purchase).
+    :type current_level: int
+    :returns: The cost in credits to advance to the next level.
+    :rtype: int
+    """
+    schedule = UPGRADE_COST_SCHEDULES.get(upgrade_id)
+    if schedule is not None and 0 <= current_level < len(schedule):
+        return schedule[current_level]
+    return UPGRADE_COSTS[upgrade_id] * (current_level + 1)
+
+
 def get_upgrade_info(ship: Ship) -> list[dict]:
     """Get information about all available ship upgrades.
 
@@ -49,7 +71,7 @@ def get_upgrade_info(ship: Ship) -> list[dict]:
     :rtype: list[dict]
     """
     info = []
-    for upgrade_id, cost in UPGRADE_COSTS.items():
+    for upgrade_id in UPGRADE_COSTS:
         current_level = ship.upgrades.get(upgrade_id, 0)
         max_level = UPGRADE_MAX_LEVELS[upgrade_id]
         info.append({
@@ -57,7 +79,7 @@ def get_upgrade_info(ship: Ship) -> list[dict]:
             "name": upgrade_id.replace("_", " ").title(),
             "current_level": current_level,
             "max_level": max_level,
-            "cost": cost * (current_level + 1),
+            "cost": upgrade_cost(upgrade_id, current_level),
             "effect": UPGRADE_EFFECTS[upgrade_id],
             "can_upgrade": current_level < max_level,
         })
@@ -89,7 +111,7 @@ def purchase_upgrade(state: GameState, upgrade_id: str) -> tuple[bool, str]:
     if current_level >= max_level:
         return False, f"{upgrade_id} is already at maximum level."
 
-    cost = UPGRADE_COSTS[upgrade_id] * (current_level + 1)
+    cost = upgrade_cost(upgrade_id, current_level)
     if ship.credits < cost:
         return False, f"Not enough credits. Need {cost}, have {ship.credits}."
 
