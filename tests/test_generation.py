@@ -6,6 +6,7 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 import random
+import typing
 
 from backend.config import GALAXY_SYSTEM_COUNT
 from backend.game.manager import (
@@ -3145,7 +3146,7 @@ def _parse_outcome_vector(outcome: str) -> dict[str, int]:
 class TestDilemmaEvents:
     """Tests for the genuine trade-off (dilemma) event templates."""
 
-    DILEMMA_TITLES = {
+    DILEMMA_TITLES: typing.ClassVar[set[str]] = {
         "Stranded Convoy",
         "Bulkhead Breach",
         "Veteran or Recruit",
@@ -3196,7 +3197,11 @@ class TestDilemmaEvents:
 
     def test_dilemma_survivable(self) -> None:
         """Every dilemma choice applies bounded hull/fuel deltas and stays clamped within valid bounds, and resolves."""
-        from backend.generation.events import EVENT_TEMPLATES, _create_event, resolve_event
+        from backend.generation.events import (
+            EVENT_TEMPLATES,
+            _create_event,
+            resolve_event,
+        )
 
         dilemmas = [t for t in EVENT_TEMPLATES if t.get("is_dilemma")]
         assert dilemmas

@@ -91,6 +91,7 @@ class HealthResponse(BaseModel):
     status: str
     version: str
     uptime: str
+    commit: str | None = None
 
 
 class CraftRequest(BaseModel):
