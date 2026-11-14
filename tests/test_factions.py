@@ -3233,3 +3233,142 @@ class TestMissionSeedConsistency:
         assert get_faction_completed_count(state, "stellar_cartographers") == 1
         assert get_faction_completed_count(state, "void_traders") == 1
         assert get_faction_completed_count(state, "free_pilots") == 0
+
+    def test_mission_seed_stable_within_epoch(self) -> None:
+        from backend.missions import _mission_epoch, _mission_seed
+
+        state = new_game(seed=42)
+        state.systems_visited = 5  # epoch 1
+        assert _mission_epoch(state) == 1
+        a = _mission_seed(
+            state.seed, "sys_0000", "stellar_cartographers", _mission_epoch(state)
+        )
+        b = _mission_seed(
+            state.seed, "sys_0000", "stellar_cartographers", _mission_epoch(state)
+        )
+        assert a == b
+
+    def test_mission_seed_differs_across_epochs(self) -> None:
+        from backend.missions import _mission_epoch, _mission_seed
+
+        state = new_game(seed=42)
+        state.systems_visited = 0  # epoch 0
+        epoch_0 = _mission_epoch(state)
+        seed_0 = _mission_seed(
+            state.seed, "sys_0000", "stellar_cartographers", epoch_0
+        )
+        state.systems_visited = 3  # epoch 1
+        epoch_1 = _mission_epoch(state)
+        seed_1 = _mission_seed(
+            state.seed, "sys_0000", "stellar_cartographers", epoch_1
+        )
+        assert epoch_0 != epoch_1
+        assert seed_0 != seed_1
+
+    def test_generate_missions_stable_within_epoch(self) -> None:
+        from backend.missions import (
+            generate_missions,
+            get_primary_faction_id,
+        )
+
+        state = new_game(seed=42)
+        current_system = state.get_current_system()
+        assert current_system is not None
+        current_system.has_trading_station = True
+        state.systems_visited = 2  # epoch 0
+
+        faction_id = get_primary_faction_id(state, current_system)
+        first = generate_missions(state, current_system, faction_id)
+        second = generate_missions(state, current_system, faction_id)
+        assert [m.id for m in first] == [m.id for m in second]
+
+    def test_generate_missions_rotates_across_epochs(self) -> None:
+        from backend.missions import (
+            generate_missions,
+            get_primary_faction_id,
+        )
+
+        state = new_game(seed=42)
+        current_system = state.get_current_system()
+        assert current_system is not None
+        current_system.has_trading_station = True
+        faction_id = get_primary_faction_id(state, current_system)
+
+        state.systems_visited = 0  # epoch 0
+        old_missions = generate_missions(state, current_system, faction_id)
+        old_ids = {m.id for m in old_missions if m.objective_type != "daily"}
+
+        state.systems_visited = 3  # epoch 1
+        new_missions = generate_missions(state, current_system, faction_id)
+        new_ids = {m.id for m in new_missions if m.objective_type != "daily"}
+
+        assert old_ids
+        assert new_ids
+        assert old_ids.isdisjoint(new_ids)
+
+    def test_faction_mission_rotates_after_epoch_advance(self) -> None:
+        """Exhausting a board is recoverable once the epoch advances.
+
+        Completing every standard mission for a faction's current board
+        makes ``POST /faction/{faction}/mission`` return 400 within the
+        current epoch. Advancing ``systems_visited`` past the epoch
+        boundary must rotate the board so a fresh standard mission becomes
+        available again.
+        """
+        from backend.missions import _mission_epoch
+
+        resp = client.post(
+            "/api/game/new",
+            json={"seed": 42, "game_id": "mission-epoch-rotation-e2e"},
+        )
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        state.ship.fuel = 100
+        state.ship.credits = 500
+        current_system = state.get_current_system()
+        assert current_system is not None
+        current_system.has_trading_station = True
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        listing = client.get(f"/api/game/{game_id}/missions").json()
+        faction_id = listing["faction_id"]
+        standard_ids = [m["id"] for m in listing["missions"]]
+        assert standard_ids
+
+        epoch_before = _mission_epoch(state)
+
+        # Exhaust the current board by marking every standard mission complete.
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        for mission_id in standard_ids:
+            state.completed_missions.append({
+                "mission_id": mission_id,
+                "faction_id": faction_id,
+                "title": "Exhausted",
+                "tier": 1,
+            })
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        resp = client.post(f"/api/game/{game_id}/faction/{faction_id}/mission")
+        assert resp.status_code == 400, resp.json()
+        assert resp.json()["detail"] == (
+            "No available missions - all missions have been completed or are already accepted"
+        )
+
+        # Advance past the epoch boundary and refresh resources.
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        state.systems_visited += 3
+        state.ship.fuel = 100
+        state.ship.credits = 500
+        GAME_STORE[game_id] = state
+        game_save(state)
+        assert _mission_epoch(state) != epoch_before
+
+        resp = client.post(f"/api/game/{game_id}/faction/{faction_id}/mission")
+        assert resp.status_code == 200, resp.json()
+        new_mission_id = resp.json()["mission"]["id"]
+        assert new_mission_id not in set(standard_ids)
