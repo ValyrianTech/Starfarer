@@ -483,16 +483,18 @@ Content-Type: application/json
 
 | ID | Effect | Base Cost | Max Level |
 |----|--------|-----------|-----------|
-| `hyperdrive` | +1 jump range | 500 | 5 |
-| `scanner` | +1 scanner level | 400 | 5 |
-| `cargo_hold` | +10 cargo capacity | 350 | 4 |
-| `hull_plating` | +20 max hull | 450 | 3 |
-| `fuel_tanks` | +20 max fuel | 300 | 3 |
-| `life_support` | -1 morale decay per jump | 400 | 3 |
+| `hyperdrive` | +1 jump range | 250 | 5 |
+| `scanner` | +1 scanner level | 220 | 5 |
+| `cargo_hold` | +10 cargo capacity | 300 | 4 |
+| `hull_plating` | +20 max hull | 350 | 3 |
+| `fuel_tanks` | +20 max fuel | 200 | 3 |
+| `life_support` | -1 morale decay per jump | 300 | 3 |
 
-Cost scales: `base_cost * (current_level + 1)`.
+Cost scales: `base_cost * (current_level + 1)`, except `hyperdrive`, which uses
+a steeper per-level schedule: `250, 400, 700, 1100, 1700` (cost to advance from
+each level to the next).
 
-**Recommended priority:** `hyperdrive` → `fuel_tanks` → `scanner` → `hull_plating` → `cargo_hold` → `life_support`
+**Recommended priority:** `fuel_tanks` → `hyperdrive` → `scanner` → `cargo_hold` → `hull_plating` → `life_support`
 
 ---
 

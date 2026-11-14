@@ -212,12 +212,20 @@ MOON_NAMES = [
 ]
 
 UPGRADE_COSTS = {
-    "hyperdrive": 500,
-    "scanner": 400,
-    "cargo_hold": 350,
-    "hull_plating": 450,
-    "fuel_tanks": 300,
-    "life_support": 400,
+    "hyperdrive": 250,
+    "scanner": 220,
+    "cargo_hold": 300,
+    "hull_plating": 350,
+    "fuel_tanks": 200,
+    "life_support": 300,
+}
+
+# Optional per-level cost schedules (cost to go from the current level to
+# the next). When an upgrade has a schedule, it overrides the default
+# ``base_cost * (current_level + 1)`` formula. Upgrades without a schedule
+# fall back to that linear formula using ``UPGRADE_COSTS``.
+UPGRADE_COST_SCHEDULES = {
+    "hyperdrive": [250, 400, 700, 1100, 1700],
 }
 
 UPGRADE_EFFECTS = {

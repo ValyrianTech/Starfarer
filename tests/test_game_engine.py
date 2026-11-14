@@ -22,6 +22,9 @@ from backend.config import (
     SCAN_FUEL_COST,
     SUB_SURFACE_CREW_COST,
     SUB_SURFACE_FUEL_COST,
+    UPGRADE_COST_SCHEDULES,
+    UPGRADE_COSTS,
+    UPGRADE_MAX_LEVELS,
 )
 from backend.game.engine import (
     BIOME_DISCOVERY_CATEGORIES,
@@ -62,6 +65,7 @@ from backend.game.trading import (
     perform_trade,
     purchase_upgrade,
     round_half_up,
+    upgrade_cost,
 )
 from backend.generation.events import (
     EVENT_TEMPLATES,
@@ -250,6 +254,49 @@ class TestTradingAndUpgrades:
         state.ship.credits = 10
         ok, _msg = purchase_upgrade(state, "hyperdrive")
         assert ok is False
+
+
+class TestUpgradeCostReTiering:
+    """Pins the upgrade-cost re-tiering behavior introduced for issue #165."""
+
+    def test_cheapest_upgrade_is_affordable_early(self) -> None:
+        assert min(UPGRADE_COSTS.values()) <= 250
+        assert min(UPGRADE_COSTS, key=UPGRADE_COSTS.get) == "fuel_tanks"
+        assert UPGRADE_COSTS["fuel_tanks"] == 200
+
+    def test_hyperdrive_schedule_cheapearly_steep_late(self) -> None:
+        assert UPGRADE_COST_SCHEDULES["hyperdrive"] == [250, 400, 700, 1100, 1700]
+        schedule = UPGRADE_COST_SCHEDULES["hyperdrive"]
+        assert all(schedule[i] < schedule[i + 1] for i in range(len(schedule) - 1))
+        assert schedule[0] == 250
+        assert schedule[0] < 1500
+
+    def test_upgrade_cost_uses_schedule_for_hyperdrive(self) -> None:
+        schedule = UPGRADE_COST_SCHEDULES["hyperdrive"]
+        for level in range(5):
+            assert upgrade_cost("hyperdrive", level) == schedule[level]
+
+    def test_upgrade_cost_fallback_linear_for_others(self) -> None:
+        for level in range(UPGRADE_MAX_LEVELS["scanner"]):
+            assert upgrade_cost("scanner", level) == UPGRADE_COSTS["scanner"] * (level + 1)
+
+    def test_upgrade_cost_hyperdrive_out_of_schedule_falls_back(self) -> None:
+        n = len(UPGRADE_COST_SCHEDULES["hyperdrive"])
+        assert upgrade_cost("hyperdrive", n) == UPGRADE_COSTS["hyperdrive"] * (n + 1)
+
+    def test_get_upgrade_info_cost_matches_upgrade_cost(self) -> None:
+        state = new_game(seed=42)
+        for entry in get_upgrade_info(state.ship):
+            assert entry["cost"] == upgrade_cost(entry["id"], entry["current_level"])
+
+    def test_fuel_tanks_first_purchase_effect_visible(self) -> None:
+        state = new_game(seed=42)
+        state.ship.credits = 1000
+        before = state.ship.max_fuel
+        ok, _msg = purchase_upgrade(state, "fuel_tanks")
+        assert ok is True
+        assert state.ship.max_fuel == before + 20
+        assert 1000 - state.ship.credits == UPGRADE_COSTS["fuel_tanks"]
 
 
 class TestCanJumpEdgeCases:

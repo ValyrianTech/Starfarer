@@ -864,6 +864,8 @@ class TestAPIAdvancedFlow:
         resp = client.post(f"/api/game/{game_id}/upgrade", json={"upgrade_id": "hyperdrive"})
         assert resp.status_code == 200
         resp = client.post(f"/api/game/{game_id}/upgrade", json={"upgrade_id": "hyperdrive"})
+        assert resp.status_code == 200
+        resp = client.post(f"/api/game/{game_id}/upgrade", json={"upgrade_id": "hyperdrive"})
         assert resp.status_code == 400
 
     def test_upgrade_success(self) -> None:
