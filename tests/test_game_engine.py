@@ -5927,6 +5927,45 @@ class TestMotherlodeDiscoveries:
         assert "MOTHERLODE" in disc.name
         assert disc.value > 200
 
+    def test_motherlode_name_matches_final_value_with_multiplier(self):
+        """Regression: the displayed number in the motherlode name must equal the
+        final stored value after the exploration multiplier is applied."""
+        import re
+        import random as rnd_mod
+        from unittest import mock
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        body = Body(id="b_ml_name", name="MLName", body_type="planet", biome="desert", size=5, distance_from_star=0.5, poi_count=5, initial_poi_count=5)
+        rng = rnd_mod.Random(42)
+        with mock.patch.object(rng, "random", return_value=0.01):
+            disc = _generate_discovery(rng, "mineral", body, system, value_multiplier=1.3)
+        assert "MOTHERLODE" in disc.name
+        match = re.search(r"\((\d+)cr\)", disc.name)
+        assert match is not None, f"Expected a '(Ncr)' number in name: {disc.name!r}"
+        name_value = int(match.group(1))
+        assert name_value == disc.value, (
+            f"Name shows {name_value}cr but stored value is {disc.value}; "
+            "the motherlode name must be formatted with the final value."
+        )
+
+    def test_motherlode_name_matches_final_value_default_multiplier(self):
+        """With the default multiplier (1.0) the name and stored value must still agree."""
+        import re
+        import random as rnd_mod
+        from unittest import mock
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        body = Body(id="b_ml_name2", name="MLName2", body_type="planet", biome="desert", size=5, distance_from_star=0.5, poi_count=5, initial_poi_count=5)
+        rng = rnd_mod.Random(42)
+        with mock.patch.object(rng, "random", return_value=0.01):
+            disc = _generate_discovery(rng, "mineral", body, system)
+        assert "MOTHERLODE" in disc.name
+        match = re.search(r"\((\d+)cr\)", disc.name)
+        assert match is not None
+        assert int(match.group(1)) == disc.value
+
 
 class TestAtmosphericScanAdditional:
     """Additional tests for atmospheric scan edge cases."""
