@@ -423,11 +423,21 @@ def _state_from_dict(d: dict) -> GameState | None:
 
         accepted_missions_raw = d.get("accepted_missions", {})
         accepted_missions = {}
-        for k, v in accepted_missions_raw.items():
-            if isinstance(v, str):
-                # Old format: value was just a faction_id string
-                accepted_missions[k] = {
-                    "faction_id": v,
+        for mission_id, raw in accepted_missions_raw.items():
+            # Save-compatibility normalization: in-flight accepted missions
+            # persisted by older versions may be keyed by pre-missions_v3
+            # mission IDs whose stored payloads omit fields that
+            # ``api_complete_mission`` reads via hard subscripts (faction_id,
+            # tier, title, description, objective_type, objective_target,
+            # fuel_cost, credit_cost, credit_reward, reputation_reward).
+            # Completing such a mission would otherwise raise ``KeyError`` and
+            # surface an HTTP 500. Backfill every entry so a loaded legacy
+            # mission stays completable.
+            if isinstance(raw, str):
+                # Old format: value was just a faction_id string. Preserve the
+                # legacy 9-key default dict exactly as before.
+                accepted_missions[mission_id] = {
+                    "faction_id": raw,
                     "tier": 1,
                     "title": "Unknown Mission",
                     "description": "Migrated from old save format.",
@@ -438,8 +448,24 @@ def _state_from_dict(d: dict) -> GameState | None:
                     "credit_reward": 75,
                     "reputation_reward": 7,
                 }
-            else:
-                accepted_missions[k] = v
+                continue
+            if not isinstance(raw, dict):
+                # Malformed non-dict, non-string value: skip safely so a
+                # corrupt entry cannot crash the load.
+                continue
+            accepted_missions[mission_id] = {
+                "faction_id": raw.get("faction_id", mission_id),
+                "tier": raw.get("tier", 1),
+                "title": raw.get("title", "Unknown Mission"),
+                "description": raw.get("description", "Migrated from old save format."),
+                "objective_type": raw.get("objective_type", "courier"),
+                "objective_target": raw.get("objective_target", ""),
+                "fuel_cost": raw.get("fuel_cost", 3),
+                "credit_cost": raw.get("credit_cost", 10),
+                "credit_reward": raw.get("credit_reward", 75),
+                "reputation_reward": raw.get("reputation_reward", 7),
+                "item_reward": raw.get("item_reward"),
+            }
 
         state = GameState(
             id=d["id"],
