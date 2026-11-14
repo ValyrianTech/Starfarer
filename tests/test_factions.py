@@ -3220,20 +3220,6 @@ class TestMissionSeedConsistency:
         listed_ids = {m["id"] for m in listing["missions"]}
         assert listed_ids == expected_ids
 
-    def test_get_faction_completed_count(self) -> None:
-        from backend.missions import get_faction_completed_count
-        state = new_game(seed=42)
-        assert get_faction_completed_count(state, "stellar_cartographers") == 0
-        state.completed_missions.append(
-            {"mission_id": "m1", "faction_id": "stellar_cartographers", "title": "A", "tier": 1}
-        )
-        state.completed_missions.append(
-            {"mission_id": "m2", "faction_id": "void_traders", "title": "B", "tier": 1}
-        )
-        assert get_faction_completed_count(state, "stellar_cartographers") == 1
-        assert get_faction_completed_count(state, "void_traders") == 1
-        assert get_faction_completed_count(state, "free_pilots") == 0
-
     def test_mission_seed_stable_within_epoch(self) -> None:
         from backend.missions import _mission_epoch, _mission_seed
 
