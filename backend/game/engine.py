@@ -884,12 +884,16 @@ def _generate_discovery(rng: random.Random, category: str, body: Body, system: S
     else:
         value = rng.randint(10, 200)
     # Motherlode chance on high-POI bodies
-    if body.initial_poi_count >= 4 and rng.random() < MOTHERLODE_CHANCE:
+    is_motherlode = body.initial_poi_count >= 4 and rng.random() < MOTHERLODE_CHANCE
+    if is_motherlode:
         multiplier = rng.randint(MOTHERLODE_VALUE_MULTIPLIER[0], MOTHERLODE_VALUE_MULTIPLIER[1])
         value = value * multiplier
-        name = f"*** MOTHERLODE: {name} ({value}cr) ***"
     # Apply the exploration value multiplier (default 1.0 leaves value unchanged).
     value = max(1, round(value * value_multiplier))
+    if is_motherlode:
+        # Format the name with the FINAL value so the displayed number matches
+        # the actual stored value (the multiplier is applied above).
+        name = f"*** MOTHERLODE: {name} ({value}cr) ***"
     return Discovery(
         id=d_id, category=category, name=name, description=desc,
         value=value, system_id=system.id, body_id=body.id,
