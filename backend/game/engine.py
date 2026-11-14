@@ -587,11 +587,6 @@ def explore_surface(state: GameState) -> tuple[bool, str, list[Discovery]]:
     elif pre_increment_count == 2:
         num_finds = num_finds // 4
 
-    # Guarantee the first-ever exploration of a fresh body always yields at
-    # least one discovery, so a brand-new surface is never a total dud.
-    if pre_increment_count == 0 and num_finds == 0:
-        num_finds = 1
-
     if num_finds == 0:
         state.add_log("exploration", f"Explored {body.name}. Found nothing of interest.", category="exploration", title="Surface Exploration", system=system.name, body=body.name, fuel_change=-EXPLORE_FUEL_COST)
         return True, f"Explored {body.name}. Found nothing of interest.", []

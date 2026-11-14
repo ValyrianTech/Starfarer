@@ -6835,36 +6835,6 @@ class TestExplorationEconomyRebalance:
         state.systems_visited = 100000
         assert exploration_value_multiplier(state) == EXPLORATION_VALUE_MULTIPLIER_MAX
 
-    def test_explore_surface_minimum_yield_on_fresh_body(self) -> None:
-        """A fresh body whose num_finds would be 0 still yields one discovery."""
-        from unittest import mock
-        state = new_game(seed=42)
-        system = state.get_current_system()
-        assert system is not None
-        body = Body(id="b_min_yield", name="MinYield", body_type="planet",
-                    biome="desert", size=5, distance_from_star=0.5,
-                    poi_count=5, initial_poi_count=1)
-        system.bodies = [body]
-        state.ship.current_body_id = body.id
-        state.ship.fuel = 100
-
-        # randint(1, 3) mocked to 0 forces num_finds == 0 on the first attempt,
-        # which the minimum-yield guarantee then coerces to 1.
-        with mock.patch("random.Random.randint", return_value=0):
-            ok, _msg, discoveries = explore_surface(state)
-        assert ok is True
-        assert len(discoveries) == 1
-        assert body.exploration_count == 1
-
-        # The second attempt keeps its original diminishing-returns behaviour
-        # (num_finds // 2 == 0) and is NOT rescued by the minimum-yield rule.
-        state.ship.fuel = 100
-        with mock.patch("random.Random.randint", return_value=0):
-            ok2, _msg2, discoveries2 = explore_surface(state)
-        assert ok2 is True
-        assert discoveries2 == []
-        assert body.exploration_count == 2
-
     def test_generate_discovery_applies_value_multiplier(self) -> None:
         import random as rnd_mod
         state = new_game(seed=42)
