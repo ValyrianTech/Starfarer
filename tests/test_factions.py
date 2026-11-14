@@ -1202,7 +1202,7 @@ class TestFactionAPI:
         data = resp.json()
         assert data["mission"]["id"] != completed_mission_id
 
-    def test_faction_mission_all_completed_returns_200(self) -> None:
+    def test_faction_mission_all_completed_returns_400(self) -> None:
         resp = client.post(
             "/api/game/new",
             json={"seed": 42, "game_id": "mission-all-completed"},
@@ -1236,7 +1236,8 @@ class TestFactionAPI:
             f"/api/game/{game_id}/faction/{faction_id}/mission"
         )
 
-        assert resp.status_code == 200
+        assert resp.status_code == 400
+        assert "No available missions" in resp.json()["detail"]
 
     def test_faction_mission_skips_accepted_mission(self) -> None:
         resp = client.post(
@@ -3052,14 +3053,13 @@ class TestMissionSummary:
 
 
 class TestMissionSeedConsistency:
-    """Regression tests for the mission-seed mismatch bug.
+    """Regression tests for the mission-id stability guarantee.
 
     The mission pool and per-mission ids are derived from an RNG seeded by
-    the completed-mission count for the offering faction. Every call site
-    that generates or accepts missions must therefore pass the *same*
-    completed count, or a mission id advertised by the listing endpoint
-    will not be found when the player tries to accept it after their first
-    completion.
+    immutable state (game seed, system id, faction id). Completing a mission
+    must never invalidate the ids of sibling missions, so a mission id
+    advertised by the listing endpoint stays acceptable after other missions
+    for the same faction have been completed.
     """
 
     def test_accept_mission_after_completion_matches_listing(self) -> None:
@@ -3108,7 +3108,11 @@ class TestMissionSeedConsistency:
         listing = client.get(f"/api/game/{game_id}/missions").json()
         assert listing["faction_id"] == faction_id
         assert len(listing["missions"]) > 0
-        next_id = listing["missions"][0]["id"]
+        # The completed mission is no longer acceptable, but its siblings must
+        # still be found by the accept endpoint (stable ids).
+        remaining = [m["id"] for m in listing["missions"] if m["id"] != first_id]
+        assert remaining, "expected at least one sibling mission to remain"
+        next_id = remaining[0]
         resp = client.post(
             f"/api/game/{game_id}/missions/{next_id}/accept",
             json={"mission_id": next_id},
@@ -3116,15 +3120,71 @@ class TestMissionSeedConsistency:
         assert resp.status_code == 200, resp.json()
         assert resp.json()["mission"]["id"] == next_id
 
+    def test_sibling_mission_ids_remain_acceptable_after_completion(self) -> None:
+        """Completing one mission must not invalidate sibling mission ids.
+
+        Every mission id listed before a completion must remain acceptable
+        afterwards. Completing a mission must not reseed generation, so the
+        pool (and therefore every sibling id) stays stable.
+        """
+        resp = client.post(
+            "/api/game/new",
+            json={"seed": 42, "game_id": "sibling-mission-stability"},
+        )
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        state.ship.fuel = 100
+        state.ship.credits = 500
+        current_system = state.get_current_system()
+        assert current_system is not None
+        current_system.has_trading_station = True
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        listing = client.get(f"/api/game/{game_id}/missions").json()
+        all_ids = [m["id"] for m in listing["missions"]]
+        assert len(all_ids) >= 2
+
+        first_id = all_ids[0]
+        sibling_ids = all_ids[1:]
+
+        resp = client.post(
+            f"/api/game/{game_id}/missions/{first_id}/accept",
+            json={"mission_id": first_id},
+        )
+        assert resp.status_code == 200, resp.json()
+        resp = client.post(
+            f"/api/game/{game_id}/missions/{first_id}/complete",
+            json={"mission_id": first_id},
+        )
+        assert resp.status_code == 200, resp.json()
+
+        # Refill resources so accept's sufficiency checks never block.
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        state.ship.fuel = 100
+        state.ship.credits = 500
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        for sibling_id in sibling_ids:
+            resp = client.post(
+                f"/api/game/{game_id}/missions/{sibling_id}/accept",
+                json={"mission_id": sibling_id},
+            )
+            assert resp.status_code == 200, resp.json()
+            assert resp.json()["mission"]["id"] == sibling_id
+
     def test_api_missions_seed_matches_summary_after_completion(self) -> None:
         """GET /missions must advertise the same ids as direct generation.
 
-        The listing endpoint must seed generation with the faction completed
-        count so mission ids stay consistent across call sites.
+        The listing endpoint and direct generation must both derive mission
+        ids from the same immutable state (seed, system, faction), so ids
+        stay stable across call sites even after a completion.
         """
         from backend.missions import (
             generate_missions,
-            get_faction_completed_count,
             get_primary_faction_id,
         )
 
@@ -3155,22 +3215,146 @@ class TestMissionSeedConsistency:
             state,
             current_system,
             primary_faction_id,
-            get_faction_completed_count(state, primary_faction_id),
         )
         expected_ids = {m.id for m in expected if m.objective_type != "daily"}
         listed_ids = {m["id"] for m in listing["missions"]}
         assert listed_ids == expected_ids
 
-    def test_get_faction_completed_count(self) -> None:
-        from backend.missions import get_faction_completed_count
+    def test_mission_seed_stable_within_epoch(self) -> None:
+        from backend.missions import _mission_epoch, _mission_seed
+
         state = new_game(seed=42)
-        assert get_faction_completed_count(state, "stellar_cartographers") == 0
-        state.completed_missions.append(
-            {"mission_id": "m1", "faction_id": "stellar_cartographers", "title": "A", "tier": 1}
+        state.systems_visited = 5  # epoch 1
+        assert _mission_epoch(state) == 1
+        a = _mission_seed(
+            state.seed, "sys_0000", "stellar_cartographers", _mission_epoch(state)
         )
-        state.completed_missions.append(
-            {"mission_id": "m2", "faction_id": "void_traders", "title": "B", "tier": 1}
+        b = _mission_seed(
+            state.seed, "sys_0000", "stellar_cartographers", _mission_epoch(state)
         )
-        assert get_faction_completed_count(state, "stellar_cartographers") == 1
-        assert get_faction_completed_count(state, "void_traders") == 1
-        assert get_faction_completed_count(state, "free_pilots") == 0
+        assert a == b
+
+    def test_mission_seed_differs_across_epochs(self) -> None:
+        from backend.missions import _mission_epoch, _mission_seed
+
+        state = new_game(seed=42)
+        state.systems_visited = 0  # epoch 0
+        epoch_0 = _mission_epoch(state)
+        seed_0 = _mission_seed(
+            state.seed, "sys_0000", "stellar_cartographers", epoch_0
+        )
+        state.systems_visited = 3  # epoch 1
+        epoch_1 = _mission_epoch(state)
+        seed_1 = _mission_seed(
+            state.seed, "sys_0000", "stellar_cartographers", epoch_1
+        )
+        assert epoch_0 != epoch_1
+        assert seed_0 != seed_1
+
+    def test_generate_missions_stable_within_epoch(self) -> None:
+        from backend.missions import (
+            generate_missions,
+            get_primary_faction_id,
+        )
+
+        state = new_game(seed=42)
+        current_system = state.get_current_system()
+        assert current_system is not None
+        current_system.has_trading_station = True
+        state.systems_visited = 2  # epoch 0
+
+        faction_id = get_primary_faction_id(state, current_system)
+        first = generate_missions(state, current_system, faction_id)
+        second = generate_missions(state, current_system, faction_id)
+        assert [m.id for m in first] == [m.id for m in second]
+
+    def test_generate_missions_rotates_across_epochs(self) -> None:
+        from backend.missions import (
+            generate_missions,
+            get_primary_faction_id,
+        )
+
+        state = new_game(seed=42)
+        current_system = state.get_current_system()
+        assert current_system is not None
+        current_system.has_trading_station = True
+        faction_id = get_primary_faction_id(state, current_system)
+
+        state.systems_visited = 0  # epoch 0
+        old_missions = generate_missions(state, current_system, faction_id)
+        old_ids = {m.id for m in old_missions if m.objective_type != "daily"}
+
+        state.systems_visited = 3  # epoch 1
+        new_missions = generate_missions(state, current_system, faction_id)
+        new_ids = {m.id for m in new_missions if m.objective_type != "daily"}
+
+        assert old_ids
+        assert new_ids
+        assert old_ids.isdisjoint(new_ids)
+
+    def test_faction_mission_rotates_after_epoch_advance(self) -> None:
+        """Exhausting a board is recoverable once the epoch advances.
+
+        Completing every standard mission for a faction's current board
+        makes ``POST /faction/{faction}/mission`` return 400 within the
+        current epoch. Advancing ``systems_visited`` past the epoch
+        boundary must rotate the board so a fresh standard mission becomes
+        available again.
+        """
+        from backend.missions import _mission_epoch
+
+        resp = client.post(
+            "/api/game/new",
+            json={"seed": 42, "game_id": "mission-epoch-rotation-e2e"},
+        )
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        state.ship.fuel = 100
+        state.ship.credits = 500
+        current_system = state.get_current_system()
+        assert current_system is not None
+        current_system.has_trading_station = True
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        listing = client.get(f"/api/game/{game_id}/missions").json()
+        faction_id = listing["faction_id"]
+        standard_ids = [m["id"] for m in listing["missions"]]
+        assert standard_ids
+
+        epoch_before = _mission_epoch(state)
+
+        # Exhaust the current board by marking every standard mission complete.
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        for mission_id in standard_ids:
+            state.completed_missions.append({
+                "mission_id": mission_id,
+                "faction_id": faction_id,
+                "title": "Exhausted",
+                "tier": 1,
+            })
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        resp = client.post(f"/api/game/{game_id}/faction/{faction_id}/mission")
+        assert resp.status_code == 400, resp.json()
+        assert resp.json()["detail"] == (
+            "No available missions - all missions have been completed or are already accepted"
+        )
+
+        # Advance past the epoch boundary and refresh resources.
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        state.systems_visited += 3
+        state.ship.fuel = 100
+        state.ship.credits = 500
+        GAME_STORE[game_id] = state
+        game_save(state)
+        assert _mission_epoch(state) != epoch_before
+
+        resp = client.post(f"/api/game/{game_id}/faction/{faction_id}/mission")
+        assert resp.status_code == 200, resp.json()
+        new_mission_id = resp.json()["mission"]["id"]
+        assert new_mission_id not in set(standard_ids)

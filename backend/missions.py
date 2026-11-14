@@ -187,12 +187,36 @@ _TIER_COSTS: dict[int, dict] = {
 }
 
 
-def _mission_seed(seed: int, system_id: str, faction_id: str, completed_count: int = 0) -> int:
+def _mission_epoch(state: GameState) -> int:
+    """Return the coarse board-refresh epoch for mission generation.
+
+    The mission board rotates in coarse epochs derived from the number of
+    systems the player has visited. Reusing the same epoch boundary as
+    :func:`get_daily_mission_key` (``systems_visited // 3``) keeps a
+    system's mission pool and mission ids stable while the player remains
+    in an epoch, so a mission id advertised by a listing stays acceptable,
+    while still rotating the board as the player explores new systems so a
+    faction's standard mission pool is never permanently exhausted.
+
+    :param state: The current game state.
+    :type state: GameState
+    :returns: The coarse board-refresh epoch for mission generation.
+    :rtype: int
+    """
+    return state.systems_visited // 3
+
+
+def _mission_seed(seed: int, system_id: str, faction_id: str, epoch: int) -> int:
     """Generate a deterministic seed for mission generation.
 
-    Combines the game seed, system ID, faction ID, and completed
-    mission count into a deterministic hash used to seed the RNG
-    for reproducible mission generation.
+    Combines the game seed, system ID, faction ID, and the coarse
+    board-refresh epoch into a deterministic hash used to seed the RNG
+    for reproducible mission generation. Combining the immutable game
+    state (seed, system id, faction id) with the coarse refresh epoch
+    keeps a system's mission pool and mission ids stable while the
+    player remains in an epoch (so a mission id advertised by a listing
+    stays acceptable), while still rotating the board periodically as
+    the player explores new systems.
 
     :param seed: The game's master seed.
     :type seed: int
@@ -200,13 +224,13 @@ def _mission_seed(seed: int, system_id: str, faction_id: str, completed_count: i
     :type system_id: str
     :param faction_id: The unique identifier of the faction.
     :type faction_id: str
-    :param completed_count: The number of missions already completed
-        for this faction, used to refresh the mission pool.
-    :type completed_count: int
+    :param epoch: The coarse board-refresh epoch derived from the
+        number of systems visited.
+    :type epoch: int
     :returns: A deterministic integer hash for mission seeding.
     :rtype: int
     """
-    return deterministic_hash(seed, system_id, faction_id, "missions_v2", str(completed_count))
+    return deterministic_hash(seed, system_id, faction_id, str(epoch), "missions_v3")
 
 
 def get_daily_mission_key(state: GameState, system_id: str) -> str:
@@ -227,14 +251,13 @@ def get_daily_mission_key(state: GameState, system_id: str) -> str:
     return f"{system_id}:{date_key}"
 
 
-def generate_missions(state: GameState, system: StarSystem, faction_id: str, completed_count: int = 0) -> list[FactionMission]:
+def generate_missions(state: GameState, system: StarSystem, faction_id: str) -> list[FactionMission]:
     """Generate 2-3 tiered missions for a faction at a given system.
 
-    Mission generation is deterministic based on seed, system,
-    faction, and completed mission count. The available tiers depend
-    on the player's reputation with the faction. A free daily mission
-    is included if the system has not had its daily mission used on
-    the current date.
+    Mission generation is deterministic based on seed, system, and
+    faction. The available tiers depend on the player's reputation
+    with the faction. A free daily mission is included if the system
+    has not had its daily mission used on the current date.
 
     :param state: The current game state.
     :type state: GameState
@@ -242,9 +265,6 @@ def generate_missions(state: GameState, system: StarSystem, faction_id: str, com
     :type system: StarSystem
     :param faction_id: The faction offering missions.
     :type faction_id: str
-    :param completed_count: The number of missions already completed
-        for this faction, used to refresh the mission pool.
-    :type completed_count: int
     :returns: A list of generated :class:`FactionMission` objects.
     :rtype: list[FactionMission]
     """
@@ -256,7 +276,8 @@ def generate_missions(state: GameState, system: StarSystem, faction_id: str, com
         return []
 
     rep = state.get_faction_reputation(faction_id)
-    rng = seeded_random(_mission_seed(state.seed, system.id, faction_id, completed_count), "generate")
+    epoch = _mission_epoch(state)
+    rng = seeded_random(_mission_seed(state.seed, system.id, faction_id, epoch), "generate")
 
     available_tiers = []
     for tier in [1, 2, 3]:
@@ -294,7 +315,7 @@ def generate_missions(state: GameState, system: StarSystem, faction_id: str, com
         rep_reward = rng.randint(costs["reputation_reward_min"], costs["reputation_reward_max"])
 
         mission_id_num = deterministic_hash(
-            state.seed, system.id, faction_id, "mission", str(i), str(tier), str(completed_count)
+            state.seed, system.id, faction_id, str(epoch), "mission", str(i), str(tier)
         )
         mission_id = f"mission_{system.id}_{abs(mission_id_num) % 100000:05d}"
 
@@ -427,23 +448,6 @@ def get_primary_faction_id(state: GameState, system: StarSystem) -> str:
     return faction_ids[faction_idx]
 
 
-def get_faction_completed_count(state: GameState, faction_id: str) -> int:
-    """Return the number of completed missions for a given faction.
-
-    The count is used to seed mission generation consistently, ensuring
-    that mission pool composition and mission ids match across every
-    call site that generates or accepts missions for the same faction.
-
-    :param state: The current game state.
-    :type state: GameState
-    :param faction_id: The identifier of the faction to count.
-    :type faction_id: str
-    :returns: The number of completed missions for the faction.
-    :rtype: int
-    """
-    return sum(1 for m in state.completed_missions if m.get("faction_id") == faction_id)
-
-
 def get_missions_summary(state: GameState, system: StarSystem | None) -> dict:
     """Summarize the missions available at a system for quick surfacing.
 
@@ -479,8 +483,7 @@ def get_missions_summary(state: GameState, system: StarSystem | None) -> dict:
     faction_id = get_primary_faction_id(state, system)
     faction = get_faction(faction_id)
 
-    faction_completed_count = get_faction_completed_count(state, faction_id)
-    missions = generate_missions(state, system, faction_id, faction_completed_count)
+    missions = generate_missions(state, system, faction_id)
 
     standard = [m for m in missions if m.objective_type != "daily"]
     daily_available = any(m.objective_type == "daily" for m in missions)
