@@ -1202,7 +1202,7 @@ class TestFactionAPI:
         data = resp.json()
         assert data["mission"]["id"] != completed_mission_id
 
-    def test_faction_mission_all_completed_returns_200(self) -> None:
+    def test_faction_mission_all_completed_returns_400(self) -> None:
         resp = client.post(
             "/api/game/new",
             json={"seed": 42, "game_id": "mission-all-completed"},
@@ -1236,7 +1236,8 @@ class TestFactionAPI:
             f"/api/game/{game_id}/faction/{faction_id}/mission"
         )
 
-        assert resp.status_code == 200
+        assert resp.status_code == 400
+        assert "No available missions" in resp.json()["detail"]
 
     def test_faction_mission_skips_accepted_mission(self) -> None:
         resp = client.post(
@@ -3052,14 +3053,13 @@ class TestMissionSummary:
 
 
 class TestMissionSeedConsistency:
-    """Regression tests for the mission-seed mismatch bug.
+    """Regression tests for the mission-id stability guarantee.
 
     The mission pool and per-mission ids are derived from an RNG seeded by
-    the completed-mission count for the offering faction. Every call site
-    that generates or accepts missions must therefore pass the *same*
-    completed count, or a mission id advertised by the listing endpoint
-    will not be found when the player tries to accept it after their first
-    completion.
+    immutable state (game seed, system id, faction id). Completing a mission
+    must never invalidate the ids of sibling missions, so a mission id
+    advertised by the listing endpoint stays acceptable after other missions
+    for the same faction have been completed.
     """
 
     def test_accept_mission_after_completion_matches_listing(self) -> None:
@@ -3108,7 +3108,11 @@ class TestMissionSeedConsistency:
         listing = client.get(f"/api/game/{game_id}/missions").json()
         assert listing["faction_id"] == faction_id
         assert len(listing["missions"]) > 0
-        next_id = listing["missions"][0]["id"]
+        # The completed mission is no longer acceptable, but its siblings must
+        # still be found by the accept endpoint (stable ids).
+        remaining = [m["id"] for m in listing["missions"] if m["id"] != first_id]
+        assert remaining, "expected at least one sibling mission to remain"
+        next_id = remaining[0]
         resp = client.post(
             f"/api/game/{game_id}/missions/{next_id}/accept",
             json={"mission_id": next_id},
@@ -3116,15 +3120,71 @@ class TestMissionSeedConsistency:
         assert resp.status_code == 200, resp.json()
         assert resp.json()["mission"]["id"] == next_id
 
+    def test_sibling_mission_ids_remain_acceptable_after_completion(self) -> None:
+        """Completing one mission must not invalidate sibling mission ids.
+
+        Every mission id listed before a completion must remain acceptable
+        afterwards. Completing a mission must not reseed generation, so the
+        pool (and therefore every sibling id) stays stable.
+        """
+        resp = client.post(
+            "/api/game/new",
+            json={"seed": 42, "game_id": "sibling-mission-stability"},
+        )
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        state.ship.fuel = 100
+        state.ship.credits = 500
+        current_system = state.get_current_system()
+        assert current_system is not None
+        current_system.has_trading_station = True
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        listing = client.get(f"/api/game/{game_id}/missions").json()
+        all_ids = [m["id"] for m in listing["missions"]]
+        assert len(all_ids) >= 2
+
+        first_id = all_ids[0]
+        sibling_ids = all_ids[1:]
+
+        resp = client.post(
+            f"/api/game/{game_id}/missions/{first_id}/accept",
+            json={"mission_id": first_id},
+        )
+        assert resp.status_code == 200, resp.json()
+        resp = client.post(
+            f"/api/game/{game_id}/missions/{first_id}/complete",
+            json={"mission_id": first_id},
+        )
+        assert resp.status_code == 200, resp.json()
+
+        # Refill resources so accept's sufficiency checks never block.
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        state.ship.fuel = 100
+        state.ship.credits = 500
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        for sibling_id in sibling_ids:
+            resp = client.post(
+                f"/api/game/{game_id}/missions/{sibling_id}/accept",
+                json={"mission_id": sibling_id},
+            )
+            assert resp.status_code == 200, resp.json()
+            assert resp.json()["mission"]["id"] == sibling_id
+
     def test_api_missions_seed_matches_summary_after_completion(self) -> None:
         """GET /missions must advertise the same ids as direct generation.
 
-        The listing endpoint must seed generation with the faction completed
-        count so mission ids stay consistent across call sites.
+        The listing endpoint and direct generation must both derive mission
+        ids from the same immutable state (seed, system, faction), so ids
+        stay stable across call sites even after a completion.
         """
         from backend.missions import (
             generate_missions,
-            get_faction_completed_count,
             get_primary_faction_id,
         )
 
@@ -3155,7 +3215,6 @@ class TestMissionSeedConsistency:
             state,
             current_system,
             primary_faction_id,
-            get_faction_completed_count(state, primary_faction_id),
         )
         expected_ids = {m.id for m in expected if m.objective_type != "daily"}
         listed_ids = {m["id"] for m in listing["missions"]}
