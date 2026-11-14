@@ -2365,7 +2365,7 @@ class TestAcceptedMissionsMigration:
         assert state.accepted_missions["mission_old_2"] == expected_defaults
 
     def test_new_format_dict_values_are_preserved(self) -> None:
-        """New-format dict values should be preserved as-is."""
+        """New-format dict values should keep provided fields and backfill the rest."""
         from backend.game.manager import _state_from_dict
         from backend.models.ship import Ship
         from backend.models.system import StarSystem
@@ -2400,6 +2400,14 @@ class TestAcceptedMissionsMigration:
             "faction_id": "stellar_cartographers",
             "tier": 1,
             "title": "Test Mission",
+            "description": "Migrated from old save format.",
+            "objective_type": "courier",
+            "objective_target": "",
+            "fuel_cost": 3,
+            "credit_cost": 10,
+            "credit_reward": 75,
+            "reputation_reward": 7,
+            "item_reward": None,
         }
 
     def test_mixed_old_and_new_formats(self) -> None:
@@ -2452,7 +2460,176 @@ class TestAcceptedMissionsMigration:
             "faction_id": "void_traders",
             "tier": 2,
             "title": "Trade Run",
+            "description": "Migrated from old save format.",
+            "objective_type": "courier",
+            "objective_target": "",
+            "fuel_cost": 3,
+            "credit_cost": 10,
+            "credit_reward": 75,
+            "reputation_reward": 7,
+            "item_reward": None,
         }
+
+    def test_partial_dict_faction_id_only_backfilled(self) -> None:
+        """A dict entry with only faction_id gets all required defaults backfilled."""
+        from backend.game.manager import _state_from_dict
+        from backend.models.ship import Ship
+        from backend.models.system import StarSystem
+
+        d = {
+            "id": "test-backfill",
+            "seed": 42,
+            "ship": Ship(name="Test", current_system_id="s1").to_dict(),
+            "systems": {
+                "s1": StarSystem(
+                    id="s1", name="Sys1", x=0.0, y=0.0, star_type="G",
+                    star_color="#fff", phenomenon="none", phenomenon_desc="",
+                ).to_dict(),
+            },
+            "events": [],
+            "discoveries": [],
+            "lore_fragments": [],
+            "log_entries": [],
+            "faction_relations": {},
+            "systems_visited": 1,
+            "game_started": "",
+            "accepted_missions": {
+                "mission_partial": {"faction_id": "free_pilots"},
+            },
+        }
+        state = _state_from_dict(d)
+        assert state.accepted_missions["mission_partial"] == {
+            "faction_id": "free_pilots",
+            "tier": 1,
+            "title": "Unknown Mission",
+            "description": "Migrated from old save format.",
+            "objective_type": "courier",
+            "objective_target": "",
+            "fuel_cost": 3,
+            "credit_cost": 10,
+            "credit_reward": 75,
+            "reputation_reward": 7,
+            "item_reward": None,
+        }
+
+    def test_fully_populated_dict_preserved_unchanged(self) -> None:
+        """A fully-populated dict entry is preserved unchanged."""
+        from backend.game.manager import _state_from_dict
+        from backend.models.ship import Ship
+        from backend.models.system import StarSystem
+
+        full = {
+            "faction_id": "void_traders",
+            "tier": 3,
+            "title": "Deep Haul",
+            "description": "Move cargo to a distant outpost.",
+            "objective_type": "courier",
+            "objective_target": "s2",
+            "fuel_cost": 5,
+            "credit_cost": 40,
+            "credit_reward": 300,
+            "reputation_reward": 15,
+            "item_reward": "artifact_shard",
+        }
+        d = {
+            "id": "test-full",
+            "seed": 42,
+            "ship": Ship(name="Test", current_system_id="s1").to_dict(),
+            "systems": {
+                "s1": StarSystem(
+                    id="s1", name="Sys1", x=0.0, y=0.0, star_type="G",
+                    star_color="#fff", phenomenon="none", phenomenon_desc="",
+                ).to_dict(),
+            },
+            "events": [],
+            "discoveries": [],
+            "lore_fragments": [],
+            "log_entries": [],
+            "faction_relations": {},
+            "systems_visited": 1,
+            "game_started": "",
+            "accepted_missions": {"mission_full": full},
+        }
+        state = _state_from_dict(d)
+        assert state.accepted_missions["mission_full"] == full
+
+    def test_malformed_non_dict_non_string_skipped(self) -> None:
+        """Non-dict, non-string malformed entries are skipped without raising."""
+        from backend.game.manager import _state_from_dict
+        from backend.models.ship import Ship
+        from backend.models.system import StarSystem
+
+        d = {
+            "id": "test-malformed",
+            "seed": 42,
+            "ship": Ship(name="Test", current_system_id="s1").to_dict(),
+            "systems": {
+                "s1": StarSystem(
+                    id="s1", name="Sys1", x=0.0, y=0.0, star_type="G",
+                    star_color="#fff", phenomenon="none", phenomenon_desc="",
+                ).to_dict(),
+            },
+            "events": [],
+            "discoveries": [],
+            "lore_fragments": [],
+            "log_entries": [],
+            "faction_relations": {},
+            "systems_visited": 1,
+            "game_started": "",
+            "accepted_missions": {
+                "mission_list": ["not", "a", "mission"],
+                "mission_int": 42,
+                "mission_ok": "stellar_cartographers",
+            },
+        }
+        state = _state_from_dict(d)
+        assert "mission_list" not in state.accepted_missions
+        assert "mission_int" not in state.accepted_missions
+        assert state.accepted_missions["mission_ok"]["faction_id"] == "stellar_cartographers"
+
+    def test_legacy_partial_mission_has_all_completion_keys(self) -> None:
+        """A legacy partial accepted mission carries every key completion reads."""
+        from backend.game.manager import _state_from_dict
+        from backend.models.ship import Ship
+        from backend.models.system import StarSystem
+
+        d = {
+            "id": "test-completion-keys",
+            "seed": 42,
+            "ship": Ship(name="Test", current_system_id="s1").to_dict(),
+            "systems": {
+                "s1": StarSystem(
+                    id="s1", name="Sys1", x=0.0, y=0.0, star_type="G",
+                    star_color="#fff", phenomenon="none", phenomenon_desc="",
+                ).to_dict(),
+            },
+            "events": [],
+            "discoveries": [],
+            "lore_fragments": [],
+            "log_entries": [],
+            "faction_relations": {},
+            "systems_visited": 1,
+            "game_started": "",
+            "accepted_missions": {
+                "mission_legacy": {"faction_id": "stellar_cartographers"},
+            },
+        }
+        state = _state_from_dict(d)
+        entry = state.accepted_missions["mission_legacy"]
+        for key in (
+            "faction_id",
+            "tier",
+            "title",
+            "description",
+            "objective_type",
+            "objective_target",
+            "fuel_cost",
+            "credit_cost",
+            "credit_reward",
+            "reputation_reward",
+            "item_reward",
+        ):
+            assert key in entry
 
     def test_empty_accepted_missions(self) -> None:
         """Empty accepted_missions should result in an empty dict."""
