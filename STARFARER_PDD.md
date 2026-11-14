@@ -143,7 +143,7 @@ Each step has a corresponding API endpoint for AI play.
 **Exploration Value Multiplier:**
 - Discovery credit values scale deterministically with persisted exploration state via `exploration_value_multiplier(state)` in `backend/game/engine.py`
 - +5% per system visited beyond the first (`EXPLORATION_VALUE_MULTIPLIER_PER_SYSTEM`), +2% per unique biome visited (`EXPLORATION_VALUE_MULTIPLIER_PER_BIOME`), capped at 2.0x (`EXPLORATION_VALUE_MULTIPLIER_MAX`)
-- The first exploration of a body in a never-visited system gets an extra 1.25x first-discovery bonus (`FIRST_DISCOVERY_BONUS_MULTIPLIER`)
+- The first body explored in a system gets an extra 1.25x first-discovery bonus (`FIRST_DISCOVERY_BONUS_MULTIPLIER`)
 - Applied to discoveries from surface exploration, atmospheric scan, and sub-surface exploration (after any motherlode bonus)
 - The first-ever exploration of a fresh body always yields at least one discovery
 
