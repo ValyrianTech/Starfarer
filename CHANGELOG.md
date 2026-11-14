@@ -28,6 +28,7 @@
 - Extracted the body of `cheapest_reachable_fuel_cost` into a private `_cheapest_reachable(state)` helper in `backend/game/engine.py` that returns a `(system, fuel_cost)` tuple, and added a public `cheapest_reachable_system(state)` wrapper alongside `cheapest_reachable_fuel_cost(state)` on top of it. No behavior change to `cheapest_reachable_fuel_cost`.
 - Added `validate_game_id` to `backend/vulture_whitelist.py` (and to the expected-names set in `tests/test_vulture_whitelist.py`) so the `NewGameRequest.game_id` field validator is not flagged as dead code by vulture. No behavior change.
 - Reordered imports in `tests/test_api.py::TestNewGameRequestGameIdValidation` to satisfy ruff import-sorting (no behavior change).
+- Reordered imports in `tests/test_game_engine.py::TestMotherlodeDiscoveries` (`random as rnd_mod` before `re`) to satisfy ruff import-sorting (no behavior change).
 - Applied ruff safe auto-fixes and cleaned up remaining ruff lint errors (`backend/api/routes.py`, `backend/game/manager.py`, `tests/test_rate_limit.py`): removed a redundant `global _new_game_rate_entries` in `reset_new_game_rate_limiter` and reordered imports in `tests/test_rate_limit.py` so `fastapi.testclient` sorts before `starlette.requests`. No behavior change.
 
 ### Security
