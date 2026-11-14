@@ -187,14 +187,36 @@ _TIER_COSTS: dict[int, dict] = {
 }
 
 
-def _mission_seed(seed: int, system_id: str, faction_id: str) -> int:
+def _mission_epoch(state: GameState) -> int:
+    """Return the coarse board-refresh epoch for mission generation.
+
+    The mission board rotates in coarse epochs derived from the number of
+    systems the player has visited. Reusing the same epoch boundary as
+    :func:`get_daily_mission_key` (``systems_visited // 3``) keeps a
+    system's mission pool and mission ids stable while the player remains
+    in an epoch, so a mission id advertised by a listing stays acceptable,
+    while still rotating the board as the player explores new systems so a
+    faction's standard mission pool is never permanently exhausted.
+
+    :param state: The current game state.
+    :type state: GameState
+    :returns: The coarse board-refresh epoch for mission generation.
+    :rtype: int
+    """
+    return state.systems_visited // 3
+
+
+def _mission_seed(seed: int, system_id: str, faction_id: str, epoch: int) -> int:
     """Generate a deterministic seed for mission generation.
 
-    Combines the game seed, system ID, and faction ID into a
-    deterministic hash used to seed the RNG for reproducible mission
-    generation. The seed depends only on immutable state so that a
-    system's mission pool and mission ids remain stable across
-    completions.
+    Combines the game seed, system ID, faction ID, and the coarse
+    board-refresh epoch into a deterministic hash used to seed the RNG
+    for reproducible mission generation. Combining the immutable game
+    state (seed, system id, faction id) with the coarse refresh epoch
+    keeps a system's mission pool and mission ids stable while the
+    player remains in an epoch (so a mission id advertised by a listing
+    stays acceptable), while still rotating the board periodically as
+    the player explores new systems.
 
     :param seed: The game's master seed.
     :type seed: int
@@ -202,10 +224,13 @@ def _mission_seed(seed: int, system_id: str, faction_id: str) -> int:
     :type system_id: str
     :param faction_id: The unique identifier of the faction.
     :type faction_id: str
+    :param epoch: The coarse board-refresh epoch derived from the
+        number of systems visited.
+    :type epoch: int
     :returns: A deterministic integer hash for mission seeding.
     :rtype: int
     """
-    return deterministic_hash(seed, system_id, faction_id, "missions_v2")
+    return deterministic_hash(seed, system_id, faction_id, str(epoch), "missions_v3")
 
 
 def get_daily_mission_key(state: GameState, system_id: str) -> str:
@@ -251,7 +276,8 @@ def generate_missions(state: GameState, system: StarSystem, faction_id: str) -> 
         return []
 
     rep = state.get_faction_reputation(faction_id)
-    rng = seeded_random(_mission_seed(state.seed, system.id, faction_id), "generate")
+    epoch = _mission_epoch(state)
+    rng = seeded_random(_mission_seed(state.seed, system.id, faction_id, epoch), "generate")
 
     available_tiers = []
     for tier in [1, 2, 3]:
@@ -289,7 +315,7 @@ def generate_missions(state: GameState, system: StarSystem, faction_id: str) -> 
         rep_reward = rng.randint(costs["reputation_reward_min"], costs["reputation_reward_max"])
 
         mission_id_num = deterministic_hash(
-            state.seed, system.id, faction_id, "mission", str(i), str(tier)
+            state.seed, system.id, faction_id, str(epoch), "mission", str(i), str(tier)
         )
         mission_id = f"mission_{system.id}_{abs(mission_id_num) % 100000:05d}"
 
