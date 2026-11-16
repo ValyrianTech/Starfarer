@@ -174,6 +174,9 @@ FUEL_BASE_PRICE = 25
 MORALE_LOW_THRESHOLD = 30
 MORALE_DECAY_PER_JUMP = 2
 
+# The distress beacon fee, waived when the ship cannot afford it.
+DISTRESS_FEE = 50
+
 STAR_SPECTRAL_TYPES = ["O", "B", "A", "F", "G", "K", "M"]
 STAR_COLORS = {
     "O": "#9db4ff",

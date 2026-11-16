@@ -2740,6 +2740,7 @@ class TestEffectivelyStranded:
             result = activate_distress_beacon(state)
         assert "error" not in result
         assert result["outcome"] == "no_response"
+        assert result["free"] is False
 
     def test_distress_rejected_when_cheapest_jump_affordable(self) -> None:
         state = self._make_state()
@@ -2757,6 +2758,7 @@ class TestEffectivelyStranded:
         state.ship.fuel = 0
         result = activate_distress_beacon(state)
         assert "error" not in result
+        assert result["free"] is False
 
     def test_distress_allowed_when_hull_critically_low_not_stranded(self) -> None:
         from unittest.mock import MagicMock
@@ -2842,13 +2844,20 @@ class TestDistressBeacon:
         assert "cooldown" in result["error"].lower()
 
     def test_activate_distress_beacon_no_credits(self) -> None:
+        from unittest.mock import MagicMock, patch
         state = new_game(seed=42)
         state.ship.fuel = 0
         state.ship.hull = 100
         state.ship.credits = 30
-        result = activate_distress_beacon(state)
-        assert "error" in result
-        assert "credits" in result["error"].lower()
+        mock_rng = MagicMock()
+        mock_rng.random.side_effect = [0.61]
+        mock_rng.randint.side_effect = [3]
+        with patch("backend.game.engine.seeded_random", return_value=mock_rng):
+            result = activate_distress_beacon(state)
+        assert "error" not in result
+        assert state.ship.credits == 30
+        assert state.ship.distress_cooldown is True
+        assert result["free"] is True
 
     def test_activate_distress_beacon_no_response(self) -> None:
         from unittest.mock import MagicMock, patch
@@ -2862,6 +2871,7 @@ class TestDistressBeacon:
         assert "No response" in result["result"]
         assert state.ship.credits == 150
         assert state.ship.distress_cooldown is True
+        assert result["free"] is False
 
     def test_activate_distress_beacon_pilots_guild(self) -> None:
         from unittest.mock import MagicMock, patch
@@ -3086,6 +3096,7 @@ class TestDistressBeacon:
         # pirates find nothing left to steal. A non-zero value here would
         # indicate the 50cr charge was applied AFTER the strategy.
         assert result["effects"]["credits"] == 0
+        assert result["free"] is False
 
     def test_activate_distress_beacon_pilots_guild_at_50_credit_boundary(self) -> None:
         from unittest.mock import MagicMock, patch
@@ -3107,6 +3118,7 @@ class TestDistressBeacon:
         # deferred 50cr charge already emptied the balance, the additional
         # -100 is clamped to 0 and the balance never goes negative.
         assert result["effects"]["credits"] == -100
+        assert result["free"] is False
 
     def test_activate_distress_beacon_deferred_charge_runs_before_credit_mutating_strategy(self) -> None:
         from unittest.mock import MagicMock, patch
@@ -3135,6 +3147,85 @@ class TestDistressBeacon:
         result = _distress_pilots_guild(state, None, 1)
         assert "error" in result
         assert result["error"] == "Cannot execute Pilots Guild rescue: no current system."
+
+    def test_distress_free_when_credits_below_fee(self) -> None:
+        from unittest.mock import MagicMock, patch
+        state = self._make_stranded_state()
+        state.ship.credits = 10
+        mock_rng = MagicMock()
+        mock_rng.random.side_effect = [0.61]
+        mock_rng.randint.side_effect = [3]
+        with patch("backend.game.engine.seeded_random", return_value=mock_rng):
+            result = activate_distress_beacon(state)
+        assert "error" not in result
+        assert state.ship.credits == 10
+        assert result["free"] is True
+        assert state.ship.distress_cooldown is True
+
+    def test_distress_free_at_zero_credits(self) -> None:
+        from unittest.mock import MagicMock, patch
+        state = self._make_stranded_state()
+        state.ship.credits = 0
+        mock_rng = MagicMock()
+        mock_rng.random.side_effect = [0.61]
+        mock_rng.randint.side_effect = [3]
+        with patch("backend.game.engine.seeded_random", return_value=mock_rng):
+            result = activate_distress_beacon(state)
+        assert "error" not in result
+        assert state.ship.credits == 0
+        assert result["free"] is True
+
+    def test_distress_free_on_resolved_outcome(self) -> None:
+        from unittest.mock import MagicMock, patch
+        state = self._make_stranded_state()
+        state.ship.credits = 10
+        mock_rng = MagicMock()
+        mock_rng.random.side_effect = [0.2, 0.5, 0.3]
+        mock_rng.randint.side_effect = [2, 15]
+        with patch("backend.game.engine.seeded_random", return_value=mock_rng):
+            result = activate_distress_beacon(state)
+        assert result["outcome"] == "passerby_help"
+        assert result["free"] is True
+        assert "waived" in result["result"]
+        assert state.ship.credits == 10
+
+    def test_distress_paid_when_affordable(self) -> None:
+        from unittest.mock import MagicMock, patch
+        state = self._make_stranded_state()
+        mock_rng = MagicMock()
+        mock_rng.random.side_effect = [0.61]
+        mock_rng.randint.side_effect = [3]
+        with patch("backend.game.engine.seeded_random", return_value=mock_rng):
+            result = activate_distress_beacon(state)
+        assert result["free"] is False
+        assert state.ship.credits == 150
+        assert "waived" not in result["result"]
+
+    def test_distress_free_path_error_refund(self) -> None:
+        from unittest.mock import MagicMock, patch
+
+        from backend.game.engine import _BucketEntry, _has_station_precondition
+        state = self._make_stranded_state()
+        state.ship.credits = 10
+        system = state.get_current_system()
+        assert system is not None
+        system.has_trading_station = True
+        mock_rng = MagicMock()
+        mock_rng.random.side_effect = [0.2, 0.1]
+        mock_rng.randint.side_effect = [1]
+        custom_table = [
+            _BucketEntry(
+                threshold=0.3,
+                precondition=_has_station_precondition,
+                strategy=lambda s, r, t: {"error": "boom"},
+                sub_table=None,
+            ),
+        ]
+        with patch("backend.game.engine._DISTRESS_TABLE", custom_table), patch("backend.game.engine.seeded_random", return_value=mock_rng):
+            result = activate_distress_beacon(state)
+        assert result["error"] == "boom"
+        assert state.ship.credits == 10
+        assert state.ship.distress_cooldown is False
 
 
 class TestSalvage:
