@@ -2575,6 +2575,7 @@ class TestAPIDistress:
         assert data["ship"]["credits"] == 10
         assert data["outcome"] == "no_response"
         assert "waived" in data["result"]
+        assert data["free"] is True
 
 
 class TestAPISalvage:
