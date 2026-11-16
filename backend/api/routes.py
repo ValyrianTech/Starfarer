@@ -1424,6 +1424,16 @@ def api_upgrades_info(
 ) -> dict:
     """Get information about all available ship upgrades.
 
+    The ``upgrades`` list contains one dict per upgrade, each with the
+    keys ``id``, ``name``, ``current_level``, ``max_level``, ``cost``,
+    ``effect``, ``can_upgrade``, ``affordable``, and ``blocked_reason``.
+    ``can_upgrade`` means "below max level" only; ``affordable`` means
+    ``credits >= cost``; ``blocked_reason`` is ``null`` when the upgrade
+    is purchasable right now, otherwise ``"max level"`` or
+    ``"insufficient credits"``. ``purchase_upgrade`` remains the single
+    source of truth for validation (credits and max level are enforced
+    there).
+
     :param game_id: The unique identifier of the game.
     :type game_id: str
     :returns: A dictionary with ``upgrades`` (list of upgrade info

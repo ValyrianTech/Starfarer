@@ -64,24 +64,44 @@ def get_upgrade_info(ship: Ship) -> list[dict]:
     Computes the current level, max level, cost for next level, and
     effect for each upgrade type.
 
+    ``can_upgrade`` means "below max level" (``current_level < max_level``)
+    only. It does NOT reflect whether the ship can currently afford the
+    upgrade. Use ``affordable`` to check affordability and
+    ``blocked_reason`` to understand why an upgrade cannot be purchased
+    right now.
+
     :param ship: The player's ship.
     :type ship: Ship
     :returns: A list of upgrade info dictionaries with keys: id, name,
-        current_level, max_level, cost, effect, and can_upgrade.
+        current_level, max_level, cost, effect, can_upgrade (True when
+        below max level), affordable (True when credits >= cost), and
+        blocked_reason (None when purchasable right now, otherwise
+        ``"max level"`` when at max level, else ``"insufficient credits"``).
     :rtype: list[dict]
     """
     info = []
     for upgrade_id in UPGRADE_COSTS:
         current_level = ship.upgrades.get(upgrade_id, 0)
         max_level = UPGRADE_MAX_LEVELS[upgrade_id]
+        cost = upgrade_cost(upgrade_id, current_level)
+        can_upgrade = current_level < max_level
+        affordable = ship.credits >= cost
+        if not can_upgrade:
+            blocked_reason = "max level"
+        elif not affordable:
+            blocked_reason = "insufficient credits"
+        else:
+            blocked_reason = None
         info.append({
             "id": upgrade_id,
             "name": upgrade_id.replace("_", " ").title(),
             "current_level": current_level,
             "max_level": max_level,
-            "cost": upgrade_cost(upgrade_id, current_level),
+            "cost": cost,
             "effect": UPGRADE_EFFECTS[upgrade_id],
-            "can_upgrade": current_level < max_level,
+            "can_upgrade": can_upgrade,
+            "affordable": affordable,
+            "blocked_reason": blocked_reason,
         })
     return info
 

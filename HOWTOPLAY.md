@@ -470,6 +470,25 @@ Returns the full game state plus a `trade_result` field with `sold_count`, `tota
 GET /api/game/{game_id}/upgrades
 ```
 
+The response includes a top-level `credits` field (your current credit
+balance) and an `upgrades` list with one entry per upgrade. Each entry has
+these fields:
+
+- `id` — the upgrade identifier (e.g. `hyperdrive`)
+- `name` — a human-readable name
+- `current_level` — the upgrade's current level
+- `max_level` — the maximum level
+- `cost` — the cost to advance to the next level
+- `effect` — the stat changes granted by the next level
+- `can_upgrade` — `true` when `current_level < max_level` (below max
+  level), **not** necessarily affordable
+- `affordable` — `true` when you can pay for it right now
+  (`credits >= cost`)
+- `blocked_reason` — `null` when the upgrade is purchasable right now;
+  otherwise a string naming the blocker: `"max level"` when at max level,
+  or `"insufficient credits"` otherwise. Max level takes precedence over
+  insufficient credits.
+
 ### Purchase an Upgrade
 
 ```http
