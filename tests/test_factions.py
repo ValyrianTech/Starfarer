@@ -1956,7 +1956,7 @@ class TestTradingFactionIntegration:
                        description="Old relic", value=200, system_id=system.id),
         ]
 
-        ok, _msg, _sold_count, total_price = perform_bulk_sell(
+        ok, _msg, _sold_count, total_price, _errors = perform_bulk_sell(
             state, [{"item": "artifact", "quantity": 1}]
         )
         assert ok is True
@@ -2540,7 +2540,7 @@ class TestReputationTrading:
                        description="Relic", value=100, system_id=system.id),
         ]
         state.modify_faction_reputation("stellar_cartographers", 0)
-        ok, _, _, price_no_rep = perform_bulk_sell(
+        ok, _, _, price_no_rep, _errors = perform_bulk_sell(
             state, [{"item": "mineral", "quantity": 1}, {"item": "artifact", "quantity": 1}]
         )
         assert ok is True
@@ -2552,7 +2552,7 @@ class TestReputationTrading:
                        description="Relic", value=100, system_id=system.id),
         ]
         state.modify_faction_reputation("stellar_cartographers", 50)
-        ok, _, _, price_with_rep = perform_bulk_sell(
+        ok, _, _, price_with_rep, _errors = perform_bulk_sell(
             state, [{"item": "mineral", "quantity": 1}, {"item": "artifact", "quantity": 1}]
         )
         assert ok is True
