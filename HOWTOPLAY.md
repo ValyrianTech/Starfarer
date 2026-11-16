@@ -238,9 +238,9 @@ When your ship is in danger — effectively stranded (out of fuel, or unable to 
 POST /api/game/{game_id}/distress
 ```
 
-Costs 50 credits. Has a 60% chance of attracting a responder within 1-3 turns. If no responder comes, you can try again after the cooldown expires.
+Normally costs 50 credits, but the fee is **waived** (the rescue is free) when you cannot afford it, so the beacon is never unaffordable while stranded. Has a 60% chance of attracting a responder within 1-3 turns. If no responder comes, you can try again after the cooldown expires.
 
-The 50-credit cost and the cooldown are only applied once a rescue outcome actually resolves. If the activation is rejected with an error (HTTP 400 — e.g. the beacon cannot be resolved in the current state), you are **not** charged and the cooldown is **not** set, so a rejected activation never costs you credits.
+The 50-credit fee and the cooldown are only applied once a rescue outcome actually resolves. If the activation is rejected with an error (HTTP 400 — e.g. the beacon cannot be resolved in the current state), you are **not** charged and the cooldown is **not** set, so a rejected activation never costs you credits. The engine response includes a `free` boolean (`true` when the 50-credit fee was waived because you could not afford it, `false` when the fee was charged); when waived, the `result` string notes that the beacon fee was waived.
 
 **Possible outcomes:**
 | Outcome | Chance | Effect |
@@ -349,11 +349,11 @@ The full game state response also includes a `recovery_options` block that surfa
 
 The `recovery_options` object has three sub-objects:
 
-- `distress` — the distress beacon. Fields: `available` (bool) and `reason` (string naming the first blocker, or `null` when available). Checked in order: being stranded or hull below 20%, not being on cooldown, and having 50 credits.
+- `distress` — the distress beacon. Fields: `available` (bool), `reason` (string naming the first blocker, or `null` when available), and `free` (bool — `true` when the 50-credit fee will be waived because you cannot afford it, `false` otherwise). Checked in order: being stranded or hull below 20%, then not being on cooldown. There is no credit gate — a broke stranded ship can always call for help (the fee is waived).
 - `salvage` — salvaging the current body. Fields: `available` (bool), `reason` (string or `null`), and `attempts_remaining` (int, 0–3). Blockers: not stranded, not landed on a body, or the body already fully salvaged (3 attempts used).
 - `craft` — emergency crafting. Fields: `available` (bool), `reason` (string or `null`), and `craftable` (list of output types such as `fuel`, `repair`, `morale`, `credits` derivable from discoveries in cargo). Unavailable when there are no craftable discoveries in cargo.
 
-`reason` strings always name the specific missing precondition (for example `requires 50 credits (you have 4)`, `beacon is on cooldown`, `must be landed on a body`, or `this body is fully salvaged (3 attempts used)`).
+`reason` strings always name the specific missing precondition (for example `beacon is on cooldown`, `must be landed on a body`, or `this body is fully salvaged (3 attempts used)`).
 
 ### 4.4 Contextual Hints
 
