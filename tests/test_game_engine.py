@@ -242,6 +242,45 @@ class TestTradingAndUpgrades:
             assert "cost" in u
             assert "current_level" in u
 
+    def test_get_upgrade_info_has_new_keys(self) -> None:
+        state = new_game(seed=42)
+        for u in get_upgrade_info(state.ship):
+            assert "affordable" in u
+            assert "blocked_reason" in u
+
+    def test_get_upgrade_info_zero_credits_all_unaffordable(self) -> None:
+        state = new_game(seed=42)
+        state.ship.credits = 0
+        for u in get_upgrade_info(state.ship):
+            assert u["can_upgrade"] is True
+            assert u["affordable"] is False
+            assert u["blocked_reason"] == "insufficient credits"
+
+    def test_get_upgrade_info_huge_credits_all_affordable(self) -> None:
+        state = new_game(seed=42)
+        state.ship.credits = 10_000_000
+        for u in get_upgrade_info(state.ship):
+            assert u["affordable"] is True
+            assert u["blocked_reason"] is None
+
+    def test_get_upgrade_info_max_level_precedence(self) -> None:
+        state = new_game(seed=42)
+        state.ship.credits = 10_000_000
+        state.ship.upgrades["fuel_tanks"] = UPGRADE_MAX_LEVELS["fuel_tanks"]
+        info = {u["id"]: u for u in get_upgrade_info(state.ship)}
+        entry = info["fuel_tanks"]
+        assert entry["can_upgrade"] is False
+        assert entry["blocked_reason"] == "max level"
+
+    def test_get_upgrade_info_exact_cost_affordable(self) -> None:
+        state = new_game(seed=42)
+        cost = upgrade_cost("fuel_tanks", state.ship.upgrades["fuel_tanks"])
+        state.ship.credits = cost
+        info = {u["id"]: u for u in get_upgrade_info(state.ship)}
+        entry = info["fuel_tanks"]
+        assert entry["affordable"] is True
+        assert entry["blocked_reason"] is None
+
     def test_purchase_upgrade(self) -> None:
         state = new_game(seed=42)
         state.ship.credits = 10000

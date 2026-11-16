@@ -249,6 +249,21 @@ class TestAPIEdgeCases:
         resp = client.get(f"/api/game/{game_id}/upgrades")
         assert resp.status_code == 200
         assert len(resp.json()["upgrades"]) > 0
+        for u in resp.json()["upgrades"]:
+            assert "affordable" in u
+            assert "blocked_reason" in u
+
+    def test_upgrade_info_zero_credits(self) -> None:
+        resp = client.post("/api/game/new", json={})
+        game_id = resp.json()["game_id"]
+        GAME_STORE[game_id].ship.credits = 0
+        resp = client.get(f"/api/game/{game_id}/upgrades")
+        assert resp.status_code == 200
+        upgrades = resp.json()["upgrades"]
+        assert len(upgrades) > 0
+        for u in upgrades:
+            assert u["affordable"] is False
+            assert u["blocked_reason"] == "insufficient credits"
 
     def test_leaderboard(self) -> None:
         resp = client.get("/api/leaderboard")
