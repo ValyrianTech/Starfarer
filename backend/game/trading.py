@@ -390,7 +390,7 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
     return False, f"Cannot trade {item}."
 
 
-def perform_bulk_sell(state: GameState, items: list[dict]) -> tuple[bool, str, int, int]:
+def perform_bulk_sell(state: GameState, items: list[dict]) -> tuple[bool, str, int, int, list[str]]:
     """Sell multiple discoveries in a single transaction.
 
     Validates that all requested items exist in the ship's discoveries.
@@ -404,16 +404,18 @@ def perform_bulk_sell(state: GameState, items: list[dict]) -> tuple[bool, str, i
     :type state: GameState
     :param items: A list of dicts with ``"item"`` and ``"quantity"`` keys.
     :type items: list[dict]
-    :returns: A tuple of ``(success, message, sold_count, total_price)``.
-    :rtype: tuple[bool, str, int, int]
+    :returns: A tuple of ``(success, message, sold_count, total_price, errors)``
+        where ``errors`` is the structured list of per-entry error strings
+        (empty when no entries failed).
+    :rtype: tuple[bool, str, int, int, list[str]]
     """
     system = state.get_current_system()
     if not system:
-        return False, "Not in a system.", 0, 0
+        return False, "Not in a system.", 0, 0, []
 
     is_station = system.has_trading_station
     if not is_station:
-        return False, "No trading facilities in this system.", 0, 0
+        return False, "No trading facilities in this system.", 0, 0, []
 
     price_mod = _market_price_mod(state, system)
 
@@ -467,7 +469,7 @@ def perform_bulk_sell(state: GameState, items: list[dict]) -> tuple[bool, str, i
         msg = "No items could be sold."
         if errors:
             msg += " " + " ".join(errors)
-        return False, msg, 0, 0
+        return False, msg, 0, 0, errors
 
     state.discoveries = [d for d in discoveries_snapshot if d.id not in sold_ids]
 
@@ -484,4 +486,4 @@ def perform_bulk_sell(state: GameState, items: list[dict]) -> tuple[bool, str, i
     if errors:
         success_msg += " " + " ".join(errors)
 
-    return True, success_msg, sold_count, total_price
+    return True, success_msg, sold_count, total_price, errors

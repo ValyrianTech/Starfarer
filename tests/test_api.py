@@ -1466,6 +1466,38 @@ class TestAPIBulkSell:
         assert data["trade_result"]["total_price"] > 0
         assert len(data["discoveries"]) < 3
 
+    def test_bulk_sell_partial_failure_surfaces_errors(self) -> None:
+        """A partial failure returns HTTP 200 with structured errors in trade_result."""
+        game_id = self._create_game_with_discoveries("bulk-sell-partial-errors")
+        resp = client.post(f"/api/game/{game_id}/trade/bulk-sell", json={
+            "items": [
+                {"item": "artifact", "quantity": 1},
+                {"item": "nonexistent_item_xyz", "quantity": 1}
+            ]
+        })
+        assert resp.status_code == 200
+        trade_result = resp.json()["trade_result"]
+        assert isinstance(trade_result["errors"], list)
+        assert trade_result["errors"]
+        assert any("nonexistent_item_xyz" in e for e in trade_result["errors"])
+        assert isinstance(trade_result["message"], str)
+        assert trade_result["message"]
+
+    def test_bulk_sell_full_success_has_empty_errors(self) -> None:
+        """A fully valid bulk sell returns HTTP 200 with an empty errors list."""
+        game_id = self._create_game_with_discoveries("bulk-sell-full-ok")
+        resp = client.post(f"/api/game/{game_id}/trade/bulk-sell", json={
+            "items": [
+                {"item": "artifact", "quantity": 1},
+                {"item": "mineral", "quantity": 1}
+            ]
+        })
+        assert resp.status_code == 200
+        trade_result = resp.json()["trade_result"]
+        assert trade_result["errors"] == []
+        assert isinstance(trade_result["message"], str)
+        assert trade_result["message"]
+
     def test_bulk_sell_all_nonexistent(self) -> None:
         """All items nonexistent should return 400."""
         game_id = self._create_game_with_discoveries("bulk-sell-all-bad")
@@ -1631,14 +1663,14 @@ class TestPerformBulkSellDirect:
     def test_missing_item_key(self) -> None:
         """Missing 'item' key should return error gracefully."""
         state = self._create_test_state()
-        success, message, _sold_count, _total_price = perform_bulk_sell(state, [{"quantity": 5}])
+        success, message, _sold_count, _total_price, _errors = perform_bulk_sell(state, [{"quantity": 5}])
         assert not success
         assert "missing required 'item' field" in message
 
     def test_missing_quantity_key(self) -> None:
         """Missing 'quantity' key should default to 1 and succeed."""
         state = self._create_test_state()
-        success, message, _sold_count, _total_price = perform_bulk_sell(state, [{"item": "artifact"}])
+        success, message, _sold_count, _total_price, _errors = perform_bulk_sell(state, [{"item": "artifact"}])
         assert success
         assert "Sold" in message
         assert len(state.discoveries) == 1  # One item sold, one remains
@@ -1646,7 +1678,7 @@ class TestPerformBulkSellDirect:
     def test_non_integer_quantity(self) -> None:
         """Non-integer quantity should return error gracefully."""
         state = self._create_test_state()
-        success, message, _sold_count, _total_price = perform_bulk_sell(state, [{"item": "artifact", "quantity": "abc"}])
+        success, message, _sold_count, _total_price, _errors = perform_bulk_sell(state, [{"item": "artifact", "quantity": "abc"}])
         assert not success
         assert "Invalid quantity" in message
 
@@ -1654,13 +1686,37 @@ class TestPerformBulkSellDirect:
         """Quantity exceeding available matches is rejected; nothing is sold."""
         state = self._create_test_state()
         # Only 1 discovery with category "artifact" exists
-        success, message, sold_count, _total_price = perform_bulk_sell(state, [{"item": "artifact", "quantity": 5}])
+        success, message, sold_count, _total_price, _errors = perform_bulk_sell(state, [{"item": "artifact", "quantity": 5}])
         assert success is False
         assert "No items could be sold." in message
         assert "Only" in message and "requested 5" in message
         assert sold_count == 0
         # Both discoveries remain (nothing sold)
         assert len(state.discoveries) == 2
+
+    def test_bulk_sell_returns_errors_on_partial_failure(self) -> None:
+        """A mixed request returns a 5-tuple with a populated errors list."""
+        state = self._create_test_state()
+        success, message, sold_count, _total_price, errors = perform_bulk_sell(state, [
+            {"item": "artifact", "quantity": 1},
+            {"item": "nonexistent_xyz", "quantity": 1},
+        ])
+        assert success is True
+        assert sold_count == 1
+        assert errors
+        assert any("nonexistent_xyz" in e for e in errors)
+        assert "No discoveries matching 'nonexistent_xyz'" in message
+
+    def test_bulk_sell_returns_empty_errors_on_full_success(self) -> None:
+        """A fully valid request returns a 5-tuple with an empty errors list."""
+        state = self._create_test_state()
+        success, message, sold_count, _total_price, errors = perform_bulk_sell(state, [
+            {"item": "artifact", "quantity": 1},
+        ])
+        assert success is True
+        assert sold_count == 1
+        assert errors == []
+        assert "Sold" in message
 
 
 class TestRoutesFullStateResponse:
