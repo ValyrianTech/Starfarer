@@ -15,6 +15,7 @@ from typing import Any, NamedTuple
 from backend.config import (
     ATMOSPHERIC_SCAN_FUEL_COST,
     ATMOSPHERIC_SCAN_MAX,
+    DISTRESS_FEE,
     EXPLORATION_VALUE_MULTIPLIER_MAX,
     EXPLORATION_VALUE_MULTIPLIER_PER_BIOME,
     EXPLORATION_VALUE_MULTIPLIER_PER_SYSTEM,
@@ -1081,17 +1082,20 @@ def activate_distress_beacon(state: GameState) -> dict:
     Can only be used when effectively stranded (fuel at 0 or unable to
     afford the cheapest reachable jump) or when hull is critically low
     (below 20% of max), and when the distress cooldown is not active.
-    Costs 50 credits. Has a 60% chance of attracting a rescue within
-    1-3 turns.
+    Costs 50 credits (``DISTRESS_FEE``), but the fee is waived (the rescue
+    is free) when the ship cannot afford it, so the beacon is never
+    unaffordable while stranded. Has a 60% chance of attracting a rescue
+    within 1-3 turns.
 
-    The 50 credits and the distress cooldown are charged up front (before
-    the outcome is resolved), and are refunded if the outcome resolves to
-    an ``error`` dict.
+    The fee and the distress cooldown are charged up front (before the
+    outcome is resolved), and are refunded if the outcome resolves to an
+    ``error`` dict.
 
     :param state: The current game state.
     :type state: GameState
     :returns: A dictionary with ``error`` on failure, or ``result``,
-        ``outcome``, and ``effects`` on success.
+        ``outcome``, ``effects``, and ``free`` (True when the fee was
+        waived because the ship could not afford it) on success.
     :rtype: dict
     """
     ship = state.ship
@@ -1107,15 +1111,16 @@ def activate_distress_beacon(state: GameState) -> dict:
     if ship.distress_cooldown:
         return {"error": "Distress beacon is on cooldown. Wait for it to recharge."}
 
-    if ship.credits < 50:
-        return {"error": "Not enough credits. Distress beacon costs 50 credits."}
+    fee = DISTRESS_FEE if ship.credits >= DISTRESS_FEE else 0
+    waived = fee == 0
 
-    ship.credits -= 50
+    ship.credits -= fee
     ship.distress_cooldown = True
 
     rng = seeded_random(state.seed, "distress", system.id, str(state._next_log_id))
 
     rescued = rng.random() < 0.6
+    outcome: dict[str, Any]
     if not rescued:
         turns = rng.randint(2, 4)
         outcome = {
@@ -1129,9 +1134,13 @@ def activate_distress_beacon(state: GameState) -> dict:
         outcome = _resolve_distress_outcome(state, rng, rescue_roll, turns)
 
     if "error" in outcome:
-        ship.credits += 50
+        ship.credits += fee
         ship.distress_cooldown = False
         return outcome
+
+    outcome = {**outcome, "free": waived}
+    if waived:
+        outcome["result"] = outcome["result"] + " The beacon fee was waived — you could not afford it."
 
     if outcome["outcome"] == "no_response":
         state.add_log("emergency", f"Distress beacon activated in {system.name}. No response yet — try again in {turns} turns.", category="crisis", title="Distress Beacon Activated", system=system.name)
@@ -1330,7 +1339,9 @@ def get_recovery_options(state: GameState) -> dict:
     beacon, salvage, and emergency crafting) without mutating state. Each
     action reports ``available`` plus a ``reason`` naming the first missing
     precondition (including ``no current system`` for distress), mirroring
-    the preflight checks of the corresponding action functions.
+    the preflight checks of the corresponding action functions. The
+    distress sub-object additionally reports ``free`` (True when the
+    beacon's fee will be waived because the ship cannot afford it).
 
     :param state: The current game state.
     :type state: GameState
@@ -1348,15 +1359,13 @@ def get_recovery_options(state: GameState) -> dict:
 
     hull_threshold = int(ship.max_hull * 0.2)
     if not system:
-        distress = {"available": False, "reason": "no current system"}
+        distress = {"available": False, "reason": "no current system", "free": False}
     elif not stranded and ship.hull >= hull_threshold:
-        distress = {"available": False, "reason": "requires being stranded or hull below 20%"}
+        distress = {"available": False, "reason": "requires being stranded or hull below 20%", "free": False}
     elif ship.distress_cooldown:
-        distress = {"available": False, "reason": "beacon is on cooldown"}
-    elif ship.credits < 50:
-        distress = {"available": False, "reason": f"requires 50 credits (you have {ship.credits})"}
+        distress = {"available": False, "reason": "beacon is on cooldown", "free": False}
     else:
-        distress = {"available": True, "reason": None}
+        distress = {"available": True, "reason": None, "free": ship.credits < DISTRESS_FEE}
 
     used = ship.salvage_attempts.get(ship.current_body_id, 0) if ship.current_body_id else 0
     attempts_remaining = max(0, 3 - used)

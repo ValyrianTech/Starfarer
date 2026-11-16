@@ -2556,6 +2556,26 @@ class TestAPIDistress:
         data = resp.json()
         assert data["ship"]["distress_cooldown"] is True
 
+    def test_distress_free_when_broke(self) -> None:
+        from unittest.mock import MagicMock, patch
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "distress-free-broke"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        state.ship.fuel = 0
+        state.ship.hull = 100
+        state.ship.credits = 10
+        GAME_STORE[game_id] = state
+        mock_rng = MagicMock()
+        mock_rng.random.side_effect = [0.61]
+        mock_rng.randint.side_effect = [3]
+        with patch("backend.game.engine.seeded_random", return_value=mock_rng):
+            resp = client.post(f"/api/game/{game_id}/distress")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["ship"]["credits"] == 10
+        assert data["outcome"] == "no_response"
+        assert "waived" in data["result"]
+
 
 class TestAPISalvage:
     """Tests for POST /api/game/{game_id}/salvage."""
@@ -3603,14 +3623,45 @@ class TestRecoveryOptions:
         assert ro["distress"]["reason"] == "no current system"
 
     def test_distress_insufficient_credits(self) -> None:
-        """Stranded with too few credits blocks distress on the credit gate."""
+        """Stranded with too few credits still leaves distress available and free."""
         _gid, state = self._new_game("recov-distress-credits")
         state.ship.fuel = 0
         state.ship.credits = 4
         ro = self._recovery(state)
-        assert ro["distress"]["available"] is False
-        assert "50 credits" in ro["distress"]["reason"]
-        assert "you have 4" in ro["distress"]["reason"]
+        assert ro["distress"]["available"] is True
+        assert ro["distress"]["reason"] is None
+        assert ro["distress"]["free"] is True
+
+    def test_issue_172_softlock_scenario_has_a_recovery_path(self) -> None:
+        """Regression for github-172: a stranded, broke ship whose only body is
+        already fully salvaged/explored must still have at least one usable
+        recovery action. Pre-fix the credit gate made distress unavailable and
+        every other path was exhausted, soft-locking the game. The beacon fee is
+        now waived when the ship is broke, so distress is available and free."""
+        _gid, state = self._new_game("recov-issue-172-softlock")
+        system = state.get_current_system()
+        body_id = system.bodies[0].id
+        # Stranded, broke, landed, and the body is exhausted for the lifetime
+        # of the game: salvage attempts used up and fully explored.
+        state.ship.fuel = 7
+        state.ship.credits = 13
+        state.ship.current_body_id = body_id
+        state.ship.salvage_attempts[body_id] = 3
+        for body in system.bodies:
+            body.exploration_count = 3
+            body.poi_count = 0
+            body.sub_surface_explored = True
+            body.atmospheric_scan_count = 6
+        # No trading station in this system.
+        system.has_trading_station = False
+        ro = self._recovery(state)
+        available = [k for k in ("distress", "salvage", "craft") if ro[k]["available"]]
+        # At least one recovery action must be usable (the soft-lock is closed).
+        assert available, f"github-172 soft-lock: no recovery action available: {ro}"
+        # Specifically, the distress beacon must be available and free.
+        assert ro["distress"]["available"] is True
+        assert ro["distress"]["reason"] is None
+        assert ro["distress"]["free"] is True
 
     def test_distress_cooldown(self) -> None:
         """Stranded with credits but a live cooldown blocks distress on cooldown."""
@@ -3621,6 +3672,7 @@ class TestRecoveryOptions:
         ro = self._recovery(state)
         assert ro["distress"]["available"] is False
         assert "cooldown" in ro["distress"]["reason"]
+        assert ro["distress"]["free"] is False
 
     def test_distress_cooldown_takes_precedence_over_credits(self) -> None:
         """With both low credits and a live cooldown, cooldown is surfaced first."""
@@ -3631,15 +3683,17 @@ class TestRecoveryOptions:
         ro = self._recovery(state)
         assert ro["distress"]["available"] is False
         assert "cooldown" in ro["distress"]["reason"]
+        assert ro["distress"]["free"] is False
 
     def test_distress_available_when_stranded_with_credits(self) -> None:
-        """Stranded with credits and no cooldown leaves distress available."""
+        """Stranded with credits and no cooldown leaves distress available (paid)."""
         _gid, state = self._new_game("recov-distress-ok")
         state.ship.fuel = 0
         state.ship.credits = 100
         ro = self._recovery(state)
         assert ro["distress"]["available"] is True
         assert ro["distress"]["reason"] is None
+        assert ro["distress"]["free"] is False
 
     def test_salvage_requires_being_stranded(self) -> None:
         """Not stranded blocks salvage."""
