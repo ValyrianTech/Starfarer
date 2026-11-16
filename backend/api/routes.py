@@ -1490,7 +1490,8 @@ def api_distress(game_id: str, x_game_token: str | None = Header(default=None)) 
     :param x_game_token: The caller-supplied per-game token (X-Game-Token header).
     :type x_game_token: str | None
     :returns: A dictionary with ``result``, ``outcome``, ``effects``,
-        and ``ship`` status.
+        ``free`` (bool — True when the fee was waived because the ship could
+        not afford it), and ``ship`` status.
     :rtype: dict
     :raises HTTPException: 404 if the game is not found; 400 if the
         beacon cannot be activated.
@@ -1509,6 +1510,7 @@ def api_distress(game_id: str, x_game_token: str | None = Header(default=None)) 
             "result": result["result"],
             "outcome": result["outcome"],
             "effects": result["effects"],
+            "free": result["free"],
             "ship": state.ship.to_dict(),
         }
 
