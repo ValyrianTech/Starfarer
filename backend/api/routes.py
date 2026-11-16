@@ -1351,7 +1351,9 @@ def api_bulk_sell(game_id: str, req: BulkSellRequest, x_game_token: str | None =
     :param x_game_token: The caller-supplied per-game token (X-Game-Token header).
     :type x_game_token: str | None
     :returns: A dictionary with the full game state (same format as
-        ``GET /api/game/{game_id}``).
+        ``GET /api/game/{game_id}``), plus a ``trade_result`` field with
+        ``sold_count``, ``total_price``, ``message`` (human-readable summary)
+        and ``errors`` (list of per-entry error strings, empty on full success).
     :rtype: dict
     :raises HTTPException: 404 if the game is not found; 400 if the
         sell is not possible.
@@ -1367,7 +1369,7 @@ def api_bulk_sell(game_id: str, req: BulkSellRequest, x_game_token: str | None =
             raise HTTPException(status_code=400, detail="Items list must not be empty.")
 
         items_dicts = [{"item": i.item, "quantity": i.quantity} for i in req.items]
-        ok, msg, sold_count, total_price = perform_bulk_sell(state, items_dicts)
+        ok, msg, sold_count, total_price, errors = perform_bulk_sell(state, items_dicts)
 
         if not ok:
             raise HTTPException(status_code=400, detail=msg)
@@ -1377,6 +1379,8 @@ def api_bulk_sell(game_id: str, req: BulkSellRequest, x_game_token: str | None =
         response["trade_result"] = {
             "sold_count": sold_count,
             "total_price": total_price,
+            "message": msg,
+            "errors": errors,
         }
         return response
 

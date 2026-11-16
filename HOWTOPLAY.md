@@ -458,7 +458,7 @@ Matches items by exact name first, then falls back to category match. Each `item
 
 **Over-quantity entries:** If an entry requests more units than are available (for example, `{ "item": "artifact", "quantity": 5 }` when only 2 matching artifacts exist), that entry is rejected outright and none of its units are sold — the quantity is NOT clamped to what is available. An error is reported for that entry, but the other valid entries in the same request still sell, so the response remains a partial success.
 
-Returns the full game state plus a `trade_result` field with `sold_count` and `total_price`.
+Returns the full game state plus a `trade_result` field with `sold_count`, `total_price`, `message` (a human-readable summary), and `errors` (a list of per-entry error strings). `errors` is an empty list on a fully successful sale and is populated on a partial failure, one string per failed entry. If every entry fails, the request still returns HTTP 400 with a `detail` string instead.
 
 ---
 
