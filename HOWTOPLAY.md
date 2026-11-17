@@ -245,7 +245,7 @@ When the beacon is activated there is a **60% chance** a responder arrives withi
 **Possible outcomes — system with a trading station:**
 | Outcome | Chance | Effect |
 |---|---|---|
-| Pilots Guild rescue | 30% | 20 fuel for 100 credits, +5 Free Pilots reputation |
+| Pilots Guild rescue | 30% | 20 fuel for up to 100 credits (clamped to current balance), +5 Free Pilots reputation |
 | Friendly passerby | 20% | +10–25 fuel, free |
 | Pirates steal credits | 12% | Lose 20–80 credits (whichever is smaller) |
 | Friendly emergency signal | 15% | +5–15 fuel, free |
