@@ -2572,10 +2572,33 @@ class TestAPIDistress:
             resp = client.post(f"/api/game/{game_id}/distress")
         assert resp.status_code == 200
         data = resp.json()
+        # The beacon is free: a broke ship is never charged.
         assert data["ship"]["credits"] == 10
         assert data["outcome"] == "no_response"
-        assert "waived" in data["result"]
-        assert data["free"] is True
+        assert "waived" not in data["result"]
+        assert "free" not in data
+
+    def test_distress_zero_credit_ship_can_call_for_help(self) -> None:
+        """github-173: a stranded ship with 0 credits can activate the beacon (it is free)."""
+        from unittest.mock import MagicMock, patch
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "distress-zero-credit"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        state.ship.fuel = 0
+        state.ship.hull = 100
+        state.ship.credits = 0
+        GAME_STORE[game_id] = state
+        mock_rng = MagicMock()
+        mock_rng.random.side_effect = [0.61]
+        mock_rng.randint.side_effect = [3]
+        with patch("backend.game.engine.seeded_random", return_value=mock_rng):
+            resp = client.post(f"/api/game/{game_id}/distress")
+        assert resp.status_code == 200
+        data = resp.json()
+        # The beacon never charges, so a broke ship keeps its (zero) balance.
+        assert data["ship"]["credits"] == 0
+        assert data["ship"]["distress_cooldown"] is True
+        assert data["outcome"] == "no_response"
 
 
 class TestAPISalvage:
@@ -3624,14 +3647,14 @@ class TestRecoveryOptions:
         assert ro["distress"]["reason"] == "no current system"
 
     def test_distress_insufficient_credits(self) -> None:
-        """Stranded with too few credits still leaves distress available and free."""
+        """Stranded with too few credits still leaves distress available (the beacon is free)."""
         _gid, state = self._new_game("recov-distress-credits")
         state.ship.fuel = 0
         state.ship.credits = 4
         ro = self._recovery(state)
         assert ro["distress"]["available"] is True
         assert ro["distress"]["reason"] is None
-        assert ro["distress"]["free"] is True
+        assert "free" not in ro["distress"]
 
     def test_issue_172_softlock_scenario_has_a_recovery_path(self) -> None:
         """Regression for github-172: a stranded, broke ship whose only body is
@@ -3659,10 +3682,10 @@ class TestRecoveryOptions:
         available = [k for k in ("distress", "salvage", "craft") if ro[k]["available"]]
         # At least one recovery action must be usable (the soft-lock is closed).
         assert available, f"github-172 soft-lock: no recovery action available: {ro}"
-        # Specifically, the distress beacon must be available and free.
+        # Specifically, the distress beacon must be available (the beacon is free).
         assert ro["distress"]["available"] is True
         assert ro["distress"]["reason"] is None
-        assert ro["distress"]["free"] is True
+        assert "free" not in ro["distress"]
 
     def test_distress_cooldown(self) -> None:
         """Stranded with credits but a live cooldown blocks distress on cooldown."""
@@ -3673,7 +3696,7 @@ class TestRecoveryOptions:
         ro = self._recovery(state)
         assert ro["distress"]["available"] is False
         assert "cooldown" in ro["distress"]["reason"]
-        assert ro["distress"]["free"] is False
+        assert "free" not in ro["distress"]
 
     def test_distress_cooldown_takes_precedence_over_credits(self) -> None:
         """With both low credits and a live cooldown, cooldown is surfaced first."""
@@ -3684,17 +3707,17 @@ class TestRecoveryOptions:
         ro = self._recovery(state)
         assert ro["distress"]["available"] is False
         assert "cooldown" in ro["distress"]["reason"]
-        assert ro["distress"]["free"] is False
+        assert "free" not in ro["distress"]
 
     def test_distress_available_when_stranded_with_credits(self) -> None:
-        """Stranded with credits and no cooldown leaves distress available (paid)."""
+        """Stranded with credits and no cooldown leaves distress available (the beacon is free)."""
         _gid, state = self._new_game("recov-distress-ok")
         state.ship.fuel = 0
         state.ship.credits = 100
         ro = self._recovery(state)
         assert ro["distress"]["available"] is True
         assert ro["distress"]["reason"] is None
-        assert ro["distress"]["free"] is False
+        assert "free" not in ro["distress"]
 
     def test_salvage_requires_being_stranded(self) -> None:
         """Not stranded blocks salvage."""
