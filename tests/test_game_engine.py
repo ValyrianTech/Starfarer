@@ -2734,13 +2734,16 @@ class TestEffectivelyStranded:
         mock_rng = MagicMock()
         mock_rng.random.side_effect = [0.61]
         mock_rng.randint.side_effect = [3]
+        credits_before = state.ship.credits
         with patch("backend.game.engine.cheapest_reachable_fuel_cost", return_value=8), patch(
             "backend.game.engine.seeded_random", return_value=mock_rng
         ):
             result = activate_distress_beacon(state)
         assert "error" not in result
         assert result["outcome"] == "no_response"
-        assert result["free"] is False
+        # The beacon is free: no credits are ever charged.
+        assert state.ship.credits == credits_before
+        assert "free" not in result
 
     def test_distress_rejected_when_cheapest_jump_affordable(self) -> None:
         state = self._make_state()
@@ -2756,9 +2759,12 @@ class TestEffectivelyStranded:
     def test_distress_allowed_at_zero_fuel(self) -> None:
         state = self._make_state()
         state.ship.fuel = 0
+        credits_before = state.ship.credits
         result = activate_distress_beacon(state)
         assert "error" not in result
-        assert result["free"] is False
+        # The beacon is free: no credits are charged even when affordable.
+        assert state.ship.credits == credits_before
+        assert "free" not in result
 
     def test_distress_allowed_when_hull_critically_low_not_stranded(self) -> None:
         from unittest.mock import MagicMock
@@ -2857,7 +2863,7 @@ class TestDistressBeacon:
         assert "error" not in result
         assert state.ship.credits == 30
         assert state.ship.distress_cooldown is True
-        assert result["free"] is True
+        assert "free" not in result
 
     def test_activate_distress_beacon_no_response(self) -> None:
         from unittest.mock import MagicMock, patch
@@ -2869,9 +2875,10 @@ class TestDistressBeacon:
             result = activate_distress_beacon(state)
         assert result["outcome"] == "no_response"
         assert "No response" in result["result"]
-        assert state.ship.credits == 150
+        # The beacon is free: credits are unchanged by a no_response.
+        assert state.ship.credits == 200
         assert state.ship.distress_cooldown is True
-        assert result["free"] is False
+        assert "free" not in result
 
     def test_activate_distress_beacon_pilots_guild(self) -> None:
         from unittest.mock import MagicMock, patch
@@ -3062,7 +3069,7 @@ class TestDistressBeacon:
         assert state.ship.credits == 200
         assert state.ship.distress_cooldown is False
 
-    def test_activate_distress_beacon_success_charges_and_cooldown(self) -> None:
+    def test_activate_distress_beacon_success_sets_cooldown(self) -> None:
         from unittest.mock import MagicMock, patch
         state = self._make_stranded_state()
         system = state.get_current_system()
@@ -3076,12 +3083,15 @@ class TestDistressBeacon:
             result = activate_distress_beacon(state)
         assert result["outcome"] == "pilots_guild"
         assert "error" not in result
-        assert state.ship.credits == 150
+        # The beacon itself is free; only the Pilots Guild rescue charges 100.
+        assert state.ship.credits == 200
         assert state.ship.distress_cooldown is True
 
-    def test_activate_distress_beacon_piracy_at_50_credit_boundary(self) -> None:
+    def test_activate_distress_beacon_piracy_steals_from_full_balance(self) -> None:
         from unittest.mock import MagicMock, patch
         state = self._make_stranded_state()
+        # No station -> piracy is reachable; no fee is charged, so pirates steal
+        # from the full balance.
         state.ship.credits = 50
         mock_rng = MagicMock()
         mock_rng.random.side_effect = [0.2, 0.5, 0.6]
@@ -3092,13 +3102,11 @@ class TestDistressBeacon:
         assert "error" not in result
         assert state.ship.credits == 0
         assert state.ship.distress_cooldown is True
-        # The deferred 50cr charge ran first, emptying the balance, so the
-        # pirates find nothing left to steal. A non-zero value here would
-        # indicate the 50cr charge was applied AFTER the strategy.
-        assert result["effects"]["credits"] == 0
-        assert result["free"] is False
+        # The bandit steals the full 50 (there is no fee to reduce the balance first).
+        assert result["effects"]["credits"] == -50
+        assert "free" not in result
 
-    def test_activate_distress_beacon_pilots_guild_at_50_credit_boundary(self) -> None:
+    def test_activate_distress_beacon_pilots_guild_charges_100_from_balance(self) -> None:
         from unittest.mock import MagicMock, patch
         state = self._make_stranded_state()
         system = state.get_current_system()
@@ -3112,15 +3120,13 @@ class TestDistressBeacon:
             result = activate_distress_beacon(state)
         assert result["outcome"] == "pilots_guild"
         assert "error" not in result
+        # The beacon is free; the guild still charges 100, clamped to 0.
         assert state.ship.credits == 0
         assert state.ship.distress_cooldown is True
-        # The guild rescue still reports its full -100 cost. Because the
-        # deferred 50cr charge already emptied the balance, the additional
-        # -100 is clamped to 0 and the balance never goes negative.
         assert result["effects"]["credits"] == -100
-        assert result["free"] is False
+        assert "free" not in result
 
-    def test_activate_distress_beacon_deferred_charge_runs_before_credit_mutating_strategy(self) -> None:
+    def test_activate_distress_beacon_does_not_charge_fee_before_strategy(self) -> None:
         from unittest.mock import MagicMock, patch
         state = self._make_stranded_state()
         state.ship.credits = 250
@@ -3131,14 +3137,9 @@ class TestDistressBeacon:
             result = activate_distress_beacon(state)
         assert result["outcome"] == "piracy"
         assert "error" not in result
-        # 250 - 50 (deferred charge) - 80 (pirates steal) == 120. This only
-        # holds when the 50cr charge is applied BEFORE the pirates steal from
-        # the already-reduced 200 balance; if the steal happened first the
-        # result would differ, proving the charge is applied first.
-        assert state.ship.credits == 120
-        # Pirates stole the full 80 because 200 remained after the charge.
+        # No fee is charged, so the pirates steal 80 from the full 250 (== 170).
+        assert state.ship.credits == 170
         assert result["effects"]["credits"] == -80
-
     def test_distress_pilots_guild_no_system(self) -> None:
         """_distress_pilots_guild should return error dict when system is None."""
         from backend.game.engine import _distress_pilots_guild
@@ -3148,7 +3149,7 @@ class TestDistressBeacon:
         assert "error" in result
         assert result["error"] == "Cannot execute Pilots Guild rescue: no current system."
 
-    def test_distress_free_when_credits_below_fee(self) -> None:
+    def test_distress_free_regardless_of_credits(self) -> None:
         from unittest.mock import MagicMock, patch
         state = self._make_stranded_state()
         state.ship.credits = 10
@@ -3158,9 +3159,10 @@ class TestDistressBeacon:
         with patch("backend.game.engine.seeded_random", return_value=mock_rng):
             result = activate_distress_beacon(state)
         assert "error" not in result
+        # The beacon never charges credits, even when the ship could afford a fee.
         assert state.ship.credits == 10
-        assert result["free"] is True
         assert state.ship.distress_cooldown is True
+        assert "free" not in result
 
     def test_distress_free_at_zero_credits(self) -> None:
         from unittest.mock import MagicMock, patch
@@ -3173,7 +3175,7 @@ class TestDistressBeacon:
             result = activate_distress_beacon(state)
         assert "error" not in result
         assert state.ship.credits == 0
-        assert result["free"] is True
+        assert "free" not in result
 
     def test_distress_free_on_resolved_outcome(self) -> None:
         from unittest.mock import MagicMock, patch
@@ -3185,20 +3187,23 @@ class TestDistressBeacon:
         with patch("backend.game.engine.seeded_random", return_value=mock_rng):
             result = activate_distress_beacon(state)
         assert result["outcome"] == "passerby_help"
-        assert result["free"] is True
-        assert "waived" in result["result"]
+        # No fee charged and no 'waived' note — the beacon is simply free.
+        assert "free" not in result
+        assert "waived" not in result["result"]
         assert state.ship.credits == 10
 
-    def test_distress_paid_when_affordable(self) -> None:
+    def test_distress_does_not_charge_when_affordable(self) -> None:
         from unittest.mock import MagicMock, patch
         state = self._make_stranded_state()
+        # Plenty of credits — pre-fix these would have been charged 50.
+        state.ship.credits = 1000
         mock_rng = MagicMock()
         mock_rng.random.side_effect = [0.61]
         mock_rng.randint.side_effect = [3]
         with patch("backend.game.engine.seeded_random", return_value=mock_rng):
             result = activate_distress_beacon(state)
-        assert result["free"] is False
-        assert state.ship.credits == 150
+        assert "free" not in result
+        assert state.ship.credits == 1000
         assert "waived" not in result["result"]
 
     def test_distress_free_path_error_refund(self) -> None:

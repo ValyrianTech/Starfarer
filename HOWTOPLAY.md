@@ -238,21 +238,34 @@ When your ship is in danger — effectively stranded (out of fuel, or unable to 
 POST /api/game/{game_id}/distress
 ```
 
-Normally costs 50 credits, but the fee is **waived** (the rescue is free) when you cannot afford it, so the beacon is never unaffordable while stranded. Has a 60% chance of attracting a responder within 1-3 turns. If no responder comes, you can try again after the cooldown expires.
+The beacon is **free** — it costs no credits. The only gates are the preconditions above plus a cooldown that is set for the rest of the turn after each activation; if no responder comes, you can try again once the cooldown clears. A broke, stranded ship can therefore always call for help.
 
-The 50-credit fee and the cooldown are only applied once a rescue outcome actually resolves. If the activation is rejected with an error (HTTP 400 — e.g. the beacon cannot be resolved in the current state), you are **not** charged and the cooldown is **not** set, so a rejected activation never costs you credits. The engine response includes a `free` boolean (`true` when the 50-credit fee was waived because you could not afford it, `false` when the fee was charged); when waived, the `result` string notes that the beacon fee was waived.
+When the beacon is activated there is a **60% chance** a responder arrives within 1–3 turns; the other **40%** of activations get no response at all (nothing happens, and the cooldown is set). The percentages below are the odds **conditional on a responder arriving**.
 
-**Possible outcomes:**
+**Possible outcomes — system with a trading station:**
 | Outcome | Chance | Effect |
 |---|---|---|
-| Pilots Guild rescue | ~30% (stations only) | 20 fuel for 100 credits, +5 Free Pilots reputation |
-| Friendly passerby | ~20% | +10-25 fuel, free |
-| Pirates steal credits | ~12% | Lose 20-80 credits |
-| Friendly emergency signal | ~20% | +5-15 fuel, free |
-| Hostile emergency signal | ~20% | 5-15 hull damage |
-| Passerby ignores | ~8% | Nothing happens |
+| Pilots Guild rescue | 30% | 20 fuel for 100 credits, +5 Free Pilots reputation |
+| Friendly passerby | 20% | +10–25 fuel, free |
+| Pirates steal credits | 12% | Lose 20–80 credits (whichever is smaller) |
+| Friendly emergency signal | 15% | +5–15 fuel, free |
+| Hostile emergency signal | 15% | 5–15 hull damage |
+| Passerby ignores | 8% | Nothing happens |
 
-The distress beacon has a cooldown period after each activation. Use it only when truly stranded.
+**Possible outcomes — system without a trading station** (the Pilots Guild branch is skipped because it requires a station):
+| Outcome | Chance | Effect |
+|---|---|---|
+| Friendly passerby | 35% | +10–25 fuel, free |
+| Friendly emergency signal | 15% | +5–15 fuel, free |
+| Pirates steal credits | 21% | Lose 20–80 credits (whichever is smaller) |
+| Hostile emergency signal | 15% | 5–15 hull damage |
+| Passerby ignores | 14% | Nothing happens |
+
+Away from a station roughly **50%** of activations that get a response yield fuel (35% + 15%); the piracy and hostile-signal outcomes are the genuine prices you can pay.
+
+**Cooldown semantics.** The cooldown is set immediately on every activation and is the only limiter besides the stranded/low-hull gate. It is cleared automatically when the ship has any fuel — i.e. a *partial* rescue (say +5 fuel from a friendly signal) clears the cooldown while the ship is still stranded. This is **intended**: a stranded ship can keep signalling until it is rescued, paying in hull and credits to pirates and hostiles along the way. There is no risk of a soft-lock: the beacon is always available to a stranded ship.
+
+If the activation is rejected with an error (HTTP 400 — e.g. the beacon cannot be resolved in the current state), the cooldown is **rolled back** so a rejected activation never consumes your attempt.
 
 ### 3.12 Salvage & Emergency Crafting
 
@@ -349,7 +362,7 @@ The full game state response also includes a `recovery_options` block that surfa
 
 The `recovery_options` object has three sub-objects:
 
-- `distress` — the distress beacon. Fields: `available` (bool), `reason` (string naming the first blocker, or `null` when available), and `free` (bool — `true` when the 50-credit fee will be waived because you cannot afford it, `false` otherwise). Checked in order: being stranded or hull below 20%, then not being on cooldown. There is no credit gate — a broke stranded ship can always call for help (the fee is waived).
+- `distress` — the distress beacon. Fields: `available` (bool) and `reason` (string naming the first blocker, or `null` when available). Checked in order: having a current system, being stranded or hull below 20%, then not being on cooldown. The beacon is free — there is no credit gate, so a broke stranded ship can always call for help.
 - `salvage` — salvaging the current body. Fields: `available` (bool), `reason` (string or `null`), and `attempts_remaining` (int, 0–3). Blockers: not stranded, not landed on a body, or the body already fully salvaged (3 attempts used).
 - `craft` — emergency crafting. Fields: `available` (bool), `reason` (string or `null`), and `craftable` (list of output types such as `fuel`, `repair`, `morale`, `credits` derivable from discoveries in cargo). Unavailable when there are no craftable discoveries in cargo.
 
