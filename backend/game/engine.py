@@ -1086,9 +1086,11 @@ def activate_distress_beacon(state: GameState) -> dict:
 
     Can only be used when effectively stranded (fuel at 0 or unable to
     afford the cheapest reachable jump) or when hull is critically low
-    (below 20% of max), and when the distress cooldown is not active.
-    The beacon is FREE (no credit cost). Has a 60% chance of attracting
-    a rescue within 1-3 turns.
+    (below 20% of max). The cooldown only gates re-firing when the ship is
+    NOT stranded: a stranded (or critically-low-hull) ship can always signal,
+    and each attempt still risks stolen credits or hostile-signal hull damage
+    on bad rolls. The beacon is FREE (no credit cost). Has a 60% chance of
+    attracting a rescue within 1-3 turns.
 
     :param state: The current game state.
     :type state: GameState
@@ -1102,11 +1104,15 @@ def activate_distress_beacon(state: GameState) -> dict:
     if not system:
         return {"error": "No current system."}
 
+    stranded = is_effectively_stranded(state)
     hull_threshold = int(ship.max_hull * 0.2)
-    if not is_effectively_stranded(state) and ship.hull >= hull_threshold:
+    if not stranded and ship.hull >= hull_threshold:
         return {"error": "Distress beacon can only be activated when stranded (cannot afford any jump) or hull is critically low (below 20%)."}
 
-    if ship.distress_cooldown:
+    # Cooldown blocks re-firing only when NOT stranded. A stranded ship can
+    # always signal (self-limiting: each attempt still risks stolen credits
+    # or hostile-signal hull damage on bad rolls).
+    if ship.distress_cooldown and not stranded:
         return {"error": "Distress beacon is on cooldown. Wait for it to recharge."}
 
     ship.distress_cooldown = True
@@ -1195,6 +1201,7 @@ def perform_salvage(state: GameState) -> dict:
     if roll < 0.4:
         fuel_found = rng.randint(2, 8)
         ship.fuel = min(ship.max_fuel, ship.fuel + fuel_found)
+        state.update_stranded_state()
         state.add_log("emergency", f"Salvaged a fuel cache on {body.name if body else body_id}: +{fuel_found} fuel.", category="crisis", title="Salvage: Fuel Cache", fuel_change=fuel_found)
         return {
             "result": f"Found a fuel cache! +{fuel_found} fuel.",
@@ -1287,6 +1294,7 @@ def emergency_craft(state: GameState, discovery_id: str, output: str) -> dict:
     ship = state.ship
     if output == "fuel":
         ship.fuel = min(ship.max_fuel, ship.fuel + rate)
+        state.update_stranded_state()
         state.add_log("emergency", f"Emergency crafted {matching_disc.name} into +{rate} fuel.", category="crisis", title="Emergency Craft: Fuel", fuel_change=rate)
         return {
             "result": f"Crafted {matching_disc.name} into +{rate} fuel.",
@@ -1328,7 +1336,9 @@ def get_recovery_options(state: GameState) -> dict:
     beacon, salvage, and emergency crafting) without mutating state. Each
     action reports ``available`` plus a ``reason`` naming the first missing
     precondition (including ``no current system`` for distress), mirroring
-    the preflight checks of the corresponding action functions.
+    the preflight checks of the corresponding action functions. The distress
+    cooldown does not gate availability: a stranded (or critically-low-hull)
+    ship can always signal.
 
     :param state: The current game state.
     :type state: GameState
@@ -1349,8 +1359,6 @@ def get_recovery_options(state: GameState) -> dict:
         distress = {"available": False, "reason": "no current system"}
     elif not stranded and ship.hull >= hull_threshold:
         distress = {"available": False, "reason": "requires being stranded or hull below 20%"}
-    elif ship.distress_cooldown:
-        distress = {"available": False, "reason": "beacon is on cooldown"}
     else:
         distress = {"available": True, "reason": None}
 

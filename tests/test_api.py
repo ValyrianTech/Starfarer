@@ -3687,27 +3687,51 @@ class TestRecoveryOptions:
         assert ro["distress"]["reason"] is None
         assert "free" not in ro["distress"]
 
-    def test_distress_cooldown(self) -> None:
-        """Stranded with credits but a live cooldown blocks distress on cooldown."""
+    def test_distress_available_when_stranded_even_with_cooldown(self) -> None:
+        """Stranded with credits and a live cooldown still leaves distress available."""
         _gid, state = self._new_game("recov-distress-cooldown")
         state.ship.fuel = 0
         state.ship.credits = 100
         state.ship.distress_cooldown = True
         ro = self._recovery(state)
-        assert ro["distress"]["available"] is False
-        assert "cooldown" in ro["distress"]["reason"]
+        assert ro["distress"]["available"] is True
+        assert ro["distress"]["reason"] is None
         assert "free" not in ro["distress"]
 
-    def test_distress_cooldown_takes_precedence_over_credits(self) -> None:
-        """With both low credits and a live cooldown, cooldown is surfaced first."""
+    def test_distress_cooldown_does_not_block_stranded_ship(self) -> None:
+        """A stranded ship with a live cooldown AND low credits still reports distress available."""
         _gid, state = self._new_game("recov-distress-cooldown-and-credits")
         state.ship.fuel = 0
         state.ship.credits = 4
         state.ship.distress_cooldown = True
         ro = self._recovery(state)
-        assert ro["distress"]["available"] is False
-        assert "cooldown" in ro["distress"]["reason"]
+        assert ro["distress"]["available"] is True
+        assert ro["distress"]["reason"] is None
         assert "free" not in ro["distress"]
+
+    def test_issue_180_fuel_stranded_with_cooldown_distress_not_400(self) -> None:
+        """Regression for github-180: a ship stranded by unaffordable fuel with a
+        live cooldown can still POST /distress and get a 200 (not a 400)."""
+        from unittest.mock import patch
+
+        _gid, state = self._new_game("recov-issue-180")
+        system = state.get_current_system()
+        body_id = system.bodies[0].id
+        state.ship.fuel = 7
+        state.ship.credits = 0
+        state.ship.distress_cooldown = True
+        state.ship.current_body_id = body_id
+        state.ship.salvage_attempts[body_id] = 3
+        for body in system.bodies:
+            body.exploration_count = 3
+            body.poi_count = 0
+        state.discoveries.clear()
+        state.sync_cargo()
+        self._save(state)
+        with patch("backend.game.engine.cheapest_reachable_fuel_cost", return_value=8):
+            resp = client.post(f"/api/game/{state.id}/distress")
+        assert resp.status_code == 200
+        assert "outcome" in resp.json()
 
     def test_distress_available_when_stranded_with_credits(self) -> None:
         """Stranded with credits and no cooldown leaves distress available (the beacon is free)."""
