@@ -238,7 +238,7 @@ When your ship is in danger — effectively stranded (out of fuel, or unable to 
 POST /api/game/{game_id}/distress
 ```
 
-The beacon is **free** — it costs no credits. The only gates are the preconditions above plus a cooldown that is set for the rest of the turn after each activation; if no responder comes, you can try again once the cooldown clears. A broke, stranded ship can therefore always call for help.
+The beacon is **free** — it costs no credits, and its only gates are being effectively stranded (or hull below 20% of max). A cooldown is set after each activation, but it does not lock out a stranded or critically-low-hull ship: you can fire the beacon again even while it is on cooldown, because the cooldown only prevents re-firing during normal flight (it exists to stop spam, not to strand a ship). A broke, stranded ship can therefore always call for help.
 
 When the beacon is activated there is a **60% chance** a responder arrives within 1–3 turns; the other **40%** of activations get no response at all (nothing happens, and the cooldown is set). The percentages below are the odds **conditional on a responder arriving**.
 
@@ -263,7 +263,7 @@ When the beacon is activated there is a **60% chance** a responder arrives withi
 
 Away from a station roughly **50%** of activations that get a response yield fuel (35% + 15%); the piracy and hostile-signal outcomes are the genuine prices you can pay.
 
-**Cooldown semantics.** The cooldown is set immediately on every activation and is the only limiter besides the stranded/low-hull gate. It is cleared automatically when the ship has any fuel — i.e. a *partial* rescue (say +5 fuel from a friendly signal) clears the cooldown while the ship is still stranded. This is **intended**: a stranded ship can keep signalling until it is rescued, paying in hull and credits to pirates and hostiles along the way. There is no risk of a soft-lock: the beacon is always available to a stranded ship.
+**Cooldown semantics.** The cooldown is set on every activation, but it does **not** block a stranded (or critically-low-hull) ship from firing again — the cooldown only gates re-firing when the ship is **not** stranded (it exists to stop spam in normal flight, not to lock out a stranded ship). The cooldown is cleared automatically when the ship has any fuel — a *partial* rescue (say +5 fuel from a friendly signal), a salvage fuel cache, or emergency-crafted fuel all clear it via `update_stranded_state`. This is **intended**: a stranded ship can keep signalling until it is rescued, paying in hull and credits to pirates and hostiles along the way. There is no risk of a soft-lock: the beacon is always available to a stranded ship, though bad rolls still cost hull or credits.
 
 If the activation is rejected with an error (HTTP 400 — e.g. the beacon cannot be resolved in the current state), the cooldown is **rolled back** so a rejected activation never consumes your attempt.
 
@@ -362,11 +362,11 @@ The full game state response also includes a `recovery_options` block that surfa
 
 The `recovery_options` object has three sub-objects:
 
-- `distress` — the distress beacon. Fields: `available` (bool) and `reason` (string naming the first blocker, or `null` when available). Checked in order: having a current system, being stranded or hull below 20%, then not being on cooldown. The beacon is free — there is no credit gate, so a broke stranded ship can always call for help.
+- `distress` — the distress beacon. Fields: `available` (bool) and `reason` (string naming the first blocker, or `null` when available). Checked in order: having a current system, then being stranded or hull below 20%. The beacon is free — there is no credit gate, so a broke stranded ship can always call for help.
 - `salvage` — salvaging the current body. Fields: `available` (bool), `reason` (string or `null`), and `attempts_remaining` (int, 0–3). Blockers: not stranded, not landed on a body, or the body already fully salvaged (3 attempts used).
 - `craft` — emergency crafting. Fields: `available` (bool), `reason` (string or `null`), and `craftable` (list of output types such as `fuel`, `repair`, `morale`, `credits` derivable from discoveries in cargo). Unavailable when there are no craftable discoveries in cargo.
 
-`reason` strings always name the specific missing precondition (for example `beacon is on cooldown`, `must be landed on a body`, or `this body is fully salvaged (3 attempts used)`).
+`reason` strings always name the specific missing precondition (for example `no current system`, `must be landed on a body`, or `this body is fully salvaged (3 attempts used)`).
 
 ### 4.4 Contextual Hints
 
