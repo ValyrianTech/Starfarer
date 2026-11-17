@@ -3709,6 +3709,21 @@ class TestRecoveryOptions:
         assert ro["distress"]["reason"] is None
         assert "free" not in ro["distress"]
 
+    def test_distress_low_hull_on_cooldown_available_and_not_stranded_consistent(self) -> None:
+        """A non-stranded, critically-low-hull ship with a live cooldown still
+        reports distress available, matching activate_distress_beacon's cooldown
+        bypass for low hull."""
+        from unittest.mock import patch
+
+        _gid, state = self._new_game("recov-distress-low-hull-cooldown")
+        state.ship.fuel = 40
+        state.ship.hull = 15
+        state.ship.distress_cooldown = True
+        with patch("backend.game.engine.cheapest_reachable_fuel_cost", return_value=1):
+            ro = self._recovery(state)
+        assert ro["distress"]["available"] is True
+        assert ro["distress"]["reason"] is None
+
     def test_issue_180_fuel_stranded_with_cooldown_distress_not_400(self) -> None:
         """Regression for github-180: a ship stranded by unaffordable fuel with a
         live cooldown can still POST /distress and get a 200 (not a 400)."""

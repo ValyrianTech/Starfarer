@@ -2856,15 +2856,35 @@ class TestDistressBeacon:
         assert state.ship.distress_cooldown is True
 
     def test_activate_distress_beacon_cooldown_blocks_when_not_stranded(self) -> None:
+        """A healthy, non-stranded ship is still blocked by the availability
+        gate regardless of the cooldown flag (the cooldown no longer gates
+        activation at all)."""
         from unittest.mock import patch
         state = new_game(seed=42)
         state.ship.fuel = 40
-        state.ship.hull = 15
+        state.ship.hull = state.ship.max_hull
         state.ship.distress_cooldown = True
         with patch("backend.game.engine.cheapest_reachable_fuel_cost", return_value=1):
             result = activate_distress_beacon(state)
         assert "error" in result
-        assert "cooldown" in result["error"].lower()
+        assert "stranded" in result["error"].lower() or "critically low" in result["error"].lower()
+
+    def test_activate_distress_beacon_low_hull_ignores_cooldown(self) -> None:
+        """A non-stranded, critically-low-hull ship on cooldown still fires:
+        the cooldown does not block a low-hull signal."""
+        from unittest.mock import MagicMock, patch
+        state = new_game(seed=42)
+        state.ship.fuel = 40
+        state.ship.hull = 15
+        state.ship.distress_cooldown = True
+        mock_rng = MagicMock()
+        mock_rng.random.side_effect = [0.61]
+        mock_rng.randint.side_effect = [3]
+        with patch("backend.game.engine.cheapest_reachable_fuel_cost", return_value=1), \
+             patch("backend.game.engine.seeded_random", return_value=mock_rng):
+            result = activate_distress_beacon(state)
+        assert "error" not in result
+        assert result["outcome"] == "no_response"
 
     def test_activate_distress_beacon_stranded_repeated_fires_all_allowed(self) -> None:
         state = self._make_stranded_state()
