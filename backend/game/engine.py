@@ -923,19 +923,25 @@ class _BucketEntry(NamedTuple):
 
 
 def _distress_pilots_guild(state: GameState, rng: Any, turns: int) -> dict:
-    """Pilots Guild rescue outcome: deliver 20 fuel for 100 credits."""
+    """Pilots Guild rescue outcome: deliver 20 fuel for 100 credits.
+
+    The 100-credit charge is clamped to the player's available credits, so a
+    player with fewer than 100 credits pays only what they can afford.
+    """
     ship = state.ship
     system = state.get_current_system()
     if system is None:
         return {"error": "Cannot execute Pilots Guild rescue: no current system."}
-    ship.credits = max(0, ship.credits - 100)
+    paid = min(ship.credits, 100)
+    ship.credits -= paid
     ship.fuel = min(ship.max_fuel, ship.fuel + 20)
     state.modify_faction_reputation("free_pilots", 5)
-    state.add_log("emergency", f"Pilots Guild answered your distress call in {system.name}. They delivered 20 fuel for 100 credits.", category="crisis", title="Pilots Guild Rescue", system=system.name, credits_change=-100, fuel_change=20)
+    paid_note = "" if paid == 100 else " (balance exhausted)"
+    state.add_log("emergency", f"Pilots Guild answered your distress call in {system.name}. They delivered 20 fuel for {paid} credits{paid_note}.", category="crisis", title="Pilots Guild Rescue", system=system.name, credits_change=-paid, fuel_change=20)
     return {
-        "result": f"Pilots Guild rescue! 20 fuel delivered for 100 credits. Arrived in {turns} turns.",
+        "result": f"Pilots Guild rescue! 20 fuel delivered for {paid} credits{paid_note}. Arrived in {turns} turns.",
         "outcome": "pilots_guild",
-        "effects": {"fuel": 20, "credits": -100},
+        "effects": {"fuel": 20, "credits": -paid},
     }
 
 

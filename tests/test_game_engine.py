@@ -3120,11 +3120,50 @@ class TestDistressBeacon:
             result = activate_distress_beacon(state)
         assert result["outcome"] == "pilots_guild"
         assert "error" not in result
-        # The beacon is free; the guild still charges 100, clamped to 0.
+        # The beacon is free; the guild still charges 100, clamped to the
+        # available balance, so only 50 is actually deducted.
         assert state.ship.credits == 0
         assert state.ship.distress_cooldown is True
-        assert result["effects"]["credits"] == -100
+        assert result["effects"]["credits"] == -50
         assert "free" not in result
+
+    def test_distress_pilots_guild_clamps_charge_to_available_credits(self) -> None:
+        from unittest.mock import MagicMock, patch
+        state = self._make_stranded_state()
+        system = state.get_current_system()
+        assert system is not None
+        system.has_trading_station = True
+        state.ship.credits = 13
+        mock_rng = MagicMock()
+        mock_rng.random.side_effect = [0.2, 0.1]
+        mock_rng.randint.side_effect = [1]
+        with patch("backend.game.engine.seeded_random", return_value=mock_rng):
+            result = activate_distress_beacon(state)
+        assert result["outcome"] == "pilots_guild"
+        assert result["effects"]["credits"] == -13
+        assert state.ship.credits == 0
+        rescue_log = state.log_entries[-1]
+        assert rescue_log["credits_change"] == -13
+        assert "100 credits" not in rescue_log["message"]
+        assert result["effects"]["fuel"] == 20
+
+    def test_distress_pilots_guild_charges_full_100_when_affordable(self) -> None:
+        from unittest.mock import MagicMock, patch
+        state = self._make_stranded_state()
+        system = state.get_current_system()
+        assert system is not None
+        system.has_trading_station = True
+        state.ship.credits = 300
+        mock_rng = MagicMock()
+        mock_rng.random.side_effect = [0.2, 0.1]
+        mock_rng.randint.side_effect = [1]
+        with patch("backend.game.engine.seeded_random", return_value=mock_rng):
+            result = activate_distress_beacon(state)
+        assert result["outcome"] == "pilots_guild"
+        assert result["effects"]["credits"] == -100
+        rescue_log = state.log_entries[-1]
+        assert rescue_log["credits_change"] == -100
+        assert "(balance exhausted)" not in rescue_log["message"]
 
     def test_activate_distress_beacon_does_not_charge_fee_before_strategy(self) -> None:
         from unittest.mock import MagicMock, patch
