@@ -2840,14 +2840,50 @@ class TestDistressBeacon:
         assert "error" in result
         assert "stranded" in result["error"].lower() or "Distress beacon can only" in result["error"]
 
-    def test_activate_distress_beacon_cooldown(self) -> None:
+    def test_activate_distress_beacon_stranded_ignores_cooldown(self) -> None:
+        from unittest.mock import MagicMock, patch
         state = new_game(seed=42)
         state.ship.fuel = 0
         state.ship.hull = 100
         state.ship.distress_cooldown = True
-        result = activate_distress_beacon(state)
+        mock_rng = MagicMock()
+        mock_rng.random.side_effect = [0.61]
+        mock_rng.randint.side_effect = [3]
+        with patch("backend.game.engine.seeded_random", return_value=mock_rng):
+            result = activate_distress_beacon(state)
+        assert "error" not in result
+        assert result["outcome"] == "no_response"
+        assert state.ship.distress_cooldown is True
+
+    def test_activate_distress_beacon_cooldown_blocks_when_not_stranded(self) -> None:
+        from unittest.mock import patch
+        state = new_game(seed=42)
+        state.ship.fuel = 40
+        state.ship.hull = 15
+        state.ship.distress_cooldown = True
+        with patch("backend.game.engine.cheapest_reachable_fuel_cost", return_value=1):
+            result = activate_distress_beacon(state)
         assert "error" in result
         assert "cooldown" in result["error"].lower()
+
+    def test_activate_distress_beacon_stranded_repeated_fires_all_allowed(self) -> None:
+        state = self._make_stranded_state()
+        state.ship.distress_cooldown = True
+        allowed = {"no_response", "pilots_guild", "passerby_help", "piracy", "passerby_ignore", "signal_friendly", "signal_hostile"}
+        for _ in range(3):
+            result = activate_distress_beacon(state)
+            assert "error" not in result
+            assert result["outcome"] in allowed
+
+    def test_issue_180_fuel_stranded_with_live_cooldown_can_signal(self) -> None:
+        from unittest.mock import patch
+        state = new_game(seed=42)
+        state.ship.fuel = 7
+        state.ship.hull = 80
+        state.ship.distress_cooldown = True
+        with patch("backend.game.engine.cheapest_reachable_fuel_cost", return_value=8):
+            result = activate_distress_beacon(state)
+        assert "error" not in result
 
     def test_activate_distress_beacon_no_credits(self) -> None:
         from unittest.mock import MagicMock, patch
@@ -3329,6 +3365,18 @@ class TestSalvage:
         assert "fuel cache" in result["result"]
         assert "error" not in result
 
+    def test_perform_salvage_fuel_cache_clears_distress_cooldown(self) -> None:
+        from unittest.mock import MagicMock, patch
+        state = self._make_salvage_state()
+        state.ship.distress_cooldown = True
+        mock_rng = MagicMock()
+        mock_rng.random.side_effect = [0.2]
+        mock_rng.randint.side_effect = [5]
+        with patch("backend.game.engine.seeded_random", return_value=mock_rng):
+            result = perform_salvage(state)
+        assert result["find"] == "fuel_cache"
+        assert state.ship.distress_cooldown is False
+
     def test_perform_salvage_repair_materials(self) -> None:
         from unittest.mock import MagicMock, patch
         state = self._make_salvage_state()
@@ -3666,6 +3714,20 @@ class TestEmergencyCraft:
         assert result["effects"]["fuel"] == 5
         assert state.ship.fuel == 15
         assert disc not in state.discoveries
+
+    def test_emergency_craft_fuel_clears_distress_cooldown(self) -> None:
+        state = new_game(seed=42)
+        state.ship.distress_cooldown = True
+        state.ship.stranded_turns = 4
+        disc = Discovery(
+            id="craft_fuel_clear_cooldown", category="artifact", name="Ancient Artifact",
+            description="Ancient", value=50, system_id="sys1", body_id="body1",
+        )
+        state.discoveries.append(disc)
+        result = emergency_craft(state, "craft_fuel_clear_cooldown", "fuel")
+        assert "error" not in result
+        assert state.ship.distress_cooldown is False
+        assert state.ship.stranded_turns == 0
 
     def test_emergency_craft_mineral_to_repair(self) -> None:
         state = new_game(seed=42)
