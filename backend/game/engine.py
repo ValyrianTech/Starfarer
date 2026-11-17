@@ -1084,17 +1084,15 @@ def _resolve_distress_outcome(state: GameState, rng: Any, rescue_roll: float, tu
 def activate_distress_beacon(state: GameState) -> dict:
     """Activate the distress beacon to call for help when in trouble.
 
-    Can only be used when effectively stranded (fuel at 0 or unable to
-    afford the cheapest reachable jump) or when hull is critically low
-    (below 20% of max). The distress cooldown does not block activation:
-    the beacon can only be fired when stranded or critically low on hull,
-    and those cases can always signal (self-limiting: each attempt still
-    risks stolen credits or hostile-signal hull damage on bad rolls). The
-    ``distress_cooldown`` flag is still set on a successful activation and
-    rolled back on an error, but it no longer gates the action since a
-    healthy, non-stranded ship is already rejected by the availability check
-    above. The beacon is FREE (no credit cost). Has a 60% chance of
-    attracting a rescue within 1-3 turns.
+    Activation is gated solely on the ship's condition: it is allowed when
+    the ship is effectively stranded (fuel at 0 or unable to afford the
+    cheapest reachable jump) OR when hull is critically low (below 20% of
+    max). Any other ship is rejected regardless of cooldown. The
+    ``distress_cooldown`` flag is never consulted as a gate — it is set to
+    ``True`` on a successful activation and rolled back to ``False`` on an
+    error, but it does not block activation in any case. The beacon is FREE
+    (no credit cost). Has a 60% chance of attracting a rescue within 1-3
+    turns.
 
     :param state: The current game state.
     :type state: GameState
