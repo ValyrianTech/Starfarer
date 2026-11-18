@@ -16,6 +16,7 @@ from backend.config import (
     GALAXY_HEIGHT,
     GALAXY_SYSTEM_COUNT,
     GALAXY_WIDTH,
+    MAX_JUMP_DISTANCE,
     MAX_ORBITALS,
     MIN_ORBITALS,
     MOON_NAMES,
@@ -364,6 +365,13 @@ def generate_universe(seed: int, system_count: int = GALAXY_SYSTEM_COUNT) -> tup
         systems[system.id] = system
 
     _ensure_connectivity(systems, galaxy_rng)
+    _ensure_global_connectivity(systems, galaxy_rng)
+    if not galaxy_is_reachable(systems):
+        logger.warning(
+            "Galaxy (seed %s) is not globally reachable after connectivity "
+            "contraction; generated positions may soft-lock navigation.",
+            seed,
+        )
 
     placement = distribute_lore_fragments(seed, systems)
 
@@ -476,6 +484,135 @@ def _ensure_connectivity(systems: dict[str, StarSystem], rng: random.Random) -> 
                         f"System {system.id} ({system.name}) was isolated after "
                         f"{max_iters} iterations; fallback repositioning applied."
                     )
+
+
+def _ensure_global_connectivity(systems: dict[str, StarSystem], rng: random.Random) -> None:
+    """Guarantee the galaxy is fully connected at the maximum jump range.
+
+    :func:`_ensure_connectivity` only guarantees every system has a single
+    neighbor within :data:`NEIGHBOR_DISTANCE_THRESHOLD` (6 LY), which is not
+    enough to make the entire galaxy reachable from the starting system at the
+    maximum jump range (``MAX_JUMP_RANGE`` LY == ``MAX_JUMP_DISTANCE`` galaxy
+    units). This function contracts over-long edges in a minimum spanning tree
+    so that every system is reachable from every other via a chain of jumps
+    each within ``MAX_JUMP_DISTANCE`` units.
+
+    :param systems: The dictionary of star systems keyed by system ID.
+    :type systems: dict[str, StarSystem]
+    :param rng: The seeded random number generator (unused; the contraction
+        is deterministic).
+    :type rng: random.Random
+    """
+    del rng  # the contraction is deterministic; no randomness is required
+
+    if len(systems) < 2:
+        return
+
+    margin = MAX_JUMP_DISTANCE - 5
+    max_iters = 10000
+    ids = list(systems.keys())
+
+    def _prim_mst_edges() -> list[tuple[str, str, float]]:
+        """Return the MST edges as ``(parent_id, child_id, distance)`` tuples."""
+        n = len(ids)
+        dist = [[0.0] * n for _ in range(n)]
+        for i in range(n):
+            si = systems[ids[i]]
+            for j in range(i + 1, n):
+                d = distance_between(si, systems[ids[j]])
+                dist[i][j] = d
+                dist[j][i] = d
+
+        in_tree = [False] * n
+        key = [float("inf")] * n
+        parent = [-1] * n
+        key[0] = 0.0
+        edges: list[tuple[str, str, float]] = []
+        for _ in range(n):
+            u = -1
+            best = float("inf")
+            for i in range(n):
+                if not in_tree[i] and key[i] < best:
+                    best = key[i]
+                    u = i
+            if u == -1:
+                break  # pragma: no cover
+            in_tree[u] = True
+            if parent[u] != -1:
+                edges.append((ids[parent[u]], ids[u], key[u]))
+            for v in range(n):
+                if not in_tree[v] and dist[u][v] < key[v]:
+                    key[v] = dist[u][v]
+                    parent[v] = u
+        return edges
+
+    for _ in range(max_iters):
+        edges = _prim_mst_edges()
+        over = [e for e in edges if e[2] > MAX_JUMP_DISTANCE]
+        if not over:
+            return
+        u_id, v_id, _edge_len = max(over, key=lambda e: e[2])
+
+        adj: dict[str, list[str]] = {sid: [] for sid in ids}
+        for p, c, _d in edges:
+            adj[p].append(c)
+            adj[c].append(p)
+
+        subtree: set[str] = {v_id}
+        stack = [v_id]
+        while stack:
+            node = stack.pop()
+            for nbr in adj[node]:
+                if nbr == u_id or nbr in subtree:
+                    continue
+                subtree.add(nbr)
+                stack.append(nbr)
+
+        u = systems[u_id]
+        v = systems[v_id]
+        dx = v.x - u.x
+        dy = v.y - u.y
+        d = math.sqrt(dx * dx + dy * dy)
+        if d < 1e-9:
+            continue  # pragma: no cover
+        target_x = u.x + (dx / d) * margin
+        target_y = u.y + (dy / d) * margin
+        delta_x = target_x - v.x
+        delta_y = target_y - v.y
+        for sid in subtree:
+            s = systems[sid]
+            s.x = max(50, min(GALAXY_WIDTH - 50, s.x + delta_x))
+            s.y = max(50, min(GALAXY_HEIGHT - 50, s.y + delta_y))
+    else:
+        logger.warning(  # pragma: no cover
+            "Galaxy connectivity contraction did not converge after %d iterations.",
+            max_iters,
+        )
+
+
+def galaxy_is_reachable(systems: dict[str, StarSystem]) -> bool:
+    """Return whether every system is reachable via jumps of at most ``MAX_JUMP_DISTANCE``.
+
+    :param systems: The dictionary of star systems keyed by system ID.
+    :type systems: dict[str, StarSystem]
+    :returns: ``True`` if the galaxy is fully connected at the maximum jump
+        range, ``False`` otherwise.
+    :rtype: bool
+    """
+    if not systems:
+        return True
+    ids = list(systems.keys())
+    visited = {ids[0]}
+    stack = [ids[0]]
+    while stack:
+        cur = stack.pop()
+        for cid in ids:
+            if cid in visited:
+                continue
+            if distance_between(systems[cur], systems[cid]) <= MAX_JUMP_DISTANCE:
+                visited.add(cid)
+                stack.append(cid)
+    return len(visited) == len(ids)
 
 
 def distance_between(sys1: StarSystem, sys2: StarSystem) -> float:

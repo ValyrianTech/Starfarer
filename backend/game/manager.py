@@ -24,13 +24,14 @@ from backend.config import (
     INITIAL_JUMP_RANGE,
     INITIAL_MORALE,
     INITIAL_SCANNER,
+    JUMP_FUEL_COST_PER_LY,
 )
 from backend.database import load_game, load_save
 from backend.database import save_game as db_save
 from backend.game.engine import (
     get_nearby_systems,
 )
-from backend.generation.universe import generate_universe
+from backend.generation.universe import distance_between, generate_universe
 from backend.models.faction import FACTION_DEFINITIONS, FactionRelation
 from backend.models.game_state import GameState
 from backend.models.ship import Ship
@@ -191,7 +192,18 @@ def get_galaxy(state: GameState) -> dict:
     :rtype: dict
     """
     systems_data = []
+    current = state.get_current_system()
     for sys_id, sys_data in state.systems.items():
+        if current is None:
+            distance_ly = None
+            fuel_cost = None
+        elif sys_id == state.ship.current_system_id:
+            distance_ly = 0.0
+            fuel_cost = 0
+        else:
+            dist = distance_between(current, sys_data)
+            distance_ly = round(dist / 10.0, 1)
+            fuel_cost = max(1, int(distance_ly * JUMP_FUEL_COST_PER_LY))
         systems_data.append({
             "id": sys_data.id,
             "name": sys_data.name,
@@ -206,6 +218,8 @@ def get_galaxy(state: GameState) -> dict:
             "has_trading_station": sys_data.has_trading_station,
             "system_type": sys_data.system_type,
             "is_current": sys_id == state.ship.current_system_id,
+            "distance_ly": distance_ly,
+            "fuel_cost": fuel_cost,
         })
     return {
         "current_system_id": state.ship.current_system_id,

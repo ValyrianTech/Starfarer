@@ -3446,3 +3446,89 @@ class TestDilemmaEvents:
 
         assert stripped_titles == original_titles, \
             "Removing is_dilemma/axes must not change which event trigger_event selects"
+
+
+class TestGalaxyReachability:
+    def test_generate_universe_logs_warning_when_not_reachable(self, caplog) -> None:
+        import logging
+        from unittest.mock import patch
+
+        from backend.generation import universe as universe_mod
+
+        with patch.object(universe_mod, "galaxy_is_reachable", return_value=False):
+            with caplog.at_level(logging.WARNING):
+                universe_mod.generate_universe(42)
+
+        assert any("not globally reachable" in record.message for record in caplog.records)
+
+    def test_ensure_global_connectivity_empty_and_single(self) -> None:
+        import random as _random
+
+        from backend.generation.universe import _ensure_global_connectivity
+        from backend.models.system import StarSystem
+
+        rng = _random.Random(42)
+
+        empty: dict = {}
+        _ensure_global_connectivity(empty, rng)
+
+        single = {
+            "sys_0000": StarSystem(
+                id="sys_0000", name="Solo", x=100.0, y=100.0,
+                star_type="G", star_color="#fff4ea", phenomenon="none",
+                phenomenon_desc="Standard stellar neighborhood.",
+            )
+        }
+        _ensure_global_connectivity(single, rng)
+        assert single["sys_0000"].x == 100.0
+        assert single["sys_0000"].y == 100.0
+
+    def test_galaxy_is_reachable_empty(self) -> None:
+        from backend.generation.universe import galaxy_is_reachable
+
+        assert galaxy_is_reachable({}) is True
+
+    def test_canonical_galaxy_is_reachable(self) -> None:
+        from backend.generation.universe import galaxy_is_reachable, generate_universe
+
+        systems, _lore = generate_universe(42)
+        assert galaxy_is_reachable(systems) is True
+
+    def test_non_canonical_seed_galaxy_is_reachable(self) -> None:
+        from backend.generation.universe import galaxy_is_reachable, generate_universe
+
+        systems, _lore = generate_universe(99)
+        assert galaxy_is_reachable(systems) is True
+
+    def test_connected_component_includes_all_systems(self) -> None:
+        from backend.config import GALAXY_SYSTEM_COUNT, MAX_JUMP_DISTANCE
+        from backend.generation.universe import distance_between, generate_universe
+
+        systems, _lore = generate_universe(42)
+        start = next(iter(systems.values()))
+        visited = {start.id}
+        stack = [start]
+        while stack:
+            cur = stack.pop()
+            for other in systems.values():
+                if other.id in visited:
+                    continue
+                if distance_between(cur, other) <= MAX_JUMP_DISTANCE:
+                    visited.add(other.id)
+                    stack.append(other)
+
+        assert len(visited) == 50
+        assert len(visited) == GALAXY_SYSTEM_COUNT
+
+    def test_nearest_system_within_max_jump_range(self) -> None:
+        from backend.config import MAX_JUMP_RANGE
+        from backend.generation.universe import distance_between, generate_universe
+
+        systems, _lore = generate_universe(42)
+        start = next(iter(systems.values()))
+        nearest_ly = min(
+            distance_between(start, s) / 10.0
+            for s in systems.values()
+            if s.id != start.id
+        )
+        assert nearest_ly <= MAX_JUMP_RANGE
