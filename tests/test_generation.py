@@ -3455,9 +3455,9 @@ class TestGalaxyReachability:
 
         from backend.generation import universe as universe_mod
 
-        with patch.object(universe_mod, "galaxy_is_reachable", return_value=False):
-            with caplog.at_level(logging.WARNING):
-                universe_mod.generate_universe(42)
+        with patch.object(universe_mod, "galaxy_is_reachable", return_value=False), \
+             caplog.at_level(logging.WARNING):
+            universe_mod.generate_universe(42)
 
         assert any("not globally reachable" in record.message for record in caplog.records)
 
