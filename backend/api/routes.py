@@ -13,7 +13,7 @@ from collections.abc import Generator
 from contextlib import contextmanager
 from threading import Lock
 
-from fastapi import APIRouter, Header, HTTPException, Request
+from fastapi import APIRouter, Header, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 
 from backend.api.schemas import (
@@ -1457,15 +1457,20 @@ def api_upgrades_info(
 def api_nearby(
     game_id: str,
     x_game_token: str | None = Header(default=None),
+    from_sys: str | None = Query(default=None, alias="from"),
 ) -> dict:
     """Get a list of nearby star systems within jump range.
 
     :param game_id: The unique identifier of the game.
     :type game_id: str
+    :param from_sys: Optional origin system ID to measure distances from;
+        defaults to the ship's current system.
+    :type from_sys: str | None
     :returns: A dictionary with ``nearby``, ``current_system_id``,
         ``jump_range``, and ``fuel``.
     :rtype: dict
-    :raises HTTPException: 404 if the game is not found.
+    :raises HTTPException: 404 if the game is not found; 422 if the
+        requested origin system does not exist.
     """
     _ensure_game_exists(game_id)
     with _locked(game_id):
@@ -1473,8 +1478,10 @@ def api_nearby(
         state = _get_state(game_id)
         if not state:
             raise HTTPException(status_code=404, detail="Game not found")
+        if from_sys is not None and from_sys not in state.systems:
+            raise HTTPException(status_code=422, detail=f"Unknown origin system: {from_sys}")
         return {
-            "nearby": get_nearby_systems(state),
+            "nearby": get_nearby_systems(state, from_system_id=from_sys),
             "current_system_id": state.ship.current_system_id,
             "jump_range": state.ship.jump_range,
             "fuel": state.ship.fuel,

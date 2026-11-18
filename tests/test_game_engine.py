@@ -7249,3 +7249,64 @@ class TestExplorationEconomyRebalance:
         assert ok is False
         assert discoveries == []
         assert body.atmospheric_scan_count == ATMOSPHERIC_SCAN_MAX
+
+
+class TestIssue182Regression:
+    def test_get_nearby_systems_from_origin(self) -> None:
+        from backend.generation.universe import distance_between
+
+        state = new_game(seed=42)
+        current_id = state.ship.current_system_id
+        origin = next(sid for sid in state.systems if sid != current_id)
+
+        nearby = get_nearby_systems(state, from_system_id=origin)
+        ids = [entry["id"] for entry in nearby]
+
+        assert len(nearby) == 49
+        assert origin not in ids
+
+        nearest = nearby[0]
+        origin_sys = state.systems[origin]
+        assert nearest["distance_ly"] == round(
+            distance_between(origin_sys, state.systems[nearest["id"]]) / 10.0, 1
+        )
+
+    def test_get_nearby_systems_unknown_origin_falls_back(self) -> None:
+        state = new_game(seed=42)
+        default_ids = [entry["id"] for entry in get_nearby_systems(state)]
+        fallback_ids = [
+            entry["id"]
+            for entry in get_nearby_systems(state, from_system_id="nonexistent")
+        ]
+        assert fallback_ids == default_ids
+
+    def test_get_galaxy_missing_current_system(self) -> None:
+        state = new_game(seed=42)
+        state.ship.current_system_id = "nonexistent"
+        galaxy = get_galaxy(state)
+        assert len(galaxy["systems"]) == 50
+        for entry in galaxy["systems"]:
+            assert entry["distance_ly"] is None
+            assert entry["fuel_cost"] is None
+
+    def test_galaxy_reachable_from_start_at_max_jump_range(self) -> None:
+        from backend.config import MAX_JUMP_RANGE
+        from backend.generation.universe import distance_between
+
+        state = new_game(seed=42)
+        start = state.get_current_system()
+        assert start is not None
+
+        visited = {start.id}
+        stack = [start]
+        while stack:
+            cur = stack.pop()
+            for other in state.systems.values():
+                if other.id in visited:
+                    continue
+                dist_ly = round(distance_between(cur, other) / 10.0, 1)
+                if dist_ly <= MAX_JUMP_RANGE:
+                    visited.add(other.id)
+                    stack.append(other)
+
+        assert len(visited) == 50

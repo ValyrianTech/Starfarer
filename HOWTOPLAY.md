@@ -86,7 +86,9 @@ Galaxy Map → Select System → Jump → System View → Scan → Land → Expl
 GET /api/game/{game_id}/galaxy
 ```
 
-Returns all 50 systems with coordinates, star types, and visited status. The `current_system_id` field tells you where your ship is.
+Returns all 50 systems with coordinates, star types, and visited status. The `current_system_id` field tells you where your ship is. Each system entry now also includes `distance_ly` (distance from your current system, rounded to 0.1 LY) and `fuel_cost` (fuel for a jump from your current system, minimum 1) — the current system reports `0.0`/`0`, so you can read reachability and jump costs straight off the map. If the ship has no current system, both are `null`.
+
+The galaxy is fully connected: with `hyperdrive` maxed out (9 LY jump range) every one of the 50 systems is reachable from any starting system through a chain of in-range jumps, so you can never be permanently cut off from part of the map.
 
 ### 3.2 Check Nearby Systems
 
@@ -98,6 +100,14 @@ Returns all systems sorted by distance. Each entry includes:
 - `distance_ly` — distance in light-years
 - `fuel_cost` — fuel required for jump
 - `reachable` — whether you have enough fuel AND jump range
+
+Optionally pass `?from=<system_id>` to measure distances and fuel costs from a system other than your current one — useful for planning a multi-jump route.
+
+```http
+GET /api/game/{game_id}/nearby?from=sys_0012
+```
+
+Without `from` the ship's current system is used. An unknown `from` system id returns HTTP 422 (`"Unknown origin system: <id>"`).
 
 **Decision rule:** Jump to `reachable` systems. Upgrade your hyperdrive to reach further ones.
 
@@ -858,7 +868,7 @@ All endpoints that access a specific game (mutating and read-only GET) accept th
 | GET | `/HOWTOPLAY.md` | This document, served by the running server (no auth; also at /api/howtoplay) |
 | POST | `/api/game/new` | Create new game (optional `game_id`, which must be 1-64 chars of `[A-Za-z0-9_-]` — otherwise HTTP 422; `seed` ignored when `shared_universe` is true; returns HTTP 409 Conflict if a caller-supplied `game_id` already exists; per-IP rate limited — HTTP 429 + `Retry-After` when exceeded — and subject to a stored-game cap, HTTP 429 `"New-game limit reached. Please try again later."`) |
 | GET | `/api/game/{id}?sort={value\|name}&order={asc\|desc}` | Full game state (ship, system, events, log, fuel_status, hints, missions_available, reputation, shared_universe, total_value, top3_ids; cargo sorted only when `sort` and/or `order` is supplied) |
-| GET | `/api/game/{id}/galaxy` | Galaxy map data |
+| GET | `/api/game/{id}/galaxy` | Galaxy map data (each system includes `distance_ly` and `fuel_cost` from the current system) |
 | GET | `/api/game/{id}/system/{sid}` | System details |
 | POST | `/api/game/{id}/jump/{sid}` | Jump to system |
 | POST | `/api/game/{id}/scan` | Scan current system (response includes `scanner_tier_data` at scanner L3+; returns HTTP 400 if scan is not possible) |
@@ -881,7 +891,7 @@ All endpoints that access a specific game (mutating and read-only GET) accept th
 | POST | `/api/game/{id}/trade/bulk-sell` | Sell multiple discoveries |
 | GET | `/api/game/{id}/upgrades` | Upgrade options |
 | POST | `/api/game/{id}/upgrade` | Purchase upgrade |
-| GET | `/api/game/{id}/nearby` | Nearby systems |
+| GET | `/api/game/{id}/nearby?from={sid}` | Nearby systems (optionally measured from `from` system; unknown `from` → HTTP 422) |
 | GET | `/api/game/{id}/factions` | List all factions |
 | GET | `/api/game/{id}/faction/{fid}` | Single faction detail |
 | POST | `/api/game/{id}/faction/{fid}/mission` | Accept a tiered faction mission (costs deducted and rewards awarded on completion) |

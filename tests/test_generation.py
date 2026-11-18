@@ -3446,3 +3446,185 @@ class TestDilemmaEvents:
 
         assert stripped_titles == original_titles, \
             "Removing is_dilemma/axes must not change which event trigger_event selects"
+
+
+class TestGalaxyReachability:
+    def test_generate_universe_logs_warning_when_not_reachable(self, caplog) -> None:
+        import logging
+        from unittest.mock import patch
+
+        from backend.generation import universe as universe_mod
+
+        with patch.object(universe_mod, "galaxy_is_reachable", return_value=False):
+            with caplog.at_level(logging.WARNING):
+                universe_mod.generate_universe(42)
+
+        assert any("not globally reachable" in record.message for record in caplog.records)
+
+    def test_ensure_global_connectivity_empty_and_single(self) -> None:
+        from backend.generation.universe import _ensure_global_connectivity
+        from backend.models.system import StarSystem
+
+        empty: dict = {}
+        _ensure_global_connectivity(empty)
+
+        single = {
+            "sys_0000": StarSystem(
+                id="sys_0000", name="Solo", x=100.0, y=100.0,
+                star_type="G", star_color="#fff4ea", phenomenon="none",
+                phenomenon_desc="Standard stellar neighborhood.",
+            )
+        }
+        _ensure_global_connectivity(single)
+        assert single["sys_0000"].x == 100.0
+        assert single["sys_0000"].y == 100.0
+
+    def test_galaxy_is_reachable_empty(self) -> None:
+        from backend.generation.universe import galaxy_is_reachable
+
+        assert galaxy_is_reachable({}) is True
+
+    def test_canonical_galaxy_is_reachable(self) -> None:
+        from backend.generation.universe import galaxy_is_reachable, generate_universe
+
+        systems, _lore = generate_universe(42)
+        assert galaxy_is_reachable(systems) is True
+
+    def test_non_canonical_seed_galaxy_is_reachable(self) -> None:
+        from backend.generation.universe import galaxy_is_reachable, generate_universe
+
+        systems, _lore = generate_universe(99)
+        assert galaxy_is_reachable(systems) is True
+
+    def test_connected_component_includes_all_systems(self) -> None:
+        from backend.config import GALAXY_SYSTEM_COUNT, MAX_JUMP_DISTANCE
+        from backend.generation.universe import distance_between, generate_universe
+
+        systems, _lore = generate_universe(42)
+        start = next(iter(systems.values()))
+        visited = {start.id}
+        stack = [start]
+        while stack:
+            cur = stack.pop()
+            for other in systems.values():
+                if other.id in visited:
+                    continue
+                if distance_between(cur, other) <= MAX_JUMP_DISTANCE:
+                    visited.add(other.id)
+                    stack.append(other)
+
+        assert len(visited) == 50
+        assert len(visited) == GALAXY_SYSTEM_COUNT
+
+    def test_nearest_system_within_max_jump_range(self) -> None:
+        from backend.config import MAX_JUMP_RANGE
+        from backend.generation.universe import distance_between, generate_universe
+
+        systems, _lore = generate_universe(42)
+        start = next(iter(systems.values()))
+        nearest_ly = min(
+            distance_between(start, s) / 10.0
+            for s in systems.values()
+            if s.id != start.id
+        )
+        assert nearest_ly <= MAX_JUMP_RANGE
+
+    def test_gameplay_rounding_preserves_reachability_canonical_seed(self) -> None:
+        """The galaxy reachability guarantee must hold under the gameplay rounding.
+
+        ``jump_distance_ly`` rounds a raw ``distance_between`` result to one
+        decimal place in light-years, and ``can_jump`` compares that rounded
+        value against ``ship.jump_range``. A future change to that rounding
+        must not be able to quietly invalidate the soft-lock fix: the
+        generation pass contracts MST edges to within ``MAX_JUMP_DISTANCE``
+        raw units, so the rounded gameplay distance must stay within
+        ``MAX_JUMP_RANGE`` for every such edge.
+        """
+        from backend.config import MAX_JUMP_DISTANCE, MAX_JUMP_RANGE
+        from backend.game.engine import jump_distance_ly
+
+        systems, _lore = generate_universe(42)
+
+        start = next(iter(systems.values()))
+        visited = {start.id}
+        stack = [start]
+        while stack:
+            cur = stack.pop()
+            for other in systems.values():
+                if other.id in visited:
+                    continue
+                if jump_distance_ly(distance_between(cur, other)) <= MAX_JUMP_RANGE:
+                    visited.add(other.id)
+                    stack.append(other)
+
+        assert len(visited) == GALAXY_SYSTEM_COUNT
+
+        systems_list = list(systems.values())
+        for i in range(len(systems_list)):
+            for j in range(len(systems_list)):
+                if i == j:
+                    continue
+                raw = distance_between(systems_list[i], systems_list[j])
+                if raw <= MAX_JUMP_DISTANCE:
+                    assert jump_distance_ly(raw) <= MAX_JUMP_RANGE, (
+                        f"rounding turned in-range raw distance {raw} into "
+                        f"out-of-range gameplay distance {jump_distance_ly(raw)}"
+                    )
+
+    def test_gameplay_rounding_preserves_reachability_multiple_seeds(self) -> None:
+        """Gameplay-rounded reachability must hold across multiple seeds.
+
+        Runs the same gameplay-rounded BFS as the canonical-seed test over a
+        handful of seeds, pinning that a future rounding change cannot quietly
+        break the soft-lock fix on any generated galaxy.
+        """
+        from backend.config import MAX_JUMP_RANGE
+        from backend.game.engine import jump_distance_ly
+
+        for seed in (42, 99, 7, 2024):
+            systems, _lore = generate_universe(seed)
+            start = next(iter(systems.values()))
+            visited = {start.id}
+            stack = [start]
+            while stack:
+                cur = stack.pop()
+                for other in systems.values():
+                    if other.id in visited:
+                        continue
+                    if jump_distance_ly(distance_between(cur, other)) <= MAX_JUMP_RANGE:
+                        visited.add(other.id)
+                        stack.append(other)
+
+            assert len(visited) == GALAXY_SYSTEM_COUNT
+
+    def test_gameplay_rounding_matches_can_jump_at_max_range(self) -> None:
+        """The generation reachability guarantee must agree with ``can_jump``.
+
+        ``can_jump`` compares ``jump_distance_ly(distance_between(...))``
+        against ``ship.jump_range``. A future change to the rounding must not
+        turn an in-range raw distance (``<= MAX_JUMP_DISTANCE``) into an
+        out-of-range gameplay distance, which would invalidate the soft-lock
+        fix without failing the raw-units reachability check.
+        """
+        from backend.config import MAX_JUMP_DISTANCE, MAX_JUMP_RANGE
+        from backend.game.engine import can_jump
+
+        systems, _lore = generate_universe(42)
+        origin = next(iter(systems.values()))
+        ship = Ship(
+            jump_range=MAX_JUMP_RANGE,
+            fuel=10**6,
+            current_system_id=origin.id,
+        )
+
+        for target in systems.values():
+            if target.id == origin.id:
+                continue
+            ok, _fuel_cost, message = can_jump(ship, target, origin)
+            raw = distance_between(origin, target)
+            if raw <= MAX_JUMP_DISTANCE:
+                assert ok is True, (
+                    f"can_jump rejected in-range raw distance {raw} for "
+                    f"{origin.id} -> {target.id}: {message}"
+                )
+                assert "exceeds jump range" not in message
