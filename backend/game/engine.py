@@ -409,29 +409,39 @@ def perform_scan(state: GameState) -> str:
     return "\n".join(lines)
 
 
-def get_nearby_systems(state: GameState) -> list[dict]:
+def get_nearby_systems(state: GameState, from_system_id: str | None = None) -> list[dict]:
     """Find all systems within jump range of the current system.
 
     Calculates distance and fuel cost to every other system in the
     galaxy and returns those within the ship's jump range, sorted
     by distance.
 
+    When ``from_system_id`` names a system in the state, distances are
+    measured from that system instead of the ship's current system.
+
     :param state: The current game state.
     :type state: GameState
+    :param from_system_id: Optional system ID to use as the origin for
+        distance measurement; defaults to the ship's current system.
+    :type from_system_id: str | None
     :returns: A list of dictionaries with system info including
         id, name, distance_ly, fuel_cost, star_type, star_color,
         phenomenon, visited, scanned, and reachable flags.
     :rtype: list[dict]
     """
     ship = state.ship
-    current = state.get_current_system()
-    if not current:
+    if from_system_id is not None and from_system_id in state.systems:
+        origin = state.systems[from_system_id]
+    else:
+        origin = state.get_current_system()
+    if not origin:
         return []
+    origin_id = origin.id
     nearby: list[dict[str, Any]] = []
     for sys_id, sys_data in state.systems.items():
-        if sys_id == ship.current_system_id:
+        if sys_id == origin_id:
             continue
-        dist = distance_between(current, sys_data)
+        dist = distance_between(origin, sys_data)
         dist_ly = round(dist / 10.0, 1)
         fuel_cost = max(1, int(dist_ly * JUMP_FUEL_COST_PER_LY))
         reachable = dist_ly <= ship.jump_range and fuel_cost <= ship.fuel

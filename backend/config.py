@@ -246,6 +246,14 @@ UPGRADE_MAX_LEVELS = {
     "life_support": 3,
 }
 
+# Maximum reachable jump in light-years (initial 4 + hyperdrive max level
+# 5 = 9). Used to guarantee the whole galaxy is reachable from any
+# starting system via a chain of jumps each within this range.
+MAX_JUMP_RANGE = INITIAL_JUMP_RANGE + UPGRADE_MAX_LEVELS["hyperdrive"]
+
+# Galaxy coordinate units for MAX_JUMP_RANGE (1 LY == 10 galaxy units).
+MAX_JUMP_DISTANCE = MAX_JUMP_RANGE * 10
+
 # Exploration depth and variety constants
 ATMOSPHERIC_SCAN_FUEL_COST = 1
 SUB_SURFACE_FUEL_COST = 3

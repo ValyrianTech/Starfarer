@@ -7190,3 +7190,50 @@ class TestNewGameRequestGameIdValidation:
         assert resp.status_code == 422
         resp = client.post("/api/game/new", json={"game_id": "a" * 65})
         assert resp.status_code == 422
+
+
+class TestIssue182ApiRegression:
+    def test_galaxy_entries_have_distance_and_fuel(self) -> None:
+        resp = client.post("/api/game/new", json={"seed": 42})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+
+        resp = client.get(f"/api/game/{game_id}/galaxy")
+        assert resp.status_code == 200
+        galaxy = resp.json()
+        systems = galaxy["systems"]
+        assert len(systems) == 50
+
+        for entry in systems:
+            assert "distance_ly" in entry
+            assert "fuel_cost" in entry
+            if entry["is_current"]:
+                assert entry["distance_ly"] == 0.0
+                assert entry["fuel_cost"] == 0
+
+        non_current = [e for e in systems if not e["is_current"]]
+        assert any(e["distance_ly"] > 0 and e["fuel_cost"] >= 1 for e in non_current)
+
+    def test_nearby_from_specific_system(self) -> None:
+        resp = client.post("/api/game/new", json={"seed": 42})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+
+        state = GAME_STORE[game_id]
+        current_id = state.ship.current_system_id
+        origin = next(sid for sid in state.systems if sid != current_id)
+
+        resp = client.get(f"/api/game/{game_id}/nearby", params={"from": origin})
+        assert resp.status_code == 200
+        data = resp.json()
+        ids = [entry["id"] for entry in data["nearby"]]
+        assert len(data["nearby"]) == 49
+        assert origin not in ids
+
+    def test_nearby_from_unknown_system_422(self) -> None:
+        resp = client.post("/api/game/new", json={"seed": 42})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+
+        resp = client.get(f"/api/game/{game_id}/nearby", params={"from": "does_not_exist"})
+        assert resp.status_code == 422
