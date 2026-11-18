@@ -3528,3 +3528,103 @@ class TestGalaxyReachability:
             if s.id != start.id
         )
         assert nearest_ly <= MAX_JUMP_RANGE
+
+    def test_gameplay_rounding_preserves_reachability_canonical_seed(self) -> None:
+        """The galaxy reachability guarantee must hold under the gameplay rounding.
+
+        ``jump_distance_ly`` rounds a raw ``distance_between`` result to one
+        decimal place in light-years, and ``can_jump`` compares that rounded
+        value against ``ship.jump_range``. A future change to that rounding
+        must not be able to quietly invalidate the soft-lock fix: the
+        generation pass contracts MST edges to within ``MAX_JUMP_DISTANCE``
+        raw units, so the rounded gameplay distance must stay within
+        ``MAX_JUMP_RANGE`` for every such edge.
+        """
+        from backend.config import MAX_JUMP_DISTANCE, MAX_JUMP_RANGE
+        from backend.game.engine import jump_distance_ly
+
+        systems, _lore = generate_universe(42)
+
+        start = next(iter(systems.values()))
+        visited = {start.id}
+        stack = [start]
+        while stack:
+            cur = stack.pop()
+            for other in systems.values():
+                if other.id in visited:
+                    continue
+                if jump_distance_ly(distance_between(cur, other)) <= MAX_JUMP_RANGE:
+                    visited.add(other.id)
+                    stack.append(other)
+
+        assert len(visited) == GALAXY_SYSTEM_COUNT
+
+        systems_list = list(systems.values())
+        for i in range(len(systems_list)):
+            for j in range(len(systems_list)):
+                if i == j:
+                    continue
+                raw = distance_between(systems_list[i], systems_list[j])
+                if raw <= MAX_JUMP_DISTANCE:
+                    assert jump_distance_ly(raw) <= MAX_JUMP_RANGE, (
+                        f"rounding turned in-range raw distance {raw} into "
+                        f"out-of-range gameplay distance {jump_distance_ly(raw)}"
+                    )
+
+    def test_gameplay_rounding_preserves_reachability_multiple_seeds(self) -> None:
+        """Gameplay-rounded reachability must hold across multiple seeds.
+
+        Runs the same gameplay-rounded BFS as the canonical-seed test over a
+        handful of seeds, pinning that a future rounding change cannot quietly
+        break the soft-lock fix on any generated galaxy.
+        """
+        from backend.config import MAX_JUMP_RANGE
+        from backend.game.engine import jump_distance_ly
+
+        for seed in (42, 99, 7, 2024):
+            systems, _lore = generate_universe(seed)
+            start = next(iter(systems.values()))
+            visited = {start.id}
+            stack = [start]
+            while stack:
+                cur = stack.pop()
+                for other in systems.values():
+                    if other.id in visited:
+                        continue
+                    if jump_distance_ly(distance_between(cur, other)) <= MAX_JUMP_RANGE:
+                        visited.add(other.id)
+                        stack.append(other)
+
+            assert len(visited) == GALAXY_SYSTEM_COUNT
+
+    def test_gameplay_rounding_matches_can_jump_at_max_range(self) -> None:
+        """The generation reachability guarantee must agree with ``can_jump``.
+
+        ``can_jump`` compares ``jump_distance_ly(distance_between(...))``
+        against ``ship.jump_range``. A future change to the rounding must not
+        turn an in-range raw distance (``<= MAX_JUMP_DISTANCE``) into an
+        out-of-range gameplay distance, which would invalidate the soft-lock
+        fix without failing the raw-units reachability check.
+        """
+        from backend.config import MAX_JUMP_DISTANCE, MAX_JUMP_RANGE
+        from backend.game.engine import can_jump
+
+        systems, _lore = generate_universe(42)
+        origin = next(iter(systems.values()))
+        ship = Ship(
+            jump_range=MAX_JUMP_RANGE,
+            fuel=10**6,
+            current_system_id=origin.id,
+        )
+
+        for target in systems.values():
+            if target.id == origin.id:
+                continue
+            ok, _fuel_cost, message = can_jump(ship, target, origin)
+            raw = distance_between(origin, target)
+            if raw <= MAX_JUMP_DISTANCE:
+                assert ok is True, (
+                    f"can_jump rejected in-range raw distance {raw} for "
+                    f"{origin.id} -> {target.id}: {message}"
+                )
+                assert "exceeds jump range" not in message
