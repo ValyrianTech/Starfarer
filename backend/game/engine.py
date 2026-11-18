@@ -39,6 +39,38 @@ from backend.utils import deterministic_hash, seeded_random
 logger = logging.getLogger(__name__)
 
 
+def jump_distance_ly(dist: float) -> float:
+    """Convert a raw galaxy distance (10 units per LY) to rounded light-years.
+
+    This is the single source of truth for the jump distance model used by
+    ``can_jump``, ``_cheapest_reachable``, ``get_nearby_systems`` and
+    ``get_galaxy``: it rounds a raw ``distance_between`` result to one
+    decimal place in light-years so the ``MAX_JUMP_DISTANCE`` reachability
+    guarantee cannot silently diverge between call sites.
+
+    :param dist: The raw galaxy-space distance between two systems.
+    :type dist: float
+    :returns: The distance in light-years, rounded to one decimal place.
+    :rtype: float
+    """
+    return round(dist / 10.0, 1)
+
+
+def jump_fuel_cost(dist_ly: float) -> int:
+    """Compute the fuel cost for a jump of ``dist_ly`` light-years.
+
+    Applies the shared fuel model (``JUMP_FUEL_COST_PER_LY`` fuel per LY,
+    with a minimum cost of 1) used by ``can_jump``, ``_cheapest_reachable``,
+    ``get_nearby_systems`` and ``get_galaxy``.
+
+    :param dist_ly: The jump distance in light-years.
+    :type dist_ly: float
+    :returns: The integer fuel cost for the jump (always at least 1).
+    :rtype: int
+    """
+    return max(1, int(dist_ly * JUMP_FUEL_COST_PER_LY))
+
+
 def can_jump(ship: Ship, target: StarSystem, current: StarSystem | None) -> tuple[bool, int, str]:
     """Check whether a jump to a target system is possible.
 
@@ -62,8 +94,8 @@ def can_jump(ship: Ship, target: StarSystem, current: StarSystem | None) -> tupl
     if not current:
         return False, 0, "No current system."
     dist = distance_between(current, target)
-    dist_ly = round(dist / 10.0, 1)
-    fuel_cost = max(1, int(dist_ly * JUMP_FUEL_COST_PER_LY))
+    dist_ly = jump_distance_ly(dist)
+    fuel_cost = jump_fuel_cost(dist_ly)
     if fuel_cost > ship.fuel:
         return False, fuel_cost, f"Not enough fuel. Need {fuel_cost}, have {ship.fuel}."
     if dist_ly > ship.jump_range:
@@ -96,10 +128,10 @@ def _cheapest_reachable(state: GameState) -> tuple[StarSystem | None, int | None
         if sys_id == state.ship.current_system_id:
             continue
         dist = distance_between(current, sys_data)
-        dist_ly = round(dist / 10.0, 1)
+        dist_ly = jump_distance_ly(dist)
         if dist_ly > state.ship.jump_range:
             continue
-        fuel_cost = max(1, int(dist_ly * JUMP_FUEL_COST_PER_LY))
+        fuel_cost = jump_fuel_cost(dist_ly)
         if cheapest is None or fuel_cost < cheapest:
             cheapest = fuel_cost
             cheapest_system = sys_data
@@ -442,8 +474,8 @@ def get_nearby_systems(state: GameState, from_system_id: str | None = None) -> l
         if sys_id == origin_id:
             continue
         dist = distance_between(origin, sys_data)
-        dist_ly = round(dist / 10.0, 1)
-        fuel_cost = max(1, int(dist_ly * JUMP_FUEL_COST_PER_LY))
+        dist_ly = jump_distance_ly(dist)
+        fuel_cost = jump_fuel_cost(dist_ly)
         reachable = dist_ly <= ship.jump_range and fuel_cost <= ship.fuel
         nearby.append({
             "id": sys_data.id,

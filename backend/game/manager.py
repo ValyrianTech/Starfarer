@@ -24,12 +24,13 @@ from backend.config import (
     INITIAL_JUMP_RANGE,
     INITIAL_MORALE,
     INITIAL_SCANNER,
-    JUMP_FUEL_COST_PER_LY,
 )
 from backend.database import load_game, load_save
 from backend.database import save_game as db_save
 from backend.game.engine import (
     get_nearby_systems,
+    jump_distance_ly,
+    jump_fuel_cost,
 )
 from backend.generation.universe import distance_between, generate_universe
 from backend.models.faction import FACTION_DEFINITIONS, FactionRelation
@@ -202,8 +203,8 @@ def get_galaxy(state: GameState) -> dict:
             fuel_cost = 0
         else:
             dist = distance_between(current, sys_data)
-            distance_ly = round(dist / 10.0, 1)
-            fuel_cost = max(1, int(distance_ly * JUMP_FUEL_COST_PER_LY))
+            distance_ly = jump_distance_ly(dist)
+            fuel_cost = jump_fuel_cost(distance_ly)
         systems_data.append({
             "id": sys_data.id,
             "name": sys_data.name,
