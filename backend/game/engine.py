@@ -463,7 +463,7 @@ def get_nearby_systems(state: GameState, from_system_id: str | None = None) -> l
     """
     ship = state.ship
     if from_system_id is not None and from_system_id in state.systems:
-        origin = state.systems[from_system_id]
+        origin: StarSystem | None = state.systems[from_system_id]
     else:
         origin = state.get_current_system()
     if not origin:
