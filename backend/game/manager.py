@@ -184,12 +184,21 @@ def get_galaxy(state: GameState) -> dict:
     """Build a galaxy map overview from the current game state.
 
     Returns summary data for every system including coordinates,
-    star type, phenomenon, visit/scan status, and body count.
+    star type, phenomenon, visit/scan status, and body count. Each
+    system summary also includes the jump distance in light-years and
+    the fuel cost to reach it, both computed from the current system.
 
     :param state: The current game state.
     :type state: GameState
     :returns: A dictionary with ``current_system_id``, ``systems``
         (list of system summaries), and ``systems_visited`` count.
+        Each system summary contains fields such as ``id``, ``name``,
+        ``x``, ``y``, ``star_type``, ``star_color``, ``phenomenon``,
+        ``visited``, ``scanned``, ``body_count``,
+        ``has_trading_station``, ``system_type``, ``is_current``,
+        ``distance_ly``, and ``fuel_cost``. The ``distance_ly`` and
+        ``fuel_cost`` values are ``0.0`` and ``0`` for the current
+        system, and ``None`` when there is no current system.
     :rtype: dict
     """
     systems_data = []
