@@ -341,8 +341,10 @@ def generate_universe(seed: int, system_count: int = GALAXY_SYSTEM_COUNT) -> tup
 
     Creates the specified number of star systems using deterministic,
     seed-based RNGs for layout and details. Ensures every system has
-    at least one neighbor within a reasonable distance. Also distributes
-    lore fragments across the galaxy.
+    at least one neighbor within a reasonable distance. A subsequent
+    global-connectivity pass guarantees every system is reachable from
+    every other at the maximum jump range. Also distributes lore
+    fragments across the galaxy.
 
     :param seed: The universe generation seed for deterministic
         reproducibility.
@@ -365,7 +367,7 @@ def generate_universe(seed: int, system_count: int = GALAXY_SYSTEM_COUNT) -> tup
         systems[system.id] = system
 
     _ensure_connectivity(systems, galaxy_rng)
-    _ensure_global_connectivity(systems, galaxy_rng)
+    _ensure_global_connectivity(systems)
     if not galaxy_is_reachable(systems):
         logger.warning(
             "Galaxy (seed %s) is not globally reachable after connectivity "
@@ -486,7 +488,7 @@ def _ensure_connectivity(systems: dict[str, StarSystem], rng: random.Random) -> 
                     )
 
 
-def _ensure_global_connectivity(systems: dict[str, StarSystem], rng: random.Random) -> None:
+def _ensure_global_connectivity(systems: dict[str, StarSystem]) -> None:
     """Guarantee the galaxy is fully connected at the maximum jump range.
 
     :func:`_ensure_connectivity` only guarantees every system has a single
@@ -499,12 +501,7 @@ def _ensure_global_connectivity(systems: dict[str, StarSystem], rng: random.Rand
 
     :param systems: The dictionary of star systems keyed by system ID.
     :type systems: dict[str, StarSystem]
-    :param rng: The seeded random number generator (unused; the contraction
-        is deterministic).
-    :type rng: random.Random
     """
-    del rng  # the contraction is deterministic; no randomness is required
-
     if len(systems) < 2:
         return
 

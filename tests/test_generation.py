@@ -3462,15 +3462,11 @@ class TestGalaxyReachability:
         assert any("not globally reachable" in record.message for record in caplog.records)
 
     def test_ensure_global_connectivity_empty_and_single(self) -> None:
-        import random as _random
-
         from backend.generation.universe import _ensure_global_connectivity
         from backend.models.system import StarSystem
 
-        rng = _random.Random(42)
-
         empty: dict = {}
-        _ensure_global_connectivity(empty, rng)
+        _ensure_global_connectivity(empty)
 
         single = {
             "sys_0000": StarSystem(
@@ -3479,7 +3475,7 @@ class TestGalaxyReachability:
                 phenomenon_desc="Standard stellar neighborhood.",
             )
         }
-        _ensure_global_connectivity(single, rng)
+        _ensure_global_connectivity(single)
         assert single["sys_0000"].x == 100.0
         assert single["sys_0000"].y == 100.0
 
