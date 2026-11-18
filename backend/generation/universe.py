@@ -580,11 +580,10 @@ def _ensure_global_connectivity(systems: dict[str, StarSystem]) -> None:
             s = systems[sid]
             s.x = max(50, min(GALAXY_WIDTH - 50, s.x + delta_x))
             s.y = max(50, min(GALAXY_HEIGHT - 50, s.y + delta_y))
-    else:
-        logger.warning(  # pragma: no cover
-            "Galaxy connectivity contraction did not converge after %d iterations.",
-            max_iters,
-        )
+    logger.warning(  # pragma: no cover
+        "Galaxy connectivity contraction did not converge after %d iterations.",
+        max_iters,
+    )
 
 
 def galaxy_is_reachable(systems: dict[str, StarSystem]) -> bool:
