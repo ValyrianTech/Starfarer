@@ -7237,3 +7237,275 @@ class TestIssue182ApiRegression:
 
         resp = client.get(f"/api/game/{game_id}/nearby", params={"from": "does_not_exist"})
         assert resp.status_code == 422
+
+
+class TestSpectateStreamResourceLimits:
+    @pytest.fixture(autouse=True)
+    def _clean_slots(self):
+        from backend.api import spectate
+        spectate._reset_stream_slots()
+        yield
+        spectate._reset_stream_slots()
+
+    def test_stream_slot_acquire_and_release(self) -> None:
+        from backend.api import spectate
+        spectate._reset_stream_slots()
+        assert spectate._active_streams == 0
+        assert spectate._try_acquire_stream_slot() is True
+        assert spectate._active_streams == 1
+        spectate._release_stream_slot()
+        assert spectate._active_streams == 0
+        spectate._release_stream_slot()
+        assert spectate._active_streams == 0
+
+    def test_stream_slot_cap_exhausted(self) -> None:
+        from backend.api import spectate
+        with patch.object(spectate, "MAX_CONCURRENT_STREAMS", 1):
+            assert spectate._try_acquire_stream_slot() is True
+            assert spectate._active_streams == 1
+            assert spectate._try_acquire_stream_slot() is False
+            assert spectate._active_streams == 1
+
+    def test_stream_returns_503_when_cap_exhausted(self) -> None:
+        import asyncio
+
+        from fastapi import HTTPException
+
+        from backend.api import spectate
+        gid = "spectate-limits-3"
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": gid})
+        assert resp.status_code == 200
+        try:
+            with patch.object(spectate, "MAX_CONCURRENT_STREAMS", 1):
+                assert spectate._try_acquire_stream_slot() is True
+                with pytest.raises(HTTPException) as exc:
+                    asyncio.run(spectate.api_spectate_stream(gid))
+                assert exc.value.status_code == 503
+                assert "Too many concurrent" in exc.value.detail
+        finally:
+            GAME_STORE.pop(gid, None)
+
+    def test_stream_releases_slot_on_normal_close(self) -> None:
+        import asyncio
+
+        from backend.api import spectate
+        gid = "spectate-limits-4"
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": gid})
+        assert resp.status_code == 200
+        try:
+            async def run() -> None:
+                resp = await spectate.api_spectate_stream(gid)
+                agen = resp.body_iterator
+                try:
+                    await agen.__anext__()
+                finally:
+                    await agen.aclose()
+
+            asyncio.run(run())
+            assert spectate._active_streams == 0
+        finally:
+            GAME_STORE.pop(gid, None)
+
+    def test_stream_releases_slot_on_cancel(self) -> None:
+        import asyncio
+
+        from backend.api import spectate
+        gid = "spectate-limits-5"
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": gid})
+        assert resp.status_code == 200
+        try:
+            async def run() -> None:
+                resp = await spectate.api_spectate_stream(gid)
+                agen = resp.body_iterator
+                assert spectate._active_streams == 1
+                try:
+                    await agen.__anext__()
+                finally:
+                    await agen.aclose()
+
+            asyncio.run(run())
+            assert spectate._active_streams == 0
+        finally:
+            GAME_STORE.pop(gid, None)
+
+    def test_stream_client_disconnect_stops_stream(self) -> None:
+        import asyncio
+
+        from backend.api import spectate
+        gid = "spectate-limits-6"
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": gid})
+        assert resp.status_code == 200
+
+        class _DisconnectedRequest:
+            async def is_disconnected(self) -> bool:
+                return True
+
+        try:
+            async def run() -> None:
+                resp = await spectate.api_spectate_stream(gid, request=_DisconnectedRequest())
+                agen = resp.body_iterator
+                try:
+                    first = await agen.__anext__()
+                    assert "event: state" in first
+                    with pytest.raises(StopAsyncIteration):
+                        await agen.__anext__()
+                finally:
+                    await agen.aclose()
+
+            asyncio.run(run())
+            assert spectate._active_streams == 0
+        finally:
+            GAME_STORE.pop(gid, None)
+
+    def test_stream_max_duration_ends_stream(self) -> None:
+        import asyncio
+
+        from backend.api import spectate
+        gid = "spectate-limits-7"
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": gid})
+        assert resp.status_code == 200
+        try:
+            async def run() -> None:
+                with patch.object(spectate, "MAX_STREAM_DURATION_SECONDS", 0.0):
+                    resp = await spectate.api_spectate_stream(gid)
+                    agen = resp.body_iterator
+                    try:
+                        first = await agen.__anext__()
+                        assert "event: state" in first
+                        second = await agen.__anext__()
+                        second = second if isinstance(second, str) else second.decode()
+                        assert second == "event: end\ndata: {}\n\n"
+                        with pytest.raises(StopAsyncIteration):
+                            await agen.__anext__()
+                    finally:
+                        await agen.aclose()
+
+            asyncio.run(run())
+            assert spectate._active_streams == 0
+        finally:
+            GAME_STORE.pop(gid, None)
+
+    def test_stream_idle_timeout_ends_stream(self) -> None:
+        import asyncio
+
+        from backend.api import spectate
+        gid = "spectate-limits-8"
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": gid})
+        assert resp.status_code == 200
+        old_poll = spectate.POLL_INTERVAL_SECONDS
+        old_hb = spectate.HEARTBEAT_INTERVAL_SECONDS
+        old_idle = spectate.IDLE_TIMEOUT_SECONDS
+        spectate.POLL_INTERVAL_SECONDS = 0.01
+        spectate.HEARTBEAT_INTERVAL_SECONDS = 100.0
+        spectate.IDLE_TIMEOUT_SECONDS = 0.02
+        try:
+            async def run() -> None:
+                resp = await spectate.api_spectate_stream(gid)
+                agen = resp.body_iterator
+                try:
+                    await agen.__anext__()
+                    saw_end = False
+                    for _ in range(20):
+                        chunk = await agen.__anext__()
+                        chunk = chunk if isinstance(chunk, str) else chunk.decode()
+                        if "event: end" in chunk:
+                            saw_end = True
+                            break
+                    assert saw_end
+                    with pytest.raises(StopAsyncIteration):
+                        await agen.__anext__()
+                finally:
+                    await agen.aclose()
+
+            asyncio.run(run())
+            assert spectate._active_streams == 0
+        finally:
+            spectate.POLL_INTERVAL_SECONDS = old_poll
+            spectate.HEARTBEAT_INTERVAL_SECONDS = old_hb
+            spectate.IDLE_TIMEOUT_SECONDS = old_idle
+            GAME_STORE.pop(gid, None)
+
+    def test_stream_idle_timeout_guard_needs_less_than_max_duration(self) -> None:
+        import asyncio
+
+        from backend.api import spectate
+        gid = "spectate-limits-9"
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": gid})
+        assert resp.status_code == 200
+        old_poll = spectate.POLL_INTERVAL_SECONDS
+        old_hb = spectate.HEARTBEAT_INTERVAL_SECONDS
+        old_idle = spectate.IDLE_TIMEOUT_SECONDS
+        old_max = spectate.MAX_STREAM_DURATION_SECONDS
+        spectate.POLL_INTERVAL_SECONDS = 0.01
+        spectate.HEARTBEAT_INTERVAL_SECONDS = 100.0
+        spectate.IDLE_TIMEOUT_SECONDS = 1000.0
+        spectate.MAX_STREAM_DURATION_SECONDS = 10.0
+        try:
+            async def run() -> None:
+                resp = await spectate.api_spectate_stream(gid)
+                agen = resp.body_iterator
+                try:
+                    first = await agen.__anext__()
+                    assert "event: state" in first
+                    with pytest.raises(asyncio.TimeoutError):
+                        await asyncio.wait_for(agen.__anext__(), timeout=0.2)
+                    assert spectate._active_streams == 0
+                finally:
+                    await agen.aclose()
+
+            asyncio.run(run())
+            assert spectate._active_streams == 0
+        finally:
+            spectate.POLL_INTERVAL_SECONDS = old_poll
+            spectate.HEARTBEAT_INTERVAL_SECONDS = old_hb
+            spectate.IDLE_TIMEOUT_SECONDS = old_idle
+            spectate.MAX_STREAM_DURATION_SECONDS = old_max
+            GAME_STORE.pop(gid, None)
+
+    def test_stream_initial_snapshot_none_emits_end(self) -> None:
+        import asyncio
+
+        from backend.api import spectate
+        gid = "spectate-limits-10"
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": gid})
+        assert resp.status_code == 200
+        try:
+            async def run() -> None:
+                with patch.object(spectate, "_initial_snapshot", return_value=None):
+                    resp = await spectate.api_spectate_stream(gid)
+                    assert resp.media_type == "text/event-stream"
+                    agen = resp.body_iterator
+                    try:
+                        first = await agen.__anext__()
+                        first = first if isinstance(first, str) else first.decode()
+                        assert first == "event: end\ndata: {}\n\n"
+                        with pytest.raises(StopAsyncIteration):
+                            await agen.__anext__()
+                    finally:
+                        await agen.aclose()
+
+            asyncio.run(run())
+            assert spectate._active_streams == 0
+        finally:
+            GAME_STORE.pop(gid, None)
+
+    def test_stream_instantiated_via_http_holds_and_releases_slot_end_to_end(self) -> None:
+        import asyncio
+
+        from backend.api import spectate
+        gid = "spectate-limits-11"
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": gid})
+        assert resp.status_code == 200
+        try:
+            async def run() -> None:
+                resp = await spectate.api_spectate_stream(gid)
+                agen = resp.body_iterator
+                try:
+                    await agen.__anext__()
+                finally:
+                    await agen.aclose()
+
+            asyncio.run(run())
+            assert spectate._active_streams == 0
+        finally:
+            GAME_STORE.pop(gid, None)

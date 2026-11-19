@@ -13,9 +13,11 @@ without mutating any state:
 import asyncio
 import json
 import logging
+import threading
+import time
 from collections.abc import AsyncGenerator
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from starlette.concurrency import run_in_threadpool
 
@@ -41,6 +43,51 @@ router = APIRouter(prefix="/api/spectate", tags=["spectate"])
 POLL_INTERVAL_SECONDS = 1.0
 HEARTBEAT_INTERVAL_SECONDS = 15.0
 INITIAL_LOG_ENTRIES = 25
+
+# Resource-exhaustion guards for the spectator SSE stream. A fixed number of
+# concurrent streams is enforced globally (using a plain threading.Lock rather
+# than an asyncio.Semaphore, which is not safe to share across event loops),
+# and each stream is bounded by a maximum duration and an idle timeout so a
+# stalled client cannot pin a slot or the underlying game object forever.
+MAX_CONCURRENT_STREAMS = 32
+MAX_STREAM_DURATION_SECONDS = 900.0
+IDLE_TIMEOUT_SECONDS = 300.0
+
+_active_streams = 0
+_stream_slots_lock = threading.Lock()
+
+
+def _try_acquire_stream_slot() -> bool:
+    """Attempt to reserve one of the limited concurrent stream slots.
+
+    :returns: ``True`` if a slot was acquired, ``False`` if the global
+        concurrent-stream cap is already reached.
+    :rtype: bool
+    """
+    global _active_streams
+    with _stream_slots_lock:
+        if _active_streams >= MAX_CONCURRENT_STREAMS:
+            return False
+        _active_streams += 1
+        return True
+
+
+def _release_stream_slot() -> None:
+    """Release a previously acquired concurrent-stream slot."""
+    global _active_streams
+    with _stream_slots_lock:
+        if _active_streams > 0:
+            _active_streams -= 1
+
+
+def _reset_stream_slots() -> None:
+    """Reset the concurrent-stream counter to zero.
+
+    Test hook used to restore a known baseline between test cases.
+    """
+    global _active_streams
+    with _stream_slots_lock:
+        _active_streams = 0
 
 
 def _get_state(game_id: str) -> GameState | None:
@@ -308,6 +355,7 @@ async def api_spectate_stream(
     game_id: str,
     x_game_token: str | None = Header(default=None),
     ticket: str | None = None,
+    request: Request = None,
 ) -> StreamingResponse:
     """Stream game state changes to a spectator via Server-Sent Events.
 
@@ -316,6 +364,12 @@ async def api_spectate_stream(
     the game state changes, pushes the updated summary together with all
     log entries added since the previous push. Sends a comment heartbeat
     while idle so proxies keep the connection open.
+
+    A stream ends with an ``end`` event when the watched game is evicted
+    from memory, when the maximum stream duration is reached, or when the
+    stream has been idle past the idle timeout. The client should treat any
+    of these as a signal to reconnect (minting a fresh stream ticket first
+    when token enforcement is on).
 
     When STARFARER_REQUIRE_GAME_TOKEN enforcement is enabled, the caller
     must authenticate either with the game's token via the
@@ -342,11 +396,16 @@ async def api_spectate_stream(
     :param ticket: Optional short-lived, single-use stream ticket supplied
         via the ``ticket`` query parameter.
     :type ticket: str | None
+    :param request: The incoming request, used to detect client
+        disconnects and end the stream early. ``None`` when the endpoint is
+        invoked directly (e.g. by tests) without a request context.
+    :type request: Request | None
     :returns: A ``text/event-stream`` response.
     :rtype: StreamingResponse
     :raises HTTPException: 404 if the game does not exist; 403 if token
         enforcement is enabled and neither the header token nor a valid
-        ticket authorizes the request.
+        ticket authorizes the request; 503 if the global cap on concurrent
+        spectator streams is reached.
     """
     # Authorization decision, tried in order:
     #   1. a valid single-use ticket (browser EventSource path, no header),
@@ -364,8 +423,17 @@ async def api_spectate_stream(
         # the game cannot be resolved).
         _authorize_game(game_id, None)
     # else: no credential supplied and enforcement is disabled — allow.
+    # Surface an HTTP 404 before the StreamingResponse starts. The
+    # authoritative read still happens inside _initial_snapshot (under the
+    # per-game lock); this pre-check exists only so a missing game fails
+    # with a normal HTTP error rather than an already-committed stream.
     if await run_in_threadpool(_get_state, game_id) is None:
         raise HTTPException(status_code=404, detail="Game not found")
+    if not _try_acquire_stream_slot():
+        raise HTTPException(
+            status_code=503,
+            detail="Too many concurrent spectator streams",
+        )
 
     async def event_stream() -> AsyncGenerator[str, None]:
         """Yield Server-Sent Events for a spectator watching a game.
@@ -375,42 +443,65 @@ async def api_spectate_stream(
         the state changes, a new ``state`` event is yielded containing
         the updated summary and any log entries added since the last
         push. While the state remains unchanged, a comment heartbeat is
-        emitted periodically to keep the connection alive. If the game is
-        evicted from the in-memory store, an ``end`` event is sent to
-        signal the client to reconnect.
+        emitted periodically to keep the connection alive.
+
+        The stream ends with an ``end`` event when the client disconnects
+        (detected via the request), when the maximum stream duration is
+        reached, when the stream has been idle past the idle timeout, or
+        when the game is evicted from the in-memory store — each a signal
+        for the client to reconnect. The concurrent-stream slot is always
+        released in a ``finally`` block so it cannot leak if the generator
+        is closed early.
 
         :yields: SSE-formatted strings: ``state`` events with a JSON
-            payload, ``end`` events when the game is gone, and comment
+            payload, ``end`` events when the stream terminates, and comment
             heartbeats (``: ping``) while idle.
         """
-        initial = await run_in_threadpool(_initial_snapshot, game_id)
-        assert initial is not None  # nosec B101 - runtime guard, not test assertion
-        payload: dict | None
-        payload, last_log_id, last_signature = initial
-        yield f"id: {last_log_id}\nevent: state\ndata: {await run_in_threadpool(json.dumps, payload)}\n\n"
-
-        idle_time = 0.0
-        while True:
-            await asyncio.sleep(POLL_INTERVAL_SECONDS)
-            snapshot = await run_in_threadpool(
-                _poll_snapshot, game_id, last_log_id, last_signature
-            )
-            if snapshot is None:
-                # Game evicted from memory (due to the LRU cap or an explicit
-                # removal); end the stream so the client reconnects and
-                # reloads the game from the database.
+        started_at = time.monotonic()
+        try:
+            initial = await run_in_threadpool(_initial_snapshot, game_id)
+            if initial is None:
                 yield "event: end\ndata: {}\n\n"
                 return
-            payload, last_log_id, signature = snapshot
-            last_signature = signature
-            if payload is not None:
-                yield f"id: {last_log_id}\nevent: state\ndata: {await run_in_threadpool(json.dumps, payload)}\n\n"
-                idle_time = 0.0
-            else:
-                idle_time += POLL_INTERVAL_SECONDS
-                if idle_time >= HEARTBEAT_INTERVAL_SECONDS:
+            payload: dict | None
+            payload, last_log_id, last_signature = initial
+            yield f"id: {last_log_id}\nevent: state\ndata: {await run_in_threadpool(json.dumps, payload)}\n\n"
+
+            idle_time = 0.0
+            heartbeat_elapsed = 0.0
+            while True:
+                if request is not None and await request.is_disconnected():
+                    return
+                if time.monotonic() - started_at >= MAX_STREAM_DURATION_SECONDS:
+                    yield "event: end\ndata: {}\n\n"
+                    return
+                await asyncio.sleep(POLL_INTERVAL_SECONDS)
+                snapshot = await run_in_threadpool(
+                    _poll_snapshot, game_id, last_log_id, last_signature
+                )
+                if snapshot is None:
+                    # Game evicted from memory (due to the LRU cap or an explicit
+                    # removal); end the stream so the client reconnects and
+                    # reloads the game from the database.
+                    yield "event: end\ndata: {}\n\n"
+                    return
+                payload, last_log_id, signature = snapshot
+                last_signature = signature
+                if payload is not None:
+                    yield f"id: {last_log_id}\nevent: state\ndata: {await run_in_threadpool(json.dumps, payload)}\n\n"
                     idle_time = 0.0
-                    yield ": ping\n\n"
+                    heartbeat_elapsed = 0.0
+                else:
+                    idle_time += POLL_INTERVAL_SECONDS
+                    heartbeat_elapsed += POLL_INTERVAL_SECONDS
+                    if idle_time >= IDLE_TIMEOUT_SECONDS and IDLE_TIMEOUT_SECONDS < MAX_STREAM_DURATION_SECONDS:
+                        yield "event: end\ndata: {}\n\n"
+                        return
+                    if heartbeat_elapsed >= HEARTBEAT_INTERVAL_SECONDS:
+                        heartbeat_elapsed = 0.0
+                        yield ": ping\n\n"
+        finally:
+            _release_stream_slot()
 
     return StreamingResponse(
         event_stream(),
