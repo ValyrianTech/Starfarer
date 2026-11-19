@@ -1,2 +1,28 @@
+# Bandit configuration.
+#
+# This repository uses two complementary, deliberately-different suppression
+# mechanisms. They are kept separate on purpose, not by drift:
+#
+# (a) `skips` (below) is a REPO-WIDE skip. It currently contains only B101
+#     (assert_used). B101 is skipped globally because `assert` is idiomatic
+#     throughout the `tests/` tree and there is a single intentional production
+#     assert (a runtime guard in `backend/api/spectate.py`). Every occurrence is
+#     a known-safe assertion, so a blanket skip is appropriate here. Note that
+#     the CI workflow `.github/workflows/bandit.yml` runs
+#     `bandit -c .bandit -r backend`, so this config applies to the `backend/`
+#     package.
+#
+# (b) B311 (random / pseudo-random generator) is intentionally NOT listed under
+#     `skips`. `random` is broadly used across the codebase, and a repo-wide
+#     B311 skip would be too broad: it would also silence any FUTURE
+#     genuinely-insecure use of `random`. Instead, each game-RNG call site in
+#     `backend/game/engine.py`, `backend/game/trading.py`, and
+#     `backend/utils.py` carries a justified inline `# nosec B311 - game RNG,
+#     not crypto` suppression, which is auditable at the exact line.
+#
+# (c) This split — a repo-wide `skips` entry for the universally-safe B101 vs
+#     per-line `# nosec` suppressions for the context-dependent B311 — is a
+#     deliberate, conscious choice. Do not merge B311 into `skips` without
+#     reconsidering whether a blanket skip would hide future insecure usage.
 skips:
   - B101
