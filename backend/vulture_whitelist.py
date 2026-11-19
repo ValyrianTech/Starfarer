@@ -119,6 +119,7 @@ whitelist.setup_db  # noqa: B018
 whitelist.lore_frags  # noqa: B018
 whitelist.cleanup_messages  # noqa: B018
 whitelist._isolated_db  # noqa: B018
+whitelist._clean_slots  # noqa: B018
 
 # Mock attributes
 whitelist.side_effect  # noqa: B018

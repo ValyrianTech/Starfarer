@@ -9,6 +9,7 @@ leaderboard data.
 import hashlib
 import json
 import logging
+import re
 import sqlite3
 from collections.abc import Generator
 from contextlib import contextmanager
@@ -18,6 +19,8 @@ from typing import Any
 from backend.config import DATA_DIR, DB_PATH, MAX_SAVES_PER_GAME
 
 logger = logging.getLogger(__name__)
+
+_IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 def get_db() -> sqlite3.Connection:
@@ -230,7 +233,7 @@ def load_game(game_id: str) -> dict | None:
         if token:
             data["token"] = token
         elif not data.get("token"):
-            data["token"] = ""
+            data["token"] = ""  # nosec B105 - empty-string default, not a credential
     return data
 
 
@@ -367,7 +370,7 @@ def load_save(game_id: str) -> dict | None:
         if token:
             data["token"] = token
         elif not data.get("token"):
-            data["token"] = ""
+            data["token"] = ""  # nosec B105 - empty-string default, not a credential
     return data
 
 
@@ -456,10 +459,13 @@ def _count_by_game_id(
     """
     if not game_ids:
         return {}
+    for name in (table, column):
+        if not _IDENT_RE.fullmatch(name):
+            raise ValueError(f"Invalid SQL identifier: {name!r}")
     placeholders = ",".join("?" for _ in game_ids)
     try:
         rows = conn.execute(
-            f"SELECT {column}, COUNT(*) FROM {table} WHERE {column} IN ({placeholders}) GROUP BY {column}",
+            f"SELECT {column}, COUNT(*) FROM {table} WHERE {column} IN ({placeholders}) GROUP BY {column}",  # nosec B608 - table/column validated as identifiers; values are ?-bound
             tuple(game_ids),
         ).fetchall()
     except sqlite3.OperationalError:

@@ -355,7 +355,7 @@ async def api_spectate_stream(
     game_id: str,
     x_game_token: str | None = Header(default=None),
     ticket: str | None = None,
-    request: Request = None,
+    request: Request = None,  # type: ignore[assignment]
 ) -> StreamingResponse:
     """Stream game state changes to a spectator via Server-Sent Events.
 

@@ -8,7 +8,7 @@ build it is running even when ``git`` is unavailable (for example in a
 sandboxed or tarball-only deployment).
 """
 
-import subprocess
+import subprocess  # nosec B404 - subprocess used only to run a fixed, literal git command
 from pathlib import Path
 
 REPO_ROOT: Path = Path(__file__).resolve().parents[1]
@@ -32,7 +32,7 @@ def get_commit_sha() -> str | None:
     :rtype: str | None
     """
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603 B607 - fixed args, no shell, executable is a literal
             ["git", "rev-parse", "--short", "HEAD"],
             cwd=REPO_ROOT,
             capture_output=True,

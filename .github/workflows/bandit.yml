@@ -1,0 +1,21 @@
+name: Security Scan (bandit)
+
+on:
+  push:
+    branches: [main, swe-pipeline/integration]
+  pull_request:
+
+jobs:
+  bandit:
+    name: bandit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install bandit
+        run: pip install bandit==1.9.4
+      - name: Run bandit
+        run: bandit -c .bandit -r backend
