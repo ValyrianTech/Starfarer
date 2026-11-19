@@ -19,7 +19,7 @@ from backend.multiplayer.database import (
     get_pending_ripples_for_system as db_get_pending_ripples_for_system,
 )
 from backend.multiplayer.database import (
-    save_ripple_event,
+    save_ripple_events,
 )
 from backend.multiplayer.models import RippleEvent
 
@@ -60,6 +60,7 @@ def create_ripple(
     systems_to_check = source_game_state.systems
 
     ripples: list[dict] = []
+    ripple_objects: list[RippleEvent] = []
     for sys_id, sys_data in systems_to_check.items():
         if sys_id == source_system.id:
             continue
@@ -78,8 +79,11 @@ def create_ripple(
             discovery_name=discovery.name,
             created_at=datetime.now(UTC).isoformat(),
         )
-        save_ripple_event(ripple)
+        ripple_objects.append(ripple)
         ripples.append(ripple.to_dict())
+
+    if ripple_objects:
+        save_ripple_events(ripple_objects)
 
     if ripples:
         source_game_state.add_log(
