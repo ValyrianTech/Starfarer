@@ -682,6 +682,39 @@ class TestMultiplayerDatabase:
         # Clean up
         GAME_STORE.pop(state.id, None)
 
+    def test_save_ripple_events_persists_multiple(self) -> None:
+        from backend.multiplayer.database import get_db_ctx, save_ripple_events
+
+        ripples = [
+            RippleEvent(
+                id=f"ripple-batch-{i}",
+                source_game_id="game-batch",
+                source_player_name="BatchPilot",
+                source_system_id="sys-batch-src",
+                target_system_id=f"sys-batch-tgt-{i}",
+                discovery_type="artifact",
+                discovery_name=f"Batch Relic {i}",
+                created_at=datetime.now(UTC).isoformat(),
+            )
+            for i in range(3)
+        ]
+        save_ripple_events(ripples)
+        with get_db_ctx() as conn:
+            rows = conn.execute(
+                "SELECT id, discovery_name FROM ripple_events WHERE source_game_id = ? ORDER BY id",
+                ("game-batch",),
+            ).fetchall()
+        assert len(rows) == 3
+        assert [r["id"] for r in rows] == ["ripple-batch-0", "ripple-batch-1", "ripple-batch-2"]
+        assert [r["discovery_name"] for r in rows] == ["Batch Relic 0", "Batch Relic 1", "Batch Relic 2"]
+
+    def test_save_ripple_events_empty_list_is_noop(self) -> None:
+        from backend.multiplayer.database import save_ripple_events
+
+        with patch("backend.multiplayer.database.get_db_ctx") as mock_get_db_ctx:
+            save_ripple_events([])
+        mock_get_db_ctx.assert_not_called()
+
     def test_acknowledge_ripple_success(self) -> None:
         from backend.multiplayer.database import acknowledge_ripple as db_ack_ripple
         from backend.multiplayer.database import save_ripple_event
@@ -2003,6 +2036,24 @@ class TestMultiplayerRipples:
                 assert r["source_system_id"] == system.id
                 assert r["discovery_name"] == "Ripple Relic"
         GAME_STORE.pop(state.id, None)
+
+    def test_create_ripple_batches_db_writes(self) -> None:
+        state = new_game(42, "RippleShip", shared_universe=True)
+        GAME_STORE[state.id] = state
+        try:
+            system = state.get_current_system()
+            disc = _make_discovery(name="Batch Relic", system_id=system.id)
+            with patch("backend.multiplayer.ripples.save_ripple_events") as mock_save:
+                result = create_ripple(state, disc)
+
+            assert mock_save.call_count == 1
+            mock_save.assert_called_once()
+            args = mock_save.call_args[0][0]
+            assert isinstance(args, list)
+            assert len(args) == result["ripples_created"]
+            assert all(isinstance(ripple, RippleEvent) for ripple in args)
+        finally:
+            GAME_STORE.pop(state.id, None)
 
     def test_create_ripple_no_current_system(self) -> None:
         state = new_game(42, "RippleShip", shared_universe=True)
