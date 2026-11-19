@@ -3867,6 +3867,15 @@ class TestLeaderboardMultiplayer:
             result = _count_by_game_id(conn, "table_does_not_exist", "game_id", ["g1"])
         assert result == {}
 
+    def test_count_by_game_id_rejects_invalid_identifiers(self) -> None:
+        """_count_by_game_id should raise ValueError for non-identifier table/column."""
+        from backend.database import _count_by_game_id, get_db_ctx
+        with get_db_ctx() as conn:
+            with pytest.raises(ValueError):
+                _count_by_game_id(conn, "bad table;", "game_id", ["g1"])
+            with pytest.raises(ValueError):
+                _count_by_game_id(conn, "ghost_signatures", "bad column;", ["g1"])
+
     def test_leaderboard_grouped_queries_constant(self) -> None:
         """get_leaderboard must use a constant number of grouped COUNT queries."""
         from backend.database import get_leaderboard, save_game
