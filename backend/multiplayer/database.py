@@ -677,32 +677,52 @@ def cleanup_expired_messages() -> int:
 # ---------------------------------------------------------------------------
 
 
+def save_ripple_events(ripples: list[RippleEvent]) -> None:
+    """Persist multiple discovery ripple events to the database in one transaction.
+
+    Opens a single database connection and uses ``executemany`` to batch
+    all ripple inserts into a single commit, avoiding the N+1 write
+    anti-pattern of committing once per ripple.
+
+    :param ripples: The ripple events to save.
+    :type ripples: list[RippleEvent]
+    :returns: ``None``.
+    :rtype: None
+    """
+    if not ripples:
+        return
+    with get_db_ctx() as conn:
+        conn.executemany(
+            "INSERT OR REPLACE INTO ripple_events "
+            "(id, source_game_id, source_player_name, source_system_id, "
+            "target_system_id, discovery_type, discovery_name, created_at, "
+            "acknowledged_by) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                (
+                    ripple.id,
+                    ripple.source_game_id,
+                    ripple.source_player_name,
+                    ripple.source_system_id,
+                    ripple.target_system_id,
+                    ripple.discovery_type,
+                    ripple.discovery_name,
+                    ripple.created_at,
+                    json.dumps(ripple.acknowledged_by),
+                )
+                for ripple in ripples
+            ],
+        )
+        conn.commit()
+
+
 def save_ripple_event(ripple: RippleEvent) -> None:
     """Persist a discovery ripple event to the database.
 
     :param ripple: The ripple event to save.
     :type ripple: RippleEvent
     """
-    with get_db_ctx() as conn:
-        conn.execute(
-            "INSERT OR REPLACE INTO ripple_events "
-            "(id, source_game_id, source_player_name, source_system_id, "
-            "target_system_id, discovery_type, discovery_name, created_at, "
-            "acknowledged_by) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                ripple.id,
-                ripple.source_game_id,
-                ripple.source_player_name,
-                ripple.source_system_id,
-                ripple.target_system_id,
-                ripple.discovery_type,
-                ripple.discovery_name,
-                ripple.created_at,
-                json.dumps(ripple.acknowledged_by),
-            ),
-        )
-        conn.commit()
+    save_ripple_events([ripple])
 
 
 def get_pending_ripples(game_id: str) -> list[RippleEvent]:
