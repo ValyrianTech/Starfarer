@@ -695,7 +695,10 @@ def api_jump(game_id: str, sys_id: str, x_game_token: str | None = Header(defaul
     :param x_game_token: The caller-supplied per-game token (X-Game-Token header).
     :type x_game_token: str | None
     :returns: A dictionary with ``result`` message, ``current_system``,
-        ``ship`` status, and ``pending_event`` if triggered.
+        ``ship`` status, and ``pending_events`` (a list of unresolved
+        events, possibly empty); ``pending_event`` is a deprecated
+        single-event alias equal to ``pending_events[0]`` when present,
+        otherwise ``None``.
     :rtype: dict
     :raises HTTPException: 404 if the game or target system is not
         found; 400 if the jump is not possible.
@@ -750,11 +753,13 @@ def api_jump(game_id: str, sys_id: str, x_game_token: str | None = Header(defaul
 
         game_save(state)
 
+        pending_events = [event.to_dict()] if event and not event.resolved else []
         return {
             "result": result,
             "current_system": current_system.to_dict() if current_system else None,
             "ship": state.ship.to_dict(),
-            "pending_event": event.to_dict() if event and not event.resolved else None,
+            "pending_events": pending_events,          # canonical
+            "pending_event": pending_events[0] if pending_events else None,  # deprecated alias
             "missions_available": missions_summary,
         }
 
@@ -771,7 +776,10 @@ def api_scan(game_id: str, x_game_token: str | None = Header(default=None)) -> d
     :param x_game_token: The caller-supplied per-game token (X-Game-Token header).
     :type x_game_token: str | None
     :returns: A dictionary with ``result``, ``system``, ``ship``
-        status, and ``pending_event`` if triggered.
+        status, and ``pending_events`` (a list of unresolved events,
+        possibly empty); ``pending_event`` is a deprecated single-event
+        alias equal to ``pending_events[0]`` when present, otherwise
+        ``None``.
     :rtype: dict
     :raises HTTPException: 404 if the game is not found; 400 if the
         scan is not possible (insufficient fuel or no current system).
@@ -793,12 +801,14 @@ def api_scan(game_id: str, x_game_token: str | None = Header(default=None)) -> d
         game_save(state)
 
         current = state.get_current_system()
+        pending_events = [event.to_dict()] if event and not event.resolved else []
         return {
             "result": result,
             "system": current.to_dict() if current else None,
             "ship": state.ship.to_dict(),
             "scanner_tier_data": get_scanner_tier_data(state, current) if current else None,
-            "pending_event": event.to_dict() if event and not event.resolved else None,
+            "pending_events": pending_events,          # canonical
+            "pending_event": pending_events[0] if pending_events else None,  # deprecated alias
         }
 
 
@@ -922,7 +932,9 @@ def api_explore(game_id: str, x_game_token: str | None = Header(default=None)) -
     :type x_game_token: str | None
     :returns: A dictionary with ``result`` message, ``discoveries``
         list, ``ship`` status, ``lore_fragments_discovered``, and
-        ``pending_event`` if triggered.
+        ``pending_events`` (a list of unresolved events, possibly
+        empty); ``pending_event`` is a deprecated single-event alias
+        equal to ``pending_events[0]`` when present, otherwise ``None``.
     :rtype: dict
     :raises HTTPException: 404 if the game is not found; 400 if
         exploration is not possible.
@@ -957,12 +969,14 @@ def api_explore(game_id: str, x_game_token: str | None = Header(default=None)) -
             state.events.append(event)
         game_save(state)
 
+        pending_events = [event.to_dict()] if event and not event.resolved else []
         return {
             "result": f"Explored. Found {len(discoveries)} points of interest.",
             "discoveries": [d.to_dict() for d in discoveries],
             "ship": state.ship.to_dict(),
             "lore_fragments_discovered": lore_fragments_found,
-            "pending_event": event.to_dict() if event and not event.resolved else None,
+            "pending_events": pending_events,          # canonical
+            "pending_event": pending_events[0] if pending_events else None,  # deprecated alias
         }
 
 
@@ -2095,13 +2109,32 @@ def api_leaderboard() -> dict:
     }
 
 
+def _pending_events_list(state: GameState) -> list[dict]:
+    """Return serialized dicts for every unresolved event on ``state``.
+
+    This is the single source of truth for the canonical ``pending_events``
+    payload builder, shared by the full-state response and the spectator
+    payload so the two never drift apart.
+
+    :param state: The current game state.
+    :type state: GameState
+    :returns: A list of ``to_dict()``-serialized unresolved events.
+    :rtype: list[dict]
+    """
+    return [e.to_dict() for e in state.events if not e.resolved]
+
+
 def _full_state_response(state: GameState, sort: str | None = None, order: str | None = None) -> dict:
     """Build the full game state response dictionary.
 
     Serializes all relevant game state fields into a dictionary
     suitable for the ``GET /game/{game_id}`` endpoint, including
-    ship data, current system, discoveries, pending events, the
-    most recent log entries, and visit statistics.
+    ship data, current system, discoveries, the most recent log
+    entries, and visit statistics.
+
+    Unresolved events are exposed under the canonical ``pending_events``
+    list, with ``events_pending`` retained as a deprecated alias of the
+    same list for backward compatibility.
 
     Cargo items (``cargo_items``) are returned unsorted by default.
     Pass ``sort`` and/or ``order`` to sort them by ``"value"`` or
@@ -2126,6 +2159,7 @@ def _full_state_response(state: GameState, sort: str | None = None, order: str |
     """
     current_system = state.get_current_system()
     cargo_items = [d.to_cargo_dict() for d in state.discoveries]
+    pending_events = _pending_events_list(state)
 
     if sort is not None or order is not None:
         valid_sorts = {"value", "name"}
@@ -2160,7 +2194,8 @@ def _full_state_response(state: GameState, sort: str | None = None, order: str |
         "current_system": current_system.to_dict() if current_system else None,
         "discoveries": [d.to_dict() for d in state.discoveries],
         "cargo_capacity": state.ship.max_cargo,
-        "events_pending": [e.to_dict() for e in state.events if not e.resolved],
+        "events_pending": pending_events,   # deprecated alias
+        "pending_events": pending_events,   # canonical
         "log_entries": list(reversed(state.log_entries))[:20],
         "systems_visited": state.systems_visited,
         "systems_total": len(state.systems),

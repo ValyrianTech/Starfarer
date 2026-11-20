@@ -22,7 +22,7 @@ from fastapi.responses import StreamingResponse
 from starlette.concurrency import run_in_threadpool
 
 from backend.api import stream_tickets
-from backend.api.routes import _authorize_game, _locked
+from backend.api.routes import _authorize_game, _locked, _pending_events_list
 from backend.config import get_require_game_token
 from backend.database import _safe_ship_credits, get_db_ctx
 from backend.game.manager import (
@@ -225,7 +225,7 @@ def _build_payload(state: GameState, since_log_id: int) -> tuple[dict, int]:
     )
     payload = {
         "summary": state.state_summary(),
-        "pending_events": [e.to_dict() for e in state.events if not e.resolved],
+        "pending_events": _pending_events_list(state),
         "new_log_entries": new_entries,
         "last_log_id": last_log_id,
     }
