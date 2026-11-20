@@ -1451,9 +1451,21 @@ class TestPendingEventsUnification:
         assert state is not None
         system = state.get_current_system()
         assert system is not None
-        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
-        if not planet:
-            return  # pragma: no cover  # no planet in starting system
+        from backend.models.system import Body
+
+        # Always construct and append a deterministic landable planet so the
+        # canonical/alias assertions below always execute (never silently
+        # return or skip when the starting system lacks a planet).
+        planet = Body(
+            id=f"{game_id}_test_planet",
+            name="Test Planet",
+            body_type="planet",
+            biome="temperate",
+            size=3,
+            distance_from_star=1.0,
+            poi_count=3,
+        )
+        system.bodies.append(planet)
         land_on_body(state, planet.id)
         state.ship.morale = 20
         GAME_STORE[game_id] = state
@@ -1560,7 +1572,7 @@ class TestPendingEventsUnification:
             system = state.get_current_system()
             assert system is not None
             planet = next((b for b in system.bodies if b.body_type == "planet"), None)
-            if not planet:
+            if planet is None:
                 pytest.skip("no planet in starting system")  # pragma: no cover
             land_on_body(state, planet.id)
         elif action == "jump":
