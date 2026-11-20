@@ -195,7 +195,9 @@ Yields 1–2 high-value discoveries. Can only be done **once per body** (`sub_su
 
 ### 3.10 Handle Events
 
-After jumping, scanning, or exploring, you may receive a `pending_event`. Events have 2-4 choices.
+After jumping, scanning, or exploring, the response contains `pending_events` — a list of unresolved events, possibly empty. Events have 2-4 choices.
+
+> **Note:** `pending_event` (a single event, or `null`) is a **DEPRECATED** alias of `pending_events`, to be removed in a future release. When events are present, `pending_event` equals `pending_events[0]`; when there are no unresolved events, `pending_events` is `[]` and `pending_event` is `null`. Prefer `pending_events` in new code.
 
 ```http
 POST /api/game/{game_id}/event/{event_id}/resolve
@@ -610,6 +612,8 @@ GET /api/game/{game_id}?sort=value&order=desc
 ```
 
 Complete state dump: ship, current system, pending events, discoveries, log entries, fuel status, active contextual hints, reputation summary, biomes visited, and cargo details. Accepts optional `sort` (`"value"` or `"name"`) and `order` (`"asc"` or `"desc"`) query parameters for sorting cargo items in the response. Cargo is returned unsorted when neither parameter is supplied; supplying either one triggers sorting, with the missing parameter defaulting (a missing `sort` defaults to `"value"`, a missing `order` defaults to `"desc"`). An invalid `sort` or `order` value returns HTTP 422. The response includes `total_value` (sum of all cargo credit values), `top3_ids` (the 3 most valuable cargo item IDs), `hints` (active contextual hint objects with `id`, `severity`, `message`, and optional `command`), `missions_available` (a summary of missions offered at the current station, with `available`, `count`, `tiers`, `highest_tier`, and `daily_available`), `biomes_visited` (list of biome type strings the player has visited), and `biomes_visited_count` (count of unique biomes visited) fields.
+
+Unresolved events are exposed under the canonical `pending_events` list. `events_pending` is a **DEPRECATED** alias of the same list, to be removed in the next major API revision; prefer `pending_events` in new code.
 
 ### Cargo Hold
 

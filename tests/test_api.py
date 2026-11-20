@@ -1374,6 +1374,263 @@ class TestAPIEventPersistence:
         assert len(data["events_pending"]) > 0, "No pending events found after reload from DB"
 
 
+class TestPendingEventsUnification:
+    """Tests for the canonical ``pending_events`` key and its deprecated aliases."""
+
+    def test_full_state_returns_canonical_and_alias(self) -> None:
+        """Full state should expose both pending_events and events_pending, equal."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "full-pending"})
+        game_id = resp.json()["game_id"]
+        data = client.get(f"/api/game/{game_id}").json()
+        assert "pending_events" in data
+        assert "events_pending" in data
+        assert isinstance(data["pending_events"], list)
+        assert isinstance(data["events_pending"], list)
+        assert data["pending_events"] == data["events_pending"]
+        assert data["pending_events"] == []
+
+    def test_full_state_pending_events_match_after_forced_jump(self) -> None:
+        """After a forced jump event, full state pending lists are equal and non-empty."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "full-pending-ev"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        state.ship.morale = 20
+        nearby = get_nearby_systems(state)
+        target_id = nearby[0]["id"]
+        GAME_STORE[game_id] = state
+        game_save(state)
+        client.post(f"/api/game/{game_id}/jump/{target_id}")
+        data = client.get(f"/api/game/{game_id}").json()
+        assert data["pending_events"] == data["events_pending"]
+        assert len(data["pending_events"]) > 0
+
+    def test_jump_forced_event_returns_canonical_and_alias(self) -> None:
+        """Forced jump event response includes pending_events list and pending_event alias."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "jump-pend-key"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        state.ship.morale = 20
+        nearby = get_nearby_systems(state)
+        target_id = nearby[0]["id"]
+        GAME_STORE[game_id] = state
+        game_save(state)
+        resp = client.post(f"/api/game/{game_id}/jump/{target_id}")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "pending_events" in data
+        assert "pending_event" in data
+        assert isinstance(data["pending_events"], list)
+        assert data["pending_events"]
+        assert data["pending_event"] == data["pending_events"][0]
+
+    def test_scan_forced_event_returns_canonical_and_alias(self) -> None:
+        """Forced scan event response includes pending_events list and pending_event alias."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "scan-pend-key"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        state.ship.morale = 20
+        GAME_STORE[game_id] = state
+        game_save(state)
+        resp = client.post(f"/api/game/{game_id}/scan")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "pending_events" in data
+        assert "pending_event" in data
+        assert isinstance(data["pending_events"], list)
+        assert data["pending_events"]
+        assert data["pending_event"] == data["pending_events"][0]
+
+    def test_explore_forced_event_returns_canonical_and_alias(self) -> None:
+        """Forced explore event response includes pending_events list and pending_event alias."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "explore-pend-key"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        system = state.get_current_system()
+        assert system is not None
+        from backend.models.system import Body
+
+        # Always construct and append a deterministic landable planet so the
+        # canonical/alias assertions below always execute (never silently
+        # return or skip when the starting system lacks a planet).
+        planet = Body(
+            id=f"{game_id}_test_planet",
+            name="Test Planet",
+            body_type="planet",
+            biome="temperate",
+            size=3,
+            distance_from_star=1.0,
+            poi_count=3,
+        )
+        system.bodies.append(planet)
+        land_on_body(state, planet.id)
+        state.ship.morale = 20
+        GAME_STORE[game_id] = state
+        game_save(state)
+        resp = client.post(f"/api/game/{game_id}/explore")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "pending_events" in data
+        assert "pending_event" in data
+        assert isinstance(data["pending_events"], list)
+        assert data["pending_events"]
+        assert data["pending_event"] == data["pending_events"][0]
+
+    def test_action_response_pending_event_none_when_no_event(self) -> None:
+        """With no triggered event, pending_events is [] and pending_event is None."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "scan-pend-none"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        GAME_STORE[game_id] = state
+        game_save(state)
+        with patch("backend.api.routes.trigger_event", return_value=None):
+            resp = client.post(f"/api/game/{game_id}/scan")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["pending_events"] == []
+        assert data["pending_event"] is None
+
+    def test_action_pending_events_includes_preexisting_event(self) -> None:
+        """Action endpoints' canonical pending_events must include pre-existing
+        unresolved events, not just the freshly-triggered one.
+
+        Regression: jump/scan/explore previously built pending_events from only
+        the newly-triggered event, so the action response diverged from the
+        full-state/spectator payload whenever a pre-existing unresolved event
+        coexisted. The canonical list must now equal _pending_events_list(state)
+        (all unresolved events) while the deprecated pending_event alias still
+        points at the newly-triggered event.
+        """
+        from backend.api.routes import _pending_events_list
+        from backend.generation.events import EVENT_TEMPLATES, _create_event
+
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "scan-pend-preexisting"})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        # Seed a pre-existing UNRESOLVED event on the state.
+        preexisting = _create_event(EVENT_TEMPLATES[0], state.ship.current_system_id)
+        assert preexisting.resolved is False
+        state.events.append(preexisting)
+        state.ship.morale = 20  # force the scan to trigger a new event too
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        resp = client.post(f"/api/game/{game_id}/scan")
+        assert resp.status_code == 200
+        data = resp.json()
+
+        new_event = state.events[-1]
+        assert new_event is not preexisting
+        assert new_event.resolved is False
+
+        expected = _pending_events_list(state)
+        # Both the pre-existing and the newly-triggered event are present.
+        assert len(expected) == 2
+        assert data["pending_events"] == expected
+        assert preexisting.to_dict() in data["pending_events"]
+        assert new_event.to_dict() in data["pending_events"]
+        # The canonical list agrees with the full-state payload.
+        full = client.get(f"/api/game/{game_id}").json()
+        assert full["pending_events"] == data["pending_events"]
+        # The deprecated alias points at the NEWLY-triggered event, which is
+        # not necessarily pending_events[0] (the pre-existing event comes first).
+        assert data["pending_event"] == new_event.to_dict()
+        assert data["pending_event"] != data["pending_events"][0]
+
+    @pytest.mark.parametrize("action", ["jump", "scan", "explore"])
+    def test_action_pending_events_includes_both_preexisting_and_triggered(self, action: str) -> None:
+        """Every action endpoint's canonical ``pending_events`` must include BOTH
+        a pre-existing unresolved event and the event the action itself triggers.
+
+        Regression: the divergence scenario where an unresolved event already
+        exists on the state and the action triggers a second one. The action
+        response must list both events, matching ``_pending_events_list(state)``
+        and the full-state payload.
+        """
+        from backend.api.routes import _pending_events_list
+        from backend.generation.events import EVENT_TEMPLATES, _create_event
+
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": f"divergence-{action}"})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+
+        # Seed a pre-existing UNRESOLVED event on the state.
+        preexisting = _create_event(EVENT_TEMPLATES[0], state.ship.current_system_id)
+        assert preexisting.resolved is False
+        state.events.append(preexisting)
+        state.ship.morale = 20  # force the action to deterministically trigger another event
+
+        if action == "explore":
+            system = state.get_current_system()
+            assert system is not None
+            planet = next((b for b in system.bodies if b.body_type == "planet"), None)
+            if planet is None:
+                pytest.skip("no planet in starting system")  # pragma: no cover
+            land_on_body(state, planet.id)
+        elif action == "jump":
+            target_id = get_nearby_systems(state)[0]["id"]
+
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        if action == "jump":
+            resp = client.post(f"/api/game/{game_id}/jump/{target_id}")
+        elif action == "scan":
+            resp = client.post(f"/api/game/{game_id}/scan")
+        else:
+            resp = client.post(f"/api/game/{game_id}/explore")
+        assert resp.status_code == 200
+        data = resp.json()
+
+        new_event = state.events[-1]
+        assert new_event is not preexisting
+        assert new_event.resolved is False
+
+        expected = _pending_events_list(state)
+        # Both the pre-existing and the newly-triggered event are present.
+        assert len(expected) == 2
+        assert data["pending_events"] == expected
+        assert preexisting.to_dict() in data["pending_events"]
+        assert new_event.to_dict() in data["pending_events"]
+        # The canonical list agrees with the full-state payload.
+        full = client.get(f"/api/game/{game_id}").json()
+        assert full["pending_events"] == data["pending_events"]
+
+    def test_pending_events_list_only_unresolved(self) -> None:
+        """_pending_events_list should return only unresolved events, in order."""
+        from backend.api.routes import _pending_events_list
+        from backend.generation.events import EVENT_TEMPLATES, _create_event
+        state = new_game(seed=42)
+        assert _pending_events_list(state) == []
+        e1 = _create_event(EVENT_TEMPLATES[0], state.ship.current_system_id)
+        e2 = _create_event(EVENT_TEMPLATES[0], state.ship.current_system_id)
+        e2.resolved = True
+        state.events.extend([e1, e2])
+        result = _pending_events_list(state)
+        assert len(result) == 1
+        assert result[0] == e1.to_dict()
+
+    def test_build_payload_matches_pending_events_list(self) -> None:
+        """Spectate _build_payload should use pending_events from _pending_events_list."""
+        from backend.api.routes import _pending_events_list
+        from backend.api.spectate import _build_payload
+        from backend.generation.events import EVENT_TEMPLATES, _create_event
+        state = new_game(seed=42, ship_name="SpecPendKey")
+        event = _create_event(EVENT_TEMPLATES[0], state.ship.current_system_id)
+        state.events.append(event)
+        payload, _ = _build_payload(state, 0)
+        assert payload["pending_events"] == _pending_events_list(state)
+        assert payload["pending_events"] == [event.to_dict()]
+
+
 class TestAPIBulkSell:
     """Tests for the bulk sell endpoint."""
 
