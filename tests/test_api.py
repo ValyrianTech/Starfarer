@@ -1531,6 +1531,67 @@ class TestPendingEventsUnification:
         assert data["pending_event"] == new_event.to_dict()
         assert data["pending_event"] != data["pending_events"][0]
 
+    @pytest.mark.parametrize("action", ["jump", "scan", "explore"])
+    def test_action_pending_events_includes_both_preexisting_and_triggered(self, action: str) -> None:
+        """Every action endpoint's canonical ``pending_events`` must include BOTH
+        a pre-existing unresolved event and the event the action itself triggers.
+
+        Regression: the divergence scenario where an unresolved event already
+        exists on the state and the action triggers a second one. The action
+        response must list both events, matching ``_pending_events_list(state)``
+        and the full-state payload.
+        """
+        from backend.api.routes import _pending_events_list
+        from backend.generation.events import EVENT_TEMPLATES, _create_event
+
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": f"divergence-{action}"})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+
+        # Seed a pre-existing UNRESOLVED event on the state.
+        preexisting = _create_event(EVENT_TEMPLATES[0], state.ship.current_system_id)
+        assert preexisting.resolved is False
+        state.events.append(preexisting)
+        state.ship.morale = 20  # force the action to deterministically trigger another event
+
+        if action == "explore":
+            system = state.get_current_system()
+            assert system is not None
+            planet = next((b for b in system.bodies if b.body_type == "planet"), None)
+            if not planet:
+                pytest.skip("no planet in starting system")  # pragma: no cover
+            land_on_body(state, planet.id)
+        elif action == "jump":
+            target_id = get_nearby_systems(state)[0]["id"]
+
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        if action == "jump":
+            resp = client.post(f"/api/game/{game_id}/jump/{target_id}")
+        elif action == "scan":
+            resp = client.post(f"/api/game/{game_id}/scan")
+        else:
+            resp = client.post(f"/api/game/{game_id}/explore")
+        assert resp.status_code == 200
+        data = resp.json()
+
+        new_event = state.events[-1]
+        assert new_event is not preexisting
+        assert new_event.resolved is False
+
+        expected = _pending_events_list(state)
+        # Both the pre-existing and the newly-triggered event are present.
+        assert len(expected) == 2
+        assert data["pending_events"] == expected
+        assert preexisting.to_dict() in data["pending_events"]
+        assert new_event.to_dict() in data["pending_events"]
+        # The canonical list agrees with the full-state payload.
+        full = client.get(f"/api/game/{game_id}").json()
+        assert full["pending_events"] == data["pending_events"]
+
     def test_pending_events_list_only_unresolved(self) -> None:
         """_pending_events_list should return only unresolved events, in order."""
         from backend.api.routes import _pending_events_list
