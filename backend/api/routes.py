@@ -695,10 +695,13 @@ def api_jump(game_id: str, sys_id: str, x_game_token: str | None = Header(defaul
     :param x_game_token: The caller-supplied per-game token (X-Game-Token header).
     :type x_game_token: str | None
     :returns: A dictionary with ``result`` message, ``current_system``,
-        ``ship`` status, and ``pending_events`` (a list of unresolved
-        events, possibly empty); ``pending_event`` is a deprecated
-        single-event alias equal to ``pending_events[0]`` when present,
-        otherwise ``None``.
+        ``ship`` status, and ``pending_events`` (the full canonical list
+        of all unresolved events on the game state, in order, possibly
+        empty, shared with the full-state/spectator payload);
+        ``pending_event`` is a deprecated single-event alias equal to
+        the event newly triggered by this action (``None`` when no event
+        was triggered), which may differ from ``pending_events[0]`` when
+        a pre-existing unresolved event also exists.
     :rtype: dict
     :raises HTTPException: 404 if the game or target system is not
         found; 400 if the jump is not possible.
@@ -753,13 +756,14 @@ def api_jump(game_id: str, sys_id: str, x_game_token: str | None = Header(defaul
 
         game_save(state)
 
-        pending_events = [event.to_dict()] if event and not event.resolved else []
+        pending_events = _pending_events_list(state)
+        pending_event = event.to_dict() if event is not None else None
         return {
             "result": result,
             "current_system": current_system.to_dict() if current_system else None,
             "ship": state.ship.to_dict(),
             "pending_events": pending_events,          # canonical
-            "pending_event": pending_events[0] if pending_events else None,  # deprecated alias
+            "pending_event": pending_event,  # deprecated alias
             "missions_available": missions_summary,
         }
 
@@ -776,10 +780,13 @@ def api_scan(game_id: str, x_game_token: str | None = Header(default=None)) -> d
     :param x_game_token: The caller-supplied per-game token (X-Game-Token header).
     :type x_game_token: str | None
     :returns: A dictionary with ``result``, ``system``, ``ship``
-        status, and ``pending_events`` (a list of unresolved events,
-        possibly empty); ``pending_event`` is a deprecated single-event
-        alias equal to ``pending_events[0]`` when present, otherwise
-        ``None``.
+        status, and ``pending_events`` (the full canonical list of all
+        unresolved events on the game state, in order, possibly empty,
+        shared with the full-state/spectator payload); ``pending_event``
+        is a deprecated single-event alias equal to the event newly
+        triggered by this action (``None`` when no event was triggered),
+        which may differ from ``pending_events[0]`` when a pre-existing
+        unresolved event also exists.
     :rtype: dict
     :raises HTTPException: 404 if the game is not found; 400 if the
         scan is not possible (insufficient fuel or no current system).
@@ -801,14 +808,15 @@ def api_scan(game_id: str, x_game_token: str | None = Header(default=None)) -> d
         game_save(state)
 
         current = state.get_current_system()
-        pending_events = [event.to_dict()] if event and not event.resolved else []
+        pending_events = _pending_events_list(state)
+        pending_event = event.to_dict() if event is not None else None
         return {
             "result": result,
             "system": current.to_dict() if current else None,
             "ship": state.ship.to_dict(),
             "scanner_tier_data": get_scanner_tier_data(state, current) if current else None,
             "pending_events": pending_events,          # canonical
-            "pending_event": pending_events[0] if pending_events else None,  # deprecated alias
+            "pending_event": pending_event,  # deprecated alias
         }
 
 
@@ -932,9 +940,13 @@ def api_explore(game_id: str, x_game_token: str | None = Header(default=None)) -
     :type x_game_token: str | None
     :returns: A dictionary with ``result`` message, ``discoveries``
         list, ``ship`` status, ``lore_fragments_discovered``, and
-        ``pending_events`` (a list of unresolved events, possibly
-        empty); ``pending_event`` is a deprecated single-event alias
-        equal to ``pending_events[0]`` when present, otherwise ``None``.
+        ``pending_events`` (the full canonical list of all unresolved
+        events on the game state, in order, possibly empty, shared with
+        the full-state/spectator payload); ``pending_event`` is a
+        deprecated single-event alias equal to the event newly triggered
+        by this action (``None`` when no event was triggered), which may
+        differ from ``pending_events[0]`` when a pre-existing unresolved
+        event also exists.
     :rtype: dict
     :raises HTTPException: 404 if the game is not found; 400 if
         exploration is not possible.
@@ -969,14 +981,15 @@ def api_explore(game_id: str, x_game_token: str | None = Header(default=None)) -
             state.events.append(event)
         game_save(state)
 
-        pending_events = [event.to_dict()] if event and not event.resolved else []
+        pending_events = _pending_events_list(state)
+        pending_event = event.to_dict() if event is not None else None
         return {
             "result": f"Explored. Found {len(discoveries)} points of interest.",
             "discoveries": [d.to_dict() for d in discoveries],
             "ship": state.ship.to_dict(),
             "lore_fragments_discovered": lore_fragments_found,
             "pending_events": pending_events,          # canonical
-            "pending_event": pending_events[0] if pending_events else None,  # deprecated alias
+            "pending_event": pending_event,  # deprecated alias
         }
 
 

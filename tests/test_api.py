@@ -1482,6 +1482,55 @@ class TestPendingEventsUnification:
         assert data["pending_events"] == []
         assert data["pending_event"] is None
 
+    def test_action_pending_events_includes_preexisting_event(self) -> None:
+        """Action endpoints' canonical pending_events must include pre-existing
+        unresolved events, not just the freshly-triggered one.
+
+        Regression: jump/scan/explore previously built pending_events from only
+        the newly-triggered event, so the action response diverged from the
+        full-state/spectator payload whenever a pre-existing unresolved event
+        coexisted. The canonical list must now equal _pending_events_list(state)
+        (all unresolved events) while the deprecated pending_event alias still
+        points at the newly-triggered event.
+        """
+        from backend.api.routes import _pending_events_list
+        from backend.generation.events import EVENT_TEMPLATES, _create_event
+
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "scan-pend-preexisting"})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        # Seed a pre-existing UNRESOLVED event on the state.
+        preexisting = _create_event(EVENT_TEMPLATES[0], state.ship.current_system_id)
+        assert preexisting.resolved is False
+        state.events.append(preexisting)
+        state.ship.morale = 20  # force the scan to trigger a new event too
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        resp = client.post(f"/api/game/{game_id}/scan")
+        assert resp.status_code == 200
+        data = resp.json()
+
+        new_event = state.events[-1]
+        assert new_event is not preexisting
+        assert new_event.resolved is False
+
+        expected = _pending_events_list(state)
+        # Both the pre-existing and the newly-triggered event are present.
+        assert len(expected) == 2
+        assert data["pending_events"] == expected
+        assert preexisting.to_dict() in data["pending_events"]
+        assert new_event.to_dict() in data["pending_events"]
+        # The canonical list agrees with the full-state payload.
+        full = client.get(f"/api/game/{game_id}").json()
+        assert full["pending_events"] == data["pending_events"]
+        # The deprecated alias points at the NEWLY-triggered event, which is
+        # not necessarily pending_events[0] (the pre-existing event comes first).
+        assert data["pending_event"] == new_event.to_dict()
+        assert data["pending_event"] != data["pending_events"][0]
+
     def test_pending_events_list_only_unresolved(self) -> None:
         """_pending_events_list should return only unresolved events, in order."""
         from backend.api.routes import _pending_events_list
