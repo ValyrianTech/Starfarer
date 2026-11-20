@@ -367,7 +367,7 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
             state.ship.credits -= cost
             state.ship.fuel += amount
             breakdown_lines = list(price_info["breakdown_lines"])
-            breakdown_lines.insert(-1, f"Market conditions: {price_mod:+.0%}")
+            breakdown_lines.insert(-1, f"Market conditions: {(price_mod - 1):+.0%}")
             breakdown_lines[-1] = f"Final price: {final_unit_price:.1f} credits/unit"
             breakdown_str = "\n".join(breakdown_lines)
             result_message = f"Purchased {amount} fuel for {cost} credits.\n{breakdown_str}"
