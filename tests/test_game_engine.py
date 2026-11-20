@@ -4469,7 +4469,44 @@ class TestMarketPriceMod:
         credits_before = state.ship.credits
         ok, msg = perform_trade(state, "buy", "fuel", amount)
         assert ok is True
-        assert "Market conditions:" in msg
+        assert f"Market conditions: {(price_mod - 1):+.0%}" in msg
+        assert f"Final price: {final_unit_price:.1f} credits/unit" in msg
+        charged = credits_before - state.ship.credits
+        assert charged == expected_cost
+
+    def test_buy_fuel_market_condition_renders_discount_as_negative_delta(self) -> None:
+        """Regression: a discount multiplier (price_mod < 1) must render as a
+        negative delta (e.g. 0.947 -> -5%), and the full breakdown must be
+        arithmetically consistent with the final unit price."""
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        system.has_trading_station = True
+        state.ship.fuel = 0
+        state.ship.credits = 100000
+        amount = 10
+
+        discount_mod = 0.947
+        with patch("backend.game.trading._market_price_mod", return_value=discount_mod):
+            price_info = calculate_fuel_price(state, system)
+            final_unit_price = price_info["final_price"] * discount_mod
+            expected_cost = round_half_up(amount * final_unit_price)
+            credits_before = state.ship.credits
+            ok, msg = perform_trade(state, "buy", "fuel", amount)
+
+        assert ok is True
+        assert "Market conditions: -5%" in msg
+        assert f"Market conditions: {(discount_mod - 1):+.0%}" in msg
+        assert "Market conditions: +95%" not in msg
+        market_delta = discount_mod - 1
+        base_price = price_info["base_price"]
+        compounded = base_price * (
+            1
+            + price_info["system_modifier"]
+            + price_info["faction_modifier"]
+            + price_info["supply_modifier"]
+        ) * (1 + market_delta)
+        assert compounded == final_unit_price
         assert f"Final price: {final_unit_price:.1f} credits/unit" in msg
         charged = credits_before - state.ship.credits
         assert charged == expected_cost
