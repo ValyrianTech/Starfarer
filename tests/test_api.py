@@ -3935,7 +3935,8 @@ class TestRecoveryOptions:
             body.atmospheric_scan_count = 6
         # No trading station in this system.
         system.has_trading_station = False
-        ro = self._recovery(state)
+        with patch("backend.game.engine.cheapest_reachable_fuel_cost", return_value=8):
+            ro = self._recovery(state)
         available = [k for k in ("distress", "salvage", "craft") if ro[k]["available"]]
         # At least one recovery action must be usable (the soft-lock is closed).
         assert available, f"github-172 soft-lock: no recovery action available: {ro}"

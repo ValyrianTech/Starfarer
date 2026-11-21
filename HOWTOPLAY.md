@@ -88,7 +88,7 @@ GET /api/game/{game_id}/galaxy
 
 Returns all 50 systems with coordinates, star types, and visited status. The `current_system_id` field tells you where your ship is. Each system entry now also includes `distance_ly` (distance from your current system, rounded to 0.1 LY) and `fuel_cost` (fuel for a jump from your current system, minimum 1) — the current system reports `0.0`/`0`, so you can read reachability and jump costs straight off the map. If the ship has no current system, both are `null`.
 
-The galaxy is fully connected: with `hyperdrive` maxed out (9 LY jump range) every one of the 50 systems is reachable from any starting system through a chain of in-range jumps, so you can never be permanently cut off from part of the map.
+The galaxy is fully connected: with `hyperdrive` maxed out (9 LY jump range) every one of the 50 systems is reachable from any starting system through a chain of in-range jumps, so you can never be permanently cut off from part of the map. A new game now starts in the largest connected pocket of systems reachable at the initial jump range (4 LY), chosen deterministically (ties broken by the smallest system id), so your starting position is the most connected part of the map — no system positions are moved.
 
 ### 3.2 Check Nearby Systems
 
@@ -140,7 +140,7 @@ Higher scanner levels unlock progressively richer scan output, both in the `resu
 GET /api/game/{game_id}/system/{system_id}
 ```
 
-Returns all bodies with IDs, biomes, sizes, descriptions, and points of interest count.
+Returns all bodies with IDs, biomes, sizes, descriptions, and points of interest count. Each body also includes an `explorable` boolean — `true` when the body still has points of interest and has been explored fewer than 3 times (surface exploration is still possible), and `false` otherwise.
 
 ### 3.6 Land on a Body
 
@@ -719,7 +719,7 @@ Factions offer tiered missions at trading stations. Higher reputation unlocks hi
 
 ##### Daily Missions
 
-Each trading station offers one free "Daily Opportunity" mission per day cycle (~10 log entries per cycle): 0 fuel/credit cost, 25–75 credits reward, 5–10 reputation.
+Each trading station offers one free "Daily Opportunity" mission per day cycle (~10 log entries per cycle): 0 fuel/credit cost, 25–75 credits reward, 5–10 reputation. Each daily cycle's mission has its own id, so completing a daily mission does not block the next cycle's daily — a new one becomes available when the cycle rolls over.
 
 ##### Mission Flow
 
