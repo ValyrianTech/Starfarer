@@ -3696,7 +3696,7 @@ class TestStartSystemSelection:
         )
         systems, _ = generate_universe(42)
         state = new_game(seed=42)
-        assert state.ship.current_system_id == next(iter(systems.keys()))
+        assert state.ship.current_system_id == select_start_system(systems)
 
         start = select_start_system(systems)
         assert start in systems

@@ -32,7 +32,7 @@ from backend.game.engine import (
     jump_distance_ly,
     jump_fuel_cost,
 )
-from backend.generation.universe import distance_between, generate_universe
+from backend.generation.universe import distance_between, generate_universe, select_start_system
 from backend.models.faction import FACTION_DEFINITIONS, FactionRelation
 from backend.models.game_state import GameState
 from backend.models.ship import Ship
@@ -83,7 +83,8 @@ def new_game(seed: int | None = None, ship_name: str | None = None, shared_unive
 
     Generates a UUID for the game, creates the galaxy using the given
     (or default) seed, initializes the ship with default stats, and
-    places the player in the first generated star system.
+    places the player in the system with the largest connected pocket
+    at the initial jump range (chosen by select_start_system).
 
     When ``shared_universe`` is True (the default), the canonical
     shared universe seed (42) is always used, enabling multiplayer
@@ -115,7 +116,7 @@ def new_game(seed: int | None = None, ship_name: str | None = None, shared_unive
         lore_fragments = copy.deepcopy(lore_fragments)
     else:
         systems, lore_fragments = generate_universe(s)
-    first_sys_id = next(iter(systems.keys()))
+    first_sys_id = select_start_system(systems)
 
     ship = Ship(
         name=name, fuel=INITIAL_FUEL, hull=INITIAL_HULL,

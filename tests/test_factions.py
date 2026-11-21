@@ -2155,14 +2155,13 @@ class TestReputationDecay:
         state.modify_faction_reputation("void_traders", 10)
         state.modify_faction_reputation("free_pilots", -5)
 
-        systems = list(state.systems.values())
-        sys_a = systems[0]
-        sys_b = None
-        for s in systems[1:]:
-            if distance_between(sys_a, s) <= 50:
-                sys_b = s
-                break
-        assert sys_b is not None
+        current = state.get_current_system()
+        assert current is not None
+        sys_a = current
+        sys_b = min(
+            (s for s in state.systems.values() if s.id != sys_a.id),
+            key=lambda s: distance_between(sys_a, s),
+        )
 
         state.ship.fuel = 500
         state.ship.jump_range = 20
@@ -2184,14 +2183,13 @@ class TestReputationDecay:
         state = new_game(seed=42)
         state.modify_faction_reputation("void_traders", 30)
 
-        systems = list(state.systems.values())
-        sys_a = systems[0]
-        sys_b = None
-        for s in systems[1:]:
-            if distance_between(sys_a, s) <= 50:
-                sys_b = s
-                break
-        assert sys_b is not None
+        current = state.get_current_system()
+        assert current is not None
+        sys_a = current
+        sys_b = min(
+            (s for s in state.systems.values() if s.id != sys_a.id),
+            key=lambda s: distance_between(sys_a, s),
+        )
 
         state.ship.fuel = 500
         state.ship.jump_range = 20
@@ -2211,14 +2209,13 @@ class TestReputationDecay:
         state = new_game(seed=42)
         assert state.get_faction_reputation("stellar_cartographers") == 0
 
-        systems = list(state.systems.values())
-        sys_a = systems[0]
-        sys_b = None
-        for s in systems[1:]:
-            if distance_between(sys_a, s) <= 50:
-                sys_b = s
-                break
-        assert sys_b is not None
+        current = state.get_current_system()
+        assert current is not None
+        sys_a = current
+        sys_b = min(
+            (s for s in state.systems.values() if s.id != sys_a.id),
+            key=lambda s: distance_between(sys_a, s),
+        )
 
         state.ship.fuel = 500
         state.ship.jump_range = 20
@@ -2238,14 +2235,13 @@ class TestReputationDecay:
         state = new_game(seed=42)
         state.modify_faction_reputation("free_pilots", -10)
 
-        systems = list(state.systems.values())
-        sys_a = systems[0]
-        sys_b = None
-        for s in systems[1:]:
-            if distance_between(sys_a, s) <= 50:
-                sys_b = s
-                break
-        assert sys_b is not None
+        current = state.get_current_system()
+        assert current is not None
+        sys_a = current
+        sys_b = min(
+            (s for s in state.systems.values() if s.id != sys_a.id),
+            key=lambda s: distance_between(sys_a, s),
+        )
 
         state.ship.fuel = 500
         state.ship.jump_range = 20
