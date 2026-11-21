@@ -3723,3 +3723,15 @@ class TestStartSystemSelection:
         assert any(
             "best starting pocket" in msg for msg in warning_messages
         ), f"Expected starting pocket warning, got: {warning_messages}"
+
+    def test_generate_universe_no_warning_for_canonical_seed(self, caplog) -> None:
+        import logging
+
+        caplog.set_level(logging.WARNING)
+        generate_universe(42)
+        warning_messages = [
+            r.message for r in caplog.records if r.levelno == logging.WARNING
+        ]
+        assert not any(
+            "best starting pocket" in msg for msg in warning_messages
+        ), f"Did not expect starting pocket warning, got: {warning_messages}"

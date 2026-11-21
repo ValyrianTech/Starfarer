@@ -336,7 +336,7 @@ def generate_system(rng: random.Random, idx: int, galaxy_rng: random.Random) -> 
 
 NEIGHBOR_DISTANCE_THRESHOLD = 60
 
-MIN_START_COMPONENT = 10
+MIN_START_COMPONENT = 3
 
 
 def system_component_at_range(systems: dict[str, StarSystem], start_id: str, range_ly: int) -> set[str]:
