@@ -339,7 +339,7 @@ def generate_missions(state: GameState, system: StarSystem, faction_id: str) -> 
 
     if current_date_for_system is None or current_date_for_system != date_part:
         free_mission = FactionMission(
-            id=f"mission_daily_{system.id}",
+            id=f"mission_daily_{system.id}_{date_part}",
             faction_id=faction_id,
             tier=1,
             title="Daily Opportunity",

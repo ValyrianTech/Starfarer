@@ -2155,15 +2155,13 @@ class TestReputationDecay:
         state.modify_faction_reputation("void_traders", 10)
         state.modify_faction_reputation("free_pilots", -5)
 
-        systems = list(state.systems.values())
-        # Find two systems within reasonable jump range
-        sys_a = systems[0]
-        sys_b = None
-        for s in systems[1:]:
-            if distance_between(sys_a, s) <= 50:
-                sys_b = s
-                break
-        assert sys_b is not None
+        current = state.get_current_system()
+        assert current is not None
+        sys_a = current
+        sys_b = min(
+            (s for s in state.systems.values() if s.id != sys_a.id),
+            key=lambda s: distance_between(sys_a, s),
+        )
 
         state.ship.fuel = 500
         state.ship.jump_range = 20
@@ -2185,14 +2183,13 @@ class TestReputationDecay:
         state = new_game(seed=42)
         state.modify_faction_reputation("void_traders", 30)
 
-        systems = list(state.systems.values())
-        sys_a = systems[0]
-        sys_b = None
-        for s in systems[1:]:
-            if distance_between(sys_a, s) <= 50:
-                sys_b = s
-                break
-        assert sys_b is not None
+        current = state.get_current_system()
+        assert current is not None
+        sys_a = current
+        sys_b = min(
+            (s for s in state.systems.values() if s.id != sys_a.id),
+            key=lambda s: distance_between(sys_a, s),
+        )
 
         state.ship.fuel = 500
         state.ship.jump_range = 20
@@ -2212,14 +2209,13 @@ class TestReputationDecay:
         state = new_game(seed=42)
         assert state.get_faction_reputation("stellar_cartographers") == 0
 
-        systems = list(state.systems.values())
-        sys_a = systems[0]
-        sys_b = None
-        for s in systems[1:]:
-            if distance_between(sys_a, s) <= 50:
-                sys_b = s
-                break
-        assert sys_b is not None
+        current = state.get_current_system()
+        assert current is not None
+        sys_a = current
+        sys_b = min(
+            (s for s in state.systems.values() if s.id != sys_a.id),
+            key=lambda s: distance_between(sys_a, s),
+        )
 
         state.ship.fuel = 500
         state.ship.jump_range = 20
@@ -2239,14 +2235,13 @@ class TestReputationDecay:
         state = new_game(seed=42)
         state.modify_faction_reputation("free_pilots", -10)
 
-        systems = list(state.systems.values())
-        sys_a = systems[0]
-        sys_b = None
-        for s in systems[1:]:
-            if distance_between(sys_a, s) <= 50:
-                sys_b = s
-                break
-        assert sys_b is not None
+        current = state.get_current_system()
+        assert current is not None
+        sys_a = current
+        sys_b = min(
+            (s for s in state.systems.values() if s.id != sys_a.id),
+            key=lambda s: distance_between(sys_a, s),
+        )
 
         state.ship.fuel = 500
         state.ship.jump_range = 20
@@ -3358,3 +3353,126 @@ class TestMissionSeedConsistency:
         assert resp.status_code == 200, resp.json()
         new_mission_id = resp.json()["mission"]["id"]
         assert new_mission_id not in set(standard_ids)
+
+
+class TestDailyMissionCycleScoping:
+    """Daily mission ids are scoped per cycle so completion state doesn't leak."""
+
+    def _setup_game_with_station(self, game_id: str) -> tuple[str, str]:
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": game_id})
+        assert resp.status_code == 200
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        state.ship.fuel = 100
+        state.ship.credits = 500
+        current_system = state.get_current_system()
+        assert current_system is not None
+        current_system.has_trading_station = True
+        GAME_STORE[game_id] = state
+        game_save(state)
+        return game_id, current_system.id
+
+    def test_daily_mission_id_scoped_per_cycle(self) -> None:
+        from backend.missions import (
+            complete_mission,
+            generate_missions,
+            get_primary_faction_id,
+        )
+
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        system.has_trading_station = True
+        faction_id = get_primary_faction_id(state, system)
+
+        def current_daily():
+            return next(
+                (m for m in generate_missions(state, system, faction_id)
+                 if m.objective_type == "daily"),
+                None,
+            )
+
+        first = current_daily()
+        assert first is not None
+        result = complete_mission(state, first)
+        assert "error" not in result
+
+        state.systems_visited += 3
+        second = current_daily()
+        assert second is not None
+        assert second.id != first.id
+
+        result2 = complete_mission(state, second)
+        assert "error" not in result2
+
+    def test_daily_mission_end_to_end_across_cycles(self) -> None:
+        game_id, _ = self._setup_game_with_station("daily-e2e-cycle")
+
+        listing = client.get(f"/api/game/{game_id}/missions").json()
+        daily_id = listing["daily_mission"]["id"]
+        assert daily_id
+
+        resp = client.post(
+            f"/api/game/{game_id}/missions/{daily_id}/accept",
+            json={"mission_id": daily_id},
+        )
+        assert resp.status_code == 200, resp.json()
+        resp = client.post(
+            f"/api/game/{game_id}/missions/{daily_id}/complete",
+            json={"mission_id": daily_id},
+        )
+        assert resp.status_code == 200, resp.json()
+
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        state.systems_visited += 3
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        listing2 = client.get(f"/api/game/{game_id}/missions").json()
+        assert listing2["daily_available"] is True
+        new_daily_id = listing2["daily_mission"]["id"]
+        assert new_daily_id != daily_id
+
+        resp = client.post(
+            f"/api/game/{game_id}/missions/{new_daily_id}/accept",
+            json={"mission_id": new_daily_id},
+        )
+        assert resp.status_code == 200, resp.json()
+        resp = client.post(
+            f"/api/game/{game_id}/missions/{new_daily_id}/complete",
+            json={"mission_id": new_daily_id},
+        )
+        assert resp.status_code == 200, resp.json()
+
+    def test_daily_available_lifecycle(self) -> None:
+        game_id, _ = self._setup_game_with_station("daily-avail-lifecycle")
+
+        listing = client.get(f"/api/game/{game_id}/missions").json()
+        assert listing["daily_available"] is True
+
+        daily_id = listing["daily_mission"]["id"]
+        resp = client.post(
+            f"/api/game/{game_id}/missions/{daily_id}/accept",
+            json={"mission_id": daily_id},
+        )
+        assert resp.status_code == 200, resp.json()
+        resp = client.post(
+            f"/api/game/{game_id}/missions/{daily_id}/complete",
+            json={"mission_id": daily_id},
+        )
+        assert resp.status_code == 200, resp.json()
+
+        listing = client.get(f"/api/game/{game_id}/missions").json()
+        assert listing["daily_available"] is False
+        assert listing["daily_mission"] is None
+
+        state = GAME_STORE.get(game_id)
+        assert state is not None
+        state.systems_visited += 3
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        listing = client.get(f"/api/game/{game_id}/missions").json()
+        assert listing["daily_available"] is True
+        assert listing["daily_mission"] is not None

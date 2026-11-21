@@ -75,6 +75,7 @@ class Body:
             "exploration_count": self.exploration_count,
             "sub_surface_explored": self.sub_surface_explored,
             "atmospheric_scan_count": self.atmospheric_scan_count,
+            "explorable": self.poi_count > 0 and self.exploration_count < 3,
         }
 
     @classmethod
