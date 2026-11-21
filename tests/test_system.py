@@ -90,6 +90,27 @@ class TestBodyFromDictBiomeFix:
         assert body.biome != ""
 
 
+class TestBodyExplorable:
+    def test_explorable_true_when_poi_and_not_exhausted(self) -> None:
+        body = _make_body(poi_count=3, exploration_count=0)
+        d = body.to_dict()
+        assert d["explorable"] is True
+
+    def test_explorable_false_when_no_poi(self) -> None:
+        body = _make_body(poi_count=0, exploration_count=0)
+        d = body.to_dict()
+        assert d["explorable"] is False
+
+    def test_explorable_false_when_exhausted(self) -> None:
+        body = _make_body(poi_count=3, exploration_count=3)
+        d = body.to_dict()
+        assert d["explorable"] is False
+
+    def test_explorable_key_present_in_to_dict(self) -> None:
+        body = _make_body()
+        assert "explorable" in body.to_dict()
+
+
 class TestValidateSystemType:
     def test_valid_types(self) -> None:
         for system_type in ["civilized", "agricultural", "frontier", "nebula", "uncharted", "ancient"]:
