@@ -3628,3 +3628,98 @@ class TestGalaxyReachability:
                     f"{origin.id} -> {target.id}: {message}"
                 )
                 assert "exceeds jump range" not in message
+
+
+class TestStartSystemSelection:
+    """Tests for system_component_at_range and select_start_system."""
+
+    @staticmethod
+    def _sys(sid: str, x: float, y: float) -> StarSystem:
+        return StarSystem(
+            id=sid, name=sid, x=x, y=y, star_type="G",
+            star_color="#fff", phenomenon="none", phenomenon_desc="",
+        )
+
+    def test_system_component_at_range_empty(self) -> None:
+        from backend.generation.universe import system_component_at_range
+        assert system_component_at_range({}, "a", 4) == set()
+
+    def test_system_component_at_range_missing_id(self) -> None:
+        from backend.generation.universe import system_component_at_range
+        systems = {"a": self._sys("a", 0, 0)}
+        assert system_component_at_range(systems, "missing", 4) == set()
+
+    def test_system_component_at_range_connectivity(self) -> None:
+        from backend.generation.universe import system_component_at_range
+        systems = {
+            "a": self._sys("a", 0, 0),
+            "b": self._sys("b", 10, 0),
+            "c": self._sys("c", 20, 0),
+            "z": self._sys("z", 1000, 1000),
+        }
+        assert system_component_at_range(systems, "a", 4) == {"a", "b", "c"}
+
+    def test_select_start_system_empty(self) -> None:
+        from backend.generation.universe import select_start_system
+        assert select_start_system({}) == ""
+
+    def test_select_start_system_picks_largest_component(self) -> None:
+        from backend.generation.universe import select_start_system
+        systems = {
+            "a": self._sys("a", 0, 0),
+            "b": self._sys("b", 10, 0),
+            "c": self._sys("c", 20, 0),
+            "z": self._sys("z", 1000, 1000),
+        }
+        assert select_start_system(systems) == "a"
+
+    def test_select_start_system_deterministic_tie_break(self) -> None:
+        from backend.generation.universe import select_start_system
+        systems = {
+            "m": self._sys("m", 1000, 1000),
+            "a": self._sys("a", 3000, 3000),
+            "z": self._sys("z", 5000, 5000),
+        }
+        assert select_start_system(systems) == "a"
+
+    def test_select_start_system_returns_valid_key(self) -> None:
+        from backend.generation.universe import select_start_system
+        systems, _ = generate_universe(42)
+        chosen = select_start_system(systems)
+        assert chosen in systems
+
+    def test_new_game_starts_in_largest_initial_range_component(self) -> None:
+        from backend.config import INITIAL_JUMP_RANGE
+        from backend.generation.universe import (
+            select_start_system,
+            system_component_at_range,
+        )
+        systems, _ = generate_universe(42)
+        state = new_game(seed=42)
+        assert state.ship.current_system_id == next(iter(systems.keys()))
+
+        start = select_start_system(systems)
+        assert start in systems
+        start_size = len(system_component_at_range(systems, start, INITIAL_JUMP_RANGE))
+        max_size = max(
+            len(system_component_at_range(systems, sid, INITIAL_JUMP_RANGE))
+            for sid in systems
+        )
+        assert start_size == max_size
+
+    def test_generate_universe_warns_on_small_start_component(self, caplog) -> None:
+        import logging
+        from unittest import mock
+
+        caplog.set_level(logging.WARNING)
+        with mock.patch(
+            "backend.generation.universe.system_component_at_range",
+            return_value=set(),
+        ):
+            generate_universe(42)
+        warning_messages = [
+            r.message for r in caplog.records if r.levelno == logging.WARNING
+        ]
+        assert any(
+            "best starting pocket" in msg for msg in warning_messages
+        ), f"Expected starting pocket warning, got: {warning_messages}"

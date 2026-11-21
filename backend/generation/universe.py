@@ -16,6 +16,7 @@ from backend.config import (
     GALAXY_HEIGHT,
     GALAXY_SYSTEM_COUNT,
     GALAXY_WIDTH,
+    INITIAL_JUMP_RANGE,
     MAX_JUMP_DISTANCE,
     MAX_ORBITALS,
     MIN_ORBITALS,
@@ -335,6 +336,67 @@ def generate_system(rng: random.Random, idx: int, galaxy_rng: random.Random) -> 
 
 NEIGHBOR_DISTANCE_THRESHOLD = 60
 
+MIN_START_COMPONENT = 10
+
+
+def system_component_at_range(systems: dict[str, StarSystem], start_id: str, range_ly: int) -> set[str]:
+    """Return the set of system ids reachable from ``start_id`` at a jump range.
+
+    Performs a depth-first traversal of the graph formed by systems within
+    ``range_ly * 10`` galaxy units of one another, using the same
+    10-units-per-light-year convention as :data:`MAX_JUMP_DISTANCE`.
+
+    :param systems: The dictionary of star systems keyed by system ID.
+    :type systems: dict[str, StarSystem]
+    :param start_id: The system id from which reachability is computed.
+    :type start_id: str
+    :param range_ly: The jump range in light-years.
+    :type range_ly: int
+    :returns: The set of system ids reachable from ``start_id``, or an empty
+        set if ``start_id`` is not present in ``systems``.
+    :rtype: set[str]
+    """
+    if start_id not in systems:
+        return set()
+    max_dist = range_ly * 10
+    ids = list(systems.keys())
+    visited = {start_id}
+    stack = [start_id]
+    while stack:
+        cur = stack.pop()
+        for cid in ids:
+            if cid in visited:
+                continue
+            if distance_between(systems[cur], systems[cid]) <= max_dist:
+                visited.add(cid)
+                stack.append(cid)
+    return visited
+
+
+def select_start_system(systems: dict[str, StarSystem]) -> str:
+    """Choose the system id with the largest initial jump-range component.
+
+    Picks the system whose connected component at :data:`INITIAL_JUMP_RANGE`
+    is the largest, breaking ties by the lexicographically smallest system id.
+    This gives new games the best possible starting pocket without moving any
+    system positions.
+
+    :param systems: The dictionary of star systems keyed by system ID.
+    :type systems: dict[str, StarSystem]
+    :returns: The chosen system id, or ``""`` if ``systems`` is empty.
+    :rtype: str
+    """
+    if not systems:
+        return ""
+    best_id = ""
+    best_size = -1
+    for sid in sorted(systems.keys()):
+        size = len(system_component_at_range(systems, sid, INITIAL_JUMP_RANGE))
+        if size > best_size:
+            best_size = size
+            best_id = sid
+    return best_id
+
 
 def generate_universe(seed: int, system_count: int = GALAXY_SYSTEM_COUNT) -> tuple[dict[str, StarSystem], list]:
     """Generate the complete galaxy of star systems with lore fragments.
@@ -373,6 +435,17 @@ def generate_universe(seed: int, system_count: int = GALAXY_SYSTEM_COUNT) -> tup
             "Galaxy (seed %s) is not globally reachable after connectivity "
             "contraction; generated positions may soft-lock navigation.",
             seed,
+        )
+
+    start_id = select_start_system(systems)
+    start_component_size = len(system_component_at_range(systems, start_id, INITIAL_JUMP_RANGE))
+    if start_component_size < MIN_START_COMPONENT:
+        logger.warning(
+            "Galaxy (seed %s) best starting pocket at initial jump range has "
+            "only %d systems (below %d); navigation may feel constrained.",
+            seed,
+            start_component_size,
+            MIN_START_COMPONENT,
         )
 
     placement = distribute_lore_fragments(seed, systems)
