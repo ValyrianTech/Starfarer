@@ -52,6 +52,7 @@ class TestModule:
             "health",
             "api_new_game",
             "api_get_game",
+            "api_delete_game",
             "api_galaxy",
             "api_system_detail",
             "api_jump",
