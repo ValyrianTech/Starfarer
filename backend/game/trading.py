@@ -181,6 +181,37 @@ def _validate_quantity(quantity: int) -> str | None:
     return None
 
 
+def _lore_linked_discovery_error(item: str) -> str:
+    """Return the distinct error for attempting to sell an all-lore-linked item.
+
+    :param item: The discovery name or category that was requested.
+    :type item: str
+    :returns: The lore-linked sell error message.
+    :rtype: str
+    """
+    return f"'{item}' is a lore-linked discovery and cannot be sold — donate it at the Crossroads instead."
+
+
+def _unfiltered_matches(discoveries: list, item: str) -> list:
+    """Find discoveries matching ``item`` by exact name, then category.
+
+    Unlike the sellable-filtered lookup, this returns ALL matches (including
+    lore-linked discoveries) so callers can distinguish "no match at all"
+    from "matched but nothing is sellable".
+
+    :param discoveries: The candidate discoveries to search.
+    :type discoveries: list
+    :param item: The discovery name or category to match.
+    :type item: str
+    :returns: The list of matching discoveries (unfiltered by sellability).
+    :rtype: list
+    """
+    name_matches = [d for d in discoveries if d.name == item]
+    if name_matches:
+        return name_matches
+    return [d for d in discoveries if d.category == item]
+
+
 def _market_price_mod(state: GameState, system: StarSystem) -> float:
     """Return the stable per-(game, station) market price modifier.
 
@@ -323,14 +354,14 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
             return False, error
         if not item or not isinstance(item, str):
             return False, "Item must be a non-empty string."
-        # Try exact name match first
-        name_matches = [d for d in state.discoveries if d.name == item and d.lore_fragment_id is None]
-        if name_matches:
-            matching = name_matches
-        else:
-            # Fall back to category match
-            matching = [d for d in state.discoveries if d.category == item and d.lore_fragment_id is None]
+        # Unfiltered lookup (name first, then category fallback) so we can
+        # distinguish a genuinely-absent item from a lore-linked (unsellable)
+        # one.
+        unfiltered = _unfiltered_matches(state.discoveries, item)
+        matching = [d for d in unfiltered if d.lore_fragment_id is None]
         if not matching:
+            if unfiltered:
+                return False, _lore_linked_discovery_error(item)
             return False, f"No discoveries matching '{item}' to sell."
         total_price = 0
         sold_items = []
@@ -462,15 +493,14 @@ def perform_bulk_sell(state: GameState, items: list[dict]) -> tuple[bool, str, i
             continue
 
         available = [d for d in discoveries_snapshot if d.id not in sold_ids]
-        # Try exact name match first
-        name_matches = [d for d in available if d.name == item_name and d.lore_fragment_id is None]
-        if name_matches:
-            matching = name_matches
-        else:
-            # Fall back to category match
-            matching = [d for d in available if d.category == item_name and d.lore_fragment_id is None]
+        # Unfiltered lookup (name first, then category fallback).
+        unfiltered = _unfiltered_matches(available, item_name)
+        matching = [d for d in unfiltered if d.lore_fragment_id is None]
         if not matching:
-            errors.append(f"No discoveries matching '{item_name}' to sell.")
+            if unfiltered:
+                errors.append(_lore_linked_discovery_error(item_name))
+            else:
+                errors.append(f"No discoveries matching '{item_name}' to sell.")
             continue
 
         matching.sort(key=lambda d: d.value, reverse=True)
