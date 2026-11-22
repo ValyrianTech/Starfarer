@@ -1861,6 +1861,48 @@ class TestBulkSell:
         assert "oq_min_1" not in remaining_ids
         assert len(state.discoveries) == 2
 
+    def test_bulk_sell_lore_linked_name_does_not_shadow_sellable_category(self) -> None:
+        """Regression: a lore-linked NAME match must not shadow a sellable
+        CATEGORY match in bulk sell, mirroring single sell."""
+        from backend.models.discovery import Discovery
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
+        if not planet:
+            return  # pragma: no cover
+        land_on_body(state, planet.id)
+        explore_surface(state)
+        lore_disc = Discovery(
+            id="bulk_shadow_lore_name_disc",
+            name="shadow_item",
+            category="artifact",
+            description="A lore-linked discovery whose name equals the requested item",
+            lore_fragment_id="frag_031",
+            value=1000,
+        )
+        sellable_disc = Discovery(
+            id="bulk_shadow_sellable_cat_disc",
+            name="Ordinary Find",
+            category="shadow_item",
+            description="A sellable discovery whose category equals the requested item",
+            lore_fragment_id=None,
+            value=300,
+        )
+        state.discoveries.clear()
+        state.discoveries.append(lore_disc)
+        state.discoveries.append(sellable_disc)
+        credits_before = state.ship.credits
+        ok, _msg, sold_count, _total_price, errors = perform_bulk_sell(
+            state, [{"item": "shadow_item", "quantity": 1}]
+        )
+        assert ok is True
+        assert sold_count == 1
+        assert errors == []
+        assert lore_disc in state.discoveries
+        assert sellable_disc not in state.discoveries
+        assert state.ship.credits > credits_before
+
 
 class TestDatabaseModule:
     """Direct unit tests for database.py functions."""
@@ -2373,6 +2415,85 @@ class TestTradingPerformTradeEdgeCases:
         assert "mineral" in msg
         assert lore_disc in state.discoveries
         assert state.ship.credits == credits_before
+
+    def test_sell_lore_linked_name_does_not_shadow_sellable_category(self) -> None:
+        """Regression: a lore-linked NAME match must not shadow a sellable
+        CATEGORY match. With no sellable name matches, the old fallback must
+        sell the sellable category match."""
+        from backend.models.discovery import Discovery
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
+        if not planet:
+            return  # pragma: no cover
+        land_on_body(state, planet.id)
+        explore_surface(state)
+        lore_disc = Discovery(
+            id="shadow_lore_name_disc",
+            name="shadow_item",
+            category="artifact",
+            description="A lore-linked discovery whose name equals the requested item",
+            lore_fragment_id="frag_030",
+            value=1000,
+        )
+        sellable_disc = Discovery(
+            id="shadow_sellable_cat_disc",
+            name="Ordinary Find",
+            category="shadow_item",
+            description="A sellable discovery whose category equals the requested item",
+            lore_fragment_id=None,
+            value=300,
+        )
+        state.discoveries.clear()
+        state.discoveries.append(lore_disc)
+        state.discoveries.append(sellable_disc)
+        credits_before = state.ship.credits
+        ok, msg = perform_trade(state, "sell", "shadow_item", 1)
+        assert ok is True
+        assert "Sold" in msg
+        assert lore_disc in state.discoveries
+        assert sellable_disc not in state.discoveries
+        assert state.ship.credits > credits_before
+
+    def test_sell_name_match_takes_precedence_over_category(self) -> None:
+        """Regression: a sellable NAME match takes precedence over sellable
+        category matches, so only the name match is sold."""
+        from backend.models.discovery import Discovery
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
+        if not planet:
+            return  # pragma: no cover
+        land_on_body(state, planet.id)
+        explore_surface(state)
+        name_disc = Discovery(
+            id="precedence_name_disc",
+            name="precedence_item",
+            category="artifact",
+            description="A sellable discovery whose name equals the requested item",
+            lore_fragment_id=None,
+            value=500,
+        )
+        category_disc = Discovery(
+            id="precedence_category_disc",
+            name="Other Name",
+            category="artifact",
+            description="Another sellable discovery in the same category",
+            lore_fragment_id=None,
+            value=100,
+        )
+        state.discoveries.clear()
+        state.discoveries.append(name_disc)
+        state.discoveries.append(category_disc)
+        credits_before = state.ship.credits
+        ok, msg = perform_trade(state, "sell", "precedence_item", 1)
+        assert ok is True
+        assert "Sold" in msg
+        assert name_disc not in state.discoveries
+        assert category_disc in state.discoveries
+        assert state.ship.credits > credits_before
 
 
 class TestDatabaseGetLeaderboard:

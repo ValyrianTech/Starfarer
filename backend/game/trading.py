@@ -212,6 +212,27 @@ def _unfiltered_matches(discoveries: list, item: str) -> list:
     return [d for d in discoveries if d.category == item]
 
 
+def _sellable_matches(discoveries: list, item: str) -> list:
+    """Find sellable discoveries matching ``item`` by exact name, then category.
+
+    Sellable (``lore_fragment_id is None``) exact-name matches take
+    precedence; if there are none, fall back to sellable category matches.
+    This preserves the original sell precedence so that a lore-linked name
+    match never shadows a sellable category match.
+
+    :param discoveries: The candidate discoveries to search.
+    :type discoveries: list
+    :param item: The discovery name or category to match.
+    :type item: str
+    :returns: The list of sellable matching discoveries.
+    :rtype: list
+    """
+    name_matches = [d for d in discoveries if d.name == item and d.lore_fragment_id is None]
+    if name_matches:
+        return name_matches
+    return [d for d in discoveries if d.category == item and d.lore_fragment_id is None]
+
+
 def _market_price_mod(state: GameState, system: StarSystem) -> float:
     """Return the stable per-(game, station) market price modifier.
 
@@ -354,13 +375,13 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
             return False, error
         if not item or not isinstance(item, str):
             return False, "Item must be a non-empty string."
-        # Unfiltered lookup (name first, then category fallback) so we can
-        # distinguish a genuinely-absent item from a lore-linked (unsellable)
-        # one.
-        unfiltered = _unfiltered_matches(state.discoveries, item)
-        matching = [d for d in unfiltered if d.lore_fragment_id is None]
+        # Sellable-first lookup (sellable name matches, else sellable category
+        # matches) preserving the original precedence. We only consult the
+        # unfiltered set to distinguish a genuinely-absent item from a
+        # lore-linked (unsellable) one.
+        matching = _sellable_matches(state.discoveries, item)
         if not matching:
-            if unfiltered:
+            if _unfiltered_matches(state.discoveries, item):
                 return False, _lore_linked_discovery_error(item)
             return False, f"No discoveries matching '{item}' to sell."
         total_price = 0
@@ -493,11 +514,11 @@ def perform_bulk_sell(state: GameState, items: list[dict]) -> tuple[bool, str, i
             continue
 
         available = [d for d in discoveries_snapshot if d.id not in sold_ids]
-        # Unfiltered lookup (name first, then category fallback).
-        unfiltered = _unfiltered_matches(available, item_name)
-        matching = [d for d in unfiltered if d.lore_fragment_id is None]
+        # Sellable-first lookup (sellable name matches, else sellable category
+        # matches) preserving the original precedence.
+        matching = _sellable_matches(available, item_name)
         if not matching:
-            if unfiltered:
+            if _unfiltered_matches(available, item_name):
                 errors.append(_lore_linked_discovery_error(item_name))
             else:
                 errors.append(f"No discoveries matching '{item_name}' to sell.")
