@@ -1747,6 +1747,48 @@ class TestBulkSell:
         assert regular_disc not in state.discoveries  # regular should be sold
         assert state.ship.credits > credits_before
 
+    def test_bulk_sell_mixed_sellable_and_lore_linked_sellable_sells_lore_remains(self) -> None:
+        """Mixed sellable + lore-linked discoveries sharing a category: the
+        sellable one is sold and the lore-linked one remains (no lore error)."""
+        from backend.models.discovery import Discovery
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
+        if not planet:
+            return  # pragma: no cover
+        land_on_body(state, planet.id)
+        explore_surface(state)
+        sellable_disc = Discovery(
+            id="bulk_mixed_sellable_disc",
+            name="Common Ore",
+            category="mineral",
+            description="A sellable mineral",
+            lore_fragment_id=None,
+            value=300,
+        )
+        lore_disc = Discovery(
+            id="bulk_mixed_lore_disc",
+            name="Mysterious Relic",
+            category="mineral",
+            description="A lore-linked mineral",
+            lore_fragment_id="frag_041",
+            value=2000,
+        )
+        state.discoveries.clear()
+        state.discoveries.append(sellable_disc)
+        state.discoveries.append(lore_disc)
+        credits_before = state.ship.credits
+        ok, _msg, sold_count, _total_price, errors = perform_bulk_sell(
+            state, [{"item": "mineral", "quantity": 1}]
+        )
+        assert ok is True
+        assert sold_count == 1
+        assert errors == []
+        assert sellable_disc not in state.discoveries
+        assert lore_disc in state.discoveries
+        assert state.ship.credits > credits_before
+
     def test_bulk_sell_lore_linked_name_only(self) -> None:
         """Name match hitting only lore-linked items yields a distinct error."""
         from backend.models.discovery import Discovery
@@ -2522,6 +2564,47 @@ class TestTradingPerformTradeEdgeCases:
         assert name_disc not in state.discoveries
         assert category_disc in state.discoveries
         assert state.ship.credits > credits_before
+
+    def test_sell_mixed_sellable_and_lore_linked_sellable_sells_lore_remains(self) -> None:
+        """Mixed sellable + lore-linked discoveries sharing a category: the
+        sellable one is sold and the lore-linked one remains (no lore error)."""
+        from backend.models.discovery import Discovery
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
+        if not planet:
+            return  # pragma: no cover
+        land_on_body(state, planet.id)
+        explore_surface(state)
+        sellable_disc = Discovery(
+            id="mixed_sellable_disc",
+            name="Common Ore",
+            category="mineral",
+            description="A sellable mineral",
+            lore_fragment_id=None,
+            value=300,
+        )
+        lore_disc = Discovery(
+            id="mixed_lore_disc",
+            name="Mysterious Relic",
+            category="mineral",
+            description="A lore-linked mineral",
+            lore_fragment_id="frag_040",
+            value=2000,
+        )
+        state.discoveries.clear()
+        state.discoveries.append(sellable_disc)
+        state.discoveries.append(lore_disc)
+        credits_before = state.ship.credits
+        ok, msg = perform_trade(state, "sell", "mineral", 1)
+        assert ok is True
+        assert "Sold" in msg
+        assert "lore-linked" not in msg
+        assert sellable_disc not in state.discoveries
+        assert lore_disc in state.discoveries
+        assert state.ship.credits > credits_before
+        assert len(state.discoveries) == 1
 
 
 class TestDatabaseGetLeaderboard:
