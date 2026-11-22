@@ -1727,6 +1727,98 @@ class TestBulkSell:
         assert regular_disc not in state.discoveries  # regular should be sold
         assert state.ship.credits > credits_before
 
+    def test_bulk_sell_lore_linked_name_only(self) -> None:
+        """Name match hitting only lore-linked items yields a distinct error."""
+        from backend.models.discovery import Discovery
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
+        if not planet:
+            return  # pragma: no cover
+        land_on_body(state, planet.id)
+        explore_surface(state)
+        lore_disc = Discovery(
+            id="lore_only_bulk_name_disc",
+            name="Ancient Artifact",
+            category="artifact",
+            description="A lore-linked artifact",
+            lore_fragment_id="frag_020",
+            value=1000,
+        )
+        state.discoveries.clear()
+        state.discoveries.append(lore_disc)
+        credits_before = state.ship.credits
+        ok, msg, _sold_count, _total_price, errors = perform_bulk_sell(
+            state, [{"item": "Ancient Artifact", "quantity": 1}]
+        )
+        assert ok is False
+        assert any("lore-linked discovery" in e and "Ancient Artifact" in e and "Crossroads" in e for e in errors)
+        assert lore_disc in state.discoveries
+        assert state.ship.credits == credits_before
+
+    def test_bulk_sell_lore_linked_category_only(self) -> None:
+        """Category match hitting only lore-linked items yields a distinct error."""
+        from backend.models.discovery import Discovery
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
+        if not planet:
+            return  # pragma: no cover
+        land_on_body(state, planet.id)
+        explore_surface(state)
+        lore_disc = Discovery(
+            id="lore_only_bulk_cat_disc",
+            name="Mysterious Relic",
+            category="mineral",
+            description="A lore-linked mineral",
+            lore_fragment_id="frag_021",
+            value=2000,
+        )
+        state.discoveries.clear()
+        state.discoveries.append(lore_disc)
+        credits_before = state.ship.credits
+        ok, msg, _sold_count, _total_price, errors = perform_bulk_sell(
+            state, [{"item": "mineral", "quantity": 1}]
+        )
+        assert ok is False
+        assert any("lore-linked discovery" in e and "mineral" in e and "Crossroads" in e for e in errors)
+        assert lore_disc in state.discoveries
+        assert state.ship.credits == credits_before
+
+    def test_bulk_sell_all_entries_lore_linked_fail(self) -> None:
+        """When every entry is lore-linked, success is False and the message
+        surfaces the distinct lore-linked text."""
+        from backend.models.discovery import Discovery
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
+        if not planet:
+            return  # pragma: no cover
+        land_on_body(state, planet.id)
+        explore_surface(state)
+        lore_disc = Discovery(
+            id="lore_all_fail_disc",
+            name="Ancient Artifact",
+            category="artifact",
+            description="A lore-linked artifact",
+            lore_fragment_id="frag_022",
+            value=1000,
+        )
+        state.discoveries.clear()
+        state.discoveries.append(lore_disc)
+        credits_before = state.ship.credits
+        ok, msg, _sold_count, _total_price, errors = perform_bulk_sell(
+            state, [{"item": "Ancient Artifact", "quantity": 1}]
+        )
+        assert ok is False
+        assert "lore-linked discovery" in msg
+        assert "Crossroads" in msg
+        assert lore_disc in state.discoveries
+        assert state.ship.credits == credits_before
+
     def test_bulk_sell_over_quantity_entry_is_rejected(self) -> None:
         """Regression: an entry requesting more than available must sell NONE of
         that item (not all matching items), while valid sibling entries still sell."""
@@ -2189,6 +2281,98 @@ class TestTradingPerformTradeEdgeCases:
         assert lore_disc in state.discoveries
         assert regular_disc not in state.discoveries
         assert state.ship.credits > credits_before
+
+    def test_sell_lore_linked_discovery_name_only(self) -> None:
+        """Name match hitting only lore-linked items returns a distinct error."""
+        from backend.models.discovery import Discovery
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
+        if not planet:
+            return  # pragma: no cover
+        land_on_body(state, planet.id)
+        explore_surface(state)
+        lore_disc = Discovery(
+            id="lore_only_name_disc",
+            name="Ancient Artifact",
+            category="artifact",
+            description="A lore-linked artifact",
+            lore_fragment_id="frag_010",
+            value=1000,
+        )
+        state.discoveries.clear()
+        state.discoveries.append(lore_disc)
+        credits_before = state.ship.credits
+        ok, msg = perform_trade(state, "sell", "Ancient Artifact", 1)
+        assert ok is False
+        assert "lore-linked discovery" in msg
+        assert "Crossroads" in msg
+        assert "Ancient Artifact" in msg
+        assert lore_disc in state.discoveries
+        assert state.ship.credits == credits_before
+
+    def test_sell_lore_linked_discovery_category_only(self) -> None:
+        """Category match hitting only lore-linked items returns a distinct error."""
+        from backend.models.discovery import Discovery
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
+        if not planet:
+            return  # pragma: no cover
+        land_on_body(state, planet.id)
+        explore_surface(state)
+        lore_disc = Discovery(
+            id="lore_only_cat_disc",
+            name="Mysterious Relic",
+            category="mineral",
+            description="A lore-linked mineral",
+            lore_fragment_id="frag_011",
+            value=2000,
+        )
+        state.discoveries.clear()
+        state.discoveries.append(lore_disc)
+        credits_before = state.ship.credits
+        ok, msg = perform_trade(state, "sell", "mineral", 1)
+        assert ok is False
+        assert "lore-linked discovery" in msg
+        assert "Crossroads" in msg
+        assert "mineral" in msg
+        assert lore_disc in state.discoveries
+        assert state.ship.credits == credits_before
+
+    def test_sell_lore_linked_discovery_category_fallback(self) -> None:
+        """Category fallback where every category match is lore-linked gives the
+        distinct error even though the name lookup misses."""
+        from backend.models.discovery import Discovery
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        planet = next((b for b in system.bodies if b.body_type == "planet"), None)
+        if not planet:
+            return  # pragma: no cover
+        land_on_body(state, planet.id)
+        explore_surface(state)
+        lore_disc = Discovery(
+            id="lore_fallback_disc",
+            name="Mysterious Relic",
+            category="mineral",
+            description="A lore-linked mineral",
+            lore_fragment_id="frag_012",
+            value=2000,
+        )
+        state.discoveries.clear()
+        state.discoveries.append(lore_disc)
+        credits_before = state.ship.credits
+        # "mineral" does not match any name, but every category match is lore-linked.
+        ok, msg = perform_trade(state, "sell", "mineral", 1)
+        assert ok is False
+        assert "lore-linked discovery" in msg
+        assert "Crossroads" in msg
+        assert "mineral" in msg
+        assert lore_disc in state.discoveries
+        assert state.ship.credits == credits_before
 
 
 class TestDatabaseGetLeaderboard:

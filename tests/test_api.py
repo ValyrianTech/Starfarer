@@ -1025,6 +1025,31 @@ class TestAPIAdvancedFlow:
         assert len(state_data["discoveries"]) == 1
         assert state_data["discoveries"][0]["name"] == "Ancient Relic"
 
+    def test_trade_sell_lore_linked_returns_distinct_error(self) -> None:
+        """Selling an all-lore-linked item returns a distinct 400 error."""
+        from backend.models.discovery import Discovery
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "trade-lore-only"})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        current_sys = state.get_current_system()
+        current_sys.has_trading_station = True
+        state.discoveries.append(
+            Discovery(id="trade-lore-only-disc-1", category="artifact", name="Ancient Artifact",
+                      description="Lore-linked", value=500, lore_fragment_id="frag_api_1",
+                      system_id=current_sys.id)
+        )
+        GAME_STORE[game_id] = state
+        game_save(state)
+        resp = client.post(f"/api/game/{game_id}/trade", json={
+            "action": "sell", "item": "Ancient Artifact", "quantity": 1
+        })
+        assert resp.status_code == 400
+        detail = resp.json()["detail"]
+        assert "lore-linked discovery" in detail
+        assert "Crossroads" in detail
+        assert "Ancient Artifact" in detail
+
 
 class TestAPIInternalFunctions:
     """Tests for internal helper functions in routes.py."""
@@ -1911,6 +1936,31 @@ class TestAPIBulkSell:
         assert "trade_result" in data
         assert data["trade_result"]["sold_count"] > 0
         assert data["trade_result"]["total_price"] > 0
+
+    def test_bulk_sell_lore_linked_returns_distinct_error(self) -> None:
+        """Bulk-selling an all-lore-linked item returns a distinct 400 error."""
+        from backend.models.discovery import Discovery
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "bulk-lore-only"})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        current_sys = state.get_current_system()
+        current_sys.has_trading_station = True
+        state.discoveries.append(
+            Discovery(id="bulk-lore-only-disc-1", category="artifact", name="Ancient Artifact",
+                      description="Lore-linked", value=500, lore_fragment_id="frag_api_2",
+                      system_id=current_sys.id)
+        )
+        GAME_STORE[game_id] = state
+        game_save(state)
+        resp = client.post(f"/api/game/{game_id}/trade/bulk-sell", json={
+            "items": [{"item": "Ancient Artifact", "quantity": 1}]
+        })
+        assert resp.status_code == 400
+        detail = resp.json()["detail"]
+        assert "lore-linked discovery" in detail
+        assert "Crossroads" in detail
+        assert "Ancient Artifact" in detail
 
 
 class TestPerformBulkSellDirect:
