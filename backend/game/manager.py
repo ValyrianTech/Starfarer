@@ -32,7 +32,11 @@ from backend.game.engine import (
     jump_distance_ly,
     jump_fuel_cost,
 )
-from backend.generation.universe import distance_between, generate_universe, select_start_system
+from backend.generation.universe import (
+    distance_between,
+    generate_universe,
+    select_start_system,
+)
 from backend.models.faction import FACTION_DEFINITIONS, FactionRelation
 from backend.models.game_state import GameState
 from backend.models.ship import Ship

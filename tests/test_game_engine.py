@@ -6277,7 +6277,6 @@ class TestMotherlodeDiscoveries:
         """Regression: the displayed number in the motherlode name must equal the
         final stored value after the exploration multiplier is applied."""
         import random as rnd_mod
-        import re
         from unittest import mock
         state = new_game(seed=42)
         system = state.get_current_system()
@@ -6298,7 +6297,6 @@ class TestMotherlodeDiscoveries:
     def test_motherlode_name_matches_final_value_default_multiplier(self):
         """With the default multiplier (1.0) the name and stored value must still agree."""
         import random as rnd_mod
-        import re
         from unittest import mock
         state = new_game(seed=42)
         system = state.get_current_system()
