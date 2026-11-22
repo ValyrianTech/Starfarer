@@ -37,6 +37,7 @@ whitelist = Whitelist()
 whitelist.health  # noqa: B018
 whitelist.api_new_game  # noqa: B018
 whitelist.api_get_game  # noqa: B018
+whitelist.api_delete_game  # noqa: B018
 whitelist.api_galaxy  # noqa: B018
 whitelist.api_system_detail  # noqa: B018
 whitelist.api_jump  # noqa: B018

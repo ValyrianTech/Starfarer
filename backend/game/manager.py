@@ -32,7 +32,11 @@ from backend.game.engine import (
     jump_distance_ly,
     jump_fuel_cost,
 )
-from backend.generation.universe import distance_between, generate_universe, select_start_system
+from backend.generation.universe import (
+    distance_between,
+    generate_universe,
+    select_start_system,
+)
 from backend.models.faction import FACTION_DEFINITIONS, FactionRelation
 from backend.models.game_state import GameState
 from backend.models.ship import Ship
@@ -682,6 +686,23 @@ def evict_if_needed(active_ids: set[str] | None = None) -> None:
                     "Failed to persist game %s during LRU eviction: %s", state.id, exc
                 )
             GAME_STORE.pop(game_id, None)
+
+
+def remove_game(game_id: str) -> None:
+    """Remove a game from the in-memory cache.
+
+    Pops the entry for ``game_id`` from :data:`GAME_STORE` under the
+    module-level :data:`_store_lock` so a concurrent
+    :func:`evict_if_needed` cannot observe a partially-updated
+    ``OrderedDict``. Missing keys are ignored (no-op).
+
+    :param game_id: The unique identifier of the game.
+    :type game_id: str
+    :returns: None
+    :rtype: None
+    """
+    with _store_lock:
+        GAME_STORE.pop(game_id, None)
 
 
 def register_game(state: GameState) -> None:

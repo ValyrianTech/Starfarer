@@ -860,6 +860,14 @@ POST /api/game/{game_id}/save
 
 The game persists all state to SQLite. Save frequently — especially before risky jumps.
 
+### Delete a Game
+
+```http
+DELETE /api/game/{game_id}
+```
+
+This permanently removes a game from both the in-memory game store and the database (the `games` row and, via the foreign-key cascade, its `saves` rows), then drops the per-game lock registry entry. The caller must authenticate with the per-game token supplied in the `X-Game-Token` header only — the `token` query parameter is rejected (it is not honored, and under default-on enforcement a query-param-only token yields HTTP 403). On success the response is HTTP 200 with exactly two keys, `result` (the string `"Game deleted."`) and `game_id` (the deleted game's id), e.g. `{"result": "Game deleted.", "game_id": "abc123"}`. An unknown game returns HTTP 404; a missing or invalid token under enforcement returns HTTP 403.
+
 ---
 
 ## 10. API Reference (Quick)
@@ -904,6 +912,7 @@ All endpoints that access a specific game (mutating and read-only GET) accept th
 | POST | `/api/game/{id}/missions/{mid}/complete` | Complete accepted mission (claims rewards) |
 | POST | `/api/game/{id}/save` | Save game |
 | POST | `/api/game/{id}/load` | Load game |
+| DELETE | `/api/game/{id}` | Delete a game (removes it from the in-memory store and the database, including its saves rows; token via `X-Game-Token` header only — the `token` query param is rejected; returns `{result, game_id}`; HTTP 404 for unknown game, HTTP 403 for missing/invalid token under enforcement) |
 | GET | `/api/leaderboard` | Top players |
 | GET | `/api/game/{id}/system/{sys_id}/ghosts?page={n}&per_page={n}` | Get ghost signatures in a system (paginated, returns total_ghosts, total_pages; sanitized public view (raw game id removed)) |
 | POST | `/api/game/{id}/leave-ghost` | Leave a ghost signature; response is a sanitized public view (raw game id removed) |
