@@ -643,6 +643,13 @@ def api_delete_game(
     key cascade, its saves rows). The per-game lock registry entry is
     released automatically by the ``_locked`` context manager.
 
+    The in-memory cache entry is dropped before the authoritative
+    database row so the game disappears immediately for concurrent
+    requests serialized on the same per-game lock. If the database
+    delete fails, the exception propagates (HTTP 500) but the
+    authoritative row survives, so a retry can still complete the
+    deletion.
+
     :param game_id: The unique identifier of the game.
     :type game_id: str
     :param x_game_token: The caller-supplied per-game token (X-Game-Token header).
@@ -656,6 +663,28 @@ def api_delete_game(
     _ensure_game_exists(game_id)
     with _locked(game_id):
         _authorize_game(game_id, x_game_token)
+        # We deliberately drop the in-memory GAME_STORE entry first (under
+        # the per-game lock) and then delete the authoritative database
+        # row. The in-memory entry is a pure cache that can always be
+        # repopulated from the database via _ensure_game_exists / _get_state
+        # (register_game reloads it), so removing it first is safe and makes
+        # the game disappear immediately for any concurrent request
+        # serialized on the same per-game lock.
+        #
+        # Failure semantics: if delete_game raises (e.g. a database error),
+        # the exception propagates and the request returns HTTP 500, but the
+        # authoritative games row survives, so a client retry (which
+        # reloads/authorizes from the DB) can still complete the deletion.
+        # The in-memory cache entry being gone is harmless because it is
+        # reloaded on next access.
+        #
+        # We do NOT delete the database row first: removing the authoritative
+        # row before dropping the cache entry could, on failure of a later
+        # step, leave a phantom in-memory game whose backing saves/games rows
+        # are already gone, so subsequent requests would act on stale state
+        # that can no longer be persisted/validated. Memory-first keeps the
+        # failure mode a "cache miss that reloads from the still-present DB
+        # row".
         remove_game(game_id)
         delete_game(game_id)
         return {"result": "Game deleted.", "game_id": game_id}
