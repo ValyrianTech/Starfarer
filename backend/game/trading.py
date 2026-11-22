@@ -181,14 +181,24 @@ def _validate_quantity(quantity: int) -> str | None:
     return None
 
 
-def _lore_linked_discovery_error(item: str) -> str:
+def _lore_linked_discovery_error(item: str, is_category: bool = False) -> str:
     """Return the distinct error for attempting to sell an all-lore-linked item.
+
+    When the match was by exact name (``is_category`` is False), the message
+    uses the singular form (``"... is a lore-linked discovery ..."``). When the
+    match was by category (``is_category`` is True), the message uses the
+    plural form and refers to the discoveries as ``"them"``.
 
     :param item: The discovery name or category that was requested.
     :type item: str
+    :param is_category: Whether the match was by category (plural wording)
+        rather than by exact name (singular wording).
+    :type is_category: bool
     :returns: The lore-linked sell error message.
     :rtype: str
     """
+    if is_category:
+        return f"Discoveries matching '{item}' are lore-linked and cannot be sold — donate them at the Crossroads instead."
     return f"'{item}' is a lore-linked discovery and cannot be sold — donate it at the Crossroads instead."
 
 
@@ -381,8 +391,10 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
         # lore-linked (unsellable) one.
         matching = _sellable_matches(state.discoveries, item)
         if not matching:
-            if _unfiltered_matches(state.discoveries, item):
-                return False, _lore_linked_discovery_error(item)
+            unfiltered = _unfiltered_matches(state.discoveries, item)
+            if unfiltered:
+                is_category = not any(d.name == item for d in unfiltered)
+                return False, _lore_linked_discovery_error(item, is_category)
             return False, f"No discoveries matching '{item}' to sell."
         total_price = 0
         sold_items = []
@@ -518,8 +530,10 @@ def perform_bulk_sell(state: GameState, items: list[dict]) -> tuple[bool, str, i
         # matches) preserving the original precedence.
         matching = _sellable_matches(available, item_name)
         if not matching:
-            if _unfiltered_matches(available, item_name):
-                errors.append(_lore_linked_discovery_error(item_name))
+            unfiltered = _unfiltered_matches(available, item_name)
+            if unfiltered:
+                is_category = not any(d.name == item_name for d in unfiltered)
+                errors.append(_lore_linked_discovery_error(item_name, is_category))
             else:
                 errors.append(f"No discoveries matching '{item_name}' to sell.")
             continue
