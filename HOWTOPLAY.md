@@ -459,7 +459,7 @@ Content-Type: application/json
 
 Sells the first matching discovery from your inventory. Prices vary per system.
 
-A discovery flagged `sellable: false` (lore-linked) cannot be sold. Attempting to sell one returns an explicit error stating it is a lore-linked discovery that can only be donated at the Crossroads, rather than the generic `No discoveries matching` message.
+A discovery flagged `sellable: false` (lore-linked) cannot be sold. Attempting to sell one returns an explicit error, rather than the generic `No discoveries matching` message. The wording distinguishes how you matched: a sell match by exact name yields the singular `'<name>' is a lore-linked discovery and cannot be sold — donate it at the Crossroads instead.`, while a match by category (e.g. `mineral`) yields the plural `Discoveries matching '<category>' are lore-linked and cannot be sold — donate them at the Crossroads instead.`
 
 The market price modifier for a station is derived deterministically from the game seed and the station's system id, and is fixed for the lifetime of a game at that station. It does **not** change as you take other actions or as your log grows between trades, so there is no benefit to performing unrelated actions (jumping, scanning, exploring) to "re-roll" a price before selling — a given item sells for the same amount at the same station regardless of what else you do. The same modifier applies to fuel purchases, where it is shown as a `Market conditions: ±N%` line in the price breakdown.
 
@@ -481,7 +481,7 @@ Content-Type: application/json
 
 Matches items by exact name first, then falls back to category match. Each `item` field accepts either a discovery name or a category (`"mineral"`, `"artifact"`, `"lifeform"`, `"signal"`, `"ruin"`). Items sorted by value (highest first) so your most valuable discoveries sell first.
 
-Lore-linked discoveries (flagged `sellable: false`) cannot be sold. If every matching discovery for an entry is lore-linked, that entry reports the distinct lore-linked error (it is a lore-linked discovery that can only be donated at the Crossroads) instead of the generic `No discoveries matching` message. When a mix of lore-linked and sellable discoveries matches, the sellable ones still sell normally.
+Lore-linked discoveries (flagged `sellable: false`) cannot be sold. If every matching discovery for an entry is lore-linked, that entry reports a distinct lore-linked error instead of the generic `No discoveries matching` message. The wording matches how the entry was matched: an exact-name match reports the singular `'<name>' is a lore-linked discovery and cannot be sold — donate it at the Crossroads instead.`, while a category match reports the plural `Discoveries matching '<category>' are lore-linked and cannot be sold — donate them at the Crossroads instead.` When a mix of lore-linked and sellable discoveries matches, the sellable ones still sell normally.
 
 **Partial failure mode:** If some items don't exist in your inventory, the available items still sell. Errors are reported alongside the success message.
 

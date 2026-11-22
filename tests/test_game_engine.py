@@ -59,6 +59,7 @@ from backend.game.manager import (
     new_game,
 )
 from backend.game.trading import (
+    _lore_linked_discovery_error,
     calculate_fuel_price,
     get_upgrade_info,
     perform_bulk_sell,
@@ -78,6 +79,25 @@ from backend.models.discovery import Discovery, LoreFragment
 from backend.models.game_state import GameState
 from backend.models.system import Body, StarSystem
 from backend.utils import deterministic_hash
+
+
+class TestLoreLinkedErrorMessage:
+    """Direct unit tests for the lore-linked sell error helper wording."""
+
+    def test_singular_name_match_wording(self) -> None:
+        msg = _lore_linked_discovery_error("Ancient Artifact")
+        assert "lore-linked discovery" in msg
+        assert "Ancient Artifact" in msg
+        assert "Crossroads" in msg
+
+    def test_plural_category_match_wording(self) -> None:
+        msg = _lore_linked_discovery_error("mineral", is_category=True)
+        assert "lore-linked" in msg
+        assert "Discoveries matching" in msg
+        assert "them" in msg
+        assert "mineral" in msg
+        assert "Crossroads" in msg
+        assert "lore-linked discovery" not in msg
 
 
 class TestGameManager:
@@ -1783,7 +1803,11 @@ class TestBulkSell:
             state, [{"item": "mineral", "quantity": 1}]
         )
         assert ok is False
-        assert any("lore-linked discovery" in e and "mineral" in e and "Crossroads" in e for e in errors)
+        assert any(
+            "lore-linked" in e and "Discoveries matching" in e and "them" in e
+            and "mineral" in e and "Crossroads" in e
+            for e in errors
+        )
         assert lore_disc in state.discoveries
         assert state.ship.credits == credits_before
 
@@ -2378,7 +2402,9 @@ class TestTradingPerformTradeEdgeCases:
         credits_before = state.ship.credits
         ok, msg = perform_trade(state, "sell", "mineral", 1)
         assert ok is False
-        assert "lore-linked discovery" in msg
+        assert "lore-linked" in msg
+        assert "Discoveries matching" in msg
+        assert "them" in msg
         assert "Crossroads" in msg
         assert "mineral" in msg
         assert lore_disc in state.discoveries
@@ -2410,7 +2436,9 @@ class TestTradingPerformTradeEdgeCases:
         # "mineral" does not match any name, but every category match is lore-linked.
         ok, msg = perform_trade(state, "sell", "mineral", 1)
         assert ok is False
-        assert "lore-linked discovery" in msg
+        assert "lore-linked" in msg
+        assert "Discoveries matching" in msg
+        assert "them" in msg
         assert "Crossroads" in msg
         assert "mineral" in msg
         assert lore_disc in state.discoveries
