@@ -252,6 +252,26 @@ def game_exists(game_id: str) -> bool:
         return row is not None
 
 
+def delete_game(game_id: str) -> bool:
+    """Delete a game row from the ``games`` table.
+
+    Runs a single ``DELETE FROM games WHERE id = ?`` statement. The
+    ``saves`` table declares ``FOREIGN KEY (game_id) REFERENCES games(id)
+    ON DELETE CASCADE`` and ``get_db`` enables ``PRAGMA foreign_keys=ON``,
+    so the associated save rows are removed automatically by the cascade.
+
+    :param game_id: The unique identifier for the game.
+    :type game_id: str
+    :returns: ``True`` if a game row was deleted, ``False`` if no such
+        game existed.
+    :rtype: bool
+    """
+    with get_db_ctx() as conn:
+        cursor = conn.execute("DELETE FROM games WHERE id = ?", (game_id,))
+        conn.commit()
+        return cursor.rowcount > 0
+
+
 def count_games() -> int:
     """Return the number of rows in the ``games`` table.
 

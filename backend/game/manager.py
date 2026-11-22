@@ -688,6 +688,23 @@ def evict_if_needed(active_ids: set[str] | None = None) -> None:
             GAME_STORE.pop(game_id, None)
 
 
+def remove_game(game_id: str) -> None:
+    """Remove a game from the in-memory cache.
+
+    Pops the entry for ``game_id`` from :data:`GAME_STORE` under the
+    module-level :data:`_store_lock` so a concurrent
+    :func:`evict_if_needed` cannot observe a partially-updated
+    ``OrderedDict``. Missing keys are ignored (no-op).
+
+    :param game_id: The unique identifier of the game.
+    :type game_id: str
+    :returns: None
+    :rtype: None
+    """
+    with _store_lock:
+        GAME_STORE.pop(game_id, None)
+
+
 def register_game(state: GameState) -> None:
     """Insert or replace a game state in the in-memory cache under the lock.
 

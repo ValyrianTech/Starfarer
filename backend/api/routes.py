@@ -34,7 +34,7 @@ from backend.config import (
     get_new_game_rate_window,
     get_require_game_token,
 )
-from backend.database import count_games, game_exists, get_leaderboard
+from backend.database import count_games, delete_game, game_exists, get_leaderboard
 from backend.fuel import get_fuel_status
 from backend.game.engine import (
     activate_distress_beacon,
@@ -60,6 +60,7 @@ from backend.game.manager import (
     get_system_detail,
     new_game,
     register_game,
+    remove_game,
 )
 from backend.game.manager import (
     game_load as game_load_func,
@@ -627,6 +628,38 @@ def api_get_game(
         if not state:
             raise HTTPException(status_code=404, detail="Game not found")
         return _full_state_response(state, sort=sort, order=order)
+
+
+@router.delete("/game/{game_id}")
+def api_delete_game(
+    game_id: str,
+    x_game_token: str | None = Header(default=None),
+) -> dict:
+    """Delete a game identified by ``game_id``.
+
+    Authenticates the caller via the per-game token supplied in the
+    ``X-Game-Token`` header, then removes the game from both the
+    in-memory store and the database (the games row and, via the foreign
+    key cascade, its saves rows). Finally the per-game lock registry entry
+    is dropped.
+
+    :param game_id: The unique identifier of the game.
+    :type game_id: str
+    :param x_game_token: The caller-supplied per-game token (X-Game-Token header).
+    :type x_game_token: str | None
+    :returns: A dictionary with ``result`` message and ``game_id``.
+    :rtype: dict
+    :raises HTTPException: 404 if the game is not found.
+    :raises HTTPException: 403 if token enforcement is on and the token
+        is missing or invalid.
+    """
+    _ensure_game_exists(game_id)
+    with _locked(game_id):
+        _authorize_game(game_id, x_game_token)
+        remove_game(game_id)
+        delete_game(game_id)
+        _cleanup_game_lock(game_id)
+        return {"result": "Game deleted.", "game_id": game_id}
 
 
 @router.get("/game/{game_id}/galaxy")
