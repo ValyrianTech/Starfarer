@@ -1749,7 +1749,7 @@ class TestBulkSell:
         state.discoveries.clear()
         state.discoveries.append(lore_disc)
         credits_before = state.ship.credits
-        ok, msg, _sold_count, _total_price, errors = perform_bulk_sell(
+        ok, _msg, _sold_count, _total_price, errors = perform_bulk_sell(
             state, [{"item": "Ancient Artifact", "quantity": 1}]
         )
         assert ok is False
@@ -1779,7 +1779,7 @@ class TestBulkSell:
         state.discoveries.clear()
         state.discoveries.append(lore_disc)
         credits_before = state.ship.credits
-        ok, msg, _sold_count, _total_price, errors = perform_bulk_sell(
+        ok, _msg, _sold_count, _total_price, errors = perform_bulk_sell(
             state, [{"item": "mineral", "quantity": 1}]
         )
         assert ok is False
@@ -1810,7 +1810,7 @@ class TestBulkSell:
         state.discoveries.clear()
         state.discoveries.append(lore_disc)
         credits_before = state.ship.credits
-        ok, msg, _sold_count, _total_price, errors = perform_bulk_sell(
+        ok, msg, _sold_count, _total_price, _errors = perform_bulk_sell(
             state, [{"item": "Ancient Artifact", "quantity": 1}]
         )
         assert ok is False
