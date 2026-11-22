@@ -640,8 +640,8 @@ def api_delete_game(
     Authenticates the caller via the per-game token supplied in the
     ``X-Game-Token`` header, then removes the game from both the
     in-memory store and the database (the games row and, via the foreign
-    key cascade, its saves rows). Finally the per-game lock registry entry
-    is dropped.
+    key cascade, its saves rows). The per-game lock registry entry is
+    released automatically by the ``_locked`` context manager.
 
     :param game_id: The unique identifier of the game.
     :type game_id: str
@@ -658,7 +658,6 @@ def api_delete_game(
         _authorize_game(game_id, x_game_token)
         remove_game(game_id)
         delete_game(game_id)
-        _cleanup_game_lock(game_id)
         return {"result": "Game deleted.", "game_id": game_id}
 
 
