@@ -3056,6 +3056,50 @@ class TestAPICargo:
         assert data["cargo"] == 0
         assert data["cargo_capacity"] == 50
         assert data["cargo_items"] == []
+        assert "count" in data
+        assert "max_cargo" in data
+        assert data["count"] == 0
+        assert data["max_cargo"] == 50
+        assert data["count"] == data["cargo"]
+        assert data["max_cargo"] == data["cargo_capacity"]
+
+    def test_cargo_endpoint_count_and_max_cargo_aliases_with_items(self) -> None:
+        """count/max_cargo aliases should mirror cargo/cargo_capacity with items present."""
+        from backend.models.discovery import Discovery
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "cargo-aliases"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        current_sys = state.get_current_system()
+        state.discoveries.append(
+            Discovery(id="alias-1", category="mineral", name="Gold",
+                      description="Gold ore", value=100, system_id=current_sys.id)
+        )
+        state.discoveries.append(
+            Discovery(id="alias-2", category="artifact", name="Relic",
+                      description="Ancient relic", value=50, system_id=current_sys.id)
+        )
+        state.sync_cargo()
+        GAME_STORE[game_id] = state
+        game_save(state)
+        resp = client.get(f"/api/game/{game_id}/cargo")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["count"] == len(data["cargo_items"])
+        assert data["count"] == data["cargo"]
+        assert data["max_cargo"] == data["cargo_capacity"]
+        assert data["count"] == 2
+
+    def test_cargo_aliases_in_full_state_response(self) -> None:
+        """GET /api/game/{id} should expose count/max_cargo aliases equal to cargo/cargo_capacity."""
+        resp = client.post("/api/game/new", json={"seed": 42})
+        game_id = resp.json()["game_id"]
+        resp = client.get(f"/api/game/{game_id}")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "count" in data
+        assert "max_cargo" in data
+        assert data["count"] == data["cargo"]
+        assert data["max_cargo"] == data["cargo_capacity"]
 
     def test_cargo_endpoint_nonexistent_game(self) -> None:
         """Cargo endpoint should 404 for nonexistent game."""
