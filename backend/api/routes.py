@@ -1229,8 +1229,9 @@ def api_cargo(
     :type sort: str
     :param order: Sort order — ``"asc"`` or ``"desc"``.
     :type order: str
-    :returns: A dictionary with ``cargo``, ``cargo_capacity``,
-        ``cargo_items`` list, and ``total_value``.
+    :returns: A dictionary with ``cargo`` (an int count) and
+        ``cargo_capacity``, their ``count``/``max_cargo`` aliases,
+        a ``cargo_items`` list, ``total_value``, and ``top3_ids``.
     :rtype: dict
     :raises HTTPException: 404 if the game is not found.
     """
@@ -1270,6 +1271,8 @@ def api_cargo(
         return {
             "cargo": state.ship.cargo,
             "cargo_capacity": state.ship.max_cargo,
+            "count": state.ship.cargo,
+            "max_cargo": state.ship.max_cargo,
             "cargo_items": cargo_items,
             "total_value": total_value,
             "top3_ids": top3_ids,
@@ -2227,7 +2230,9 @@ def _full_state_response(state: GameState, sort: str | None = None, order: str |
         or ``"desc"``. Defaults to ``"desc"`` when ``sort`` is
         supplied without ``order``.
     :type order: str or None
-    :returns: A dictionary with all game state fields.
+    :returns: A dictionary with all game state fields, including
+        ``cargo`` (an int count) and ``cargo_capacity`` together with
+        their ``count``/``max_cargo`` aliases.
     :rtype: dict
     :raises HTTPException: 422 if ``sort`` or ``order`` is invalid.
     """
@@ -2280,6 +2285,8 @@ def _full_state_response(state: GameState, sort: str | None = None, order: str |
         "reputation_summary": state.build_reputation_summary(),
         "cargo": state.ship.cargo,
         "cargo_items": cargo_items,
+        "count": state.ship.cargo,
+        "max_cargo": state.ship.max_cargo,
         "total_value": sum(item["value"] for item in cargo_items),
         "top3_ids": [item["id"] for item in sorted(cargo_items, key=lambda i: i.get("value", 0), reverse=True)[:3]],
         "fuel_status": get_fuel_status(state, state.systems),
