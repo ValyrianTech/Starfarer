@@ -626,11 +626,15 @@ GET /api/game/{game_id}/cargo?sort=value&order=desc
 ```
 
 Returns a detailed breakdown of your cargo hold, including:
-- `count` — current number of items
-- `max_cargo` — maximum capacity
+- `cargo` — **int**, the number of items currently carried (NOT a list)
+- `cargo_capacity` — int, maximum cargo capacity
+- `cargo_items` — list of cargo entries, each with `id`, `name`, `category`, `value`, `description`, and `sellable` (lore-linked items are marked `sellable: false`)
+- `count` — int alias of `cargo` (same value; a clearly-named count)
+- `max_cargo` — int alias of `cargo_capacity` (same value)
 - `total_value` — sum of all cargo item credit values
 - `top3_ids` — list of the 3 most valuable cargo item IDs (by credit value, descending)
-- `cargo` — list of every discovery with its ID, name, category, value, and sellability status. Lore-linked items are marked as not sellable.
+
+**NOTE:** `cargo` is a COUNT, not a list. The item list is `cargo_items`. (On the full-state endpoint `GET /api/game/{game_id}` too, `cargo` is an int count and the per-item list is `cargo_items`.)
 
 **Query parameters:**
 | Parameter | Values | Default | Description |
