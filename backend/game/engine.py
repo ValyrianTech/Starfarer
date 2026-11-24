@@ -56,6 +56,11 @@ def jump_distance_ly(dist: float) -> float:
     return round(dist / 10.0, 1)
 
 
+def format_distance_ly(value: float) -> str:
+    """Format a light-year distance for display, trimming trailing .0."""
+    return f"{value:g}"
+
+
 def jump_fuel_cost(dist_ly: float) -> int:
     """Compute the fuel cost for a jump of ``dist_ly`` light-years.
 
@@ -99,7 +104,10 @@ def can_jump(ship: Ship, target: StarSystem, current: StarSystem | None) -> tupl
     if fuel_cost > ship.fuel:
         return False, fuel_cost, f"Not enough fuel. Need {fuel_cost}, have {ship.fuel}."
     if dist_ly > ship.jump_range:
-        return False, fuel_cost, f"Distance {dist_ly} LY exceeds jump range {ship.jump_range}."
+        return False, fuel_cost, (
+            f"Distance {format_distance_ly(dist_ly)} LY exceeds jump range "
+            f"{format_distance_ly(ship.jump_range)}."
+        )
     return True, fuel_cost, ""
 
 
