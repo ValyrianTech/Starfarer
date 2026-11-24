@@ -5759,9 +5759,16 @@ class TestApiNewEndpoints:
         state.ship.credits = 1000
         GAME_STORE[game_id] = state
 
+        from backend.config import CREW_HIRE_PRICE
+
+        credits_before = state.ship.credits
         resp = client.post(f"/api/game/{game_id}/trade", json={"action": "buy", "item": "crew", "quantity": 2})
         assert resp.status_code == 200
         assert resp.json()["ship"]["crew"] == 2
+        # The API layer must reflect the credits deduction: 2 crew at the flat
+        # per-crew hire price, charged against the starting balance.
+        expected_credits = credits_before - 2 * CREW_HIRE_PRICE
+        assert resp.json()["ship"]["credits"] == expected_credits
 
     def test_sub_surface_blocker_fallback_detail(self):
         resp = client.post("/api/game/new", json={"seed": 42, "game_id": "sub-fallback"})
