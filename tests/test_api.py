@@ -3948,6 +3948,81 @@ class TestFuelWarningSystem:
         assert isinstance(fs["cheapest_reachable_jump_fuel"], int)
         assert fs["stranded"] is False
 
+    def test_fuel_status_at_station_zero_fuel_not_green(self) -> None:
+        """At a trading station with zero fuel, fuel_status is 'critical'."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "fuel-station-zero"})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        current_sys = state.get_current_system()
+        assert current_sys is not None
+        current_sys.has_trading_station = True
+        state.ship.fuel = 0
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        resp = client.get(f"/api/game/{game_id}")
+        assert resp.status_code == 200
+        fs = resp.json()["fuel_status"]
+        assert fs["level"] != "green"
+        assert fs["level"] == "critical"
+        assert fs["current_fuel"] == 0
+        assert fs["stranded"] is True
+        assert fs["cheapest_reachable_jump_fuel"] is not None
+        assert fs["message"] != ""
+        assert fs["nearest_station_distance"] == 0.0
+        assert fs["fuel_for_one_way"] == 0
+        assert fs["fuel_for_round_trip"] == 0
+
+    def test_fuel_status_at_station_red_when_short_of_cheapest_jump(self) -> None:
+        """At a trading station with fuel >= 5 but below the cheapest jump,
+        fuel_status is 'red' and the ship is stranded."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "fuel-station-red"})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        current_sys = state.get_current_system()
+        assert current_sys is not None
+        current_sys.has_trading_station = True
+        state.ship.fuel = 6
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        with patch("backend.fuel._cheapest_reachable", return_value=(current_sys, 9)):
+            resp = client.get(f"/api/game/{game_id}")
+        assert resp.status_code == 200
+        fs = resp.json()["fuel_status"]
+        assert fs["level"] == "red"
+        assert fs["stranded"] is True
+        assert fs["current_fuel"] == 6
+        assert fs["cheapest_reachable_jump_fuel"] == 9
+        assert fs["message"] != ""
+        assert fs["nearest_station_distance"] == 0.0
+
+    def test_fuel_status_at_station_green_when_fuel_sufficient(self) -> None:
+        """At a trading station with ample fuel, fuel_status is 'green'."""
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "fuel-station-green"})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        current_sys = state.get_current_system()
+        assert current_sys is not None
+        current_sys.has_trading_station = True
+        state.ship.fuel = 80
+        GAME_STORE[game_id] = state
+        game_save(state)
+
+        resp = client.get(f"/api/game/{game_id}")
+        assert resp.status_code == 200
+        fs = resp.json()["fuel_status"]
+        assert fs["level"] == "green"
+        assert fs["message"] == ""
+        assert fs["stranded"] is False
+        assert fs["nearest_station_distance"] == 0.0
+        assert fs["fuel_for_one_way"] == 0
+        assert fs["fuel_for_round_trip"] == 0
+        assert fs["nearest_station_system"] == current_sys.name
+
 
 class TestRecoveryOptions:
     """Tests for the recovery_options surfacing in the game state response."""
