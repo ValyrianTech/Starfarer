@@ -191,7 +191,7 @@ Costs 3 fuel + 1 crew. Requires being landed on a body. Works on:
 - `volcanic`, `desert`, `tundra` — explores cave systems, yielding `geological_formation` discoveries (50–120 cr)
 - `ocean` — explores the ocean depths, yielding `biological_specimen` discoveries (80–200 cr)
 
-Yields 1–2 high-value discoveries. Can only be done **once per body** (`sub_surface_explored`). The 3 fuel + 1 crew and the one-time `sub_surface_explored` flag are charged up front, before discoveries are generated or cargo capacity is checked, so sub-surface exploration with a full cargo hold still costs 3 fuel + 1 crew and marks the body as explored (no free re-rolls). Because it is one-time-per-body there is no retry, so a full cargo hold simply means the (single) discovery is lost — there is no possibility of a repeating "found nothing" livelock. Returns HTTP 400 only when sub-surface exploration is genuinely not possible here (no current system, not enough fuel/crew, not landed, unsupported biome, or the body was already explored) — never a silent charge. In a shared universe, a successful discovery here propagates a discovery ripple to nearby systems (within 5 LY) that other players can see via `GET /api/game/{id}/ripples`.
+Yields 1–2 high-value discoveries. Can only be done **once per body** (`sub_surface_explored`). The 3 fuel + 1 crew and the one-time `sub_surface_explored` flag are charged up front, before discoveries are generated or cargo capacity is checked, so sub-surface exploration with a full cargo hold still costs 3 fuel + 1 crew and marks the body as explored (no free re-rolls). Because it is one-time-per-body there is no retry, so a full cargo hold simply means the (single) discovery is lost — there is no possibility of a repeating "found nothing" livelock. Returns HTTP 400 only when sub-surface exploration is genuinely not possible here (no current system, not enough fuel/crew, not landed, unsupported biome, or the body was already explored) — never a silent charge. The HTTP 400 `detail` now names the specific blocker (e.g. `requires 1 crew (have 0)`) so a player who is correctly landed on a supported biome is not misled into thinking the biome was wrong when the real blocker is crew or fuel. In a shared universe, a successful discovery here propagates a discovery ripple to nearby systems (within 5 LY) that other players can see via `GET /api/game/{id}/ripples`.
 
 ### 3.10 Handle Events
 
@@ -447,6 +447,17 @@ Content-Type: application/json
 ```
 
 Each repair point restores 20 hull at ~40 credits per point.
+
+### Hire Crew
+
+```http
+POST /api/game/{game_id}/trade
+Content-Type: application/json
+
+{ "action": "buy", "item": "crew", "quantity": 1 }
+```
+
+Hires crew members at `150` credits each. The quantity is capped at the ship's `max_crew` — hiring more than the remaining roster space hires only up to the cap (you are charged only for the crew actually hired). Requires being at a trading station.
 
 ### Sell Discoveries
 
@@ -907,7 +918,7 @@ All endpoints that access a specific game (mutating and read-only GET) accept th
 | GET | `/api/game/{id}/cargo?sort={value\|name}&order={asc\|desc}` | Cargo hold details (sortable, includes total_value) |
 | GET | `/api/game/{id}/lore` | Lore fragment collection |
 | GET | `/api/game/{id}/codex` | Biome discovery codex |
-| POST | `/api/game/{id}/trade` | Buy/sell at station |
+| POST | `/api/game/{id}/trade` | Buy/sell at station (fuel, repair, crew hire, sell discoveries) |
 | POST | `/api/game/{id}/trade/bulk-sell` | Sell multiple discoveries |
 | GET | `/api/game/{id}/upgrades` | Upgrade options |
 | POST | `/api/game/{id}/upgrade` | Purchase upgrade |

@@ -9,6 +9,7 @@ at trading stations.
 import random
 
 from backend.config import (
+    CREW_HIRE_PRICE,
     FUEL_BASE_PRICE,
     UPGRADE_COST_SCHEDULES,
     UPGRADE_COSTS,
@@ -348,14 +349,14 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
 
     Selling finds a matching discovery in the inventory and sells it
     at a market price modified by the system seed. Buying supports
-    purchasing fuel or repairing the hull.
+    purchasing fuel, repairing the hull, or hiring crew.
 
     :param state: The current game state.
     :type state: GameState
     :param action: Either ``"buy"`` or ``"sell"``.
     :type action: str
     :param item: The item to trade (e.g. ``"fuel"``, ``"repair"``,
-        or a discovery category/name).
+        ``"crew"``, or a discovery category/name).
     :type item: str
     :param quantity: The quantity to buy or the multiplier for
         repairs.
@@ -462,6 +463,22 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
             state.ship.hull += repair_amount
             result_message = f"Repaired hull by {repair_amount} for {cost} credits."
             state.add_log("trade", result_message, category="trade", title="Trade", system=system.name, credits_change=-cost, hull_change=repair_amount)
+            trade_completed = True
+
+        elif item == "crew":
+            error = _validate_quantity(quantity)
+            if error:
+                return False, error
+            hireable = min(quantity, state.ship.max_crew - state.ship.crew)
+            if hireable <= 0:
+                return False, "Crew roster is already full."
+            cost = hireable * CREW_HIRE_PRICE
+            if state.ship.credits < cost:
+                return False, f"Not enough credits. Need {cost}."
+            state.ship.credits -= cost
+            state.ship.crew += hireable
+            result_message = f"Hired {hireable} crew for {cost} credits."
+            state.add_log("trade", result_message, category="trade", title="Trade", system=system.name, credits_change=-cost)
             trade_completed = True
 
     if trade_completed:

@@ -50,6 +50,7 @@ from backend.game.engine import (
     perform_salvage,
     perform_scan,
     perform_sub_surface_exploration,
+    sub_surface_blocker,
 )
 from backend.game.manager import (
     GAME_STORE,
@@ -966,7 +967,8 @@ def api_sub_surface_explore(game_id: str, x_game_token: str | None = Header(defa
         list, and ``ship`` status.
     :rtype: dict
     :raises HTTPException: 404 if the game is not found; 400 if
-        sub-surface exploration is not possible.
+        sub-surface exploration is not possible, with the ``detail``
+        naming the specific blocker (e.g. ``"requires 1 crew (have 0)"``).
     """
     _ensure_game_exists(game_id)
     with _locked(game_id):
@@ -976,7 +978,9 @@ def api_sub_surface_explore(game_id: str, x_game_token: str | None = Header(defa
             raise HTTPException(status_code=404, detail="Game not found")
         ok, discoveries = perform_sub_surface_exploration(state)
         if not ok:
-            raise HTTPException(status_code=400, detail="Sub-surface exploration not possible here.")
+            blocker = sub_surface_blocker(state)
+            detail = f"Sub-surface exploration not possible here: {blocker}" if blocker else "Sub-surface exploration not possible here."
+            raise HTTPException(status_code=400, detail=detail)
         if state.shared_universe and discoveries:
             for disc in discoveries:
                 create_ripple(state, disc)
