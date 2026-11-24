@@ -1408,7 +1408,8 @@ def api_codex(
 def api_trade(game_id: str, req: TradeRequest, x_game_token: str | None = Header(default=None)) -> dict:
     """Perform a buy or sell trade action.
 
-    Supports buying fuel, repairing hull, or selling discoveries
+    Supports buying fuel, repairing hull, hiring crew (flat per-crew
+    pricing, capped by the ship's maximum crew), or selling discoveries
     at trading stations in accessible systems.
 
     :param game_id: The unique identifier of the game.
