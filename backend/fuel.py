@@ -33,11 +33,22 @@ def get_fuel_status(game_state: GameState, systems: dict[str, StarSystem]) -> di
     cheapest_reachable_name = cheapest_system.name if cheapest_system else None
     stranded = game_state.ship.fuel == 0 or cheapest_fuel is None or game_state.ship.fuel < cheapest_fuel
 
-    # Early return: if already at a trading station, fuel status is always green
+    # Early return: at a trading station, distances are zero but the level
+    # still reflects whether the ship can afford any jump.
     if current_system and current_system.has_trading_station:
+        if stranded:
+            if current_fuel < 5:
+                level = "critical"
+                message = "CRITICAL: Fuel reserves nearly depleted"
+            else:
+                level = "red"
+                message = "DANGER: Insufficient fuel to make any jump — refuel to depart"
+        else:
+            level = "green"
+            message = ""
         return {
-            "level": "green",
-            "message": "",
+            "level": level,
+            "message": message,
             "current_fuel": current_fuel,
             "fuel_for_round_trip": 0,
             "fuel_for_one_way": 0,
