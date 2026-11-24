@@ -14,6 +14,7 @@ from datetime import UTC
 from backend.config import (
     ATMOSPHERIC_SCAN_FUEL_COST,
     ATMOSPHERIC_SCAN_MAX,
+    CREW_HIRE_PRICE,
     EXPLORATION_VALUE_MULTIPLIER_MAX,
     EXPLORATION_VALUE_MULTIPLIER_PER_BIOME,
     EXPLORATION_VALUE_MULTIPLIER_PER_SYSTEM,
@@ -29,10 +30,14 @@ from backend.config import (
 from backend.game.engine import (
     BIOME_DISCOVERY_CATEGORIES,
     DEFAULT_DISCOVERY_CATEGORIES,
+    SUB_SURFACE_CAVE_BIOMES,
+    SUB_SURFACE_OCEAN_BIOMES,
+    SUB_SURFACE_SUPPORTED_BIOMES,
     _add_discoveries,
     _body_has_anomaly,
     _categories_for_biome,
     _generate_discovery,
+    _sub_surface_discovery_category,
     activate_distress_beacon,
     can_jump,
     cheapest_reachable_fuel_cost,
@@ -49,6 +54,7 @@ from backend.game.engine import (
     perform_salvage,
     perform_scan,
     perform_sub_surface_exploration,
+    sub_surface_blocker,
 )
 from backend.game.manager import (
     _state_from_dict,
@@ -6508,6 +6514,179 @@ class TestSubSurfaceExploration:
         ok, _discoveries = perform_sub_surface_exploration(state)
         assert ok is True
         assert body.sub_surface_explored is True
+
+
+class TestSubSurfaceBlocker:
+    """Tests for sub_surface_blocker."""
+    def _make_state(self, biome):
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        body = Body(id="b_sub", name="SubWorld", body_type="planet", biome=biome, size=5, distance_from_star=0.5, poi_count=3)
+        system.bodies = [body]
+        state.ship.current_body_id = body.id
+        state.ship.crew = 5
+        return state, body
+
+    def test_no_current_system(self):
+        state = new_game(seed=42)
+        state.ship.current_system_id = ""
+        assert sub_surface_blocker(state) == "no current system"
+
+    def test_not_enough_fuel(self):
+        state, _body = self._make_state("volcanic")
+        state.ship.fuel = 0
+        state.ship.crew = 5
+        assert sub_surface_blocker(state) == "requires 3 fuel (have 0)"
+
+    def test_not_enough_crew(self):
+        state, _body = self._make_state("volcanic")
+        state.ship.fuel = 50
+        state.ship.crew = 0
+        assert sub_surface_blocker(state) == "requires 1 crew (have 0)"
+
+    def test_not_landed(self):
+        state, _body = self._make_state("volcanic")
+        state.ship.fuel = 50
+        state.ship.crew = 5
+        state.ship.current_body_id = None
+        assert sub_surface_blocker(state) == "must be landed on a body"
+
+    def test_unsupported_biome(self):
+        state, _body = self._make_state("jungle")
+        state.ship.fuel = 50
+        state.ship.crew = 5
+        assert sub_surface_blocker(state) == "unsupported biome"
+
+    def test_already_explored(self):
+        state, body = self._make_state("volcanic")
+        state.ship.fuel = 50
+        state.ship.crew = 5
+        body.sub_surface_explored = True
+        assert sub_surface_blocker(state) == "this body has already been explored"
+
+    def test_allowed(self):
+        state, _body = self._make_state("volcanic")
+        state.ship.fuel = 50
+        state.ship.crew = 5
+        assert sub_surface_blocker(state) is None
+
+
+class TestSubSurfaceBiomeConsolidation:
+    """Regression tests locking the consolidated sub-surface biome constants."""
+    def _make_state(self, biome):
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        body = Body(id="b_sub", name="SubWorld", body_type="planet", biome=biome, size=5, distance_from_star=0.5, poi_count=3)
+        system.bodies = [body]
+        state.ship.current_body_id = body.id
+        state.ship.crew = 5
+        state.ship.fuel = 50
+        return state, body
+
+    def test_supported_biomes_is_union_of_cave_and_ocean(self):
+        """The supported set is the disjoint union of cave and ocean biomes."""
+        assert SUB_SURFACE_SUPPORTED_BIOMES == SUB_SURFACE_CAVE_BIOMES | SUB_SURFACE_OCEAN_BIOMES
+        assert SUB_SURFACE_CAVE_BIOMES.isdisjoint(SUB_SURFACE_OCEAN_BIOMES)
+
+    def test_supported_biomes_values(self):
+        """Cave and ocean biome sets hold the expected concrete biomes."""
+        assert SUB_SURFACE_CAVE_BIOMES == frozenset({"volcanic", "desert", "tundra"})
+        assert SUB_SURFACE_OCEAN_BIOMES == frozenset({"ocean"})
+
+    @pytest.mark.parametrize(
+        "biome, expected",
+        [
+            ("volcanic", "geological_formation"),
+            ("desert", "geological_formation"),
+            ("tundra", "geological_formation"),
+            ("ocean", "biological_specimen"),
+            ("jungle", None),
+            ("barren", None),
+            (None, None),
+        ],
+    )
+    def test_discovery_category_mapping(self, biome, expected):
+        """Biome-to-category mapping returns the right value or None."""
+        assert _sub_surface_discovery_category(biome) == expected
+
+    @pytest.mark.parametrize(
+        "biome",
+        sorted(SUB_SURFACE_SUPPORTED_BIOMES) + ["jungle", "barren", "gas_giant"],
+    )
+    def test_blocker_matches_supported_biome_set(self, biome):
+        """The blocker allows exactly the biomes the explorer supports."""
+        state, _body = self._make_state(biome)
+        blocker = sub_surface_blocker(state)
+        if _sub_surface_discovery_category(biome) is not None:
+            assert blocker is None
+        else:
+            assert blocker is not None
+
+
+class TestHireCrew:
+    """Tests for hiring crew via perform_trade."""
+    def _make_state(self):
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        system.has_trading_station = True
+        return state
+
+    def test_hire_success(self):
+        state = self._make_state()
+        state.ship.crew = 0
+        state.ship.credits = 1000
+        ok, message = perform_trade(state, "buy", "crew", 2)
+        assert ok is True
+        assert "Hired 2 crew" in message
+        assert state.ship.crew == 2
+        assert state.ship.credits == 1000 - 2 * CREW_HIRE_PRICE
+
+    def test_caps_at_max_crew(self):
+        state = self._make_state()
+        state.ship.crew = state.ship.max_crew - 1
+        state.ship.credits = 1000
+        ok, _message = perform_trade(state, "buy", "crew", 5)
+        assert ok is True
+        assert state.ship.crew == state.ship.max_crew
+        assert state.ship.credits == 1000 - CREW_HIRE_PRICE
+
+    def test_already_full(self):
+        state = self._make_state()
+        state.ship.crew = state.ship.max_crew
+        state.ship.credits = 1000
+        ok, message = perform_trade(state, "buy", "crew", 1)
+        assert ok is False
+        assert message == "Crew roster is already full."
+
+    def test_not_enough_credits(self):
+        state = self._make_state()
+        state.ship.crew = 0
+        state.ship.credits = 0
+        ok, message = perform_trade(state, "buy", "crew", 1)
+        assert ok is False
+        assert "Not enough credits" in message
+
+    def test_invalid_quantity_zero(self):
+        state = self._make_state()
+        ok, message = perform_trade(state, "buy", "crew", 0)
+        assert ok is False
+        assert message == "Quantity must be a positive integer."
+
+    def test_invalid_quantity_bool(self):
+        state = self._make_state()
+        ok, message = perform_trade(state, "buy", "crew", True)
+        assert ok is False
+        assert message == "Quantity must be a positive integer."
+
+    def test_no_trading_station(self):
+        state = self._make_state()
+        state.get_current_system().has_trading_station = False
+        ok, message = perform_trade(state, "buy", "crew", 1)
+        assert ok is False
+        assert message == "No trading facilities in this system."
 
 
 class TestDiminishingReturns:

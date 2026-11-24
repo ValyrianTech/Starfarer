@@ -748,6 +748,83 @@ def perform_atmospheric_scan(state: GameState) -> tuple[bool, list[Discovery]]:
     return True, discoveries
 
 
+#: Biomes that support sub-surface exploration via cave systems (yielding
+#: ``geological_formation`` discoveries). Single source of truth shared by
+#: :func:`sub_surface_blocker` and :func:`perform_sub_surface_exploration`.
+SUB_SURFACE_CAVE_BIOMES: frozenset[str] = frozenset({"volcanic", "desert", "tundra"})
+
+#: Biomes that support sub-surface exploration via ocean depths (yielding
+#: ``biological_specimen`` discoveries). Single source of truth shared by
+#: :func:`sub_surface_blocker` and :func:`perform_sub_surface_exploration`.
+SUB_SURFACE_OCEAN_BIOMES: frozenset[str] = frozenset({"ocean"})
+
+#: All biomes that support sub-surface exploration.
+SUB_SURFACE_SUPPORTED_BIOMES: frozenset[str] = SUB_SURFACE_CAVE_BIOMES | SUB_SURFACE_OCEAN_BIOMES
+
+
+def _sub_surface_discovery_category(biome: str | None) -> str | None:
+    """Return the discovery category for a body's sub-surface exploration.
+
+    Maps a body biome to the discovery category produced by sub-surface
+    exploration: ``"geological_formation"`` for cave biomes and
+    ``"biological_specimen"`` for ocean biomes. Returns ``None`` when the
+    biome does not support sub-surface exploration.
+
+    :param biome: The body's biome.
+    :type biome: str | None
+    :returns: The discovery category, or ``None`` for unsupported biomes.
+    :rtype: str | None
+    """
+    if biome in SUB_SURFACE_CAVE_BIOMES:
+        return "geological_formation"
+    if biome in SUB_SURFACE_OCEAN_BIOMES:
+        return "biological_specimen"
+    return None
+
+
+def sub_surface_blocker(state: GameState) -> str | None:
+    """Return the reason sub-surface exploration is currently blocked, if any.
+
+    Performs the same preflight checks as
+    :func:`perform_sub_surface_exploration` WITHOUT mutating state, and
+    returns a human-readable reason string for the FIRST blocker
+    encountered, or ``None`` when sub-surface exploration would be allowed.
+
+    The checks are performed in the same order as the exploration function:
+    current system, fuel, crew, landed body, supported biome, and
+    not-already-explored.
+
+    :param state: The current game state.
+    :type state: GameState
+    :returns: A blocker reason string, or ``None`` if exploration is allowed.
+    :rtype: str | None
+    """
+    system = state.get_current_system()
+    if not system:
+        return "no current system"
+    ship = state.ship
+    if ship.fuel < SUB_SURFACE_FUEL_COST:
+        return f"requires {SUB_SURFACE_FUEL_COST} fuel (have {ship.fuel})"
+    if ship.crew < SUB_SURFACE_CREW_COST:
+        return f"requires {SUB_SURFACE_CREW_COST} crew (have {ship.crew})"
+
+    body = None
+    for b in system.bodies:
+        if b.id == ship.current_body_id:
+            body = b
+            break
+    if not body:
+        return "must be landed on a body"
+
+    if body.biome not in SUB_SURFACE_SUPPORTED_BIOMES:
+        return "unsupported biome"
+
+    if body.sub_surface_explored:
+        return "this body has already been explored"
+
+    return None
+
+
 def perform_sub_surface_exploration(state: GameState) -> tuple[bool, list[Discovery]]:
     """Perform a sub-surface exploration of the current body.
 
@@ -791,14 +868,7 @@ def perform_sub_surface_exploration(state: GameState) -> tuple[bool, list[Discov
         return False, []
 
     # Determine which biomes support sub-surface exploration
-    cave_biomes = {"volcanic", "desert", "tundra"}
-    ocean_biomes = {"ocean"}
-
-    category = None
-    if body.biome in cave_biomes:
-        category = "geological_formation"
-    elif body.biome in ocean_biomes:
-        category = "biological_specimen"
+    category = _sub_surface_discovery_category(body.biome)
 
     if category is None:
         return False, []
@@ -830,7 +900,7 @@ def perform_sub_surface_exploration(state: GameState) -> tuple[bool, list[Discov
     discoveries = _add_discoveries(state, discoveries)
 
     if discoveries:
-        biome_label = "cave systems" if body.biome in cave_biomes else "ocean depths"
+        biome_label = "cave systems" if body.biome in SUB_SURFACE_CAVE_BIOMES else "ocean depths"
         state.add_log("exploration", f"Sub-surface exploration of {body.name} complete. Explored {biome_label} and found {len(discoveries)} discoveries.", category="exploration", title="Sub-Surface Exploration", system=system.name, body=body.name, fuel_change=-SUB_SURFACE_FUEL_COST)
     else:
         state.add_log("exploration", f"Sub-surface exploration of {body.name} complete. Found nothing of interest — cargo hold is full.", category="exploration", title="Sub-Surface Exploration", system=system.name, body=body.name, fuel_change=-SUB_SURFACE_FUEL_COST)

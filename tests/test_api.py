@@ -5731,6 +5731,54 @@ class TestApiNewEndpoints:
             data = resp.json()
             assert "discoveries" in data
 
+    def test_sub_surface_crew_blocker_names_crew(self):
+        from backend.models.system import Body
+
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "sub-crew-blocker"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        system = state.get_current_system()
+        volc_body = Body(id="sub_crew", name="SubCrew", body_type="planet", biome="volcanic", size=5, distance_from_star=0.5, poi_count=3)
+        system.bodies.append(volc_body)
+        GAME_STORE[game_id] = state
+        client.post(f"/api/game/{game_id}/land/sub_crew")
+        state = GAME_STORE[game_id]
+        state.ship.crew = 0
+        GAME_STORE[game_id] = state
+
+        resp = client.post(f"/api/game/{game_id}/sub-surface-explore")
+        assert resp.status_code == 400
+        assert "requires 1 crew (have 0)" in resp.json()["detail"]
+
+    def test_trade_hire_crew(self):
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "hire-crew"})
+        game_id = resp.json()["game_id"]
+        state = GAME_STORE[game_id]
+        state.get_current_system().has_trading_station = True
+        state.ship.crew = 0
+        state.ship.credits = 1000
+        GAME_STORE[game_id] = state
+
+        from backend.config import CREW_HIRE_PRICE
+
+        credits_before = state.ship.credits
+        resp = client.post(f"/api/game/{game_id}/trade", json={"action": "buy", "item": "crew", "quantity": 2})
+        assert resp.status_code == 200
+        assert resp.json()["ship"]["crew"] == 2
+        # The API layer must reflect the credits deduction: 2 crew at the flat
+        # per-crew hire price, charged against the starting balance.
+        expected_credits = credits_before - 2 * CREW_HIRE_PRICE
+        assert resp.json()["ship"]["credits"] == expected_credits
+
+    def test_sub_surface_blocker_fallback_detail(self):
+        resp = client.post("/api/game/new", json={"seed": 42, "game_id": "sub-fallback"})
+        game_id = resp.json()["game_id"]
+        with patch("backend.api.routes.perform_sub_surface_exploration", return_value=(False, [])), \
+             patch("backend.api.routes.sub_surface_blocker", return_value=None):
+            resp = client.post(f"/api/game/{game_id}/sub-surface-explore")
+        assert resp.status_code == 400
+        assert resp.json()["detail"] == "Sub-surface exploration not possible here."
+
 
 class TestApiExploreValidation:
     """Tests that api_explore returns 400 when exploration is impossible."""

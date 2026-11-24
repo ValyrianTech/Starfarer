@@ -1,0 +1,45 @@
+#!/bin/sh
+# commit-msg hook: validate the commit message using backend.commit_hygiene.
+#
+# Invoked by git with the path to the commit message file as $1. Skips
+# validation for merge commits, fixup/squash/amend rewrites, and git-generated
+# "Revert" subjects; otherwise validates the message and exits non-zero (with
+# errors printed to stderr) when it does not conform.
+
+COMMIT_MSG_FILE="$1"
+
+# Resolve the repository root relative to this script so backend is importable.
+SCRIPT_DIR=$(dirname "$0")
+REPO_ROOT=$(cd "$SCRIPT_DIR/../.." && pwd)
+
+# Read the subject (first line) to decide whether validation applies.
+subject=$(sed -n '1p' "$COMMIT_MSG_FILE" 2>/dev/null || true)
+
+case "$subject" in
+    "Merge "*)
+        exit 0
+        ;;
+    "fixup! "*|"squash! "*|"amend! "*)
+        exit 0
+        ;;
+    Revert\ \"*)
+        exit 0
+        ;;
+esac
+
+PYTHONPATH="$REPO_ROOT${PYTHONPATH:+:$PYTHONPATH}" python - "$COMMIT_MSG_FILE" <<'PYEOF'
+import sys
+from pathlib import Path
+
+from backend.commit_hygiene import check_commit_message
+
+commit_file = sys.argv[1]
+message = Path(commit_file).read_text(encoding="utf-8")
+result = check_commit_message(message)
+for warning in result.warnings:
+    sys.stderr.write(f"commit-msg: warning: {warning}\n")
+if not result.ok:
+    for error in result.errors:
+        sys.stderr.write(f"commit-msg: {error}\n")
+    sys.exit(1)
+PYEOF
