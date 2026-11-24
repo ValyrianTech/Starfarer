@@ -30,10 +30,14 @@ from backend.config import (
 from backend.game.engine import (
     BIOME_DISCOVERY_CATEGORIES,
     DEFAULT_DISCOVERY_CATEGORIES,
+    SUB_SURFACE_CAVE_BIOMES,
+    SUB_SURFACE_OCEAN_BIOMES,
+    SUB_SURFACE_SUPPORTED_BIOMES,
     _add_discoveries,
     _body_has_anomaly,
     _categories_for_biome,
     _generate_discovery,
+    _sub_surface_discovery_category,
     activate_distress_beacon,
     can_jump,
     cheapest_reachable_fuel_cost,
@@ -6566,6 +6570,59 @@ class TestSubSurfaceBlocker:
         state.ship.fuel = 50
         state.ship.crew = 5
         assert sub_surface_blocker(state) is None
+
+
+class TestSubSurfaceBiomeConsolidation:
+    """Regression tests locking the consolidated sub-surface biome constants."""
+    def _make_state(self, biome):
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        body = Body(id="b_sub", name="SubWorld", body_type="planet", biome=biome, size=5, distance_from_star=0.5, poi_count=3)
+        system.bodies = [body]
+        state.ship.current_body_id = body.id
+        state.ship.crew = 5
+        state.ship.fuel = 50
+        return state, body
+
+    def test_supported_biomes_is_union_of_cave_and_ocean(self):
+        """The supported set is the disjoint union of cave and ocean biomes."""
+        assert SUB_SURFACE_SUPPORTED_BIOMES == SUB_SURFACE_CAVE_BIOMES | SUB_SURFACE_OCEAN_BIOMES
+        assert SUB_SURFACE_CAVE_BIOMES.isdisjoint(SUB_SURFACE_OCEAN_BIOMES)
+
+    def test_supported_biomes_values(self):
+        """Cave and ocean biome sets hold the expected concrete biomes."""
+        assert SUB_SURFACE_CAVE_BIOMES == frozenset({"volcanic", "desert", "tundra"})
+        assert SUB_SURFACE_OCEAN_BIOMES == frozenset({"ocean"})
+
+    @pytest.mark.parametrize(
+        "biome, expected",
+        [
+            ("volcanic", "geological_formation"),
+            ("desert", "geological_formation"),
+            ("tundra", "geological_formation"),
+            ("ocean", "biological_specimen"),
+            ("jungle", None),
+            ("barren", None),
+            (None, None),
+        ],
+    )
+    def test_discovery_category_mapping(self, biome, expected):
+        """Biome-to-category mapping returns the right value or None."""
+        assert _sub_surface_discovery_category(biome) == expected
+
+    @pytest.mark.parametrize(
+        "biome",
+        sorted(SUB_SURFACE_SUPPORTED_BIOMES) + ["jungle", "barren", "gas_giant"],
+    )
+    def test_blocker_matches_supported_biome_set(self, biome):
+        """The blocker allows exactly the biomes the explorer supports."""
+        state, _body = self._make_state(biome)
+        blocker = sub_surface_blocker(state)
+        if _sub_surface_discovery_category(biome) is not None:
+            assert blocker is None
+        else:
+            assert blocker is not None
 
 
 class TestHireCrew:
