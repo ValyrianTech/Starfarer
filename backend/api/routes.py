@@ -978,6 +978,14 @@ def api_sub_surface_explore(game_id: str, x_game_token: str | None = Header(defa
             raise HTTPException(status_code=404, detail="Game not found")
         ok, discoveries = perform_sub_surface_exploration(state)
         if not ok:
+            # perform_sub_surface_exploration does not mutate state when it
+            # returns ok=False (every failure branch returns before charging
+            # fuel/crew or setting the sub_surface_explored flag), so calling
+            # sub_surface_blocker(state) here re-evaluates the exact same
+            # preconditions the failed attempt just checked. The blocker
+            # therefore reflects the same conditions the exploration failed
+            # under; if that invariant were ever broken, the blocker could
+            # report a stale or mismatched reason.
             blocker = sub_surface_blocker(state)
             detail = f"Sub-surface exploration not possible here: {blocker}" if blocker else "Sub-surface exploration not possible here."
             raise HTTPException(status_code=400, detail=detail)
