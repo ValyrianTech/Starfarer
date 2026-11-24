@@ -366,7 +366,7 @@ The `fuel_status` object includes:
 - `cheapest_reachable_system` — name of the system reached by the cheapest jump (`null` if none)
 - `stranded` — whether the ship is effectively stranded (cannot afford any jump from its current position)
 
-If you are already at a trading station, the status is always `green` with zero distances.
+If you are already at a trading station, the distances are always zero, but the `level` still reflects whether the ship can afford any jump: a ship with 0 fuel (or too little fuel for the cheapest reachable jump) reports `critical`/`red` instead of `green`, with a message telling you to refuel to depart.
 
 #### Recovery Action Availability
 
