@@ -39,6 +39,7 @@ from backend.game.engine import (
     emergency_craft,
     exploration_value_multiplier,
     explore_surface,
+    format_distance_ly,
     get_nearby_systems,
     get_scanner_tier_data,
     is_effectively_stranded,
@@ -7767,3 +7768,58 @@ class TestIssue182Regression:
                     stack.append(other)
 
         assert len(visited) == 50
+
+
+class TestJumpRangeBoundary:
+    """Boundary tests for the jump-range vs. displayed-distance agreement (issue #202)."""
+
+    def test_format_distance_ly(self) -> None:
+        assert format_distance_ly(8.0) == "8"
+        assert format_distance_ly(8.1) == "8.1"
+
+    def _place_target(self, state: GameState, units: float) -> StarSystem:
+        cur = state.get_current_system()
+        assert cur is not None
+        return StarSystem(
+            id=f"boundary-target-{units}",
+            name=f"Boundary Target {units}",
+            x=cur.x + units,
+            y=cur.y,
+            star_type="G",
+            star_color="#ffffff",
+            phenomenon="none",
+            phenomenon_desc="",
+        )
+
+    def test_jump_range_boundary(self) -> None:
+        state = new_game(seed=42)
+        state.ship.jump_range = 8
+        state.ship.fuel = 500
+        cur = state.get_current_system()
+        assert cur is not None
+
+        # 10 galaxy coordinate units per light-year, so:
+        #   80.0 units -> 8.0 LY (exactly at range -> jumpable)
+        #   80.4 units -> 8.04 LY -> rounds to 8.0 (jumpable)
+        #   81.0 units -> 8.1 LY (just over range -> rejected)
+        cases = [
+            (80.0, 8.0, True),
+            (80.4, 8.0, True),
+            (81.0, 8.1, False),
+        ]
+
+        for units, expected_ly, expected_ok in cases:
+            target = self._place_target(state, units)
+            state.systems[target.id] = target
+
+            nearby = get_nearby_systems(state)
+            entry = next(n for n in nearby if n["id"] == target.id)
+            assert entry["distance_ly"] == expected_ly
+
+            ok, _fuel_cost, msg = can_jump(state.ship, target, cur)
+            assert ok is expected_ok
+            assert entry["reachable"] is ok
+
+            if not expected_ok:
+                assert msg == "Distance 8.1 LY exceeds jump range 8."
+                assert format_distance_ly(entry["distance_ly"]) in msg
