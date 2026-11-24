@@ -6591,7 +6591,7 @@ class TestHireCrew:
         state = self._make_state()
         state.ship.crew = state.ship.max_crew - 1
         state.ship.credits = 1000
-        ok, message = perform_trade(state, "buy", "crew", 5)
+        ok, _message = perform_trade(state, "buy", "crew", 5)
         assert ok is True
         assert state.ship.crew == state.ship.max_crew
         assert state.ship.credits == 1000 - CREW_HIRE_PRICE
