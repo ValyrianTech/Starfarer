@@ -748,6 +748,50 @@ def perform_atmospheric_scan(state: GameState) -> tuple[bool, list[Discovery]]:
     return True, discoveries
 
 
+def sub_surface_blocker(state: GameState) -> str | None:
+    """Return the reason sub-surface exploration is currently blocked, if any.
+
+    Performs the same preflight checks as
+    :func:`perform_sub_surface_exploration` WITHOUT mutating state, and
+    returns a human-readable reason string for the FIRST blocker
+    encountered, or ``None`` when sub-surface exploration would be allowed.
+
+    The checks are performed in the same order as the exploration function:
+    current system, fuel, crew, landed body, supported biome, and
+    not-already-explored.
+
+    :param state: The current game state.
+    :type state: GameState
+    :returns: A blocker reason string, or ``None`` if exploration is allowed.
+    :rtype: str | None
+    """
+    system = state.get_current_system()
+    if not system:
+        return "no current system"
+    ship = state.ship
+    if ship.fuel < SUB_SURFACE_FUEL_COST:
+        return f"requires {SUB_SURFACE_FUEL_COST} fuel (have {ship.fuel})"
+    if ship.crew < SUB_SURFACE_CREW_COST:
+        return f"requires {SUB_SURFACE_CREW_COST} crew (have {ship.crew})"
+
+    body = None
+    for b in system.bodies:
+        if b.id == ship.current_body_id:
+            body = b
+            break
+    if not body:
+        return "must be landed on a body"
+
+    supported_biomes = {"volcanic", "desert", "tundra", "ocean"}
+    if body.biome not in supported_biomes:
+        return "unsupported biome"
+
+    if body.sub_surface_explored:
+        return "this body has already been explored"
+
+    return None
+
+
 def perform_sub_surface_exploration(state: GameState) -> tuple[bool, list[Discovery]]:
     """Perform a sub-surface exploration of the current body.
 

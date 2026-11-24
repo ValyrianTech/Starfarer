@@ -170,6 +170,8 @@ MAX_MORALE = 100
 MAX_CREW = 10
 
 FUEL_BASE_PRICE = 25
+# Cost per crew member hired at a trading station (capped at MAX_CREW).
+CREW_HIRE_PRICE = 150
 
 MORALE_LOW_THRESHOLD = 30
 MORALE_DECAY_PER_JUMP = 2
