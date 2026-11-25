@@ -187,7 +187,7 @@ Costs 1 fuel. No landing required. Available on `gas_giant`, `volcanic`, and `oc
 POST /api/game/{game_id}/sub-surface-explore
 ```
 
-Costs 3 fuel + 1 crew. Requires being landed on a body. Works on:
+Costs 3 fuel + 1 crew. **The 1 crew member is consumed (expended), not merely required** — each sub-surface exploration attempt permanently reduces your `crew` stat by 1, and that lost crew must be re-hired at a trading station (150 credits each via the `/trade` `crew` purchase) before it can be recovered. Requires being landed on a body. Works on:
 - `volcanic`, `desert`, `tundra` — explores cave systems, yielding `geological_formation` discoveries (50–120 cr)
 - `ocean` — explores the ocean depths, yielding `biological_specimen` discoveries (80–200 cr)
 
@@ -331,7 +331,7 @@ Content-Type: application/json
 | Cargo | 0 | 50 | Inventory slots used. |
 | Morale | 80 | 100 | Below 30 triggers negative crew events. |
 | Credits | 1000 | ∞ | Universal currency. |
-| Crew | 4 | 10 | Affects morale decay and some event outcomes. |
+| Crew | 4 | 10 | Affects morale decay and some event outcomes. Crew can also decrease through sub-surface exploration costs (one crew member is expended per attempt), so crew is both a stat and a consumable cost. |
 | Jump Range | 4 LY | ∞ | Max light-years per jump. Upgradable. |
 | Scanner | 1 | 5 | Detection range. Upgradable. |
 
@@ -372,11 +372,12 @@ If you are already at a trading station, the distances are always zero, but the 
 
 The full game state response also includes a `recovery_options` block that surfaces — *before* you attempt them — whether each recovery action is available and, if not, the specific missing precondition. This mirrors the preflight checks of the actual `/distress`, `/salvage`, and `/craft` endpoints without consuming any resources.
 
-The `recovery_options` object has three sub-objects:
+The `recovery_options` object has four sub-objects:
 
 - `distress` — the distress beacon. Fields: `available` (bool) and `reason` (string naming the first blocker, or `null` when available). Checked in order: having a current system, then being stranded or hull below 20%. The beacon is free — there is no credit gate, so a broke stranded ship can always call for help.
 - `salvage` — salvaging the current body. Fields: `available` (bool), `reason` (string or `null`), and `attempts_remaining` (int, 0–3). Blockers: not stranded, not landed on a body, or the body already fully salvaged (3 attempts used).
 - `craft` — emergency crafting. Fields: `available` (bool), `reason` (string or `null`), and `craftable` (list of output types such as `fuel`, `repair`, `morale`, `credits` derivable from discoveries in cargo). Unavailable when there are no craftable discoveries in cargo.
+- `sub_surface` — sub-surface exploration. Fields: `available` (bool), `reason` (string or `null`, mirroring the `/sub-surface-explore` HTTP 400 blocker), `crew_cost` (int), `fuel_cost` (int), `crew_after` (int, the crew remaining if an attempt were made now), and `crew_threshold_warning` (string or `null`; present only when the action is available and an attempt would leave 0 crew, naming the morale-decay/event-outcome risk).
 
 `reason` strings always name the specific missing precondition (for example `no current system`, `must be landed on a body`, or `this body is fully salvaged (3 attempts used)`).
 
@@ -908,7 +909,7 @@ All endpoints that access a specific game (mutating and read-only GET) accept th
 | POST | `/api/game/{id}/land/{bid}` | Land on body |
 | POST | `/api/game/{id}/explore` | Explore surface |
 | POST | `/api/game/{id}/atmospheric-scan` | Atmospheric scan (1 fuel, gas giants/volcanic/ocean; returns HTTP 400 only if genuinely not possible, HTTP 200 with empty discoveries on a full hold) |
-| POST | `/api/game/{id}/sub-surface-explore` | Sub-surface exploration (3 fuel + 1 crew, cave systems/ocean depths) |
+| POST | `/api/game/{id}/sub-surface-explore` | Sub-surface exploration (3 fuel + 1 crew, cave systems/ocean depths; the 1 crew is consumed/expended, not merely required) |
 | POST | `/api/game/{id}/event/{eid}/resolve` | Resolve event |
 | POST | `/api/game/{id}/distress` | Activate distress beacon |
 | POST | `/api/game/{id}/salvage` | Salvage area for resources |
