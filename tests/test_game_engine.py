@@ -6629,7 +6629,7 @@ class TestSubSurfaceBiomeConsolidation:
 class TestRecoveryOptionsSubSurface:
     """Tests for the sub_surface sub-object of get_recovery_options."""
 
-    _THRESHOLD_WARNING = "This will leave 0 crew — morale decay and some event outcomes may worsen."
+    _THRESHOLD_WARNING = "This will leave 0 crew — each lost crew member must be re-hired at a station for 150 credits."
 
     def _make_state(self, biome):
         state = new_game(seed=42)

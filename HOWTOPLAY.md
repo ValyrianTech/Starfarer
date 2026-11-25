@@ -331,7 +331,7 @@ Content-Type: application/json
 | Cargo | 0 | 50 | Inventory slots used. |
 | Morale | 80 | 100 | Below 30 triggers negative crew events. |
 | Credits | 1000 | ∞ | Universal currency. |
-| Crew | 4 | 10 | Affects morale decay and some event outcomes. Crew can also decrease through sub-surface exploration costs (one crew member is expended per attempt), so crew is both a stat and a consumable cost. |
+| Crew | 4 | 10 | A stat that can decrease through sub-surface exploration (one crew member is expended per attempt). Lost crew must be re-hired at a station for 150 credits each; hiring is capped at max_crew. |
 | Jump Range | 4 LY | ∞ | Max light-years per jump. Upgradable. |
 | Scanner | 1 | 5 | Detection range. Upgradable. |
 
@@ -377,7 +377,7 @@ The `recovery_options` object has four sub-objects:
 - `distress` — the distress beacon. Fields: `available` (bool) and `reason` (string naming the first blocker, or `null` when available). Checked in order: having a current system, then being stranded or hull below 20%. The beacon is free — there is no credit gate, so a broke stranded ship can always call for help.
 - `salvage` — salvaging the current body. Fields: `available` (bool), `reason` (string or `null`), and `attempts_remaining` (int, 0–3). Blockers: not stranded, not landed on a body, or the body already fully salvaged (3 attempts used).
 - `craft` — emergency crafting. Fields: `available` (bool), `reason` (string or `null`), and `craftable` (list of output types such as `fuel`, `repair`, `morale`, `credits` derivable from discoveries in cargo). Unavailable when there are no craftable discoveries in cargo.
-- `sub_surface` — sub-surface exploration. Fields: `available` (bool), `reason` (string or `null`, mirroring the `/sub-surface-explore` HTTP 400 blocker), `crew_cost` (int), `fuel_cost` (int), `crew_after` (int, the crew remaining if an attempt were made now), and `crew_threshold_warning` (string or `null`; present only when the action is available and an attempt would leave 0 crew, naming the morale-decay/event-outcome risk).
+- `sub_surface` — sub-surface exploration. Fields: `available` (bool), `reason` (string or `null`, mirroring the `/sub-surface-explore` HTTP 400 blocker), `crew_cost` (int), `fuel_cost` (int), `crew_after` (int, the crew remaining if an attempt were made now), and `crew_threshold_warning` (string or `null`; present only when the action is available and an attempt would leave 0 crew, naming that the lost crew must be re-hired at a station for 150 credits each).
 
 `reason` strings always name the specific missing precondition (for example `no current system`, `must be landed on a body`, or `this body is fully salvaged (3 attempts used)`).
 
