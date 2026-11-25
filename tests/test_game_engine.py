@@ -6658,7 +6658,7 @@ class TestRecoveryOptionsSubSurface:
         sub_surface = get_recovery_options(state)["sub_surface"]
         assert sub_surface["available"] is False
         assert sub_surface["reason"] == "requires 1 crew (have 0)"
-        assert sub_surface["crew_after"] == 0
+        assert "crew_after" not in sub_surface
         assert sub_surface["crew_threshold_warning"] is None
 
     def test_threshold_warning_with_one_crew(self):
@@ -6675,6 +6675,7 @@ class TestRecoveryOptionsSubSurface:
         sub_surface = get_recovery_options(state)["sub_surface"]
         assert sub_surface["available"] is False
         assert sub_surface["reason"] == "no current system"
+        assert "crew_after" not in sub_surface
 
 
 class TestHireCrew:

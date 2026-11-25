@@ -1459,10 +1459,15 @@ def get_recovery_options(state: GameState) -> dict:
 
     A fourth sub-object, ``sub_surface``, reports the up-front cost of the
     one-time sub-surface exploration action (``crew_cost``/``fuel_cost``) and
-    its availability, including how much crew would remain after an attempt
-    (``crew_after``) and a ``crew_threshold_warning`` when the attempt would
-    leave the ship at zero crew (stating that each lost crew member must be
-    re-hired at a station for 150 credits).
+    its availability. When the action is available, it also reports how much
+    crew would remain after an attempt (``crew_after``, a hypothetical
+    projection equal to ``max(0, crew - SUB_SURFACE_CREW_COST)``) together with
+    a ``crew_threshold_warning`` when the attempt would leave the ship at zero
+    crew (stating that each lost crew member must be re-hired at a station for
+    150 credits). Both ``crew_after`` and ``crew_threshold_warning`` are present
+    ONLY when the action is available; when the action is blocked they are
+    omitted (``crew_threshold_warning`` is also omitted when available but the
+    attempt would not leave zero crew).
 
     :param state: The current game state.
     :type state: GameState
@@ -1505,8 +1510,8 @@ def get_recovery_options(state: GameState) -> dict:
         craft = {"available": False, "reason": "no craftable discoveries in cargo", "craftable": []}
 
     sub_surface_blocker_reason = sub_surface_blocker(state)
-    crew_after = max(0, ship.crew - SUB_SURFACE_CREW_COST)
     if sub_surface_blocker_reason is None:
+        crew_after = max(0, ship.crew - SUB_SURFACE_CREW_COST)
         crew_threshold_warning = (
             "This will leave 0 crew — each lost crew member must be re-hired at a station for 150 credits."
             if crew_after == 0
@@ -1526,7 +1531,6 @@ def get_recovery_options(state: GameState) -> dict:
             "reason": sub_surface_blocker_reason,
             "crew_cost": SUB_SURFACE_CREW_COST,
             "fuel_cost": SUB_SURFACE_FUEL_COST,
-            "crew_after": crew_after,
             "crew_threshold_warning": None,
         }
 
