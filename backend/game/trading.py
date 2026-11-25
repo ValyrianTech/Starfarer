@@ -469,15 +469,20 @@ def perform_trade(state: GameState, action: str, item: str, quantity: int = 1) -
             error = _validate_quantity(quantity)
             if error:
                 return False, error
-            hireable = min(quantity, state.ship.max_crew - state.ship.crew)
-            if hireable <= 0:
+            roster_space = state.ship.max_crew - state.ship.crew
+            if roster_space <= 0:
                 return False, "Crew roster is already full."
+            roster_capped = min(quantity, roster_space)
+            affordable = state.ship.credits // CREW_HIRE_PRICE
+            hireable = min(roster_capped, affordable)
+            if hireable <= 0:
+                return False, f"Not enough credits for {roster_capped} crew (need {roster_capped * CREW_HIRE_PRICE}, have {state.ship.credits})."
             cost = hireable * CREW_HIRE_PRICE
-            if state.ship.credits < cost:
-                return False, f"Not enough credits. Need {cost}."
             state.ship.credits -= cost
             state.ship.crew += hireable
             result_message = f"Hired {hireable} crew for {cost} credits."
+            if affordable < roster_capped:
+                result_message += f" (requested {quantity}; limited by credits)"
             state.add_log("trade", result_message, category="trade", title="Trade", system=system.name, credits_change=-cost)
             trade_completed = True
 

@@ -6688,6 +6688,93 @@ class TestHireCrew:
         assert ok is False
         assert message == "No trading facilities in this system."
 
+    def test_partial_hire_limited_by_credits(self):
+        """Requesting more crew than affordable hires only what credits allow."""
+        from backend.config import CREW_HIRE_PRICE
+        state = self._make_state()
+        state.ship.crew = 2
+        state.ship.max_crew = 10  # 8 roster slots free
+        # Afford exactly 2 crew.
+        state.ship.credits = 2 * CREW_HIRE_PRICE + 82
+        ok, message = perform_trade(state, "buy", "crew", 20)
+        assert ok is True
+        assert state.ship.crew == 4  # hired 2 on top of the existing 2
+        assert state.ship.credits == 82
+        assert message.startswith("Hired 2 crew for 300 credits.")
+        assert "requested 20" in message
+        assert "limited by credits" in message
+
+    def test_partial_hire_limited_by_credits_logged(self):
+        """The truncation note is also written to the ship log."""
+        from backend.config import CREW_HIRE_PRICE
+        state = self._make_state()
+        state.ship.crew = 0
+        state.ship.credits = CREW_HIRE_PRICE  # afford exactly 1
+        ok, message = perform_trade(state, "buy", "crew", 5)
+        assert ok is True
+        assert state.ship.crew == 1
+        trade_logs = [e for e in state.log_entries if e.get("category") == "trade"]
+        assert trade_logs
+        assert "limited by credits" in trade_logs[-1]["message"]
+        assert "requested 5" in message
+
+    def test_partial_hire_limited_by_credits_within_roster_cap(self):
+        """The truncation note names the originally requested quantity, not the roster-capped one."""
+        from backend.config import CREW_HIRE_PRICE
+        state = self._make_state()
+        state.ship.crew = 6
+        state.ship.max_crew = 10  # 4 roster slots free
+        state.ship.credits = CREW_HIRE_PRICE  # afford exactly 1
+        ok, message = perform_trade(state, "buy", "crew", 20)
+        assert ok is True
+        assert state.ship.crew == 7
+        assert state.ship.credits == 0
+        assert "requested 20" in message
+        assert "limited by credits" in message
+
+    def test_hire_no_truncation_note_when_credits_ample(self):
+        """No credit-truncation note when the (roster-capped) quantity is affordable."""
+        from backend.config import CREW_HIRE_PRICE
+        state = self._make_state()
+        state.ship.crew = state.ship.max_crew - 1
+        state.ship.credits = 1000
+        ok, message = perform_trade(state, "buy", "crew", 5)
+        assert ok is True
+        assert state.ship.crew == state.ship.max_crew
+        assert state.ship.credits == 1000 - CREW_HIRE_PRICE
+        assert "limited by credits" not in message
+        assert "requested" not in message
+
+    def test_cannot_afford_any_crew_names_both_limits(self):
+        """When even one crew member is unaffordable, the error names the roster-capped quantity and the shortfall."""
+        from backend.config import CREW_HIRE_PRICE
+        state = self._make_state()
+        state.ship.crew = 2
+        state.ship.max_crew = 10  # 8 roster slots free
+        state.ship.credits = 1  # cannot afford a single crew
+        ok, message = perform_trade(state, "buy", "crew", 20)
+        assert ok is False
+        # 8 is the roster-capped quantity (not the requested 20).
+        assert message == (
+            f"Not enough credits for 8 crew (need {8 * CREW_HIRE_PRICE}, have 1)."
+        )
+        assert state.ship.crew == 2
+        assert state.ship.credits == 1
+
+    def test_affordable_zero_when_credits_below_price(self):
+        """Credits less than a single crew price yield zero affordable crew."""
+        from backend.config import CREW_HIRE_PRICE
+        state = self._make_state()
+        state.ship.crew = 0
+        state.ship.credits = CREW_HIRE_PRICE - 1
+        ok, message = perform_trade(state, "buy", "crew", 3)
+        assert ok is False
+        assert message == (
+            f"Not enough credits for 3 crew (need {3 * CREW_HIRE_PRICE}, have {CREW_HIRE_PRICE - 1})."
+        )
+        assert state.ship.crew == 0
+        assert state.ship.credits == CREW_HIRE_PRICE - 1
+
 
 class TestDiminishingReturns:
     """Tests for diminishing returns in explore_surface."""

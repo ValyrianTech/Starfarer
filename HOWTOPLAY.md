@@ -457,7 +457,7 @@ Content-Type: application/json
 { "action": "buy", "item": "crew", "quantity": 1 }
 ```
 
-Hires crew members at `150` credits each. The quantity is capped at the ship's `max_crew` — hiring more than the remaining roster space hires only up to the cap (you are charged only for the crew actually hired). Requires being at a trading station.
+Hires crew members at `150` credits each. The quantity is capped at the ship's `max_crew` — hiring more than the remaining roster space hires only up to the cap (you are charged only for the crew actually hired). The hire is also limited by what the player can afford: if the player cannot afford the full (roster-capped) quantity, only as many crew as the credits allow are hired and the success message reports the truncation; if the player cannot afford a single crew member, the request is rejected with an error naming both the roster-capped quantity and the credit shortfall. Requires being at a trading station.
 
 This flat per-crew price is intentional: crew hiring does NOT vary with the station's market modifier, system type, faction standing, or supply/demand. Crew hiring is a one-time recruitment/roster-expansion service rather than a resellable trade commodity, so a fixed price keeps the cost predictable.
 
