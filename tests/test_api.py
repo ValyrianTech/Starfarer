@@ -4251,17 +4251,41 @@ class TestRecoveryOptions:
         assert "no craftable discoveries" in ro["craft"]["reason"]
         assert ro["craft"]["craftable"] == []
 
-    def test_sub_surface_present_with_six_keys(self) -> None:
-        """The sub_surface sub-object is surfaced in the HTTP response with exactly six keys."""
-        _gid, state = self._new_game("recov-sub-surface-keys")
+    def test_sub_surface_available_has_six_keys_blocked_has_five(self) -> None:
+        """Available sub_surface has six keys (incl. crew_after); blocked has five (no crew_after)."""
+        from backend.config import SUB_SURFACE_CREW_COST
+        from backend.models.system import Body
+
+        _gid, state = self._new_game("recov-sub-surface-keys-available")
+        body = Body(id="b_sub_keys", name="SubWorld", body_type="planet", biome="volcanic",
+                    size=5, distance_from_star=0.5, poi_count=3)
+        state.get_current_system().bodies.append(body)
+        land_on_body(state, body.id)
+        state.ship.fuel = 100
+        state.ship.crew = 5
         ro = self._recovery(state)
-        assert "sub_surface" in ro
-        assert set(ro["sub_surface"].keys()) == {
+        sub = ro["sub_surface"]
+        assert sub["available"] is True
+        assert set(sub.keys()) == {
             "available",
             "reason",
             "crew_cost",
             "fuel_cost",
             "crew_after",
+            "crew_threshold_warning",
+        }
+        assert sub["crew_after"] == max(0, state.ship.crew - SUB_SURFACE_CREW_COST)
+
+        _gid2, blocked_state = self._new_game("recov-sub-surface-keys-blocked")
+        ro_blocked = self._recovery(blocked_state)
+        sub_blocked = ro_blocked["sub_surface"]
+        assert sub_blocked["available"] is False
+        assert "crew_after" not in sub_blocked
+        assert set(sub_blocked.keys()) == {
+            "available",
+            "reason",
+            "crew_cost",
+            "fuel_cost",
             "crew_threshold_warning",
         }
 
@@ -4326,7 +4350,7 @@ class TestRecoveryOptions:
         assert sub["reason"]
         assert sub["crew_cost"] == SUB_SURFACE_CREW_COST
         assert sub["fuel_cost"] == SUB_SURFACE_FUEL_COST
-        assert sub["crew_after"] == 0
+        assert "crew_after" not in sub
         assert sub["crew_threshold_warning"] is None
 
         resp = client.post(f"/api/game/{state.id}/sub-surface-explore")
@@ -4348,6 +4372,7 @@ class TestRecoveryOptions:
         sub = ro["sub_surface"]
         assert sub["available"] is False
         assert sub["reason"] == "unsupported biome"
+        assert "crew_after" not in sub
 
         resp = client.post(f"/api/game/{state.id}/sub-surface-explore")
         assert resp.status_code == 400
