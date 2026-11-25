@@ -48,7 +48,8 @@ def donate_item(
     from the player's inventory and made available for other players
     to claim. Lore-linked discoveries (those with a ``lore_fragment_id``)
     are excluded from donation and should be exchanged via ``donate_lore``
-    instead.
+    instead; attempting to donate one yields a distinct lore-linked error
+    rather than the generic "not found" message.
 
     :param game_state: The current game state.
     :type game_state: GameState
@@ -66,6 +67,12 @@ def donate_item(
 
     matching = [d for d in game_state.discoveries if d.name == item_name and d.lore_fragment_id is None]
     if not matching:
+        unfiltered = [d for d in game_state.discoveries if d.name == item_name]
+        if unfiltered:
+            return {
+                "success": False,
+                "detail": f"'{item_name}' is a lore-linked discovery and cannot be donated as an item — donate the lore fragment via /api/crossroads/donate-lore instead.",
+            }
         return {"success": False, "detail": f"No discovery named '{item_name}' in cargo."}
 
     actual_quantity = min(quantity, len(matching))
