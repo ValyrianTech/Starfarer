@@ -1198,6 +1198,7 @@ class TestMultiplayerCrossroads:
         GAME_STORE[state.id] = state
         result = donate_item(state, "NonexistentItem", 1)
         assert result["success"] is False
+        assert result["detail"] == "No discovery named 'NonexistentItem' in cargo."
         GAME_STORE.pop(state.id, None)
 
     @pytest.mark.parametrize("quantity", [0, -5])
@@ -1272,7 +1273,10 @@ class TestMultiplayerCrossroads:
             result = donate_item(state, "Lore Ore", 1)
 
             assert result["success"] is False
-            assert "No discovery named 'Lore Ore' in cargo." in result["detail"]
+            assert "is a lore-linked discovery and cannot be donated as an item" in result["detail"]
+            assert "/api/crossroads/donate-lore" in result["detail"]
+            assert result["detail"] != "No discovery named 'Lore Ore' in cargo."
+            assert "No discovery named 'Lore Ore' in cargo." not in result["detail"]
             assert any(d.name == "Lore Ore" and d.lore_fragment_id == "lore_frag_1" for d in state.discoveries)
             assert not any(i["item_name"] == "Lore Ore" for i in get_available_items_list())
         finally:
@@ -1309,7 +1313,10 @@ class TestMultiplayerCrossroads:
             result = donate_item(state, "AllLore Ore", 1)
 
             assert result["success"] is False
-            assert "No discovery named 'AllLore Ore' in cargo." in result["detail"]
+            assert "is a lore-linked discovery and cannot be donated as an item" in result["detail"]
+            assert "/api/crossroads/donate-lore" in result["detail"]
+            assert result["detail"] != "No discovery named 'AllLore Ore' in cargo."
+            assert "No discovery named 'AllLore Ore' in cargo." not in result["detail"]
             assert len(state.discoveries) == 1
             assert not any(i["item_name"] == "AllLore Ore" for i in get_available_items_list())
         finally:
@@ -2898,6 +2905,26 @@ class TestMultiplayerAPI:
             json={"game_id": game_id, "item_name": "NonexistentItem", "quantity": 1},
         )
         assert resp.status_code == 400
+
+    def test_api_donate_item_lore_linked_returns_400(self) -> None:
+        resp = client.post("/api/game/new", json={"shared_universe": True})
+        assert resp.status_code == 200
+        game_id = resp.json()["game_id"]
+        sys_id = resp.json()["state"]["ship"]["current_system_id"]
+
+        state = GAME_STORE[game_id]
+        disc = _make_discovery(name="Lore Ore", system_id=sys_id)
+        disc.lore_fragment_id = "lore_frag_1"
+        state.discoveries.append(disc)
+        game_save(state)
+
+        resp = client.post(
+            "/api/crossroads/donate-item",
+            json={"game_id": game_id, "item_name": "Lore Ore", "quantity": 1},
+        )
+        assert resp.status_code == 400
+        assert "lore-linked discovery and cannot be donated as an item" in resp.json()["detail"]
+        assert "No discovery named" not in resp.json()["detail"]
 
     def test_api_claim_item(self) -> None:
         # Create donor game and donate
