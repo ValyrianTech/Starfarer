@@ -1461,7 +1461,8 @@ def get_recovery_options(state: GameState) -> dict:
     one-time sub-surface exploration action (``crew_cost``/``fuel_cost``) and
     its availability, including how much crew would remain after an attempt
     (``crew_after``) and a ``crew_threshold_warning`` when the attempt would
-    leave the ship at zero crew.
+    leave the ship at zero crew (stating that each lost crew member must be
+    re-hired at a station for 150 credits).
 
     :param state: The current game state.
     :type state: GameState
@@ -1507,7 +1508,7 @@ def get_recovery_options(state: GameState) -> dict:
     crew_after = max(0, ship.crew - SUB_SURFACE_CREW_COST)
     if sub_surface_blocker_reason is None:
         crew_threshold_warning = (
-            "This will leave 0 crew — morale decay and some event outcomes may worsen."
+            "This will leave 0 crew — each lost crew member must be re-hired at a station for 150 credits."
             if crew_after == 0
             else None
         )
