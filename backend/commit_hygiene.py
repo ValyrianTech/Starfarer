@@ -96,8 +96,7 @@ def parse_subject(subject: str) -> tuple[str | None, str | None, str | None]:
         return None, None, None
     header = subject[:idx]
     description = subject[idx + 2:].rstrip()
-    if header.endswith("!"):
-        header = header[:-1]
+    header = header.removesuffix("!")
     if "(" in header or ")" in header:
         if "(" not in header or not header.endswith(")"):
             return None, None, None
@@ -153,8 +152,7 @@ def check_commit_message(
         )
     else:
         header = raw_subject[:sep_idx]
-        if header.endswith("!"):
-            header = header[:-1]
+        header = header.removesuffix("!")
         if header.endswith(")") and "(" in header:
             commit_type = header[: header.index("(")]
         else:
