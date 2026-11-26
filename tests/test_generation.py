@@ -704,7 +704,7 @@ class TestGameState:
         assert state.ship.cargo == 2
 
     def test_cargo_negative_removes_available_when_insufficient(self) -> None:
-        """cargo:-N with too few discoveries should remove what is available."""
+        """cargo:-N with too few discoveries reports the actual number removed."""
         ship = Ship(cargo=2, max_cargo=50)
         state = GameState(id="test-cargo-underflow", seed=42, ship=ship)
         state.discoveries = [
@@ -713,9 +713,10 @@ class TestGameState:
         ]
         state.sync_cargo()
         effects = state.apply_choice_outcome("cargo:-10")
-        assert effects["cargo"] == -10
+        assert effects["cargo"] == -2
         assert len(state.discoveries) == 0
         assert state.ship.cargo == 0
+        assert len(state.last_cargo_removal) == 2
 
     def test_cargo_positive_respects_max_capacity(self) -> None:
         """cargo:+N at max capacity should not exceed the limit."""
@@ -791,6 +792,101 @@ class TestGameState:
         state.sync_cargo()
         assert state.ship.cargo == len(state.discoveries)
         assert state.ship.cargo == 4
+
+
+class TestCargoOutcomeHonesty:
+    def test_cargo_minus_one_removes_one_and_matches_value(self) -> None:
+        """cargo:-1 removes exactly one non-lore discovery and drops its value."""
+        ship = Ship(cargo=3, max_cargo=50)
+        state = GameState(id="test-honest-1", seed=42, ship=ship)
+        state.discoveries = [
+            Discovery(id="d1", category="artifact", name="Fallen Tower", description="x", value=148),
+            Discovery(id="d2", category="artifact", name="B", description="x", value=200),
+            Discovery(id="d3", category="artifact", name="C", description="x", value=147),
+        ]
+        state.sync_cargo()
+        total_before = sum(d.value for d in state.discoveries)
+        effects = state.apply_choice_outcome("cargo:-1")
+        assert len(state.discoveries) == 2
+        assert state.ship.cargo == 2
+        assert effects["cargo"] == -1
+        removed = state.last_cargo_removal
+        assert len(removed) == 1
+        total_after = sum(d.value for d in state.discoveries)
+        assert total_before - total_after == removed[0].value
+
+    def test_cargo_minus_one_empty_hold_reports_zero_not_silent_success(self) -> None:
+        """cargo:-1 on an empty hold reports 0 and removes nothing."""
+        ship = Ship(cargo=0, max_cargo=50)
+        state = GameState(id="test-honest-2", seed=42, ship=ship)
+        effects = state.apply_choice_outcome("cargo:-1")
+        assert effects["cargo"] == 0
+        assert state.last_cargo_removal == []
+        assert state.ship.cargo == 0
+
+    def test_cargo_minus_one_lore_only_hold_reports_zero(self) -> None:
+        """cargo:-1 with only lore-linked discoveries removes nothing."""
+        ship = Ship(cargo=1, max_cargo=50)
+        state = GameState(id="test-honest-3", seed=42, ship=ship)
+        state.discoveries = [
+            Discovery(id="lore1", category="artifact", name="Lore Item", description="x", value=100, lore_fragment_id="lf")
+        ]
+        state.sync_cargo()
+        effects = state.apply_choice_outcome("cargo:-1")
+        assert effects["cargo"] == 0
+        assert len(state.discoveries) == 1
+        assert state.last_cargo_removal == []
+
+    def test_resolve_event_cargo_outcome_message_names_discarded_item(self) -> None:
+        from backend.generation.events import resolve_event
+
+        ship = Ship(cargo=1, max_cargo=50)
+        state = GameState(id="test-honest-4", seed=42, ship=ship)
+        state.discoveries = [
+            Discovery(id="d1", category="artifact", name="Fallen Tower", description="x", value=148)
+        ]
+        state.sync_cargo()
+        event = Event(
+            id="evt_cargo", title="Breach", flavor="x", event_type="crisis",
+            category="crisis",
+            choices=[Choice(text="Seal", outcome="cargo:-1; Sacrificed cargo to seal the breach.")],
+            system_id="sys",
+        )
+        state.events = [event]
+        ok, msg, extra = resolve_event(state, event.id, 0)
+        assert ok is True
+        assert extra["effects"]["cargo"] == -1
+        assert extra["cargo_discarded"] == [{"name": "Fallen Tower", "value": 148}]
+        assert "Discarded Fallen Tower (148 cr)" in msg
+        assert state.ship.cargo == 0
+        assert event.resolved is True
+
+    def test_resolve_event_cargo_outcome_empty_hold_is_honest_failure(self) -> None:
+        from backend.generation.events import resolve_event
+
+        ship = Ship(cargo=0, max_cargo=50)
+        state = GameState(id="test-honest-5", seed=42, ship=ship)
+        event = Event(
+            id="evt_cargo2", title="Breach", flavor="x", event_type="crisis",
+            category="crisis",
+            choices=[Choice(text="Seal", outcome="cargo:-1; Sacrificed cargo to seal the breach.")],
+            system_id="sys",
+        )
+        state.events = [event]
+        ok, msg, extra = resolve_event(state, event.id, 0)
+        assert ok is True
+        assert extra["effects"]["cargo"] == 0
+        assert extra["cargo_discarded"] == []
+        assert "no cargo could be discarded" in msg
+        assert "Discarded" not in msg
+
+    def test_requested_cargo_delta_helper(self) -> None:
+        from backend.generation.events import _requested_cargo_delta
+
+        assert _requested_cargo_delta("cargo:-1; x") == -1
+        assert _requested_cargo_delta("credits:50") == 0
+        assert _requested_cargo_delta("cargo:2") == 2
+        assert _requested_cargo_delta("cargo:abc") == 0
 
 
 class TestEventModel:
