@@ -1064,6 +1064,29 @@ _EVENT_REP_MAP: dict[str, tuple[str, tuple[int, int], Callable]] = {
 }
 
 
+def _requested_cargo_delta(outcome: str) -> int:
+    """Return the requested cargo delta parsed from an outcome string.
+
+    Scans the semicolon-separated outcome for a ``cargo:`` component and
+    returns its integer value. Returns ``0`` when no cargo component is
+    present or the value cannot be parsed as an integer.
+
+    :param outcome: The outcome string to parse.
+    :type outcome: str
+    :returns: The requested cargo delta, or ``0`` if none is present.
+    :rtype: int
+    """
+    for part in outcome.split(";"):
+        part = part.strip()
+        if part.startswith("cargo:"):
+            value = part.split(":", 1)[1].strip()
+            try:
+                return int(value.split(":", 1)[0].strip())
+            except ValueError:
+                return 0
+    return 0
+
+
 def resolve_event(state: GameState, event_id: str, choice_idx: int) -> tuple[bool, str, dict]:
     """Resolve a pending event by applying the chosen outcome.
 
@@ -1102,6 +1125,16 @@ def resolve_event(state: GameState, event_id: str, choice_idx: int) -> tuple[boo
     choice = event.choices[choice_idx]
     effects = state.apply_choice_outcome(choice.outcome)
 
+    message = choice.outcome
+    cargo_discarded: list[dict] = []
+    removed = state.last_cargo_removal
+    if effects["cargo"] < 0 and removed:
+        descs = [f"{d.name} ({d.value} cr)" for d in removed]
+        message = f"{choice.outcome} — Discarded {', '.join(descs)}"
+        cargo_discarded = [{"name": d.name, "value": d.value} for d in removed]
+    elif _requested_cargo_delta(choice.outcome) < 0 and effects["cargo"] == 0:
+        message = f"{choice.outcome} — no cargo could be discarded"
+
     event.resolved = True
     event.chosen = choice_idx
 
@@ -1127,5 +1160,6 @@ def resolve_event(state: GameState, event_id: str, choice_idx: int) -> tuple[boo
         "chosen_text": choice.text,
         "outcome_text": choice.outcome,
         "effects": effects,
+        "cargo_discarded": cargo_discarded,
     }
-    return True, choice.outcome, extra_output
+    return True, message, extra_output

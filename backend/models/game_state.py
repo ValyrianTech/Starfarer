@@ -94,6 +94,7 @@ class GameState:
     shared_universe: bool = True
     _next_log_id: int = 1
     token: str = ""
+    last_cargo_removal: list[Discovery] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         """Initialize the ``game_started`` timestamp if not already set.
@@ -193,9 +194,15 @@ class GameState:
         :param outcome: Semicolon-separated stat effects.
         :type outcome: str
         :returns: A dictionary mapping stat names to their applied deltas.
+            For negative cargo deltas, ``effects["cargo"]`` reflects the
+            number of non-lore discoveries actually removed (``0`` if none
+            could be removed), not the requested delta. The discoveries
+            removed this call are also recorded on
+            ``self.last_cargo_removal``.
         :rtype: dict
         """
         effects = {"fuel": 0, "hull": 0, "morale": 0, "credits": 0, "cargo": 0, "crew": 0}
+        self.last_cargo_removal = []
         if not isinstance(outcome, str):
             logger.warning("apply_choice_outcome received non-string outcome: %r", outcome)
             return effects
@@ -247,8 +254,11 @@ class GameState:
                     to_remove, len(removable), overflow,
                 )
             to_remove = min(to_remove, len(removable))
-            removed_ids = {d.id for d in removable[:to_remove]}
+            removed = removable[:to_remove]
+            removed_ids = {d.id for d in removed}
             self.discoveries = [d for d in self.discoveries if d.id not in removed_ids]
+            self.last_cargo_removal = removed
+            effects["cargo"] = -len(removed)
 
         self.sync_cargo()
         return effects
