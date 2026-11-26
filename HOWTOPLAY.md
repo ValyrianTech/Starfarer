@@ -72,6 +72,37 @@ JSON.parse(document.getElementById('game-state').textContent)
 
 All interactive elements have `data-action` attributes. Click them or trigger them programmatically.
 
+### 2.4 Response Envelope (read this first)
+
+Every API response uses a **standard response envelope**. Read this before you write any client code — it is the single most common source of silent client bugs.
+
+- **Success responses (HTTP 200)** carry their human-readable outcome in the top-level key **`result`** — a non-empty string on every mutating endpoint that returns 200.
+- **Error responses (HTTP 400 / 403 / 404 / 409 / 422)** carry their human-readable message in the top-level key **`detail`**.
+- **There is NO `message` key at the top level of any response.** Clients must read `result` for success text and `detail` for error text; reading `message` returns nothing and fails silently.
+
+Representative envelopes for common mutating endpoints:
+
+| Endpoint | `result` example | Additional per-endpoint payload keys |
+|----------|------------------|--------------------------------------|
+| `POST /game/{id}/land/{body_id}` | `"Landed on Aurora Prime."` | `ship`, `current_body_id` |
+| `POST /game/{id}/explore` | `"Explored. Found 3 points of interest."` | `discoveries`, `pending_events` |
+| `POST /game/{id}/jump/{system_id}` | `"Jumped to Epsilon Q9232."` | `current_system`, `ship` |
+| `POST /game/{id}/event/{event_id}/resolve` | `"Event resolved."` | `event`, `ship` |
+| `POST /game/{id}/missions/{mission_id}/accept` | `"Mission 'Deliver Ore' accepted."` | `mission`, `ship` |
+| `POST /game/{id}/trade` | `"Bought 10 fuel."` | `ship` |
+| `POST /game/{id}/save` | `"Game saved."` | `game_id` |
+
+> **Do not call `resp.get("message")` — it is `None`.** Call `resp["result"]` (success) or `resp["detail"]` (error).
+
+```python
+resp = session.post(f"{base}/api/game/{game_id}/save")
+if resp.status_code == 200:
+    outcome = resp.json()["result"]      # correct
+    # NOT resp.json().get("message")      # wrong: always None
+else:
+    outcome = resp.json()["detail"]
+```
+
 ---
 
 ## 3. Core Game Loop
@@ -893,6 +924,8 @@ This permanently removes a game from both the in-memory game store and the datab
 ---
 
 ## 10. API Reference (Quick)
+
+**Response envelope reminder:** success text is under `result`, error text is under `detail`, and there is **no `message` key** (see Section 2.4).
 
 All endpoints that access a specific game (mutating and read-only GET) accept the token via the `X-Game-Token` header only (the `token` query parameter is no longer accepted). Enforcement is **ON by default** (secure baseline); see Section 2.1 for how to disable it for purely local play. The Crossroads read endpoints (`/api/crossroads/items`, `/api/crossroads/lore`, `/api/crossroads/messages`) are authenticated the same way (they require a `game_id` and pass the token like the other game-scoped endpoints) and return sanitized public views: raw donor/claimer game IDs are omitted (a stable opaque `donor_id` is provided instead), and free text is truncated (`donor_name`/`player_name` to 100 chars, `message`/`text` to 500 chars). These Crossroads read endpoints acquire the per-game lock while authenticating and reading shared state, consistent with the other game-scoped endpoints. The ghost signature endpoints (`GET /api/game/{id}/system/{sys_id}/ghosts`, `POST /api/game/{id}/leave-ghost`) and the ripples endpoint (`GET /api/game/{id}/ripples`) also return sanitized public views: raw `game_id`/`source_game_id` and the `acknowledged_by` list are omitted, and free text is truncated (`player_name`/`source_player_name` to 100 chars, `message`/`discovery_name` to 500 chars). All game-scoped endpoints return HTTP 404 `"Game not found"` for a `game_id` that does not resolve to an existing game (checked against the in-memory game store and the persisted games table) before authentication and locking are performed. The Crossroads listing endpoints (`GET /api/crossroads/items`, `/api/crossroads/lore`, and `/api/crossroads/messages`) also return HTTP 404 `"Game not found"` for an unknown `game_id`, but for these three listing endpoints the existence check runs *after* authorization (while still holding the per-game lock), so a missing/invalid token under enforcement still yields 403 first. The documentation endpoints `GET /HOWTOPLAY.md` and `GET /api/howtoplay` are unauthenticated static reference content (no token is required).
 
