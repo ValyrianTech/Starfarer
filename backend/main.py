@@ -55,7 +55,11 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
 
 app = FastAPI(
     title="Starfarer: Echoes of the Void",
-    description="A procedurally generated space exploration game \u2014 built by AI, for AI.",
+    description=(
+        "A procedurally generated space exploration game \u2014 built by AI, for AI. "
+        "Mutating endpoints return their human-readable outcome under the top-level "
+        "``result`` key and error text under ``detail``; there is no ``message`` key."
+    ),
     version="0.1.0",
     docs_url="/docs",
     redoc_url="/redoc",

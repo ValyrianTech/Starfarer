@@ -575,7 +575,8 @@ def api_new_game(request: Request, req: NewGameRequest) -> dict:
     :param req: The new game request with optional seed, ship_name,
         and game_id.
     :type req: NewGameRequest
-    :returns: A dictionary with ``game_id`` and a ``state`` summary.
+    :returns: A dictionary with ``result`` (a human-readable success
+        message), ``game_id``, a ``state`` summary, and ``token``.
     :rtype: dict
     :raises HTTPException: 409 if the requested game_id already exists;
         429 if the per-IP rate limit or the stored-game cap is exceeded.
@@ -592,6 +593,7 @@ def api_new_game(request: Request, req: NewGameRequest) -> dict:
         evict_if_needed(_locked_game_ids() | {state.id})
         game_save(state)
         return {
+            "result": "Game created.",
             "game_id": state.id,
             "state": state.state_summary(),
             "token": state.token,
@@ -1455,9 +1457,11 @@ def api_bulk_sell(game_id: str, req: BulkSellRequest, x_game_token: str | None =
     :param x_game_token: The caller-supplied per-game token (X-Game-Token header).
     :type x_game_token: str | None
     :returns: A dictionary with the full game state (same format as
-        ``GET /api/game/{game_id}``), plus a ``trade_result`` field with
-        ``sold_count``, ``total_price``, ``message`` (human-readable summary)
-        and ``errors`` (list of per-entry error strings, empty on full success).
+        ``GET /api/game/{game_id}``), plus a top-level ``result`` message
+        (the human-readable bulk-sell summary), plus a ``trade_result``
+        field with ``sold_count``, ``total_price``, ``message``
+        (human-readable summary) and ``errors`` (list of per-entry error
+        strings, empty on full success).
     :rtype: dict
     :raises HTTPException: 404 if the game is not found; 400 if the
         sell is not possible.
@@ -1480,6 +1484,7 @@ def api_bulk_sell(game_id: str, req: BulkSellRequest, x_game_token: str | None =
 
         game_save(state)
         response = _full_state_response(state)
+        response["result"] = msg
         response["trade_result"] = {
             "sold_count": sold_count,
             "total_price": total_price,
