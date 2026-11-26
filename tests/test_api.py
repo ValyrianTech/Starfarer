@@ -4313,7 +4313,7 @@ class TestRecoveryOptions:
 
     def test_sub_surface_available_zero_crew_threshold_warning(self) -> None:
         """An available sub-surface attempt that leaves zero crew names the 150-credit re-hire cost."""
-        from backend.config import SUB_SURFACE_CREW_COST, SUB_SURFACE_FUEL_COST
+        from backend.config import SUB_SURFACE_CREW_COST
         from backend.models.system import Body
 
         _gid, state = self._new_game("recov-sub-surface-zero-crew")
