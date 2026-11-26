@@ -46,6 +46,7 @@ from backend.game.engine import (
     explore_surface,
     format_distance_ly,
     get_nearby_systems,
+    get_recovery_options,
     get_scanner_tier_data,
     is_effectively_stranded,
     land_on_body,
@@ -6623,6 +6624,58 @@ class TestSubSurfaceBiomeConsolidation:
             assert blocker is None
         else:
             assert blocker is not None
+
+
+class TestRecoveryOptionsSubSurface:
+    """Tests for the sub_surface sub-object of get_recovery_options."""
+
+    _THRESHOLD_WARNING = "This will leave 0 crew — each lost crew member must be re-hired at a station for 150 credits."
+
+    def _make_state(self, biome):
+        state = new_game(seed=42)
+        system = state.get_current_system()
+        assert system is not None
+        body = Body(id="b_sub", name="SubWorld", body_type="planet", biome=biome, size=5, distance_from_star=0.5, poi_count=3)
+        system.bodies = [body]
+        state.ship.current_body_id = body.id
+        state.ship.crew = 5
+        state.ship.fuel = 50
+        return state, body
+
+    def test_available_case(self):
+        state, _body = self._make_state("volcanic")
+        sub_surface = get_recovery_options(state)["sub_surface"]
+        assert sub_surface["available"] is True
+        assert sub_surface["reason"] is None
+        assert sub_surface["crew_cost"] == SUB_SURFACE_CREW_COST
+        assert sub_surface["fuel_cost"] == SUB_SURFACE_FUEL_COST
+        assert sub_surface["crew_after"] == state.ship.crew - 1
+        assert sub_surface["crew_threshold_warning"] is None
+
+    def test_blocked_no_crew(self):
+        state, _body = self._make_state("volcanic")
+        state.ship.crew = 0
+        sub_surface = get_recovery_options(state)["sub_surface"]
+        assert sub_surface["available"] is False
+        assert sub_surface["reason"] == "requires 1 crew (have 0)"
+        assert "crew_after" not in sub_surface
+        assert sub_surface["crew_threshold_warning"] is None
+
+    def test_threshold_warning_with_one_crew(self):
+        state, _body = self._make_state("volcanic")
+        state.ship.crew = 1
+        sub_surface = get_recovery_options(state)["sub_surface"]
+        assert sub_surface["available"] is True
+        assert sub_surface["crew_after"] == 0
+        assert sub_surface["crew_threshold_warning"] == self._THRESHOLD_WARNING
+
+    def test_no_current_system(self):
+        state = new_game(seed=42)
+        state.ship.current_system_id = "nonexistent"
+        sub_surface = get_recovery_options(state)["sub_surface"]
+        assert sub_surface["available"] is False
+        assert sub_surface["reason"] == "no current system"
+        assert "crew_after" not in sub_surface
 
 
 class TestHireCrew:

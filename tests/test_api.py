@@ -4251,6 +4251,133 @@ class TestRecoveryOptions:
         assert "no craftable discoveries" in ro["craft"]["reason"]
         assert ro["craft"]["craftable"] == []
 
+    def test_sub_surface_available_has_six_keys_blocked_has_five(self) -> None:
+        """Available sub_surface has six keys (incl. crew_after); blocked has five (no crew_after)."""
+        from backend.config import SUB_SURFACE_CREW_COST
+        from backend.models.system import Body
+
+        _gid, state = self._new_game("recov-sub-surface-keys-available")
+        body = Body(id="b_sub_keys", name="SubWorld", body_type="planet", biome="volcanic",
+                    size=5, distance_from_star=0.5, poi_count=3)
+        state.get_current_system().bodies.append(body)
+        land_on_body(state, body.id)
+        state.ship.fuel = 100
+        state.ship.crew = 5
+        ro = self._recovery(state)
+        sub = ro["sub_surface"]
+        assert sub["available"] is True
+        assert set(sub.keys()) == {
+            "available",
+            "reason",
+            "crew_cost",
+            "fuel_cost",
+            "crew_after",
+            "crew_threshold_warning",
+        }
+        assert sub["crew_after"] == max(0, state.ship.crew - SUB_SURFACE_CREW_COST)
+
+        _gid2, blocked_state = self._new_game("recov-sub-surface-keys-blocked")
+        ro_blocked = self._recovery(blocked_state)
+        sub_blocked = ro_blocked["sub_surface"]
+        assert sub_blocked["available"] is False
+        assert "crew_after" not in sub_blocked
+        assert set(sub_blocked.keys()) == {
+            "available",
+            "reason",
+            "crew_cost",
+            "fuel_cost",
+            "crew_threshold_warning",
+        }
+
+    def test_sub_surface_available_shape(self) -> None:
+        """Landed on a supported biome with enough fuel and crew makes sub-surface available."""
+        from backend.config import SUB_SURFACE_CREW_COST, SUB_SURFACE_FUEL_COST
+        from backend.models.system import Body
+
+        _gid, state = self._new_game("recov-sub-surface-available")
+        body = Body(id="b_sub_ok", name="SubWorld", body_type="planet", biome="volcanic",
+                    size=5, distance_from_star=0.5, poi_count=3)
+        state.get_current_system().bodies.append(body)
+        land_on_body(state, body.id)
+        state.ship.fuel = 100
+        state.ship.crew = 5
+        ro = self._recovery(state)
+        sub = ro["sub_surface"]
+        assert sub["available"] is True
+        assert sub["reason"] is None
+        assert sub["crew_cost"] == SUB_SURFACE_CREW_COST
+        assert sub["fuel_cost"] == SUB_SURFACE_FUEL_COST
+        assert sub["crew_after"] == max(0, state.ship.crew - SUB_SURFACE_CREW_COST)
+        assert sub["crew_after"] == 4
+        assert sub["crew_threshold_warning"] is None
+
+    def test_sub_surface_available_zero_crew_threshold_warning(self) -> None:
+        """An available sub-surface attempt that leaves zero crew names the 150-credit re-hire cost."""
+        from backend.config import SUB_SURFACE_CREW_COST, SUB_SURFACE_FUEL_COST
+        from backend.models.system import Body
+
+        _gid, state = self._new_game("recov-sub-surface-zero-crew")
+        body = Body(id="b_sub_zero", name="SubWorld", body_type="planet", biome="volcanic",
+                    size=5, distance_from_star=0.5, poi_count=3)
+        state.get_current_system().bodies.append(body)
+        land_on_body(state, body.id)
+        state.ship.fuel = 100
+        state.ship.crew = SUB_SURFACE_CREW_COST
+        ro = self._recovery(state)
+        sub = ro["sub_surface"]
+        assert sub["available"] is True
+        assert sub["crew_after"] == 0
+        assert sub["crew_threshold_warning"] is not None
+        assert "150" in sub["crew_threshold_warning"]
+
+    def test_sub_surface_blocked_reason_agrees_with_endpoint_400_detail(self) -> None:
+        """The blocked sub_surface.reason from GET matches the sub-surface-explore 400 detail."""
+        from backend.config import SUB_SURFACE_CREW_COST, SUB_SURFACE_FUEL_COST
+        from backend.models.system import Body
+
+        _gid, state = self._new_game("recov-sub-surface-blocked")
+        body = Body(id="b_sub_blocked", name="SubWorld", body_type="planet", biome="volcanic",
+                    size=5, distance_from_star=0.5, poi_count=3)
+        state.get_current_system().bodies.append(body)
+        land_on_body(state, body.id)
+        state.ship.crew = 0
+        state.ship.fuel = 100
+        self._save(state)
+
+        ro = self._recovery(state)
+        sub = ro["sub_surface"]
+        assert sub["available"] is False
+        assert sub["reason"]
+        assert sub["crew_cost"] == SUB_SURFACE_CREW_COST
+        assert sub["fuel_cost"] == SUB_SURFACE_FUEL_COST
+        assert "crew_after" not in sub
+        assert sub["crew_threshold_warning"] is None
+
+        resp = client.post(f"/api/game/{state.id}/sub-surface-explore")
+        assert resp.status_code == 400
+        assert resp.json()["detail"] == f"Sub-surface exploration not possible here: {sub['reason']}"
+
+    def test_sub_surface_blocked_unsupported_biome_reason(self) -> None:
+        """A barren biome blocks sub-surface exploration with the 'unsupported biome' reason."""
+        from backend.models.system import Body
+
+        _gid, state = self._new_game("recov-sub-surface-barren")
+        body = Body(id="b_sub_barren", name="BarrenWorld", body_type="planet", biome="barren",
+                    size=5, distance_from_star=0.5, poi_count=3)
+        state.get_current_system().bodies.append(body)
+        land_on_body(state, body.id)
+        state.ship.fuel = 100
+        state.ship.crew = 5
+        ro = self._recovery(state)
+        sub = ro["sub_surface"]
+        assert sub["available"] is False
+        assert sub["reason"] == "unsupported biome"
+        assert "crew_after" not in sub
+
+        resp = client.post(f"/api/game/{state.id}/sub-surface-explore")
+        assert resp.status_code == 400
+        assert resp.json()["detail"] == "Sub-surface exploration not possible here: unsupported biome"
+
 
 class TestAPIReputationLabels:
     """Tests for the _rep_label function that maps reputation values to labels."""
