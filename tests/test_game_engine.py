@@ -5027,6 +5027,13 @@ class TestBlackHoleEvents:
         
         for event in black_hole_events:
             for i, choice in enumerate(event["choices"]):
+                # Re-seed cargo each iteration so negative-cargo choices
+                # actually remove an item instead of reporting an honest 0.
+                state.discoveries = [
+                    Discovery(id=f"bh-{j}", category="artifact", name="Cargo", description="x", value=10)
+                    for j in range(5)
+                ]
+                state.sync_cargo()
                 # This should not raise any exceptions
                 effects = state.apply_choice_outcome(choice["outcome"])
                 assert isinstance(effects, dict), f"Outcome for {event['title']} choice {i} should return a dict"
